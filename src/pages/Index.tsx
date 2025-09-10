@@ -174,7 +174,7 @@ const Index = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
                 size="xl"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/auth")}
                 className="min-w-48 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <GraduationCap className="w-5 h-5 mr-2" />
@@ -327,7 +327,7 @@ const Index = () => {
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
             <Button 
               size="xl"
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/auth")}
               className="min-w-56 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-2xl hover:shadow-orange-500/25 transition-all duration-300 hover:scale-105"
             >
               <GraduationCap className="w-6 h-6 mr-3" />
