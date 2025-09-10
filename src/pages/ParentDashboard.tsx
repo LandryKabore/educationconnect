@@ -3,13 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageToggle } from "@/components/LanguageToggle";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -69,12 +65,7 @@ const ParentDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
-      {/* Theme and Language Controls */}
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
       {/* Floating Interactive Elements */}
       {floatingIcons.map((item, index) => {
         const IconComponent = item.icon;
@@ -104,7 +95,7 @@ const ParentDashboard = () => {
       {/* Background Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
       {/* Header */}
-      <header className="bg-card border-b border-border shadow-xl backdrop-blur-sm relative z-10">
+      <header className="bg-slate-800/50 border-b border-slate-700/50 shadow-xl backdrop-blur-sm relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -112,20 +103,20 @@ const ParentDashboard = () => {
                 variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-foreground">{t('dashboard.parent.title', 'Parent Dashboard')}</h1>
-                <p className="text-sm text-muted-foreground">{t('welcomeBack')}</p>
+                <h1 className="text-xl font-bold text-white">Parent Dashboard</h1>
+                <p className="text-sm text-slate-300">Welcome back!</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <Bell className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
             </div>
@@ -137,35 +128,35 @@ const ParentDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Child Overview */}
         <div className="mb-8">
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardHeader>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
                   <GraduationCap className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl text-foreground">{childData.name}</CardTitle>
-                  <CardDescription className="text-muted-foreground">{childData.class}</CardDescription>
+                  <CardTitle className="text-xl text-white">{childData.name}</CardTitle>
+                  <CardDescription className="text-slate-300">{childData.class}</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-muted rounded-xl">
-                  <div className="text-2xl font-bold text-primary">{childData.overallGrade}</div>
-                  <div className="text-sm text-muted-foreground">{t('dashboard.parent.overallGrade', 'Overall Grade')}</div>
+                <div className="text-center p-4 bg-slate-100/80 rounded-xl">
+                  <div className="text-2xl font-bold text-orange-500">{childData.overallGrade}</div>
+                  <div className="text-sm text-slate-600">Overall Grade</div>
                 </div>
-                <div className="text-center p-4 bg-muted rounded-xl">
-                  <div className="text-2xl font-bold text-success">{childData.attendance}</div>
-                  <div className="text-sm text-muted-foreground">{t('dashboard.parent.attendance', 'Attendance')}</div>
+                <div className="text-center p-4 bg-slate-100/80 rounded-xl">
+                  <div className="text-2xl font-bold text-green-500">{childData.attendance}</div>
+                  <div className="text-sm text-slate-600">Attendance</div>
                 </div>
-                <div className="text-center p-4 bg-muted rounded-xl">
-                  <div className="text-2xl font-bold text-accent">8</div>
-                  <div className="text-sm text-muted-foreground">{t('dashboard.parent.subjects', 'Subjects')}</div>
+                <div className="text-center p-4 bg-slate-100/80 rounded-xl">
+                  <div className="text-2xl font-bold text-blue-500">8</div>
+                  <div className="text-sm text-slate-600">Subjects</div>
                 </div>
-                <div className="text-center p-4 bg-muted rounded-xl">
-                  <div className="text-2xl font-bold text-destructive">3</div>
-                  <div className="text-sm text-muted-foreground">{t('dashboard.parent.upcomingExams', 'Upcoming Exams')}</div>
+                <div className="text-center p-4 bg-slate-100/80 rounded-xl">
+                  <div className="text-2xl font-bold text-red-500">3</div>
+                  <div className="text-sm text-slate-600">Upcoming Exams</div>
                 </div>
               </div>
             </CardContent>
@@ -174,112 +165,112 @@ const ParentDashboard = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recent Grades */}
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <CardTitle className="text-foreground">{t('dashboard.parent.recentGrades')}</CardTitle>
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+                <CardTitle className="text-white">Recent Grades</CardTitle>
               </div>
-              <CardDescription className="text-muted-foreground">{t('dashboard.parent.latestPerformance')}</CardDescription>
+              <CardDescription className="text-slate-300">Latest academic performance</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {recentGrades.map((grade, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-xl">
+                  <div key={index} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
                     <div>
-                      <div className="font-medium text-foreground">{grade.subject}</div>
-                      <div className="text-sm text-muted-foreground">{grade.date}</div>
+                      <div className="font-medium text-white">{grade.subject}</div>
+                      <div className="text-sm text-slate-300">{grade.date}</div>
                     </div>
-                    <div className="text-lg font-bold text-primary">{grade.grade}</div>
+                    <div className="text-lg font-bold text-orange-400">{grade.grade}</div>
                   </div>
                 ))}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white border-0">
-                {t('dashboard.parent.viewAllGrades')}
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+                View All Grades
               </Button>
             </CardContent>
           </Card>
 
           {/* Upcoming Exams */}
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-accent" />
-                <CardTitle className="text-foreground">{t('dashboard.parent.upcomingExamsTitle')}</CardTitle>
+                <Calendar className="w-5 h-5 text-orange-400" />
+                <CardTitle className="text-white">Upcoming Exams</CardTitle>
               </div>
-              <CardDescription className="text-muted-foreground">{t('dashboard.parent.importantDates')}</CardDescription>
+              <CardDescription className="text-slate-300">Important test dates</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {upcomingExams.map((exam, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-xl">
-                    <div className="font-medium text-foreground">{exam.subject}</div>
-                    <div className="text-sm text-muted-foreground">
+                  <div key={index} className="p-3 bg-slate-700/50 rounded-xl">
+                    <div className="font-medium text-white">{exam.subject}</div>
+                    <div className="text-sm text-slate-300">
                       {exam.date} at {exam.time}
                     </div>
                   </div>
                 ))}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white border-0">
-                {t('dashboard.parent.viewFullCalendar')}
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+                View Full Calendar
               </Button>
             </CardContent>
           </Card>
 
           {/* School Announcements */}
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-destructive" />
-                <CardTitle className="text-foreground">{t('dashboard.parent.schoolAnnouncements')}</CardTitle>
+                <Bell className="w-5 h-5 text-red-400" />
+                <CardTitle className="text-white">School Announcements</CardTitle>
               </div>
-              <CardDescription className="text-muted-foreground">{t('dashboard.parent.latestUpdates')}</CardDescription>
+              <CardDescription className="text-slate-300">Latest updates from school</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {announcements.map((announcement, index) => (
-                  <div key={index} className={`p-3 rounded-xl border ${announcement.urgent ? 'border-destructive/50 bg-destructive/10' : 'bg-muted'}`}>
+                  <div key={index} className={`p-3 rounded-xl border ${announcement.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="font-medium text-foreground">{announcement.title}</div>
-                        <div className="text-sm text-muted-foreground mt-1">{announcement.message}</div>
+                        <div className="font-medium text-white">{announcement.title}</div>
+                        <div className="text-sm text-slate-300 mt-1">{announcement.message}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{announcement.date}</div>
+                      <div className="text-xs text-slate-400">{announcement.date}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white border-0">
-                {t('dashboard.parent.viewAllAnnouncements')}
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+                View All Announcements
               </Button>
             </CardContent>
           </Card>
 
           {/* Teacher Communication */}
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <MessageCircle className="w-5 h-5 text-success" />
-                <CardTitle className="text-foreground">{t('dashboard.parent.teacherMessages')}</CardTitle>
+                <MessageCircle className="w-5 h-5 text-green-400" />
+                <CardTitle className="text-white">Teacher Messages</CardTitle>
               </div>
-              <CardDescription className="text-muted-foreground">{t('dashboard.parent.recentCommunications')}</CardDescription>
+              <CardDescription className="text-slate-300">Recent communications</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="p-3 bg-muted rounded-xl">
-                  <div className="font-medium text-foreground">Ms. Sarah Thompson</div>
-                  <div className="text-sm text-muted-foreground">Mathematics Teacher</div>
-                  <div className="text-sm text-muted-foreground mt-1">Emma is showing excellent progress in algebra. Keep up the great work!</div>
+                <div className="p-3 bg-slate-700/50 rounded-xl">
+                  <div className="font-medium text-white">Ms. Sarah Thompson</div>
+                  <div className="text-sm text-slate-300">Mathematics Teacher</div>
+                  <div className="text-sm text-slate-300 mt-1">Emma is showing excellent progress in algebra. Keep up the great work!</div>
                 </div>
-                <div className="p-3 bg-muted rounded-xl">
-                  <div className="font-medium text-foreground">Mr. James Wilson</div>
-                  <div className="text-sm text-muted-foreground">English Teacher</div>
-                  <div className="text-sm text-muted-foreground mt-1">Please review the reading assignment for next week's discussion.</div>
+                <div className="p-3 bg-slate-700/50 rounded-xl">
+                  <div className="font-medium text-white">Mr. James Wilson</div>
+                  <div className="text-sm text-slate-300">English Teacher</div>
+                  <div className="text-sm text-slate-300 mt-1">Please review the reading assignment for next week's discussion.</div>
                 </div>
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-primary to-secondary hover:opacity-90 text-white border-0">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 <MessageCircle className="w-4 h-4 mr-2" />
-                {t('dashboard.parent.sendMessageToTeacher')}
+                Send Message to Teacher
               </Button>
             </CardContent>
           </Card>

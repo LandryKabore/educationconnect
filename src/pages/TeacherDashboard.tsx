@@ -3,13 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageToggle } from "@/components/LanguageToggle";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -71,12 +67,7 @@ const TeacherDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
-      {/* Theme and Language Controls */}
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
-        <LanguageToggle />
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
       {/* Floating Interactive Elements */}
       {floatingIcons.map((item, index) => {
         const IconComponent = item.icon;
@@ -106,7 +97,7 @@ const TeacherDashboard = () => {
       {/* Background Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
       {/* Header */}
-      <header className="bg-card border-b border-border shadow-xl backdrop-blur-sm relative z-10">
+      <header className="bg-slate-800/50 border-b border-slate-700/50 shadow-xl backdrop-blur-sm relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -114,20 +105,20 @@ const TeacherDashboard = () => {
                 variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-foreground">{t('dashboard.teacher.title')}</h1>
-                <p className="text-sm text-muted-foreground">{teacherData.name} - {teacherData.subject}</p>
+                <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
+                <p className="text-sm text-slate-300">{teacherData.name} - {teacherData.subject}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <MessageCircle className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
             </div>
@@ -139,28 +130,28 @@ const TeacherDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-primary">{teacherData.classes.length}</div>
-              <div className="text-sm text-muted-foreground">{t('dashboard.teacher.activeClasses')}</div>
+              <div className="text-2xl font-bold text-orange-400">{teacherData.classes.length}</div>
+              <div className="text-sm text-slate-300">Active Classes</div>
             </CardContent>
           </Card>
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-accent">{teacherData.totalStudents}</div>
-              <div className="text-sm text-muted-foreground">{t('dashboard.teacher.totalStudents')}</div>
+              <div className="text-2xl font-bold text-blue-400">{teacherData.totalStudents}</div>
+              <div className="text-sm text-slate-300">Total Students</div>
             </CardContent>
           </Card>
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-destructive">4</div>
-              <div className="text-sm text-muted-foreground">{t('dashboard.teacher.pendingTasks')}</div>
+              <div className="text-2xl font-bold text-red-400">4</div>
+              <div className="text-sm text-slate-300">Pending Tasks</div>
             </CardContent>
           </Card>
-          <Card className="bg-card border-border shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-success">96%</div>
-              <div className="text-sm text-muted-foreground">{t('dashboard.teacher.avgAttendance')}</div>
+              <div className="text-2xl font-bold text-green-400">96%</div>
+              <div className="text-sm text-slate-300">Avg Attendance</div>
             </CardContent>
           </Card>
         </div>
