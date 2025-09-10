@@ -1,10 +1,33 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({
+        x: (e.clientX / window.innerWidth - 0.5) * 2,
+        y: (e.clientY / window.innerHeight - 0.5) * 2,
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  const floatingIcons = [
+    { icon: Calculator, x: 15, y: 20, size: 25, delay: 0 },
+    { icon: Brain, x: 85, y: 25, size: 30, delay: 0.1 },
+    { icon: Microscope, x: 25, y: 70, size: 28, delay: 0.2 },
+    { icon: Code2, x: 75, y: 65, size: 22, delay: 0.3 },
+    { icon: Lightbulb, x: 10, y: 45, size: 26, delay: 0.4 },
+    { icon: Database, x: 90, y: 80, size: 29, delay: 0.5 },
+  ];
 
   const studentData = {
     name: "Alex Thompson",
@@ -40,9 +63,37 @@ const StudentDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+      {/* Floating Interactive Elements */}
+      {floatingIcons.map((item, index) => {
+        const IconComponent = item.icon;
+        const moveX = mousePosition.x * (8 + index * 1.5);
+        const moveY = mousePosition.y * (6 + index * 1);
+        
+        return (
+          <div
+            key={index}
+            className="absolute opacity-10 pointer-events-none"
+            style={{
+              left: `${item.x}%`,
+              top: `${item.y}%`,
+              transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.03}deg)`,
+            }}
+          >
+            <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 backdrop-blur-sm border border-orange-500/10">
+              <IconComponent 
+                size={item.size} 
+                className="text-orange-400/30"
+              />
+            </div>
+          </div>
+        );
+      })}
+      
+      {/* Background Grid Pattern */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
       {/* Header */}
-      <header className="bg-card border-b border-border shadow-card">
+      <header className="bg-slate-800/50 border-b border-slate-700/50 shadow-xl backdrop-blur-sm relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -55,12 +106,12 @@ const StudentDashboard = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-foreground">Student Dashboard</h1>
-                <p className="text-sm text-muted-foreground">{studentData.name} - {studentData.grade}</p>
+                <h1 className="text-xl font-bold text-white">Student Dashboard</h1>
+                <p className="text-sm text-slate-300">{studentData.name} - {studentData.grade}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
             </div>
@@ -69,35 +120,35 @@ const StudentDashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Academic Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="shadow-card">
+          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Award className="w-8 h-8 text-primary mx-auto mb-2" />
-              <div className="text-2xl font-bold text-primary">{studentData.overallGPA}</div>
-              <div className="text-sm text-muted-foreground">Overall GPA</div>
+              <Award className="w-8 h-8 text-orange-500 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-orange-500">{studentData.overallGPA}</div>
+              <div className="text-sm text-slate-600">Overall GPA</div>
             </CardContent>
           </Card>
-          <Card className="shadow-card">
+          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Clock className="w-8 h-8 text-success mx-auto mb-2" />
-              <div className="text-2xl font-bold text-success">{studentData.attendance}</div>
-              <div className="text-sm text-muted-foreground">Attendance</div>
+              <Clock className="w-8 h-8 text-green-500 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-green-500">{studentData.attendance}</div>
+              <div className="text-sm text-slate-600">Attendance</div>
             </CardContent>
           </Card>
-          <Card className="shadow-card">
+          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <BookOpen className="w-8 h-8 text-secondary mx-auto mb-2" />
-              <div className="text-2xl font-bold text-secondary">8</div>
-              <div className="text-sm text-muted-foreground">Active Subjects</div>
+              <BookOpen className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-blue-500">8</div>
+              <div className="text-sm text-slate-600">Active Subjects</div>
             </CardContent>
           </Card>
-          <Card className="shadow-card">
+          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Users className="w-8 h-8 text-accent mx-auto mb-2" />
-              <div className="text-2xl font-bold text-accent">3</div>
-              <div className="text-sm text-muted-foreground">Study Groups</div>
+              <Users className="w-8 h-8 text-red-500 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-red-500">3</div>
+              <div className="text-sm text-slate-600">Study Groups</div>
             </CardContent>
           </Card>
         </div>
