@@ -196,25 +196,44 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-32 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-3/4 left-1/2 w-64 h-64 bg-orange-500/10 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '2s' }} />
-        </div>
+      <section className="py-32 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+        {/* Floating Interactive Elements */}
+        {floatingIcons.slice(0, 4).map((item, index) => {
+          const IconComponent = item.icon;
+          const moveX = mousePosition.x * (8 + index * 2);
+          const moveY = mousePosition.y * (6 + index * 1.5);
+          
+          return (
+            <div
+              key={index}
+              className="absolute opacity-15 pointer-events-none"
+              style={{
+                left: `${item.x}%`,
+                top: `${item.y}%`,
+                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.05}deg)`,
+              }}
+            >
+              <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/15 to-red-500/15 backdrop-blur-sm border border-orange-500/15">
+                <IconComponent 
+                  size={item.size * 0.8} 
+                  className="text-orange-400/40"
+                />
+              </div>
+            </div>
+          );
+        })}
         
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:32px_32px]" />
+        {/* Background Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500/20 to-red-500/20 rounded-3xl backdrop-blur-sm border border-blue-500/30 mb-8">
-            <GraduationCap className="w-10 h-10 text-blue-400" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-3xl backdrop-blur-sm border border-orange-500/30 mb-8">
+            <GraduationCap className="w-10 h-10 text-orange-400" />
           </div>
           
           <h2 className="text-4xl sm:text-6xl font-bold text-white mb-8 leading-tight">
             Ready to{" "}
-            <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-red-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
               Transform
             </span>{" "}
             Your School?
@@ -229,7 +248,7 @@ const Index = () => {
             <Button 
               size="xl"
               onClick={() => navigate("/login")}
-              className="min-w-56 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 hover:scale-105"
+              className="min-w-56 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-2xl hover:shadow-orange-500/25 transition-all duration-300 hover:scale-105"
             >
               <GraduationCap className="w-6 h-6 mr-3" />
               Get Started Today
