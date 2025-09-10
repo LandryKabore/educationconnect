@@ -77,12 +77,11 @@ const Index = () => {
           return (
             <div
               key={index}
-              className="absolute opacity-20 transition-transform duration-1000 ease-out pointer-events-none"
+              className="absolute opacity-20 pointer-events-none"
               style={{
                 left: `${item.x}%`,
                 top: `${item.y}%`,
                 transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.1}deg)`,
-                transitionDelay: `${item.delay}s`,
               }}
             >
               <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20">
@@ -104,16 +103,15 @@ const Index = () => {
               <GraduationCap className="w-10 h-10 text-orange-400" />
             </div>
             <h1 className="text-4xl sm:text-6xl font-bold text-white mb-6">
-              Achieve{" "}
+              Welcome to{" "}
               <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                mastery
+                EduConnect
               </span>
-              <br />
-              <span className="text-white">through education</span>
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Improve your school management by connecting with powerful tools that continuously 
-              challenge and push your educational practice forward.
+              A comprehensive school management platform designed for African schools. 
+              Manage classes, track progress, and foster communication between parents, 
+              teachers, and students.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
@@ -127,7 +125,7 @@ const Index = () => {
               <Button 
                 variant="outline" 
                 size="xl"
-                className="min-w-48 border-slate-600 text-slate-300 hover:bg-slate-800 hover:border-slate-500 hover:text-white transition-all duration-300"
+                className="min-w-48 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white transition-all duration-300 backdrop-blur-sm"
               >
                 Learn More
               </Button>
