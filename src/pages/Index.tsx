@@ -198,11 +198,14 @@ const Index = () => {
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center mb-20">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500/20 to-red-500/20 rounded-2xl backdrop-blur-sm border border-blue-500/20 mb-6">
-              <BookOpen className="w-8 h-8 text-blue-500" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-2xl backdrop-blur-sm border border-orange-500/20 mb-6">
+              <BookOpen className="w-8 h-8 text-orange-400" />
             </div>
             <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
-              Built for Modern Education
+              Built for{" "}
+              <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
+                Modern Education
+              </span>
             </h2>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
               Everything you need to manage school operations efficiently, 
