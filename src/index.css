@@ -2,41 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* School Management Platform Design System */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Light theme - Professional Education Colors */
+    --background: 210 15% 98%;
+    --foreground: 215 25% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 215 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Professional blue - trustworthy, academic */
+    --primary: 213 78% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 213 78% 55%;
+    --primary-dark: 213 78% 35%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Warm green - growth, learning */
+    --secondary: 145 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-light: 145 60% 55%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Soft background variants */
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 15% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Amber accent - highlighting, engagement */
+    --accent: 35 85% 55%;
+    --accent-foreground: 215 25% 15%;
+    --accent-light: 35 85% 65%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Semantic colors */
+    --success: 145 60% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 85% 55%;
+    --warning-foreground: 215 25% 15%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Interface elements */
+    --border: 210 15% 88%;
+    --input: 210 15% 92%;
+    --ring: 213 78% 45%;
 
-    --radius: 0.5rem;
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(213 78% 45%), hsl(145 60% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(213 78% 45%), hsl(213 78% 55%));
+    --gradient-accent: linear-gradient(135deg, hsl(35 85% 55%), hsl(35 85% 65%));
+
+    /* Shadows */
+    --shadow-card: 0 2px 8px hsl(215 25% 15% / 0.08);
+    --shadow-elevated: 0 8px 24px hsl(215 25% 15% / 0.12);
+    --shadow-interactive: 0 4px 12px hsl(213 78% 45% / 0.15);
+
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -56,41 +79,59 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark theme for school platform */
+    --background: 215 25% 8%;
+    --foreground: 210 15% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 215 25% 12%;
+    --card-foreground: 210 15% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 215 25% 12%;
+    --popover-foreground: 210 15% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 213 78% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 213 78% 65%;
+    --primary-dark: 213 78% 45%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 145 60% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-light: 145 60% 65%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 215 25% 16%;
+    --muted-foreground: 210 15% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 35 85% 65%;
+    --accent-foreground: 215 25% 8%;
+    --accent-light: 35 85% 75%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --success: 145 60% 55%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 85% 65%;
+    --warning-foreground: 215 25% 8%;
+    --destructive: 0 75% 65%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 215 25% 20%;
+    --input: 215 25% 16%;
+    --ring: 213 78% 55%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(213 78% 55%), hsl(145 60% 55%));
+    --gradient-hero: linear-gradient(135deg, hsl(213 78% 55%), hsl(213 78% 65%));
+    --gradient-accent: linear-gradient(135deg, hsl(35 85% 65%), hsl(35 85% 75%));
+
+    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.25);
+    --shadow-elevated: 0 8px 24px hsl(0 0% 0% / 0.35);
+    --shadow-interactive: 0 4px 12px hsl(213 78% 55% / 0.25);
+
+    --sidebar-background: 215 25% 10%;
+    --sidebar-foreground: 210 15% 85%;
+    --sidebar-primary: 213 78% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 215 25% 16%;
+    --sidebar-accent-foreground: 210 15% 85%;
+    --sidebar-border: 215 25% 20%;
+    --sidebar-ring: 213 78% 55%;
   }
 }
 
