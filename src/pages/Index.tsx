@@ -16,8 +16,31 @@ const Index = () => {
       });
     };
 
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma !== null && e.beta !== null) {
+        // gamma: left/right tilt (-90 to 90)
+        // beta: front/back tilt (-180 to 180)
+        setMousePosition({
+          x: (e.gamma / 45), // Normalize to -2 to 2 range
+          y: (e.beta / 90), // Normalize to -2 to 2 range
+        });
+      }
+    };
+
+    // Check if device supports orientation
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+    }
+    
+    // Always add mouse support for desktop
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (window.DeviceOrientationEvent) {
+        window.removeEventListener('deviceorientation', handleDeviceOrientation);
+      }
+    };
   }, []);
 
   const floatingIcons = [
