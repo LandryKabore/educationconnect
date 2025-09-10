@@ -71,24 +71,25 @@ const Index = () => {
     
     const animate = () => {
       setMousePosition(current => {
-        setVelocity(currentVel => {
-          const dampening = 0.15; // Adjust for more/less momentum
-          const newVel = {
-            x: currentVel.x + (targetPosition.x - current.x) * dampening,
-            y: currentVel.y + (targetPosition.y - current.y) * dampening,
-          };
-          
-          // Apply velocity with decay
-          const decay = 0.95; // Momentum decay factor
-          return {
-            x: newVel.x * decay,
-            y: newVel.y * decay,
-          };
-        });
+        const dampening = 0.08; // Reduced for stability
+        const maxVelocity = 0.5; // Limit velocity to prevent runaway
         
+        // Calculate target difference
+        const diff = {
+          x: targetPosition.x - current.x,
+          y: targetPosition.y - current.y,
+        };
+        
+        // Apply smooth interpolation directly to position
+        const newPosition = {
+          x: current.x + diff.x * dampening,
+          y: current.y + diff.y * dampening,
+        };
+        
+        // Clamp position to reasonable bounds
         return {
-          x: current.x + velocity.x,
-          y: current.y + velocity.y,
+          x: Math.max(-2, Math.min(2, newPosition.x)),
+          y: Math.max(-2, Math.min(2, newPosition.y)),
         };
       });
       
@@ -102,7 +103,7 @@ const Index = () => {
         cancelAnimationFrame(animationFrame);
       }
     };
-  }, [targetPosition, velocity]);
+  }, [targetPosition]);
 
   const floatingIcons = [
     { icon: Calculator, x: 15, y: 20, size: 40, delay: 0, depth: 1 },
