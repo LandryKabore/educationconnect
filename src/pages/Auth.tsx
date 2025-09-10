@@ -111,6 +111,33 @@ export default function Auth() {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data.user) {
+        // Validate role first before showing success message
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error("Profile fetch error", profileError);
+          await supabase.auth.signOut();
+          throw new Error("Failed to validate user role");
+        }
+
+        const userRole = profile?.role as UserRole;
+        
+        // Check if the user's role matches the expected role
+        if (userRole !== selectedRole) {
+          await supabase.auth.signOut();
+          toast({
+            title: "Access Denied",
+            description: `These credentials belong to a ${userRole} account. Please select the correct role.`,
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Only show success message if role is correct
         toast({ title: "Welcome back", description: "Signed in successfully." });
         redirectToRole(data.user.id, selectedRole);
       }
