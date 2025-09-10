@@ -86,9 +86,11 @@ export default function Auth() {
     
     // Check if the user's role matches the expected role (if provided)
     if (expectedRole && userRole !== expectedRole) {
+      // Sign out the user since they used wrong credentials for this role
+      await supabase.auth.signOut();
       toast({
         title: "Access Denied",
-        description: `This ${expectedRole} login cannot be used for a ${userRole} account.`,
+        description: `This ${expectedRole} login cannot be used for a ${userRole} account. Please use the correct role.`,
         variant: "destructive"
       });
       return;
