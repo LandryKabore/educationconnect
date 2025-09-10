@@ -88,33 +88,33 @@ const Index = () => {
   const features = [
     {
       icon: Users,
-      title: "Multi-Role Access",
-      description: "Dedicated dashboards for parents, teachers, and students with role-specific features.",
+      title: t('features.multiRole.title'),
+      description: t('features.multiRole.description'),
     },
     {
       icon: Wifi,
-      title: "Offline Support",
-      description: "Teachers can take attendance offline and sync when internet is available.",
+      title: t('features.offline.title'),
+      description: t('features.offline.description'),
     },
     {
       icon: Globe,
-      title: "Multi-Language",
-      description: "Support for English, French, and local African languages.",
+      title: t('features.multiLanguage.title'),
+      description: t('features.multiLanguage.description'),
     },
     {
       icon: Smartphone,
-      title: "Mobile-First",
-      description: "Optimized for smartphones and tablets with responsive design.",
+      title: t('features.mobile.title'),
+      description: t('features.mobile.description'),
     },
     {
       icon: Shield,
-      title: "Secure & Private",
-      description: "Safe environment for educational data and communications.",
+      title: t('features.secure.title'),
+      description: t('features.secure.description'),
     },
     {
       icon: BookOpen,
-      title: "Study Groups",
-      description: "Students can collaborate in moderated study groups and forums.",
+      title: t('features.studyGroups.title'),
+      description: t('features.studyGroups.description'),
     },
   ];
 
@@ -317,16 +317,11 @@ const Index = () => {
           </div>
           
           <h2 className="text-4xl sm:text-6xl font-bold text-white mb-8 leading-tight">
-            Ready to{" "}
-            <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-              Transform
-            </span>{" "}
-            Your School?
+            {t('cta.title')}
           </h2>
           
           <p className="text-xl text-slate-300 mb-12 leading-relaxed max-w-3xl mx-auto">
-            Join thousands of schools already using EduConnect to improve 
-            educational outcomes and streamline operations across Africa.
+            {t('cta.description')}
           </p>
           
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
@@ -336,7 +331,7 @@ const Index = () => {
               className="min-w-56 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-2xl hover:shadow-orange-500/25 transition-all duration-300 hover:scale-105"
             >
               <GraduationCap className="w-6 h-6 mr-3" />
-              Get Started Today
+              {t('cta.getStartedToday')}
             </Button>
             
             <Button 
@@ -345,7 +340,7 @@ const Index = () => {
               className="min-w-56 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white transition-all duration-300 backdrop-blur-sm hover:scale-105"
             >
               <BookOpen className="w-6 h-6 mr-3" />
-              View Demo
+              {t('cta.viewDemo')}
             </Button>
           </div>
           
@@ -353,15 +348,15 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20 pt-16 border-t border-slate-700/50">
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold text-white mb-2">10,000+</div>
-              <div className="text-slate-400">Students Enrolled</div>
+              <div className="text-slate-400">{t('stats.students')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold text-white mb-2">500+</div>
-              <div className="text-slate-400">Schools Using EduConnect</div>
+              <div className="text-slate-400">{t('stats.schools')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold text-white mb-2">25+</div>
-              <div className="text-slate-400">African Countries</div>
+              <div className="text-slate-400">{t('stats.countries')}</div>
             </div>
           </div>
         </div>
@@ -380,7 +375,7 @@ const Index = () => {
               </span>
             </div>
             <p className="text-slate-400 text-lg mb-8">
-              © 2024 EduConnect. Empowering education across Africa.
+              {t('footer.copyright')}
             </p>
             
             {/* Social Links Placeholder */}

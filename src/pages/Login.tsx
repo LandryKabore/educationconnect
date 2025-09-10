@@ -202,12 +202,12 @@ const Login = () => {
                     {isSelected ? (
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        Logging in...
+                        {t('loggingIn')}
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <User className="w-5 h-5 group-hover:text-primary-foreground transition-colors" />
-                        Continue as {role.title}
+                        {t('continueAs')} {role.title}
                       </div>
                     )}
                   </Button>
