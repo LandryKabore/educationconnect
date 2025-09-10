@@ -3,9 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -117,7 +121,13 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen flex items-center">
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 light:from-slate-50 light:via-white light:to-slate-100 min-h-screen flex items-center">
+        {/* Theme and Language Controls */}
+        <div className="absolute top-4 right-4 z-20 flex gap-2">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
+        
         {/* Floating Interactive Elements */}
         {floatingIcons.map((item, index) => {
           const IconComponent = item.icon;
@@ -152,16 +162,14 @@ const Index = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-3xl backdrop-blur-sm border border-orange-500/30 mb-8">
               <GraduationCap className="w-10 h-10 text-orange-400" />
             </div>
-            <h1 className="text-4xl sm:text-6xl font-bold text-white mb-6">
-              Welcome to{" "}
+            <h1 className="text-4xl sm:text-6xl font-bold text-white dark:text-white light:text-slate-900 mb-6">
+              {t('welcome')}{" "}
               <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                EduConnect
+                {t('appName')}
               </span>
             </h1>
-            <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-10 leading-relaxed">
-              A comprehensive school management platform designed for African schools. 
-              Manage classes, track progress, and foster communication between parents, 
-              teachers, and students.
+            <p className="text-xl text-slate-300 dark:text-slate-300 light:text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed">
+              {t('description')}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
@@ -170,14 +178,14 @@ const Index = () => {
                 className="min-w-48 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <GraduationCap className="w-5 h-5 mr-2" />
-                Get Started
+                {t('getStarted')}
               </Button>
               <Button 
                 variant="outline" 
                 size="xl"
-                className="min-w-48 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white transition-all duration-300 backdrop-blur-sm"
+                className="min-w-48 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white transition-all duration-300 backdrop-blur-sm dark:border-slate-600 dark:text-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-700 light:border-slate-300 light:text-slate-700 light:bg-white/50 light:hover:bg-slate-50"
               >
-                Learn More
+                {t('learnMore')}
               </Button>
             </div>
           </div>
@@ -225,15 +233,14 @@ const Index = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-2xl backdrop-blur-sm border border-orange-500/20 mb-6">
               <BookOpen className="w-8 h-8 text-orange-400" />
             </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
-              Built for{" "}
+            <h2 className="text-4xl sm:text-5xl font-bold text-white dark:text-white light:text-slate-900 mb-6">
+              {t('builtForEducation', 'Built for ')}{" "}
               <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                Modern Education
+                {t('features.multiRole.title', 'Modern Education')}
               </span>
             </h2>
-            <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-              Everything you need to manage school operations efficiently, 
-              with features designed specifically for African educational institutions.
+            <p className="text-xl text-slate-300 dark:text-slate-300 light:text-slate-600 max-w-3xl mx-auto leading-relaxed">
+              {t('educationDescription')}
             </p>
           </div>
           

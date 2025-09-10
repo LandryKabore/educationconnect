@@ -1,0 +1,69 @@
+{
+  "welcome": "Bienvenue à",
+  "appName": "EduConnect",
+  "description": "Une plateforme complète de gestion scolaire conçue pour les écoles africaines. Gérez les classes, suivez les progrès et favorisez la communication entre parents, enseignants et étudiants.",
+  "getStarted": "Commencer",
+  "learnMore": "En savoir plus",
+  "login": "Connexion",
+  "selectRole": "Sélectionnez votre rôle",
+  "roleDescription": "Choisissez comment vous utiliserez EduConnect pour accéder à votre tableau de bord personnalisé.",
+  "parent": "Parent",
+  "parentDescription": "Surveillez les progrès de votre enfant, communiquez avec les enseignants et restez informé des activités scolaires.",
+  "teacher": "Enseignant",
+  "teacherDescription": "Gérez les classes, suivez les progrès des étudiants, créez des devoirs et communiquez avec les parents.",
+  "student": "Étudiant",
+  "studentDescription": "Accédez aux devoirs, consultez les notes, participez aux discussions et gérez votre parcours académique.",
+  "dashboard": "Tableau de bord",
+  "welcomeBack": "Bon retour !",
+  "builtForEducation": "Conçu pour l'Éducation Moderne",
+  "educationDescription": "Tout ce dont vous avez besoin pour gérer efficacement les opérations scolaires, avec des fonctionnalités conçues spécifiquement pour les institutions éducatives africaines.",
+  "features": {
+    "multiRole": {
+      "title": "Accès Multi-Rôles",
+      "description": "Tableaux de bord dédiés pour parents, enseignants et étudiants avec des fonctionnalités spécifiques à chaque rôle."
+    },
+    "offline": {
+      "title": "Support Hors Ligne",
+      "description": "Les enseignants peuvent prendre les présences hors ligne et synchroniser quand internet est disponible."
+    },
+    "multiLanguage": {
+      "title": "Multi-Langues",
+      "description": "Support pour l'anglais, le français et les langues africaines locales."
+    },
+    "mobile": {
+      "title": "Mobile d'Abord",
+      "description": "Optimisé pour smartphones et tablettes avec un design réactif."
+    },
+    "secure": {
+      "title": "Sécurisé et Privé",
+      "description": "Environnement sûr pour les données éducatives et communications."
+    },
+    "studyGroups": {
+      "title": "Groupes d'Étude",
+      "description": "Les étudiants peuvent collaborer dans des groupes d'étude et forums modérés."
+    }
+  },
+  "cta": {
+    "title": "Prêt à Transformer Votre École ?",
+    "description": "Rejoignez des milliers d'écoles utilisant déjà EduConnect pour améliorer les résultats éducatifs et rationaliser les opérations à travers l'Afrique.",
+    "getStartedToday": "Commencer Aujourd'hui",
+    "viewDemo": "Voir la Démo"
+  },
+  "stats": {
+    "students": "Étudiants Inscrits",
+    "schools": "Écoles Utilisant EduConnect",
+    "countries": "Pays Africains"
+  },
+  "footer": {
+    "copyright": "© 2024 EduConnect. Autonomiser l'éducation à travers l'Afrique."
+  },
+  "theme": {
+    "light": "Clair",
+    "dark": "Sombre"
+  },
+  "language": {
+    "english": "English",
+    "french": "Français",
+    "swahili": "Kiswahili"
+  }
+}

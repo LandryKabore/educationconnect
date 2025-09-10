@@ -1,0 +1,69 @@
+{
+  "welcome": "Welcome to",
+  "appName": "EduConnect",
+  "description": "A comprehensive school management platform designed for African schools. Manage classes, track progress, and foster communication between parents, teachers, and students.",
+  "getStarted": "Get Started",
+  "learnMore": "Learn More",
+  "login": "Login",
+  "selectRole": "Select Your Role",
+  "roleDescription": "Choose how you'll be using EduConnect to access your personalized dashboard.",
+  "parent": "Parent",
+  "parentDescription": "Monitor your child's progress, communicate with teachers, and stay updated on school activities.",
+  "teacher": "Teacher",
+  "teacherDescription": "Manage classes, track student progress, create assignments, and communicate with parents.",
+  "student": "Student",
+  "studentDescription": "Access assignments, view grades, participate in discussions, and manage your academic journey.",
+  "dashboard": "Dashboard",
+  "welcomeBack": "Welcome back!",
+  "builtForEducation": "Built for Modern Education",
+  "educationDescription": "Everything you need to manage school operations efficiently, with features designed specifically for African educational institutions.",
+  "features": {
+    "multiRole": {
+      "title": "Multi-Role Access",
+      "description": "Dedicated dashboards for parents, teachers, and students with role-specific features."
+    },
+    "offline": {
+      "title": "Offline Support",
+      "description": "Teachers can take attendance offline and sync when internet is available."
+    },
+    "multiLanguage": {
+      "title": "Multi-Language",
+      "description": "Support for English, French, and local African languages."
+    },
+    "mobile": {
+      "title": "Mobile-First",
+      "description": "Optimized for smartphones and tablets with responsive design."
+    },
+    "secure": {
+      "title": "Secure & Private",
+      "description": "Safe environment for educational data and communications."
+    },
+    "studyGroups": {
+      "title": "Study Groups",
+      "description": "Students can collaborate in moderated study groups and forums."
+    }
+  },
+  "cta": {
+    "title": "Ready to Transform Your School?",
+    "description": "Join thousands of schools already using EduConnect to improve educational outcomes and streamline operations across Africa.",
+    "getStartedToday": "Get Started Today",
+    "viewDemo": "View Demo"
+  },
+  "stats": {
+    "students": "Students Enrolled",
+    "schools": "Schools Using EduConnect",
+    "countries": "African Countries"
+  },
+  "footer": {
+    "copyright": "© 2024 EduConnect. Empowering education across Africa."
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "language": {
+    "english": "English",
+    "french": "Français",
+    "swahili": "Kiswahili"
+  }
+}

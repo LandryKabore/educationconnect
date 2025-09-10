@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, BookOpen, User, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Globe, Smartphone } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
@@ -76,24 +80,24 @@ const Login = () => {
   const roles = [
     {
       id: "parent",
-      title: "Parent",
-      description: "View your child's progress, grades, and communicate with teachers",
+      title: t('parent'),
+      description: t('parentDescription'),
       icon: Users,
       color: "from-blue-500 to-blue-600",
       route: "/parent-dashboard",
     },
     {
       id: "teacher", 
-      title: "Teacher",
-      description: "Manage classes, take attendance, grade students, and upload resources",
+      title: t('teacher'),
+      description: t('teacherDescription'),
       icon: GraduationCap,
       color: "from-green-500 to-green-600", 
       route: "/teacher-dashboard",
     },
     {
       id: "student",
-      title: "Student", 
-      description: "Access your grades, study materials, and join study groups",
+      title: t('student'), 
+      description: t('studentDescription'),
       icon: BookOpen,
       color: "from-amber-500 to-amber-600",
       route: "/student-dashboard",
@@ -110,6 +114,12 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Theme and Language Controls */}
+      <div className="absolute top-4 right-4 z-20 flex gap-2">
+        <LanguageToggle />
+        <ThemeToggle />
+      </div>
+      
       {/* Floating Interactive Elements */}
       {floatingIcons.map((item, index) => {
         const IconComponent = item.icon;
@@ -146,14 +156,13 @@ const Login = () => {
             <GraduationCap className="w-10 h-10 text-orange-400" />
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-            Welcome to{" "}
+            {t('welcome')}{" "}
             <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-              EduConnect
+              {t('appName')}
             </span>
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Your comprehensive school management platform designed for African schools. 
-            Choose your role to continue your educational journey.
+            {t('roleDescription')}
           </p>
         </div>
 
@@ -210,7 +219,7 @@ const Login = () => {
 
         {/* Footer */}
         <div className="text-center mt-16 text-slate-400 text-lg">
-          <p>© 2024 EduConnect. Empowering education across Africa.</p>
+          <p>{t('footer.copyright')}</p>
         </div>
       </div>
     </div>

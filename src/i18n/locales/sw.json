@@ -1,0 +1,69 @@
+{
+  "welcome": "Karibu",
+  "appName": "EduConnect",
+  "description": "Jukwaa kamilifu la usimamizi wa shule lililotengenezwa kwa shule za Kiafrika. Simamia madarasa, fuatilia maendeleo na kuongeza mawasiliano kati ya wazazi, walimu na wanafunzi.",
+  "getStarted": "Anza",
+  "learnMore": "Jifunze Zaidi",
+  "login": "Ingia",
+  "selectRole": "Chagua Jukumu Lako",
+  "roleDescription": "Chagua jinsi utakavyotumia EduConnect ili kupata dashibodi yako ya kibinafsi.",
+  "parent": "Mzazi",
+  "parentDescription": "Fuatilia maendeleo ya mtoto wako, wasiliana na walimu, na ujulishwe shughuli za shule.",
+  "teacher": "Mwalimu",
+  "teacherDescription": "Simamia madarasa, fuatilia maendeleo ya wanafunzi, unda kazi za nyumbani, na wasiliana na wazazi.",
+  "student": "Mwanafunzi",
+  "studentDescription": "Pata kazi za nyumbani, ona alama, shiriki katika majadiliano, na simamia safari yako ya kitaaluma.",
+  "dashboard": "Dashibodi",
+  "welcomeBack": "Karibu tena!",
+  "builtForEducation": "Imejengwa kwa Elimu ya Kisasa",
+  "educationDescription": "Kila kitu unachohitaji kusimamia shughuli za shule kwa ufanisi, na vipengele vilivyotengenezwa mahsusi kwa taasisi za kielimu za Kiafrika.",
+  "features": {
+    "multiRole": {
+      "title": "Ufikiaji wa Majukumu Mengi",
+      "description": "Dashibodi za kipekee kwa wazazi, walimu na wanafunzi na vipengele mahsusi vya kila jukumu."
+    },
+    "offline": {
+      "title": "Msaada wa Nje ya Mtandao",
+      "description": "Walimu wanaweza kuchukua mahudhurio bila mtandao na kusawazisha wakati mtandao unapatikana."
+    },
+    "multiLanguage": {
+      "title": "Lugha Nyingi",
+      "description": "Msaada wa Kiingereza, Kifaransa, na lugha za ndani za Kiafrika."
+    },
+    "mobile": {
+      "title": "Simu Kwanza",
+      "description": "Imeboreshwa kwa simu mahiri na kompyuta ndogo na muundo unaoweza kubadilika."
+    },
+    "secure": {
+      "title": "Salama na Binafsi",
+      "description": "Mazingira salama kwa data ya kielimu na mawasiliano."
+    },
+    "studyGroups": {
+      "title": "Makundi ya Masomo",
+      "description": "Wanafunzi wanaweza kushirikiana katika makundi ya masomo na majukwaa yanayosimamishwa."
+    }
+  },
+  "cta": {
+    "title": "Uko Tayari Kubadilisha Shule Yako?",
+    "description": "Jiunge na shule elfu nyingi ambazo tayari zinatumia EduConnect kuboresha matokeo ya kielimu na kurahisisha shughuli katika Afrika.",
+    "getStartedToday": "Anza Leo",
+    "viewDemo": "Ona Onyesho"
+  },
+  "stats": {
+    "students": "Wanafunzi Waliosajiliwa",
+    "schools": "Shule Zinazoitumia EduConnect",
+    "countries": "Nchi za Kiafrika"
+  },
+  "footer": {
+    "copyright": "© 2024 EduConnect. Kuimarisha elimu katika Afrika."
+  },
+  "theme": {
+    "light": "Mwanga",
+    "dark": "Giza"
+  },
+  "language": {
+    "english": "English",
+    "french": "Français",
+    "swahili": "Kiswahili"
+  }
+}
