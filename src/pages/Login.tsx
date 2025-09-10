@@ -166,8 +166,8 @@ const Login = () => {
             return (
               <Card 
                 key={role.id}
-                className={`relative overflow-hidden border border-white/20 bg-white/60 backdrop-blur-sm hover:bg-white/80 transition-all duration-500 cursor-pointer group shadow-xl hover:shadow-2xl ${
-                  isSelected ? 'scale-105 bg-white/90' : 'hover:scale-102 hover:-translate-y-2'
+                className={`relative overflow-hidden border border-slate-600/50 bg-slate-800/60 backdrop-blur-sm hover:bg-slate-800/80 transition-all duration-500 cursor-pointer group shadow-xl hover:shadow-2xl ${
+                  isSelected ? 'scale-105 bg-slate-800/90' : 'hover:scale-102 hover:-translate-y-2'
                 }`}
                 onClick={() => handleRoleSelect(role)}
               >
@@ -178,18 +178,16 @@ const Login = () => {
                     </div>
                     <div className={`absolute inset-0 bg-gradient-to-br ${role.color} rounded-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-300 blur-xl mx-auto w-16 h-16`} />
                   </div>
-                  <CardTitle className="text-xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors duration-300">
+                  <CardTitle className="text-xl font-bold text-white group-hover:text-orange-400 transition-colors duration-300">
                     {role.title}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-center pb-8">
-                  <CardDescription className="text-slate-600 leading-relaxed mb-6 text-base">
+                  <CardDescription className="text-slate-300 leading-relaxed mb-6 text-base">
                     {role.description}
                   </CardDescription>
                   <Button 
-                    variant="role"
-                    size="role"
-                    className="w-full"
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
                     disabled={isSelected}
                   >
                     {isSelected ? (

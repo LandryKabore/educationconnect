@@ -100,10 +100,10 @@ const ParentDashboard = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
