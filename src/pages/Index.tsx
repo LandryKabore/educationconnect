@@ -7,32 +7,32 @@ import { useState, useEffect } from "react";
 const Index = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [velocity, setVelocity] = useState({ x: 0, y: 0 });
-  const [targetPosition, setTargetPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      const newTarget = {
+      setMousePosition({
         x: (e.clientX / window.innerWidth - 0.5) * 2,
         y: (e.clientY / window.innerHeight - 0.5) * 2,
-      };
-      setTargetPosition(newTarget);
+      });
     };
 
     const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
       if (e.gamma !== null && e.beta !== null) {
+        // gamma: left/right tilt (-90 to 90)
+        // beta: front/back tilt (-180 to 180)
+        // Clamp values to prevent extreme movements
         const gamma = Math.max(-45, Math.min(45, e.gamma));
         const beta = Math.max(-45, Math.min(45, e.beta));
         
-        const newTarget = {
-          x: gamma / 22.5,
-          y: beta / 22.5,
-        };
-        setTargetPosition(newTarget);
+        setMousePosition({
+          x: gamma / 22.5, // Normalize to -2 to 2 range
+          y: beta / 22.5, // Normalize to -2 to 2 range
+        });
       }
     };
 
     const requestOrientationPermission = async () => {
+      // For iOS 13+ devices, request permission
       if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
         try {
           const permission = await (DeviceOrientationEvent as any).requestPermission();
@@ -43,18 +43,23 @@ const Index = () => {
           console.log('Device orientation permission denied');
         }
       } else if (window.DeviceOrientationEvent) {
+        // For non-iOS or older iOS devices
         window.addEventListener('deviceorientation', handleDeviceOrientation);
       }
     };
 
+    // Add click handler to request permissions on user interaction
     const handleFirstInteraction = () => {
       requestOrientationPermission();
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('touchstart', handleFirstInteraction);
     };
 
+    // Request permission on first user interaction
     document.addEventListener('click', handleFirstInteraction);
     document.addEventListener('touchstart', handleFirstInteraction);
+    
+    // Always add mouse support for desktop
     window.addEventListener('mousemove', handleMouseMove);
     
     return () => {
@@ -65,59 +70,15 @@ const Index = () => {
     };
   }, []);
 
-  // Smooth momentum animation
-  useEffect(() => {
-    let animationFrame: number;
-    
-    const animate = () => {
-      setMousePosition(current => {
-        const dampening = 0.2; // Increased for more sensitivity
-        const maxVelocity = 0.5; // Limit velocity to prevent runaway
-        
-        // Calculate target difference
-        const diff = {
-          x: targetPosition.x - current.x,
-          y: targetPosition.y - current.y,
-        };
-        
-        // Apply smooth interpolation directly to position
-        const newPosition = {
-          x: current.x + diff.x * dampening,
-          y: current.y + diff.y * dampening,
-        };
-        
-        // Clamp position to reasonable bounds
-        return {
-          x: Math.max(-2, Math.min(2, newPosition.x)),
-          y: Math.max(-2, Math.min(2, newPosition.y)),
-        };
-      });
-      
-      animationFrame = requestAnimationFrame(animate);
-    };
-    
-    animationFrame = requestAnimationFrame(animate);
-    
-    return () => {
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
-    };
-  }, [targetPosition]);
-
   const floatingIcons = [
-    { icon: Calculator, x: 15, y: 20, size: 40, delay: 0, depth: 1 },
-    { icon: Brain, x: 85, y: 25, size: 60, delay: 0.1, depth: 0.3 },
-    { icon: Microscope, x: 25, y: 70, size: 35, delay: 0.2, depth: 0.8 },
-    { icon: Code2, x: 75, y: 65, size: 55, delay: 0.3, depth: 0.2 },
-    { icon: Lightbulb, x: 10, y: 45, size: 30, delay: 0.4, depth: 0.9 },
-    { icon: Database, x: 90, y: 80, size: 50, delay: 0.5, depth: 0.4 },
-    { icon: Globe, x: 60, y: 15, size: 28, delay: 0.6, depth: 1.2 },
-    { icon: BookOpen, x: 45, y: 85, size: 65, delay: 0.7, depth: 0.1 },
-    { icon: Smartphone, x: 5, y: 60, size: 25, delay: 0.8, depth: 1.5 },
-    { icon: Shield, x: 95, y: 35, size: 45, delay: 0.9, depth: 0.6 },
-    { icon: Users, x: 35, y: 5, size: 40, delay: 1.0, depth: 0.7 },
-    { icon: Wifi, x: 80, y: 90, size: 32, delay: 1.1, depth: 1.0 },
+    { icon: Calculator, x: 15, y: 20, size: 40, delay: 0 },
+    { icon: Brain, x: 85, y: 25, size: 50, delay: 0.1 },
+    { icon: Microscope, x: 25, y: 70, size: 45, delay: 0.2 },
+    { icon: Code2, x: 75, y: 65, size: 35, delay: 0.3 },
+    { icon: Lightbulb, x: 10, y: 45, size: 38, delay: 0.4 },
+    { icon: Database, x: 90, y: 80, size: 42, delay: 0.5 },
+    { icon: Globe, x: 60, y: 15, size: 36, delay: 0.6 },
+    { icon: BookOpen, x: 45, y: 85, size: 48, delay: 0.7 },
   ];
 
   const features = [
@@ -160,28 +121,20 @@ const Index = () => {
         {/* Floating Interactive Elements */}
         {floatingIcons.map((item, index) => {
           const IconComponent = item.icon;
-          const baseMovement = 15 + index * 3;
-          const moveX = mousePosition.x * (baseMovement * item.depth);
-          const moveY = mousePosition.y * (10 + index * 2) * item.depth;
-          
-          // Create depth-based visual effects
-          const opacity = Math.max(0.1, 0.4 - item.depth * 0.15);
-          const blur = item.depth > 0.8 ? 'blur-sm' : item.depth > 0.5 ? 'blur-[1px]' : '';
-          const scale = 1 + (1 - item.depth) * 0.3; // Closer items are larger
+          const moveX = mousePosition.x * (15 + index * 3);
+          const moveY = mousePosition.y * (10 + index * 2);
           
           return (
             <div
               key={index}
-              className={`absolute pointer-events-none transition-transform duration-75 ease-out ${blur}`}
+              className="absolute opacity-20 pointer-events-none"
               style={{
                 left: `${item.x}%`,
                 top: `${item.y}%`,
-                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.1}deg) scale(${scale})`,
-                zIndex: Math.round(10 - item.depth * 10), // Closer items have higher z-index
-                opacity,
+                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.1}deg)`,
               }}
             >
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20 shadow-lg">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20">
                 <IconComponent 
                   size={item.size} 
                   className="text-orange-400/60"
