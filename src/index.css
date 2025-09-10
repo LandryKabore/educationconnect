@@ -53,6 +53,8 @@
     --gradient-primary: linear-gradient(135deg, hsl(213 78% 45%), hsl(145 60% 45%));
     --gradient-hero: linear-gradient(135deg, hsl(213 78% 45%), hsl(213 78% 55%));
     --gradient-accent: linear-gradient(135deg, hsl(35 85% 55%), hsl(35 85% 65%));
+    --gradient-feature: linear-gradient(135deg, hsl(213 78% 45%), hsl(0 75% 55%));
+    --gradient-cta: linear-gradient(135deg, hsl(213 78% 35%), hsl(260 75% 45%));
 
     /* Shadows */
     --shadow-card: 0 2px 8px hsl(215 25% 15% / 0.08);
