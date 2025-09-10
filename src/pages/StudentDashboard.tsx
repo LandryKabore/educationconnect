@@ -98,10 +98,10 @@ const StudentDashboard = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
@@ -123,162 +123,162 @@ const StudentDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Academic Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Award className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-orange-500">{studentData.overallGPA}</div>
-              <div className="text-sm text-slate-600">Overall GPA</div>
+              <Award className="w-8 h-8 text-orange-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-orange-400">{studentData.overallGPA}</div>
+              <div className="text-sm text-slate-300">Overall GPA</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Clock className="w-8 h-8 text-green-500 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-500">{studentData.attendance}</div>
-              <div className="text-sm text-slate-600">Attendance</div>
+              <Clock className="w-8 h-8 text-green-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-green-400">{studentData.attendance}</div>
+              <div className="text-sm text-slate-300">Attendance</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <BookOpen className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-blue-500">8</div>
-              <div className="text-sm text-slate-600">Active Subjects</div>
+              <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-blue-400">8</div>
+              <div className="text-sm text-slate-300">Active Subjects</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <Users className="w-8 h-8 text-red-500 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-red-500">3</div>
-              <div className="text-sm text-slate-600">Study Groups</div>
+              <Users className="w-8 h-8 text-red-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-red-400">3</div>
+              <div className="text-sm text-slate-300">Study Groups</div>
             </CardContent>
           </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recent Grades */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <CardTitle>Recent Grades</CardTitle>
+                <TrendingUp className="w-5 h-5 text-orange-400" />
+                <CardTitle className="text-white">Recent Grades</CardTitle>
               </div>
-              <CardDescription>Your latest academic performance</CardDescription>
+              <CardDescription className="text-slate-300">Your latest academic performance</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {recentGrades.map((grade, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-lg">
+                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{grade.subject}</div>
-                        <div className="text-sm text-muted-foreground">{grade.assignment}</div>
-                        <div className="text-xs text-muted-foreground">{grade.date}</div>
+                        <div className="font-medium text-white">{grade.subject}</div>
+                        <div className="text-sm text-slate-300">{grade.assignment}</div>
+                        <div className="text-xs text-slate-400">{grade.date}</div>
                       </div>
-                      <div className="text-lg font-bold text-primary">{grade.grade}</div>
+                      <div className="text-lg font-bold text-orange-400">{grade.grade}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Grades
               </Button>
             </CardContent>
           </Card>
 
           {/* Upcoming Exams */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-warning" />
-                <CardTitle>Upcoming Exams</CardTitle>
+                <Calendar className="w-5 h-5 text-red-400" />
+                <CardTitle className="text-white">Upcoming Exams</CardTitle>
               </div>
-              <CardDescription>Important test dates to remember</CardDescription>
+              <CardDescription className="text-slate-300">Important test dates to remember</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {upcomingExams.map((exam, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-lg">
-                    <div className="font-medium">{exam.subject}</div>
-                    <div className="text-sm text-muted-foreground">{exam.topic}</div>
-                    <div className="text-sm text-muted-foreground">
+                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
+                    <div className="font-medium text-white">{exam.subject}</div>
+                    <div className="text-sm text-slate-300">{exam.topic}</div>
+                    <div className="text-sm text-slate-400">
                       {exam.date} at {exam.time}
                     </div>
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View Study Calendar
               </Button>
             </CardContent>
           </Card>
 
           {/* Study Materials */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-secondary" />
-                <CardTitle>Study Materials</CardTitle>
+                <BookOpen className="w-5 h-5 text-blue-400" />
+                <CardTitle className="text-white">Study Materials</CardTitle>
               </div>
-              <CardDescription>Resources uploaded by your teachers</CardDescription>
+              <CardDescription className="text-slate-300">Resources uploaded by your teachers</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {studyMaterials.map((material, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-lg hover:bg-muted/80 cursor-pointer transition-colors">
+                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{material.title}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-medium text-white">{material.title}</div>
+                        <div className="text-sm text-slate-300">
                           {material.subject} • {material.type} • by {material.uploadedBy}
                         </div>
-                        <div className="text-xs text-muted-foreground">{material.date}</div>
+                        <div className="text-xs text-slate-400">{material.date}</div>
                       </div>
-                      <Button variant="ghost" size="sm">
+                      <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
                         Download
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 Browse All Materials
               </Button>
             </CardContent>
           </Card>
 
           {/* Study Groups */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-accent" />
-                <CardTitle>Study Groups</CardTitle>
+                <Users className="w-5 h-5 text-green-400" />
+                <CardTitle className="text-white">Study Groups</CardTitle>
               </div>
-              <CardDescription>Collaborate with your classmates</CardDescription>
+              <CardDescription className="text-slate-300">Collaborate with your classmates</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {studyGroups.map((group, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-lg">
+                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <div className="font-medium">{group.name}</div>
+                          <div className="font-medium text-white">{group.name}</div>
                           {group.active && (
-                            <div className="w-2 h-2 bg-success rounded-full"></div>
+                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-slate-300">
                           {group.subject} • {group.members} members
                         </div>
-                        <div className="text-xs text-muted-foreground">Last activity: {group.lastActivity}</div>
+                        <div className="text-xs text-slate-400">Last activity: {group.lastActivity}</div>
                       </div>
-                      <Button variant="outline" size="sm">
+                      <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
                         Join Chat
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button variant="default" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 <Users className="w-4 h-4 mr-2" />
                 Find More Groups
               </Button>

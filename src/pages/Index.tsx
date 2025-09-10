@@ -220,7 +220,7 @@ const Index = () => {
                     animationDelay: `${index * 0.1}s`,
                   }}
                 >
-                  <Card className="h-full bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-white/20 dark:border-slate-700/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 group-hover:bg-white/80 dark:group-hover:bg-slate-800/80">
+                  <Card className="h-full bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 group-hover:bg-slate-800/80">
                     <CardHeader className="pb-4">
                       <div className="relative mb-6">
                         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
@@ -228,12 +228,12 @@ const Index = () => {
                         </div>
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-red-500 rounded-2xl opacity-20 group-hover:opacity-30 transition-opacity duration-300 blur-xl" />
                       </div>
-                      <CardTitle className="text-xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300">
+                      <CardTitle className="text-xl font-bold text-white group-hover:text-orange-400 transition-colors duration-300">
                         {feature.title}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CardDescription className="text-slate-600 dark:text-slate-300 leading-relaxed text-base">
+                      <CardDescription className="text-slate-300 leading-relaxed text-base">
                         {feature.description}
                       </CardDescription>
                     </CardContent>

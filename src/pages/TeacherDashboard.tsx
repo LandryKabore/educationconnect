@@ -130,54 +130,54 @@ const TeacherDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-orange-500">{teacherData.classes.length}</div>
-              <div className="text-sm text-slate-600">Active Classes</div>
+              <div className="text-2xl font-bold text-orange-400">{teacherData.classes.length}</div>
+              <div className="text-sm text-slate-300">Active Classes</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-blue-500">{teacherData.totalStudents}</div>
-              <div className="text-sm text-slate-600">Total Students</div>
+              <div className="text-2xl font-bold text-blue-400">{teacherData.totalStudents}</div>
+              <div className="text-sm text-slate-300">Total Students</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-red-500">4</div>
-              <div className="text-sm text-slate-600">Pending Tasks</div>
+              <div className="text-2xl font-bold text-red-400">4</div>
+              <div className="text-sm text-slate-300">Pending Tasks</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-green-500">96%</div>
-              <div className="text-sm text-slate-600">Avg Attendance</div>
+              <div className="text-2xl font-bold text-green-400">96%</div>
+              <div className="text-sm text-slate-300">Avg Attendance</div>
             </CardContent>
           </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Today's Classes */}
-          <Card className="bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-orange-500" />
-                <CardTitle className="text-slate-900">Today's Classes</CardTitle>
+                <Calendar className="w-5 h-5 text-orange-400" />
+                <CardTitle className="text-white">Today's Classes</CardTitle>
               </div>
-              <CardDescription className="text-slate-600">Your schedule for today</CardDescription>
+              <CardDescription className="text-slate-300">Your schedule for today</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {todayClasses.map((classInfo, index) => (
-                  <div key={index} className="p-4 bg-muted rounded-lg">
+                  <div key={index} className="p-4 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{classInfo.class} - {classInfo.subject}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="font-medium text-white">{classInfo.class} - {classInfo.subject}</div>
+                        <div className="text-sm text-slate-300">
                           {classInfo.time} • {classInfo.room} • {classInfo.students} students
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">
+                      <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
                         <CheckSquare className="w-4 h-4 mr-2" />
                         Attendance
                       </Button>
@@ -189,26 +189,26 @@ const TeacherDashboard = () => {
           </Card>
 
           {/* Quick Actions */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and tools</CardDescription>
+              <CardTitle className="text-white">Quick Actions</CardTitle>
+              <CardDescription className="text-slate-300">Common tasks and tools</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                <Button variant="default" className="h-16 flex-col">
+                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                   <CheckSquare className="w-5 h-5 mb-1" />
                   Take Attendance
                 </Button>
-                <Button variant="secondary" className="h-16 flex-col">
+                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                   <TrendingUp className="w-5 h-5 mb-1" />
                   Enter Grades
                 </Button>
-                <Button variant="accent" className="h-16 flex-col">
+                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                   <Upload className="w-5 h-5 mb-1" />
                   Upload Resources
                 </Button>
-                <Button variant="outline" className="h-16 flex-col">
+                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                   <Users className="w-5 h-5 mb-1" />
                   Manage Classes
                 </Button>
@@ -217,25 +217,25 @@ const TeacherDashboard = () => {
           </Card>
 
           {/* Pending Tasks */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-accent" />
-                <CardTitle>Pending Tasks</CardTitle>
+                <CheckSquare className="w-5 h-5 text-red-400" />
+                <CardTitle className="text-white">Pending Tasks</CardTitle>
               </div>
-              <CardDescription>Items requiring your attention</CardDescription>
+              <CardDescription className="text-slate-300">Items requiring your attention</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {pendingTasks.map((task, index) => (
-                  <div key={index} className={`p-3 rounded-lg border ${task.urgent ? 'border-warning bg-warning/10' : 'bg-muted'}`}>
+                  <div key={index} className={`p-3 rounded-lg border ${task.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{task.task}</div>
-                        <div className="text-sm text-muted-foreground">Due: {task.due}</div>
+                        <div className="font-medium text-white">{task.task}</div>
+                        <div className="text-sm text-slate-300">Due: {task.due}</div>
                       </div>
                       {task.urgent && (
-                        <div className="text-xs bg-warning text-warning-foreground px-2 py-1 rounded">
+                        <div className="text-xs bg-orange-500 text-white px-2 py-1 rounded">
                           Urgent
                         </div>
                       )}
@@ -243,37 +243,37 @@ const TeacherDashboard = () => {
                   </div>
                 ))}
               </div>
-              <Button variant="outline" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Tasks
               </Button>
             </CardContent>
           </Card>
 
           {/* Recent Messages */}
-          <Card className="shadow-card">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <MessageCircle className="w-5 h-5 text-primary" />
-                <CardTitle>Recent Messages</CardTitle>
+                <MessageCircle className="w-5 h-5 text-green-400" />
+                <CardTitle className="text-white">Recent Messages</CardTitle>
               </div>
-              <CardDescription>Communications from parents and admin</CardDescription>
+              <CardDescription className="text-slate-300">Communications from parents and admin</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {recentMessages.map((message, index) => (
-                  <div key={index} className={`p-3 rounded-lg ${message.unread ? 'bg-primary/10 border border-primary/20' : 'bg-muted'}`}>
+                  <div key={index} className={`p-3 rounded-lg ${message.unread ? 'bg-orange-400/10 border border-orange-400/20' : 'bg-slate-700/50'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="font-medium">{message.from}</div>
-                        <div className="text-sm font-medium text-muted-foreground">{message.subject}</div>
-                        <div className="text-sm text-muted-foreground mt-1">{message.preview}</div>
+                        <div className="font-medium text-white">{message.from}</div>
+                        <div className="text-sm font-medium text-slate-300">{message.subject}</div>
+                        <div className="text-sm text-slate-300 mt-1">{message.preview}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{message.time}</div>
+                      <div className="text-xs text-slate-400">{message.time}</div>
                     </div>
                   </div>
                 ))}
               </div>
-              <Button variant="default" className="w-full mt-4">
+              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 <MessageCircle className="w-4 h-4 mr-2" />
                 View All Messages
               </Button>
