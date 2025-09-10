@@ -234,9 +234,9 @@ const Index = () => {
               <BookOpen className="w-8 h-8 text-orange-400" />
             </div>
             <h2 className="text-4xl sm:text-5xl font-bold text-white dark:text-white light:text-slate-900 mb-6">
-              {t('builtForEducation', 'Built for ')}{" "}
+              {t('builtForEducation')}{" "}
               <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                {t('features.multiRole.title', 'Modern Education')}
+                {t('modernEducation')}
               </span>
             </h2>
             <p className="text-xl text-slate-300 dark:text-slate-300 light:text-slate-600 max-w-3xl mx-auto leading-relaxed">
