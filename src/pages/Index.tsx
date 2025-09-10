@@ -71,7 +71,7 @@ const Index = () => {
     
     const animate = () => {
       setMousePosition(current => {
-        const dampening = 0.08; // Reduced for stability
+        const dampening = 0.2; // Increased for more sensitivity
         const maxVelocity = 0.5; // Limit velocity to prevent runaway
         
         // Calculate target difference
