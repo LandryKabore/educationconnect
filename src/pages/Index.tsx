@@ -191,10 +191,34 @@ const Index = () => {
 
       {/* Features Section */}
       <section className="py-24 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(249,115,22,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(239,68,68,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
+        {/* Floating Interactive Elements */}
+        {floatingIcons.slice(0, 6).map((item, index) => {
+          const IconComponent = item.icon;
+          const moveX = mousePosition.x * (8 + index * 1.5);
+          const moveY = mousePosition.y * (6 + index * 1);
+          
+          return (
+            <div
+              key={index}
+              className="absolute opacity-10 pointer-events-none"
+              style={{
+                left: `${item.x}%`,
+                top: `${item.y}%`,
+                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.03}deg)`,
+              }}
+            >
+              <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 backdrop-blur-sm border border-orange-500/10">
+                <IconComponent 
+                  size={item.size * 0.6} 
+                  className="text-orange-400/30"
+                />
+              </div>
+            </div>
+          );
+        })}
+        
+        {/* Background Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center mb-20">
