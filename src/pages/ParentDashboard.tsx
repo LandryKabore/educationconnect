@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
+import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { useParentData } from "@/hooks/useParentData";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements } = useParentData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -29,40 +31,27 @@ const ParentDashboard = () => {
     { icon: Database, x: 90, y: 80, size: 29, delay: 0.5 },
   ];
 
-  const childData = {
-    name: "Emma Johnson",
-    class: "Grade 8A",
-    overallGrade: "A-",
-    attendance: "96%",
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-white">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading your dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
-  const recentGrades = [
-    { subject: "Mathematics", grade: "A", date: "Dec 8" },
-    { subject: "English", grade: "A-", date: "Dec 6" },
-    { subject: "Science", grade: "B+", date: "Dec 5" },
-    { subject: "History", grade: "A", date: "Dec 3" },
-  ];
-
-  const upcomingExams = [
-    { subject: "Mathematics", date: "Dec 15, 2024", time: "9:00 AM" },
-    { subject: "French", date: "Dec 17, 2024", time: "10:30 AM" },
-    { subject: "Physics", date: "Dec 19, 2024", time: "2:00 PM" },
-  ];
-
-  const announcements = [
-    {
-      title: "Parent-Teacher Conference",
-      message: "Scheduled for December 20th. Please confirm your attendance.",
-      date: "Dec 9",
-      urgent: true,
-    },
-    {
-      title: "Winter Break Schedule",
-      message: "Classes will resume on January 8th, 2025.",
-      date: "Dec 8",
-      urgent: false,
-    },
-  ];
+  if (children.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center text-white">
+          <h2 className="text-2xl font-bold mb-4">No Children Found</h2>
+          <p className="text-slate-300">You don't have any children linked to your account yet.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
@@ -134,28 +123,43 @@ const ParentDashboard = () => {
                 <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
                   <GraduationCap className="w-8 h-8 text-white" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl text-white">{childData.name}</CardTitle>
-                  <CardDescription className="text-slate-300">{childData.class}</CardDescription>
+                <div className="flex-1">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <CardTitle className="text-xl text-white">{currentChild?.name || "Select Child"}</CardTitle>
+                      <CardDescription className="text-slate-300">{currentChild?.class || "No class assigned"}</CardDescription>
+                    </div>
+                    {children.length > 1 && (
+                      <select 
+                        value={selectedChildId || ''} 
+                        onChange={(e) => setSelectedChildId(e.target.value)}
+                        className="bg-slate-700 text-white rounded px-3 py-1 text-sm border border-slate-600"
+                      >
+                        {children.map(child => (
+                          <option key={child.id} value={child.id}>{child.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 bg-slate-100/80 rounded-xl">
-                  <div className="text-2xl font-bold text-orange-500">{childData.overallGrade}</div>
+                  <div className="text-2xl font-bold text-orange-500">{currentChild?.overall_grade || "N/A"}</div>
                   <div className="text-sm text-slate-600">Overall Grade</div>
                 </div>
                 <div className="text-center p-4 bg-slate-100/80 rounded-xl">
-                  <div className="text-2xl font-bold text-green-500">{childData.attendance}</div>
+                  <div className="text-2xl font-bold text-green-500">{currentChild?.attendance || "N/A"}</div>
                   <div className="text-sm text-slate-600">Attendance</div>
                 </div>
                 <div className="text-center p-4 bg-slate-100/80 rounded-xl">
-                  <div className="text-2xl font-bold text-blue-500">8</div>
-                  <div className="text-sm text-slate-600">Subjects</div>
+                  <div className="text-2xl font-bold text-blue-500">{grades.length}</div>
+                  <div className="text-sm text-slate-600">Recent Grades</div>
                 </div>
                 <div className="text-center p-4 bg-slate-100/80 rounded-xl">
-                  <div className="text-2xl font-bold text-red-500">3</div>
+                  <div className="text-2xl font-bold text-red-500">{exams.length}</div>
                   <div className="text-sm text-slate-600">Upcoming Exams</div>
                 </div>
               </div>
@@ -175,15 +179,20 @@ const ParentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {recentGrades.map((grade, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
+                {grades.length > 0 ? grades.slice(0, 4).map((grade) => (
+                  <div key={grade.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
                     <div>
                       <div className="font-medium text-white">{grade.subject}</div>
-                      <div className="text-sm text-slate-300">{grade.date}</div>
+                      <div className="text-sm text-slate-300">{grade.assignment}</div>
+                      <div className="text-xs text-slate-400">{grade.date}</div>
                     </div>
                     <div className="text-lg font-bold text-orange-400">{grade.grade}</div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-xl text-center text-slate-300">
+                    No grades available yet
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Grades
@@ -202,14 +211,19 @@ const ParentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {upcomingExams.map((exam, index) => (
-                  <div key={index} className="p-3 bg-slate-700/50 rounded-xl">
+                {exams.length > 0 ? exams.map((exam) => (
+                  <div key={exam.id} className="p-3 bg-slate-700/50 rounded-xl">
                     <div className="font-medium text-white">{exam.subject}</div>
-                    <div className="text-sm text-slate-300">
+                    <div className="text-sm text-slate-300">{exam.topic}</div>
+                    <div className="text-sm text-slate-400">
                       {exam.date} at {exam.time}
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-xl text-center text-slate-300">
+                    No upcoming exams
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View Full Calendar
@@ -228,8 +242,8 @@ const ParentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {announcements.map((announcement, index) => (
-                  <div key={index} className={`p-3 rounded-xl border ${announcement.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
+                {announcements.length > 0 ? announcements.map((announcement) => (
+                  <div key={announcement.id} className={`p-3 rounded-xl border ${announcement.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="font-medium text-white">{announcement.title}</div>
@@ -238,7 +252,11 @@ const ParentDashboard = () => {
                       <div className="text-xs text-slate-400">{announcement.date}</div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-xl text-center text-slate-300">
+                    No announcements
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Announcements

@@ -2,11 +2,16 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
+import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { useTeacherData } from "@/hooks/useTeacherData";
+import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
+import { GradeStudentModal } from "@/components/GradeStudentModal";
+import { AttendanceModal } from "@/components/AttendanceModal";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const { loading, teacherInfo, classes, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -29,42 +34,16 @@ const TeacherDashboard = () => {
     { icon: Database, x: 90, y: 80, size: 29, delay: 0.5 },
   ];
 
-  const teacherData = {
-    name: "Ms. Sarah Thompson",
-    subject: "Mathematics",
-    classes: ["8A", "8B", "9A"],
-    totalStudents: 87,
-  };
-
-  const todayClasses = [
-    { class: "8A", subject: "Algebra", time: "9:00 AM", room: "Room 201", students: 28 },
-    { class: "8B", subject: "Geometry", time: "11:00 AM", room: "Room 201", students: 30 },
-    { class: "9A", subject: "Advanced Math", time: "2:00 PM", room: "Room 203", students: 29 },
-  ];
-
-  const pendingTasks = [
-    { task: "Grade Math Quiz - 8A", urgent: true, due: "Today" },
-    { task: "Upload Study Materials - 9A", urgent: false, due: "Tomorrow" },
-    { task: "Parent Meeting - Emma Johnson", urgent: true, due: "Today 3PM" },
-    { task: "Attendance Review - 8B", urgent: false, due: "This Week" },
-  ];
-
-  const recentMessages = [
-    {
-      from: "John Parent",
-      subject: "Question about homework",
-      preview: "Could you clarify the algebra assignment...",
-      time: "2 hours ago",
-      unread: true,
-    },
-    {
-      from: "School Admin",
-      subject: "Weekly Report Due",
-      preview: "Please submit your weekly progress report...",
-      time: "1 day ago",
-      unread: false,
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-white">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading your dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
@@ -111,7 +90,9 @@ const TeacherDashboard = () => {
               </Button>
               <div>
                 <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
-                <p className="text-sm text-slate-300">{teacherData.name} - {teacherData.subject}</p>
+                <p className="text-sm text-slate-300">
+                  {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : "Teacher"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -132,25 +113,25 @@ const TeacherDashboard = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-orange-400">{teacherData.classes.length}</div>
+              <div className="text-2xl font-bold text-orange-400">{classes.length}</div>
               <div className="text-sm text-slate-300">Active Classes</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-blue-400">{teacherData.totalStudents}</div>
+              <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
               <div className="text-sm text-slate-300">Total Students</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-red-400">4</div>
+              <div className="text-2xl font-bold text-red-400">{stats.pendingTasks}</div>
               <div className="text-sm text-slate-300">Pending Tasks</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-green-400">96%</div>
+              <div className="text-2xl font-bold text-green-400">{stats.avgAttendance}</div>
               <div className="text-sm text-slate-300">Avg Attendance</div>
             </CardContent>
           </Card>
@@ -168,13 +149,13 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {todayClasses.map((classInfo, index) => (
-                  <div key={index} className="p-4 bg-slate-700/50 rounded-lg">
+                {classes.length > 0 ? classes.map((classInfo) => (
+                  <div key={classInfo.id} className="p-4 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium text-white">{classInfo.class} - {classInfo.subject}</div>
+                        <div className="font-medium text-white">{classInfo.name} - {classInfo.grade_level}</div>
                         <div className="text-sm text-slate-300">
-                          {classInfo.time} • {classInfo.room} • {classInfo.students} students
+                          {classInfo.schedule_time} • {classInfo.room} • {classInfo.student_count} students
                         </div>
                       </div>
                       <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
@@ -183,7 +164,11 @@ const TeacherDashboard = () => {
                       </Button>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No classes assigned yet
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -196,18 +181,13 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-                  <CheckSquare className="w-5 h-5 mb-1" />
-                  Take Attendance
-                </Button>
-                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-                  <TrendingUp className="w-5 h-5 mb-1" />
-                  Enter Grades
-                </Button>
-                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-                  <Upload className="w-5 h-5 mb-1" />
-                  Upload Resources
-                </Button>
+                <AttendanceModal onAttendanceSubmitted={() => {}} />
+                <GradeStudentModal onGradeSubmitted={() => {}} />
+                <CreateAssignmentModal 
+                  classes={classes.map(c => ({ id: c.id, name: c.name }))} 
+                  subjects={[{ id: "1", name: "Mathematics" }, { id: "2", name: "Science" }]} 
+                  onAssignmentCreated={() => {}} 
+                />
                 <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                   <Users className="w-5 h-5 mb-1" />
                   Manage Classes
@@ -227,21 +207,35 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {pendingTasks.map((task, index) => (
-                  <div key={index} className={`p-3 rounded-lg border ${task.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
+                {tasks.length > 0 ? tasks.map((task) => (
+                  <div key={task.id} className={`p-3 rounded-lg border ${task.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex-1">
                         <div className="font-medium text-white">{task.task}</div>
                         <div className="text-sm text-slate-300">Due: {task.due}</div>
                       </div>
-                      {task.urgent && (
-                        <div className="text-xs bg-orange-500 text-white px-2 py-1 rounded">
-                          Urgent
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {task.urgent && (
+                          <div className="text-xs bg-orange-500 text-white px-2 py-1 rounded">
+                            Urgent
+                          </div>
+                        )}
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => markTaskComplete(task.id)}
+                          className="text-xs"
+                        >
+                          Complete
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No pending tasks
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Tasks
@@ -260,8 +254,12 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {recentMessages.map((message, index) => (
-                  <div key={index} className={`p-3 rounded-lg ${message.unread ? 'bg-orange-400/10 border border-orange-400/20' : 'bg-slate-700/50'}`}>
+                {messages.length > 0 ? messages.map((message) => (
+                  <div 
+                    key={message.id} 
+                    className={`p-3 rounded-lg cursor-pointer ${message.unread ? 'bg-orange-400/10 border border-orange-400/20' : 'bg-slate-700/50'}`}
+                    onClick={() => markMessageRead(message.id)}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="font-medium text-white">{message.from}</div>
@@ -271,7 +269,11 @@ const TeacherDashboard = () => {
                       <div className="text-xs text-slate-400">{message.time}</div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No recent messages
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 <MessageCircle className="w-4 h-4 mr-2" />

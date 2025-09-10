@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { useStudentData } from "@/hooks/useStudentData";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -29,38 +31,27 @@ const StudentDashboard = () => {
     { icon: Database, x: 90, y: 80, size: 29, delay: 0.5 },
   ];
 
-  const studentData = {
-    name: "Alex Thompson",
-    grade: "Grade 9A",
-    overallGPA: "3.8",
-    attendance: "94%",
-  };
-
-  const recentGrades = [
-    { subject: "Mathematics", grade: "A-", date: "Dec 8", assignment: "Algebra Quiz" },
-    { subject: "English", grade: "B+", date: "Dec 6", assignment: "Essay: Climate Change" },
-    { subject: "Science", grade: "A", date: "Dec 5", assignment: "Physics Lab Report" },
-    { subject: "History", grade: "A-", date: "Dec 3", assignment: "World War II Project" },
-  ];
-
-  const upcomingExams = [
-    { subject: "Mathematics", date: "Dec 15", time: "9:00 AM", topic: "Quadratic Equations" },
-    { subject: "French", date: "Dec 17", time: "10:30 AM", topic: "Conversation Test" },
-    { subject: "Chemistry", date: "Dec 19", time: "2:00 PM", topic: "Organic Compounds" },
-  ];
-
+  // Mock data for features not yet implemented
   const studyMaterials = [
     { subject: "Mathematics", title: "Algebra Practice Problems", type: "PDF", uploadedBy: "Ms. Thompson", date: "Dec 7" },
     { subject: "Science", title: "Physics Formula Sheet", type: "PDF", uploadedBy: "Mr. Wilson", date: "Dec 6" },
-    { subject: "English", title: "Essay Writing Guidelines", type: "Document", uploadedBy: "Ms. Davis", date: "Dec 5" },
-    { subject: "History", title: "WWII Timeline", type: "PDF", uploadedBy: "Mr. Brown", date: "Dec 4" },
   ];
 
   const studyGroups = [
     { name: "Math Study Group", subject: "Mathematics", members: 8, lastActivity: "2 hours ago", active: true },
     { name: "Science Champions", subject: "Physics", members: 12, lastActivity: "1 day ago", active: false },
-    { name: "History Buffs", subject: "History", members: 6, lastActivity: "3 days ago", active: false },
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-white">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading your dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
@@ -107,7 +98,10 @@ const StudentDashboard = () => {
               </Button>
               <div>
                 <h1 className="text-xl font-bold text-white">Student Dashboard</h1>
-                <p className="text-sm text-slate-300">{studentData.name} - {studentData.grade}</p>
+                <p className="text-sm text-slate-300">
+                  {studentInfo?.profile ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` : "Student"} - 
+                  {studentInfo?.student?.classes?.name || "Unknown Class"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -126,14 +120,14 @@ const StudentDashboard = () => {
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <Award className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-orange-400">{studentData.overallGPA}</div>
+              <div className="text-2xl font-bold text-orange-400">{gpa}</div>
               <div className="text-sm text-slate-300">Overall GPA</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <Clock className="w-8 h-8 text-green-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-400">{studentData.attendance}</div>
+              <div className="text-2xl font-bold text-green-400">{attendanceRate}</div>
               <div className="text-sm text-slate-300">Attendance</div>
             </CardContent>
           </Card>
@@ -147,8 +141,8 @@ const StudentDashboard = () => {
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <Users className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-red-400">3</div>
-              <div className="text-sm text-slate-300">Study Groups</div>
+              <div className="text-2xl font-bold text-red-400">{assignments.length}</div>
+              <div className="text-sm text-slate-300">Upcoming Assignments</div>
             </CardContent>
           </Card>
         </div>
@@ -165,8 +159,8 @@ const StudentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {recentGrades.map((grade, index) => (
-                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
+                {grades.length > 0 ? grades.slice(0, 4).map((grade) => (
+                  <div key={grade.id} className="p-3 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-white">{grade.subject}</div>
@@ -176,7 +170,11 @@ const StudentDashboard = () => {
                       <div className="text-lg font-bold text-orange-400">{grade.grade}</div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No grades available yet
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View All Grades
@@ -195,15 +193,19 @@ const StudentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {upcomingExams.map((exam, index) => (
-                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
-                    <div className="font-medium text-white">{exam.subject}</div>
-                    <div className="text-sm text-slate-300">{exam.topic}</div>
+                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => (
+                  <div key={assignment.id} className="p-3 bg-slate-700/50 rounded-lg">
+                    <div className="font-medium text-white">{assignment.subject}</div>
+                    <div className="text-sm text-slate-300">{assignment.title}</div>
                     <div className="text-sm text-slate-400">
-                      {exam.date} at {exam.time}
+                      Due: {assignment.due_date}
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No upcoming assignments
+                  </div>
+                )}
               </div>
               <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
                 View Study Calendar
