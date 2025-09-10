@@ -20,26 +20,53 @@ const Index = () => {
       if (e.gamma !== null && e.beta !== null) {
         // gamma: left/right tilt (-90 to 90)
         // beta: front/back tilt (-180 to 180)
+        // Clamp values to prevent extreme movements
+        const gamma = Math.max(-45, Math.min(45, e.gamma));
+        const beta = Math.max(-45, Math.min(45, e.beta));
+        
         setMousePosition({
-          x: (e.gamma / 45), // Normalize to -2 to 2 range
-          y: (e.beta / 90), // Normalize to -2 to 2 range
+          x: gamma / 22.5, // Normalize to -2 to 2 range
+          y: beta / 22.5, // Normalize to -2 to 2 range
         });
       }
     };
 
-    // Check if device supports orientation
-    if (window.DeviceOrientationEvent) {
-      window.addEventListener('deviceorientation', handleDeviceOrientation);
-    }
+    const requestOrientationPermission = async () => {
+      // For iOS 13+ devices, request permission
+      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+        try {
+          const permission = await (DeviceOrientationEvent as any).requestPermission();
+          if (permission === 'granted') {
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+          }
+        } catch (error) {
+          console.log('Device orientation permission denied');
+        }
+      } else if (window.DeviceOrientationEvent) {
+        // For non-iOS or older iOS devices
+        window.addEventListener('deviceorientation', handleDeviceOrientation);
+      }
+    };
+
+    // Add click handler to request permissions on user interaction
+    const handleFirstInteraction = () => {
+      requestOrientationPermission();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+
+    // Request permission on first user interaction
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
     
     // Always add mouse support for desktop
     window.addEventListener('mousemove', handleMouseMove);
     
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      if (window.DeviceOrientationEvent) {
-        window.removeEventListener('deviceorientation', handleDeviceOrientation);
-      }
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
     };
   }, []);
 
