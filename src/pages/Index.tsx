@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone } from "lucide-react";
+import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
 import { useState, useEffect } from "react";
-import FloatingElements3D from "@/components/FloatingElements3D";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -20,6 +19,17 @@ const Index = () => {
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
+
+  const floatingIcons = [
+    { icon: Calculator, x: 15, y: 20, size: 40, delay: 0 },
+    { icon: Brain, x: 85, y: 25, size: 50, delay: 0.1 },
+    { icon: Microscope, x: 25, y: 70, size: 45, delay: 0.2 },
+    { icon: Code2, x: 75, y: 65, size: 35, delay: 0.3 },
+    { icon: Lightbulb, x: 10, y: 45, size: 38, delay: 0.4 },
+    { icon: Database, x: 90, y: 80, size: 42, delay: 0.5 },
+    { icon: Globe, x: 60, y: 15, size: 36, delay: 0.6 },
+    { icon: BookOpen, x: 45, y: 85, size: 48, delay: 0.7 },
+  ];
 
   const features = [
     {
@@ -58,8 +68,31 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen flex items-center">
-        {/* 3D Floating Elements */}
-        <FloatingElements3D mousePosition={mousePosition} />
+        {/* Floating Interactive Elements */}
+        {floatingIcons.map((item, index) => {
+          const IconComponent = item.icon;
+          const moveX = mousePosition.x * (15 + index * 3);
+          const moveY = mousePosition.y * (10 + index * 2);
+          
+          return (
+            <div
+              key={index}
+              className="absolute opacity-20 pointer-events-none"
+              style={{
+                left: `${item.x}%`,
+                top: `${item.y}%`,
+                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.1}deg)`,
+              }}
+            >
+              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20">
+                <IconComponent 
+                  size={item.size} 
+                  className="text-orange-400/60"
+                />
+              </div>
+            </div>
+          );
+        })}
         
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
