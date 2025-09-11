@@ -59,30 +59,27 @@ export const useParentData = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch children through parent-student relationships
+      // Fetch children through parent-student links
       const { data: relationships } = await supabase
-        .from("parent_student_relationships")
+        .from("parent_student_links")
         .select(`
-          student_id,
-          students(
-            *,
-            profiles(*),
-            classes(name, grade_level)
-          )
+          student_user_id,
+          profiles!parent_student_links_student_user_id_fkey(*)
         `)
-        .eq("parent_id", user.id);
+        .eq("parent_user_id", user.id)
+        .eq("status", "active");
 
       if (relationships && relationships.length > 0) {
         const childrenData = relationships.map(rel => {
-          const student = rel.students;
+          const profile = rel.profiles;
           return {
-            id: student.user_id,
-            name: `${student.profiles?.first_name || 'Unknown'} ${student.profiles?.last_name || 'Student'}`,
-            class: student.classes?.name || "Unknown Class",
-            grade_level: student.classes?.grade_level || "Unknown Grade",
+            id: rel.student_user_id,
+            name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
+            class: "Unknown Class", // Will be fetched separately
+            grade_level: "Unknown Grade", // Will be fetched separately
             overall_grade: "A-", // Will be calculated from actual grades
             attendance: "96%", // Will be calculated from actual attendance
-            profile: student.profiles
+            profile: profile
           };
         });
 

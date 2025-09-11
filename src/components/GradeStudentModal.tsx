@@ -67,25 +67,33 @@ export function GradeStudentModal({ onGradeSubmitted }: GradeStudentModalProps) 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get students from teacher's classes
-      const { data, error } = await supabase
-        .from("students")
-        .select(`
-          user_id,
-          profiles(first_name, last_name),
-          classes!inner(teacher_id)
-        `)
-        .eq("classes.teacher_id", user.id);
+      // Get students from teacher's teaching assignments
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select("class_section_id")
+        .eq("teacher_user_id", user.id);
 
-      if (error) throw error;
-      
-      const formattedStudents = data?.map(student => ({
-        id: student.user_id,
-        name: `${student.profiles?.first_name || ''} ${student.profiles?.last_name || ''}`.trim(),
-        user_id: student.user_id
-      })) || [];
+      if (assignments && assignments.length > 0) {
+        const classSectionIds = assignments.map(a => a.class_section_id);
+        
+        const { data, error } = await supabase
+          .from("enrollments")
+          .select(`
+            student_user_id,
+            profiles!enrollments_student_user_id_fkey(first_name, last_name)
+          `)
+          .in("class_section_id", classSectionIds);
 
-      setStudents(formattedStudents);
+        if (error) throw error;
+        
+        const formattedStudents = data?.map(enrollment => ({
+          id: enrollment.student_user_id,
+          name: `${enrollment.profiles?.first_name || ''} ${enrollment.profiles?.last_name || ''}`.trim(),
+          user_id: enrollment.student_user_id
+        })) || [];
+
+        setStudents(formattedStudents);
+      }
     } catch (error) {
       console.error("Error fetching students:", error);
     }

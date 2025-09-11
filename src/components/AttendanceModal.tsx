@@ -64,19 +64,19 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
   const fetchStudents = async () => {
     try {
       const { data, error } = await supabase
-        .from("students")
+        .from("enrollments")
         .select(`
-          user_id,
-          profiles(first_name, last_name)
+          student_user_id,
+          profiles!enrollments_student_user_id_fkey(first_name, last_name)
         `)
-        .eq("class_id", selectedClass);
+        .eq("class_section_id", selectedClass);
 
       if (error) throw error;
       
-      const formattedStudents = data?.map(student => ({
-        id: student.user_id,
-        name: `${student.profiles?.first_name || ''} ${student.profiles?.last_name || ''}`.trim(),
-        user_id: student.user_id
+      const formattedStudents = data?.map(enrollment => ({
+        id: enrollment.student_user_id,
+        name: `${enrollment.profiles?.first_name || ''} ${enrollment.profiles?.last_name || ''}`.trim(),
+        user_id: enrollment.student_user_id
       })) || [];
 
       setStudents(formattedStudents);

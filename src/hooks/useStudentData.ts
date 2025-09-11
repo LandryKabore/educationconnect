@@ -52,10 +52,9 @@ export const useStudentData = () => {
         .single();
 
       const { data: student } = await supabase
-        .from("students")
+        .from("student_profiles")
         .select(`
           *,
-          classes(name, grade_level),
           schools(name)
         `)
         .eq("user_id", user.id)
@@ -109,15 +108,22 @@ export const useStudentData = () => {
           setAttendance(formattedAttendance);
         }
 
+        // Get student's enrolled classes first
+        const { data: enrollments } = await supabase
+          .from("enrollments")
+          .select("class_section_id")
+          .eq("student_user_id", user.id);
+
+        const classSectionIds = enrollments?.map(e => e.class_section_id) || [];
+
         // Fetch upcoming assignments
         const { data: assignmentsData } = await supabase
           .from("assignments")
           .select(`
             *,
-            subjects(name),
-            classes(name)
+            subjects(name)
           `)
-          .eq("class_id", student.class_id)
+          .in("class_id", classSectionIds)
           .gte("due_date", new Date().toISOString())
           .order("due_date", { ascending: true })
           .limit(10);

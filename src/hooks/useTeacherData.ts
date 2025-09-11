@@ -57,7 +57,7 @@ export const useTeacherData = () => {
         .single();
 
       const { data: teacher } = await supabase
-        .from("teachers")
+        .from("teacher_profiles")
         .select(`
           *,
           schools(name)
