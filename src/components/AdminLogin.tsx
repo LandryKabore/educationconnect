@@ -15,7 +15,28 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    role: 'admin' as 'admin' | 'teacher' | 'student' | 'parent',
+    schoolId: ''
+  });
+  const [schools, setSchools] = useState<Array<{id: string, name: string}>>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchSchools = async () => {
+      const { data } = await supabase
+        .from('schools')
+        .select('id, name')
+        .eq('active', true);
+      setSchools(data || []);
+    };
+    
+    if (isSignUp) {
+      fetchSchools();
+    }
+  }, [isSignUp]);
 
   useEffect(() => {
     // Keep the auth state listener simple per best practices
@@ -44,13 +65,18 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
           password,
           options: {
             emailRedirectTo: redirectUrl,
-            data: { role: 'admin' }
+            data: { 
+              first_name: formData.firstName,
+              last_name: formData.lastName,
+              role: formData.role,
+              school_id: formData.schoolId
+            }
           }
         });
         if (error) throw error;
         toast({
           title: "Confirmation sent",
-          description: "Check your email to confirm and complete admin setup.",
+          description: "Check your email to confirm and complete setup.",
         });
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -83,15 +109,73 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
     <div className="min-h-screen grid place-items-center bg-background">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle>{isSignUp ? 'Create Admin Account' : 'Admin Sign In'}</CardTitle>
+          <CardTitle>{isSignUp ? 'Create Account' : 'Admin Sign In'}</CardTitle>
           <CardDescription>
             {isSignUp
-              ? 'Sign up to create the first admin. A confirmation email will be sent.'
+              ? 'Sign up to create an account. A confirmation email will be sent.'
               : 'Sign in with your admin email and password'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAuth} className="space-y-4">
+            {isSignUp && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData(prev => ({...prev, firstName: e.target.value}))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData(prev => ({...prev, lastName: e.target.value}))}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="role">Role</Label>
+                  <select
+                    id="role"
+                    value={formData.role}
+                    onChange={(e) => setFormData(prev => ({...prev, role: e.target.value as any}))}
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md"
+                    required
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="student">Student</option>
+                    <option value="parent">Parent</option>
+                  </select>
+                </div>
+                {(formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && (
+                  <div>
+                    <Label htmlFor="school">School</Label>
+                    <select
+                      id="school"
+                      value={formData.schoolId}
+                      onChange={(e) => setFormData(prev => ({...prev, schoolId: e.target.value}))}
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md"
+                      required
+                    >
+                      <option value="">Select a school</option>
+                      {schools.map((school) => (
+                        <option key={school.id} value={school.id}>
+                          {school.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -113,14 +197,14 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (isSignUp ? 'Creating...' : 'Signing in...') : (isSignUp ? 'Create Admin' : 'Access Admin Panel')}
+              {loading ? (isSignUp ? 'Creating...' : 'Signing in...') : (isSignUp ? 'Create Account' : 'Access Admin Panel')}
             </Button>
             <button
               type="button"
               onClick={() => setIsSignUp((v) => !v)}
               className="w-full text-sm underline mt-2"
             >
-              {isSignUp ? 'Have an account? Sign in' : "First time? Create admin account"}
+              {isSignUp ? 'Have an account? Sign in' : "First time? Create account"}
             </button>
           </form>
         </CardContent>

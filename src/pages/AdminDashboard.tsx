@@ -121,7 +121,8 @@ const AdminDashboard = () => {
         subjectsData,
         profilesData,
         studentProfilesData,
-        teacherProfilesData
+        teacherProfilesData,
+        parentProfilesData
       ] = await Promise.all([
         supabase.from('schools').select('*').eq('active', true),
         supabase.from('campuses').select('*').then(result => ({
@@ -151,12 +152,18 @@ const AdminDashboard = () => {
         supabase.from('teacher_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
           data: selectedSchoolId ? result.data?.filter(tp => tp.school_id === selectedSchoolId) : result.data
+        })),
+        // And parent profiles to link parents to schools
+        supabase.from('parent_profiles').select('*, profiles!inner(*)').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(pp => pp.school_id === selectedSchoolId) : result.data
         }))
       ]);
 
       console.log('Profiles data:', profilesData);
       console.log('Student profiles data:', studentProfilesData);
       console.log('Teacher profiles data:', teacherProfilesData);
+      console.log('Parent profiles data:', parentProfilesData);
       
       if (profilesData.error) {
         console.error('Error fetching profiles:', profilesData.error);
@@ -172,8 +179,8 @@ const AdminDashboard = () => {
         students = studentProfilesData.data?.length || 0;
         // Count teachers linked to this school
         teachers = teacherProfilesData.data?.length || 0;
-        // Count parents (for now, all parents - could be filtered by children's school)
-        parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
+        // Count parents linked to this school
+        parents = parentProfilesData.data?.length || 0;
       } else {
         // Count all users
         students = profilesData.data?.filter(p => p.role === 'student').length || 0;
