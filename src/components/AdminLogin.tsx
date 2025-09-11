@@ -181,25 +181,24 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                     <option value="parent">Parent</option>
                   </select>
                 </div>
-                {(formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && (
-                  <div>
-                    <Label htmlFor="school">School *</Label>
-                    <select
-                      id="school"
-                      value={formData.schoolId}
-                      onChange={(e) => setFormData(prev => ({...prev, schoolId: e.target.value}))}
-                      className="w-full px-3 py-2 border border-input bg-background rounded-md z-50 relative"
-                      required
-                    >
-                      <option value="">Select a school</option>
-                      {schools.map((school) => (
-                        <option key={school.id} value={school.id}>
-                          {school.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                {/* ALWAYS show school dropdown for parent signup since default role is parent */}
+                <div>
+                  <Label htmlFor="school">School *</Label>
+                  <select
+                    id="school"
+                    value={formData.schoolId}
+                    onChange={(e) => setFormData(prev => ({...prev, schoolId: e.target.value}))}
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md"
+                    required
+                  >
+                    <option value="">Select a school ({schools.length} available)</option>
+                    {schools.map((school) => (
+                      <option key={school.id} value={school.id}>
+                        {school.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </>
             )}
             <div className="space-y-2">
