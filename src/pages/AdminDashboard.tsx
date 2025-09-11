@@ -49,14 +49,28 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    // Check for admin access
-    const adminAccess = localStorage.getItem("admin_access");
-    if (adminAccess === "true") {
-      setHasAdminAccess(true);
-      fetchAdminData();
-    } else {
-      setLoading(false);
-    }
+    // Listen for auth changes and verify admin role
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        checkAdminAndLoad();
+      } else {
+        setHasAdminAccess(false);
+        setLoading(false);
+      }
+    });
+
+    // Also check current session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        checkAdminAndLoad();
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Refetch data when selected school changes
@@ -65,6 +79,34 @@ const AdminDashboard = () => {
       fetchAdminData();
     }
   }, [selectedSchoolId]);
+
+  async function checkAdminAndLoad() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.rpc('is_admin');
+      if (error) throw error;
+      if (data === true) {
+        setHasAdminAccess(true);
+        await fetchAdminData();
+      } else {
+        setHasAdminAccess(false);
+        toast({
+          title: "Unauthorized",
+          description: "You must be an admin to access this dashboard.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error('Error checking admin access:', err);
+      toast({
+        title: "Error",
+        description: "Failed to verify admin access.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const fetchAdminData = async () => {
     try {
