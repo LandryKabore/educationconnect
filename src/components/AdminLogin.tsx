@@ -33,10 +33,10 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
       setSchools(data || []);
     };
     
-    if (isSignUp) {
+    if (isSignUp && (formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent')) {
       fetchSchools();
     }
-  }, [isSignUp]);
+  }, [isSignUp, formData.role]);
 
   useEffect(() => {
     // Keep the auth state listener simple per best practices
