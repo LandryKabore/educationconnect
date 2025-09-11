@@ -14,9 +14,10 @@ import { School, MapPin, Phone, Mail, Globe } from "lucide-react";
 interface SchoolSelectorProps {
   onSchoolSelect: (schoolId: string | null) => void;
   selectedSchoolId: string | null;
+  onRefresh?: () => void;
 }
 
-export function SchoolSelector({ onSchoolSelect, selectedSchoolId }: SchoolSelectorProps) {
+export function SchoolSelector({ onSchoolSelect, selectedSchoolId, onRefresh }: SchoolSelectorProps) {
   const [schools, setSchools] = useState<any[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<any>(null);
   const [loading, setLoading] = useState(true);

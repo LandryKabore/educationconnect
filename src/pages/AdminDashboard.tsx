@@ -181,6 +181,7 @@ const AdminDashboard = () => {
           <SchoolSelector 
             selectedSchoolId={selectedSchoolId}
             onSchoolSelect={setSelectedSchoolId}
+            onRefresh={fetchAdminData}
           />
         </div>
         {/* Quick Stats */}
