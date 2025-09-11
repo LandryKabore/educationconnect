@@ -167,12 +167,12 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                 </div>
                 {(formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && (
                   <div>
-                    <Label htmlFor="school">School</Label>
+                    <Label htmlFor="school">School *</Label>
                     <select
                       id="school"
                       value={formData.schoolId}
                       onChange={(e) => setFormData(prev => ({...prev, schoolId: e.target.value}))}
-                      className="w-full px-3 py-2 border border-input bg-background rounded-md"
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md z-50 relative"
                       required
                     >
                       <option value="">Select a school</option>
