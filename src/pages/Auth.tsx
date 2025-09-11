@@ -108,6 +108,18 @@ export default function Auth() {
     
     try {
       setLoading(true);
+      
+      // Check for hardcoded admin credentials
+      if (email === "blooster@gmail.com" && password === "8691") {
+        localStorage.setItem("admin_access", "true");
+        toast({
+          title: "Admin Access Granted",
+          description: "Welcome to the admin panel",
+        });
+        navigate("/admin-dashboard", { replace: true });
+        return;
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data.user) {
