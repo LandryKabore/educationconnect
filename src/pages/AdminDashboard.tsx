@@ -75,9 +75,20 @@ const AdminDashboard = () => {
         supabase.from('profiles').select('*')
       ]);
 
+      console.log('Profiles data:', profilesData);
+      console.log('Profiles count:', profilesData.data?.length);
+      
+      if (profilesData.error) {
+        console.error('Error fetching profiles:', profilesData.error);
+      }
+
       const students = profilesData.data?.filter(p => p.role === 'student').length || 0;
       const teachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
       const parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
+
+      console.log('Student count:', students);
+      console.log('Teacher count:', teachers);
+      console.log('Parent count:', parents);
 
       setAdminData({
         schools: schoolsData.data || [],
