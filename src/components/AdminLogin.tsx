@@ -26,26 +26,26 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
 
   useEffect(() => {
     const fetchSchools = async () => {
-      console.log('Fetching schools...');
-      const { data } = await supabase
+      console.log('FETCHING SCHOOLS - Role:', formData.role, 'SignUp:', isSignUp);
+      const { data, error } = await supabase
         .from('schools')
         .select('id, name')
         .eq('active', true);
-      console.log('Schools data:', data);
+      console.log('SCHOOLS FETCHED:', { data, error });
       setSchools(data || []);
     };
     
-    // Always fetch schools on mount since default role is parent
+    // Always fetch schools when component mounts (default role is parent)
     fetchSchools();
   }, []);
 
-  // Also fetch when role changes in signup mode
+  // Fetch again when switching to signup or changing role
   useEffect(() => {
-    if (isSignUp && (formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent')) {
+    if (isSignUp) {
       const fetchSchools = async () => {
         const { data } = await supabase
           .from('schools')
-          .select('id, name')
+          .select('id, name')  
           .eq('active', true);
         setSchools(data || []);
       };
@@ -181,9 +181,9 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                     <option value="parent">Parent</option>
                   </select>
                 </div>
-                {/* ALWAYS show school dropdown for parent signup since default role is parent */}
+                {/* School dropdown - ALWAYS show in signup mode */}
                 <div>
-                  <Label htmlFor="school">School *</Label>
+                  <Label htmlFor="school">School * (Role: {formData.role}, Schools: {schools.length})</Label>
                   <select
                     id="school"
                     value={formData.schoolId}
@@ -191,7 +191,7 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                     className="w-full px-3 py-2 border border-input bg-background rounded-md"
                     required
                   >
-                    <option value="">Select a school ({schools.length} available)</option>
+                    <option value="">Select a school</option>
                     {schools.map((school) => (
                       <option key={school.id} value={school.id}>
                         {school.name}
