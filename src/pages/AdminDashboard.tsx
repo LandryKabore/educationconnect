@@ -59,34 +59,85 @@ const AdminDashboard = () => {
     }
   }, []);
 
+  // Refetch data when selected school changes
+  useEffect(() => {
+    if (hasAdminAccess) {
+      fetchAdminData();
+    }
+  }, [selectedSchoolId]);
+
   const fetchAdminData = async () => {
     try {
+      // Build queries based on selected school
+      let schoolFilter = selectedSchoolId ? { school_id: selectedSchoolId } : {};
+      
       const [
         schoolsData,
         campusesData,
         academicYearsData,
         classSectionsData,
         subjectsData,
-        profilesData
+        profilesData,
+        studentProfilesData,
+        teacherProfilesData
       ] = await Promise.all([
         supabase.from('schools').select('*').eq('active', true),
-        supabase.from('campuses').select('*'),
-        supabase.from('academic_years').select('*').order('created_at', { ascending: false }),
-        supabase.from('class_sections').select('*'),
-        supabase.from('subjects').select('*'),
-        supabase.from('profiles').select('*')
+        supabase.from('campuses').select('*').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(c => c.school_id === selectedSchoolId) : result.data
+        })),
+        supabase.from('academic_years').select('*').order('created_at', { ascending: false }).then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(ay => ay.school_id === selectedSchoolId) : result.data
+        })),
+        supabase.from('class_sections').select('*').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(cs => cs.school_id === selectedSchoolId) : result.data
+        })),
+        supabase.from('subjects').select('*').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(s => !s.school_id || s.school_id === selectedSchoolId) : result.data
+        })),
+        // Fetch all profiles first
+        supabase.from('profiles').select('*'),
+        // Then get student profiles to link students to schools
+        supabase.from('student_profiles').select('*, profiles!inner(*)').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(sp => sp.school_id === selectedSchoolId) : result.data
+        })),
+        // And teacher profiles to link teachers to schools
+        supabase.from('teacher_profiles').select('*, profiles!inner(*)').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(tp => tp.school_id === selectedSchoolId) : result.data
+        }))
       ]);
 
       console.log('Profiles data:', profilesData);
-      console.log('Profiles count:', profilesData.data?.length);
+      console.log('Student profiles data:', studentProfilesData);
+      console.log('Teacher profiles data:', teacherProfilesData);
       
       if (profilesData.error) {
         console.error('Error fetching profiles:', profilesData.error);
       }
 
-      const students = profilesData.data?.filter(p => p.role === 'student').length || 0;
-      const teachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
-      const parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
+      // Calculate totals based on school filter
+      let students = 0;
+      let teachers = 0;
+      let parents = 0;
+
+      if (selectedSchoolId) {
+        // Count students linked to this school
+        students = studentProfilesData.data?.length || 0;
+        // Count teachers linked to this school
+        teachers = teacherProfilesData.data?.length || 0;
+        // Count parents (for now, all parents - could be filtered by children's school)
+        parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
+      } else {
+        // Count all users
+        students = profilesData.data?.filter(p => p.role === 'student').length || 0;
+        teachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
+        parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
+      }
 
       console.log('Student count:', students);
       console.log('Teacher count:', teachers);
@@ -454,6 +505,7 @@ const AdminDashboard = () => {
         onClose={() => setUserModalOpen(false)}
         userType={userModalType}
         title={userModalTitle}
+        selectedSchoolId={selectedSchoolId}
       />
 
       <CreateSchoolModal

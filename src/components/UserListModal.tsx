@@ -30,9 +30,10 @@ interface UserListModalProps {
   onClose: () => void;
   userType: 'student' | 'teacher' | 'parent' | 'all';
   title: string;
+  selectedSchoolId?: string | null;
 }
 
-export function UserListModal({ isOpen, onClose, userType, title }: UserListModalProps) {
+export function UserListModal({ isOpen, onClose, userType, title, selectedSchoolId }: UserListModalProps) {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -57,18 +58,35 @@ export function UserListModal({ isOpen, onClose, userType, title }: UserListModa
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('profiles').select('*');
-      
-      if (userType !== 'all') {
-        query = query.eq('role', userType);
+      if (selectedSchoolId && (userType === 'student' || userType === 'teacher')) {
+        // For students and teachers, filter by school through their profile tables
+        const profileTable = userType === 'student' ? 'student_profiles' : 'teacher_profiles';
+        const { data, error } = await supabase
+          .from(profileTable)
+          .select('*, profiles!inner(*)')
+          .eq('school_id', selectedSchoolId)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const profilesData = data?.map(item => item.profiles) || [];
+        setUsers(profilesData);
+        setFilteredUsers(profilesData);
+      } else {
+        // Default behavior - fetch all profiles
+        let query = supabase.from('profiles').select('*');
+        
+        if (userType !== 'all') {
+          query = query.eq('role', userType);
+        }
+        
+        const { data, error } = await query.order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        setUsers(data || []);
+        setFilteredUsers(data || []);
       }
-      
-      const { data, error } = await query.order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      setUsers(data || []);
-      setFilteredUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
