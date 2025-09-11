@@ -9,6 +9,9 @@ import { AdminLogin } from "@/components/AdminLogin";
 import { UserListModal } from "@/components/UserListModal";
 import { CreateSchoolModal } from "@/components/CreateSchoolModal";
 import { CreateCampusModal } from "@/components/CreateCampusModal";
+import { CreateAcademicYearModal } from "@/components/CreateAcademicYearModal";
+import { CreateClassSectionModal } from "@/components/CreateClassSectionModal";
+import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -35,6 +38,9 @@ const AdminDashboard = () => {
   const [userModalTitle, setUserModalTitle] = useState('');
   const [createSchoolModalOpen, setCreateSchoolModalOpen] = useState(false);
   const [createCampusModalOpen, setCreateCampusModalOpen] = useState(false);
+  const [createAcademicYearModalOpen, setCreateAcademicYearModalOpen] = useState(false);
+  const [createClassSectionModalOpen, setCreateClassSectionModalOpen] = useState(false);
+  const [createSubjectModalOpen, setCreateSubjectModalOpen] = useState(false);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
@@ -429,7 +435,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400">+{adminData.academicYears.length - 3} more</p>
                 )}
               </div>
-              <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white">
+              <Button 
+                className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
+                onClick={() => setCreateAcademicYearModalOpen(true)}
+              >
                 Create Academic Year
               </Button>
             </CardContent>
@@ -460,7 +469,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400">+{adminData.classSections.length - 3} more</p>
                 )}
               </div>
-              <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              <Button 
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => setCreateClassSectionModalOpen(true)}
+              >
                 Create Class Section
               </Button>
             </CardContent>
@@ -491,7 +503,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400">+{adminData.subjects.length - 3} more</p>
                 )}
               </div>
-              <Button className="w-full bg-red-600 hover:bg-red-700 text-white">
+              <Button 
+                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => setCreateSubjectModalOpen(true)}
+              >
                 Add New Subject
               </Button>
             </CardContent>
@@ -562,6 +577,27 @@ const AdminDashboard = () => {
         isOpen={createCampusModalOpen}
         onClose={() => setCreateCampusModalOpen(false)}
         onSuccess={fetchAdminData}
+      />
+
+      <CreateAcademicYearModal
+        isOpen={createAcademicYearModalOpen}
+        onClose={() => setCreateAcademicYearModalOpen(false)}
+        onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId}
+      />
+
+      <CreateClassSectionModal
+        isOpen={createClassSectionModalOpen}
+        onClose={() => setCreateClassSectionModalOpen(false)}
+        onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId}
+      />
+
+      <CreateSubjectModal
+        isOpen={createSubjectModalOpen}
+        onClose={() => setCreateSubjectModalOpen(false)}
+        onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId}
       />
     </div>
   );
