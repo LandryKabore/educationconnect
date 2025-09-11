@@ -26,14 +26,29 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
 
   useEffect(() => {
     const fetchSchools = async () => {
+      console.log('Fetching schools...');
       const { data } = await supabase
         .from('schools')
         .select('id, name')
         .eq('active', true);
+      console.log('Schools data:', data);
       setSchools(data || []);
     };
     
+    // Always fetch schools on mount since default role is parent
+    fetchSchools();
+  }, []);
+
+  // Also fetch when role changes in signup mode
+  useEffect(() => {
     if (isSignUp && (formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent')) {
+      const fetchSchools = async () => {
+        const { data } = await supabase
+          .from('schools')
+          .select('id, name')
+          .eq('active', true);
+        setSchools(data || []);
+      };
       fetchSchools();
     }
   }, [isSignUp, formData.role]);
@@ -175,13 +190,19 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                       className="w-full px-3 py-2 border border-input bg-background rounded-md z-50 relative"
                       required
                     >
-                      <option value="">Select a school</option>
+                      <option value="">Select a school ({schools.length} available)</option>
                       {schools.map((school) => (
                         <option key={school.id} value={school.id}>
                           {school.name}
                         </option>
                       ))}
                     </select>
+                  </div>
+                )}
+                {/* Debug info */}
+                {isSignUp && (
+                  <div className="text-xs text-gray-500">
+                    Debug: Role={formData.role}, Schools={schools.length}, SignUp={isSignUp.toString()}
                   </div>
                 )}
               </>
