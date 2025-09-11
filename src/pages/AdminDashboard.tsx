@@ -9,6 +9,7 @@ import { AdminLogin } from "@/components/AdminLogin";
 import { UserListModal } from "@/components/UserListModal";
 import { CreateSchoolModal } from "@/components/CreateSchoolModal";
 import { CreateCampusModal } from "@/components/CreateCampusModal";
+import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
   schools: any[];
@@ -34,6 +35,7 @@ const AdminDashboard = () => {
   const [userModalTitle, setUserModalTitle] = useState('');
   const [createSchoolModalOpen, setCreateSchoolModalOpen] = useState(false);
   const [createCampusModalOpen, setCreateCampusModalOpen] = useState(false);
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
     campuses: [],
@@ -174,6 +176,13 @@ const AdminDashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* School Selector */}
+        <div className="mb-8">
+          <SchoolSelector 
+            selectedSchoolId={selectedSchoolId}
+            onSchoolSelect={setSelectedSchoolId}
+          />
+        </div>
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card 

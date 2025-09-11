@@ -30,8 +30,17 @@ export default function Auth() {
   // Signup-only fields
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [selectedSchool, setSelectedSchool] = useState("");
+  const [schools, setSchools] = useState<any[]>([]);
 
   useEffect(() => {
+    // Fetch schools for signup
+    const fetchSchools = async () => {
+      const { data } = await supabase.from('schools').select('*').eq('active', true);
+      if (data) setSchools(data);
+    };
+    fetchSchools();
+
     // SEO: title + description + canonical
     document.title = title;
     const metaDesc = document.querySelector('meta[name="description"]');
@@ -171,7 +180,12 @@ export default function Auth() {
         email,
         password,
         options: {
-          data: { first_name: firstName, last_name: lastName, role: selectedRole },
+          data: { 
+            first_name: firstName, 
+            last_name: lastName, 
+            role: selectedRole,
+            school_id: selectedSchool 
+          },
           emailRedirectTo: redirectUrl,
         },
       });
@@ -225,6 +239,7 @@ export default function Auth() {
     setPassword("");
     setFirstName("");
     setLastName("");
+    setSelectedSchool("");
   };
 
   if (step === "role-selection") {
@@ -335,6 +350,25 @@ export default function Auth() {
                   <Label htmlFor="password">Password</Label>
                   <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
+                {(selectedRole === 'student' || selectedRole === 'teacher') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="school">School</Label>
+                    <select 
+                      id="school"
+                      value={selectedSchool} 
+                      onChange={(e) => setSelectedSchool(e.target.value)}
+                      className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                      required={selectedRole === 'student' || selectedRole === 'teacher'}
+                    >
+                      <option value="">Select a school</option>
+                      {schools.map((school) => (
+                        <option key={school.id} value={school.id}>
+                          {school.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating account..." : `Create ${selectedRoleInfo?.title} Account`}
                 </Button>
