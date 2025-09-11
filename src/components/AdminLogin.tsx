@@ -60,6 +60,16 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
     try {
       if (isSignUp) {
         const redirectUrl = `${window.location.origin}/admin-dashboard`;
+        // Validate school selection for non-admin roles
+        if ((formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && !formData.schoolId) {
+          toast({
+            title: "School required",
+            description: "Please select a school for this role.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -69,7 +79,7 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
               first_name: formData.firstName,
               last_name: formData.lastName,
               role: formData.role,
-              school_id: formData.schoolId
+              school_id: formData.schoolId || null // Convert empty string to null
             }
           }
         });
