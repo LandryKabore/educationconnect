@@ -6,6 +6,9 @@ import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, G
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AdminLogin } from "@/components/AdminLogin";
+import { UserListModal } from "@/components/UserListModal";
+import { CreateSchoolModal } from "@/components/CreateSchoolModal";
+import { CreateCampusModal } from "@/components/CreateCampusModal";
 
 interface AdminData {
   schools: any[];
@@ -24,6 +27,13 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  
+  // Modal states
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [userModalType, setUserModalType] = useState<'student' | 'teacher' | 'parent' | 'all'>('all');
+  const [userModalTitle, setUserModalTitle] = useState('');
+  const [createSchoolModalOpen, setCreateSchoolModalOpen] = useState(false);
+  const [createCampusModalOpen, setCreateCampusModalOpen] = useState(false);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
     campuses: [],
@@ -57,12 +67,12 @@ const AdminDashboard = () => {
         subjectsData,
         profilesData
       ] = await Promise.all([
-        supabase.from('schools').select('*'),
+        supabase.from('schools').select('*').eq('active', true),
         supabase.from('campuses').select('*'),
         supabase.from('academic_years').select('*').order('created_at', { ascending: false }),
         supabase.from('class_sections').select('*'),
         supabase.from('subjects').select('*'),
-        supabase.from('profiles').select('role')
+        supabase.from('profiles').select('*')
       ]);
 
       const students = profilesData.data?.filter(p => p.role === 'student').length || 0;
@@ -90,6 +100,12 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUserStatClick = (type: 'student' | 'teacher' | 'parent' | 'all', title: string) => {
+    setUserModalType(type);
+    setUserModalTitle(title);
+    setUserModalOpen(true);
   };
 
   const handleAdminLoginSuccess = () => {
@@ -149,7 +165,10 @@ const AdminDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-slate-800/50 border-slate-700 shadow-lg">
+          <Card 
+            className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+            onClick={() => handleUserStatClick('student', 'Students')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-200">Total Students</CardTitle>
               <GraduationCap className="w-4 h-4 text-blue-400" />
@@ -159,7 +178,10 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800/50 border-slate-700 shadow-lg">
+          <Card 
+            className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+            onClick={() => handleUserStatClick('teacher', 'Teachers')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-200">Total Teachers</CardTitle>
               <Users className="w-4 h-4 text-green-400" />
@@ -169,7 +191,10 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800/50 border-slate-700 shadow-lg">
+          <Card 
+            className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+            onClick={() => handleUserStatClick('parent', 'Parents')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-200">Total Parents</CardTitle>
               <User className="w-4 h-4 text-yellow-400" />
@@ -179,7 +204,10 @@ const AdminDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-800/50 border-slate-700 shadow-lg">
+          <Card 
+            className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+            onClick={() => handleUserStatClick('all', 'All Schools')}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-200">Active Schools</CardTitle>
               <School className="w-4 h-4 text-purple-400" />
@@ -217,7 +245,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400">+{adminData.schools.length - 3} more</p>
                 )}
               </div>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <Button 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => setCreateSchoolModalOpen(true)}
+              >
                 Create New School
               </Button>
             </CardContent>
@@ -248,7 +279,10 @@ const AdminDashboard = () => {
                   <p className="text-xs text-slate-400">+{adminData.campuses.length - 3} more</p>
                 )}
               </div>
-              <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+              <Button 
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => setCreateCampusModalOpen(true)}
+              >
                 Add New Campus
               </Button>
             </CardContent>
@@ -360,13 +394,28 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                  onClick={() => handleUserStatClick('student', 'Students')}
+                >
                   Students
                 </Button>
-                <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                  onClick={() => handleUserStatClick('teacher', 'Teachers')}
+                >
                   Teachers
                 </Button>
-                <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                  onClick={() => handleUserStatClick('parent', 'Parents')}
+                >
                   Parents
                 </Button>
                 <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
@@ -377,6 +426,26 @@ const AdminDashboard = () => {
           </Card>
         </div>
       </main>
+
+      {/* Modals */}
+      <UserListModal
+        isOpen={userModalOpen}
+        onClose={() => setUserModalOpen(false)}
+        userType={userModalType}
+        title={userModalTitle}
+      />
+
+      <CreateSchoolModal
+        isOpen={createSchoolModalOpen}
+        onClose={() => setCreateSchoolModalOpen(false)}
+        onSuccess={fetchAdminData}
+      />
+
+      <CreateCampusModal
+        isOpen={createCampusModalOpen}
+        onClose={() => setCreateCampusModalOpen(false)}
+        onSuccess={fetchAdminData}
+      />
     </div>
   );
 };
