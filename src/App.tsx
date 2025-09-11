@@ -24,7 +24,7 @@ const App = () => (
         <Route path="/parent-dashboard" element={<RequireAuth><ParentDashboard /></RequireAuth>} />
         <Route path="/teacher-dashboard" element={<RequireAuth><TeacherDashboard /></RequireAuth>} />
         <Route path="/student-dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
-        <Route path="/admin-dashboard" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
