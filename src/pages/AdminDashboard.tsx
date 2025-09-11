@@ -8,10 +8,15 @@ import { useToast } from "@/hooks/use-toast";
 import { AdminLogin } from "@/components/AdminLogin";
 import { UserListModal } from "@/components/UserListModal";
 import { CreateSchoolModal } from "@/components/CreateSchoolModal";
+import { EditSchoolModal } from "@/components/EditSchoolModal";
 import { CreateCampusModal } from "@/components/CreateCampusModal";
+import { EditCampusModal } from "@/components/EditCampusModal";
 import { CreateAcademicYearModal } from "@/components/CreateAcademicYearModal";
+import { EditAcademicYearModal } from "@/components/EditAcademicYearModal";
 import { CreateClassSectionModal } from "@/components/CreateClassSectionModal";
+import { EditClassSectionModal } from "@/components/EditClassSectionModal";
 import { CreateSubjectModal } from "@/components/CreateSubjectModal";
+import { EditSubjectModal } from "@/components/EditSubjectModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -37,10 +42,22 @@ const AdminDashboard = () => {
   const [userModalType, setUserModalType] = useState<'student' | 'teacher' | 'parent' | 'all'>('all');
   const [userModalTitle, setUserModalTitle] = useState('');
   const [createSchoolModalOpen, setCreateSchoolModalOpen] = useState(false);
+  const [editSchoolModalOpen, setEditSchoolModalOpen] = useState(false);
   const [createCampusModalOpen, setCreateCampusModalOpen] = useState(false);
+  const [editCampusModalOpen, setEditCampusModalOpen] = useState(false);
   const [createAcademicYearModalOpen, setCreateAcademicYearModalOpen] = useState(false);
+  const [editAcademicYearModalOpen, setEditAcademicYearModalOpen] = useState(false);
   const [createClassSectionModalOpen, setCreateClassSectionModalOpen] = useState(false);
+  const [editClassSectionModalOpen, setEditClassSectionModalOpen] = useState(false);
   const [createSubjectModalOpen, setCreateSubjectModalOpen] = useState(false);
+  const [editSubjectModalOpen, setEditSubjectModalOpen] = useState(false);
+  
+  // State for items being edited
+  const [editingSchool, setEditingSchool] = useState<any>(null);
+  const [editingCampus, setEditingCampus] = useState<any>(null);
+  const [editingAcademicYear, setEditingAcademicYear] = useState<any>(null);
+  const [editingClassSection, setEditingClassSection] = useState<any>(null);
+  const [editingSubject, setEditingSubject] = useState<any>(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
@@ -227,6 +244,32 @@ const AdminDashboard = () => {
     setUserModalOpen(true);
   };
 
+  // Edit handlers
+  const handleEditSchool = (school: any) => {
+    setEditingSchool(school);
+    setEditSchoolModalOpen(true);
+  };
+
+  const handleEditCampus = (campus: any) => {
+    setEditingCampus(campus);
+    setEditCampusModalOpen(true);
+  };
+
+  const handleEditAcademicYear = (academicYear: any) => {
+    setEditingAcademicYear(academicYear);
+    setEditAcademicYearModalOpen(true);
+  };
+
+  const handleEditClassSection = (classSection: any) => {
+    setEditingClassSection(classSection);
+    setEditClassSectionModalOpen(true);
+  };
+
+  const handleEditSubject = (subject: any) => {
+    setEditingSubject(subject);
+    setEditSubjectModalOpen(true);
+  };
+
 
   if (!hasAdminAccess) {
     return <AdminLogin onSuccess={() => {}} />;
@@ -354,19 +397,24 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.schools.slice(0, 3).map((school) => (
-                  <div key={school.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">{school.name}</span>
-                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
-                      Edit
-                    </Button>
-                  </div>
-                ))}
-                {adminData.schools.length > 3 && (
-                  <p className="text-xs text-slate-400">+{adminData.schools.length - 3} more</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  {adminData.schools.slice(0, 3).map((school) => (
+                    <div key={school.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm">{school.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        onClick={() => handleEditSchool(school)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {adminData.schools.length > 3 && (
+                    <p className="text-xs text-slate-400">+{adminData.schools.length - 3} more</p>
+                  )}
+                </div>
               <Button 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => setCreateSchoolModalOpen(true)}
@@ -388,19 +436,24 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.campuses.slice(0, 3).map((campus) => (
-                  <div key={campus.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">{campus.name}</span>
-                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
-                      Edit
-                    </Button>
-                  </div>
-                ))}
-                {adminData.campuses.length > 3 && (
-                  <p className="text-xs text-slate-400">+{adminData.campuses.length - 3} more</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  {adminData.campuses.slice(0, 3).map((campus) => (
+                    <div key={campus.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm">{campus.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        onClick={() => handleEditCampus(campus)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {adminData.campuses.length > 3 && (
+                    <p className="text-xs text-slate-400">+{adminData.campuses.length - 3} more</p>
+                  )}
+                </div>
               <Button 
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => setCreateCampusModalOpen(true)}
@@ -422,19 +475,24 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.academicYears.slice(0, 3).map((year) => (
-                  <div key={year.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">{year.name}</span>
-                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
-                      Edit
-                    </Button>
-                  </div>
-                ))}
-                {adminData.academicYears.length > 3 && (
-                  <p className="text-xs text-slate-400">+{adminData.academicYears.length - 3} more</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  {adminData.academicYears.slice(0, 3).map((year) => (
+                    <div key={year.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm">{year.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        onClick={() => handleEditAcademicYear(year)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {adminData.academicYears.length > 3 && (
+                    <p className="text-xs text-slate-400">+{adminData.academicYears.length - 3} more</p>
+                  )}
+                </div>
               <Button 
                 className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
                 onClick={() => setCreateAcademicYearModalOpen(true)}
@@ -456,19 +514,24 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.classSections.slice(0, 3).map((section) => (
-                  <div key={section.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">{section.name} - {section.grade_level}</span>
-                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
-                      Edit
-                    </Button>
-                  </div>
-                ))}
-                {adminData.classSections.length > 3 && (
-                  <p className="text-xs text-slate-400">+{adminData.classSections.length - 3} more</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  {adminData.classSections.slice(0, 3).map((section) => (
+                    <div key={section.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm">{section.name} - {section.grade_level}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        onClick={() => handleEditClassSection(section)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {adminData.classSections.length > 3 && (
+                    <p className="text-xs text-slate-400">+{adminData.classSections.length - 3} more</p>
+                  )}
+                </div>
               <Button 
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                 onClick={() => setCreateClassSectionModalOpen(true)}
@@ -490,19 +553,24 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.subjects.slice(0, 3).map((subject) => (
-                  <div key={subject.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">{subject.name}</span>
-                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-200 hover:bg-slate-700">
-                      Edit
-                    </Button>
-                  </div>
-                ))}
-                {adminData.subjects.length > 3 && (
-                  <p className="text-xs text-slate-400">+{adminData.subjects.length - 3} more</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  {adminData.subjects.slice(0, 3).map((subject) => (
+                    <div key={subject.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm">{subject.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        onClick={() => handleEditSubject(subject)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {adminData.subjects.length > 3 && (
+                    <p className="text-xs text-slate-400">+{adminData.subjects.length - 3} more</p>
+                  )}
+                </div>
               <Button 
                 className="w-full bg-red-600 hover:bg-red-700 text-white"
                 onClick={() => setCreateSubjectModalOpen(true)}
@@ -573,10 +641,24 @@ const AdminDashboard = () => {
         onSuccess={fetchAdminData}
       />
 
+      <EditSchoolModal
+        isOpen={editSchoolModalOpen}
+        onClose={() => setEditSchoolModalOpen(false)}
+        onSuccess={fetchAdminData}
+        school={editingSchool}
+      />
+
       <CreateCampusModal
         isOpen={createCampusModalOpen}
         onClose={() => setCreateCampusModalOpen(false)}
         onSuccess={fetchAdminData}
+      />
+
+      <EditCampusModal
+        isOpen={editCampusModalOpen}
+        onClose={() => setEditCampusModalOpen(false)}
+        onSuccess={fetchAdminData}
+        campus={editingCampus}
       />
 
       <CreateAcademicYearModal
@@ -586,10 +668,25 @@ const AdminDashboard = () => {
         selectedSchoolId={selectedSchoolId}
       />
 
+      <EditAcademicYearModal
+        isOpen={editAcademicYearModalOpen}
+        onClose={() => setEditAcademicYearModalOpen(false)}
+        onSuccess={fetchAdminData}
+        academicYear={editingAcademicYear}
+      />
+
       <CreateClassSectionModal
         isOpen={createClassSectionModalOpen}
         onClose={() => setCreateClassSectionModalOpen(false)}
         onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId}
+      />
+
+      <EditClassSectionModal
+        isOpen={editClassSectionModalOpen}
+        onClose={() => setEditClassSectionModalOpen(false)}
+        onSuccess={fetchAdminData}
+        classSection={editingClassSection}
         selectedSchoolId={selectedSchoolId}
       />
 
@@ -598,6 +695,13 @@ const AdminDashboard = () => {
         onClose={() => setCreateSubjectModalOpen(false)}
         onSuccess={fetchAdminData}
         selectedSchoolId={selectedSchoolId}
+      />
+
+      <EditSubjectModal
+        isOpen={editSubjectModalOpen}
+        onClose={() => setEditSubjectModalOpen(false)}
+        onSuccess={fetchAdminData}
+        subject={editingSubject}
       />
     </div>
   );
