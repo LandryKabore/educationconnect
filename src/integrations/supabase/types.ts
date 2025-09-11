@@ -14,6 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_years: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          end_date: string
+          id: string
+          name: string
+          school_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          end_date: string
+          id?: string
+          name: string
+          school_id: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          end_date?: string
+          id?: string
+          name?: string
+          school_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_years_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          audience: string
+          body: string
+          class_section_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          school_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          body: string
+          class_section_id?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          school_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          class_section_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          school_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "announcements_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignments: {
         Row: {
           class_id: string
@@ -124,12 +223,98 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+        ]
+      }
+      campuses: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          name: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "attendance_student_id_fkey"
-            columns: ["student_id"]
+            foreignKeyName: "campuses_school_id_fkey"
+            columns: ["school_id"]
             isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["user_id"]
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_sections: {
+        Row: {
+          academic_year_id: string
+          campus_id: string
+          capacity: number | null
+          created_at: string
+          grade_level: string
+          id: string
+          name: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id: string
+          campus_id: string
+          capacity?: number | null
+          created_at?: string
+          grade_level: string
+          id?: string
+          name: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string
+          campus_id?: string
+          capacity?: number | null
+          created_at?: string
+          grade_level?: string
+          id?: string
+          name?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_sections_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_sections_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_sections_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -178,6 +363,247 @@ export type Database = {
           },
         ]
       }
+      enhanced_attendance: {
+        Row: {
+          class_section_id: string
+          created_at: string
+          date: string
+          device_timestamp: string | null
+          id: string
+          notes: string | null
+          status: string
+          student_user_id: string
+          synced: boolean | null
+          taken_by: string
+          updated_at: string
+        }
+        Insert: {
+          class_section_id: string
+          created_at?: string
+          date: string
+          device_timestamp?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          student_user_id: string
+          synced?: boolean | null
+          taken_by: string
+          updated_at?: string
+        }
+        Update: {
+          class_section_id?: string
+          created_at?: string
+          date?: string
+          device_timestamp?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          student_user_id?: string
+          synced?: boolean | null
+          taken_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enhanced_attendance_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enhanced_attendance_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "enhanced_attendance_taken_by_fkey"
+            columns: ["taken_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      enhanced_grades: {
+        Row: {
+          comment: string | null
+          created_at: string
+          exam_id: string
+          graded_by: string
+          id: string
+          max_score: number
+          score: number
+          student_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          exam_id: string
+          graded_by: string
+          id?: string
+          max_score: number
+          score: number
+          student_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          exam_id?: string
+          graded_by?: string
+          id?: string
+          max_score?: number
+          score?: number
+          student_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enhanced_grades_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enhanced_grades_graded_by_fkey"
+            columns: ["graded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "enhanced_grades_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      enrollments: {
+        Row: {
+          academic_year_id: string
+          class_section_id: string
+          created_at: string
+          date_enrolled: string | null
+          id: string
+          status: string | null
+          student_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id: string
+          class_section_id: string
+          created_at?: string
+          date_enrolled?: string | null
+          id?: string
+          status?: string | null
+          student_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string
+          class_section_id?: string
+          created_at?: string
+          date_enrolled?: string | null
+          id?: string
+          status?: string | null
+          student_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      exams: {
+        Row: {
+          class_section_id: string
+          created_at: string
+          created_by: string
+          exam_date: string
+          id: string
+          max_score: number | null
+          subject_id: string
+          term: string | null
+          title: string
+          updated_at: string
+          weight: number | null
+        }
+        Insert: {
+          class_section_id: string
+          created_at?: string
+          created_by: string
+          exam_date: string
+          id?: string
+          max_score?: number | null
+          subject_id: string
+          term?: string | null
+          title: string
+          updated_at?: string
+          weight?: number | null
+        }
+        Update: {
+          class_section_id?: string
+          created_at?: string
+          created_by?: string
+          exam_date?: string
+          id?: string
+          max_score?: number | null
+          subject_id?: string
+          term?: string | null
+          title?: string
+          updated_at?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "exams_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grades: {
         Row: {
           assignment_id: string
@@ -217,50 +643,135 @@ export type Database = {
             referencedRelation: "assignments"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "grades_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["user_id"]
-          },
         ]
       }
-      parent_student_relationships: {
+      messages: {
         Row: {
+          attachments: string[] | null
+          body: string
           created_at: string
           id: string
-          parent_id: string
-          relationship_type: string | null
-          student_id: string
+          read_at: string | null
+          recipient_user_id: string
+          sender_user_id: string
+          subject: string | null
+          updated_at: string
         }
         Insert: {
+          attachments?: string[] | null
+          body: string
           created_at?: string
           id?: string
-          parent_id: string
-          relationship_type?: string | null
-          student_id: string
+          read_at?: string | null
+          recipient_user_id: string
+          sender_user_id: string
+          subject?: string | null
+          updated_at?: string
         }
         Update: {
+          attachments?: string[] | null
+          body?: string
           created_at?: string
           id?: string
-          parent_id?: string
-          relationship_type?: string | null
-          student_id?: string
+          read_at?: string | null
+          recipient_user_id?: string
+          sender_user_id?: string
+          subject?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "parent_student_relationships_parent_id_fkey"
-            columns: ["parent_id"]
+            foreignKeyName: "messages_recipient_user_id_fkey"
+            columns: ["recipient_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: "parent_student_relationships_student_id_fkey"
-            columns: ["student_id"]
+            foreignKeyName: "messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
             isOneToOne: false
-            referencedRelation: "students"
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      parent_profiles: {
+        Row: {
+          created_at: string
+          id: string
+          relationship_to_student: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          relationship_to_student?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          relationship_to_student?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      parent_student_links: {
+        Row: {
+          created_at: string
+          id: string
+          parent_user_id: string
+          status: string | null
+          student_user_id: string
+          updated_at: string
+          verification_code: string | null
+          verification_method: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          parent_user_id: string
+          status?: string | null
+          student_user_id: string
+          updated_at?: string
+          verification_code?: string | null
+          verification_method?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          parent_user_id?: string
+          status?: string | null
+          student_user_id?: string
+          updated_at?: string
+          verification_code?: string | null
+          verification_method?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_student_links_parent_user_id_fkey"
+            columns: ["parent_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "parent_student_links_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -272,9 +783,11 @@ export type Database = {
           email: string
           first_name: string | null
           id: string
+          language_pref: string | null
           last_name: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          status: string | null
           updated_at: string
           user_id: string
         }
@@ -284,9 +797,11 @@ export type Database = {
           email: string
           first_name?: string | null
           id?: string
+          language_pref?: string | null
           last_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          status?: string | null
           updated_at?: string
           user_id: string
         }
@@ -296,92 +811,157 @@ export type Database = {
           email?: string
           first_name?: string | null
           id?: string
+          language_pref?: string | null
           last_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          status?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
       }
+      resources: {
+        Row: {
+          class_section_id: string
+          created_at: string
+          description: string | null
+          file_url: string | null
+          id: string
+          subject_id: string
+          title: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          class_section_id: string
+          created_at?: string
+          description?: string | null
+          file_url?: string | null
+          id?: string
+          subject_id: string
+          title: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          class_section_id?: string
+          created_at?: string
+          description?: string | null
+          file_url?: string | null
+          id?: string
+          subject_id?: string
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resources_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resources_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resources_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       schools: {
         Row: {
+          active: boolean | null
           address: string | null
+          country: string | null
           created_at: string
           email: string | null
           id: string
+          languages: string[] | null
           name: string
           phone: string | null
           updated_at: string
         }
         Insert: {
+          active?: boolean | null
           address?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          languages?: string[] | null
           name: string
           phone?: string | null
           updated_at?: string
         }
         Update: {
+          active?: boolean | null
           address?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          languages?: string[] | null
           name?: string
           phone?: string | null
           updated_at?: string
         }
         Relationships: []
       }
-      students: {
+      student_profiles: {
         Row: {
-          class_id: string | null
           created_at: string
-          enrollment_date: string | null
+          dob: string | null
+          gender: string | null
+          guardian_primary_contact: string | null
           id: string
           school_id: string
-          student_id: string | null
+          student_no: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          class_id?: string | null
           created_at?: string
-          enrollment_date?: string | null
+          dob?: string | null
+          gender?: string | null
+          guardian_primary_contact?: string | null
           id?: string
           school_id: string
-          student_id?: string | null
+          student_no?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          class_id?: string | null
           created_at?: string
-          enrollment_date?: string | null
+          dob?: string | null
+          gender?: string | null
+          guardian_primary_contact?: string | null
           id?: string
           school_id?: string
-          student_id?: string | null
+          student_no?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "students_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "classes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "students_school_id_fkey"
+            foreignKeyName: "student_profiles_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "students_user_id_fkey"
+            foreignKeyName: "student_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
@@ -389,67 +969,237 @@ export type Database = {
           },
         ]
       }
+      study_group_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          study_group_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          study_group_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          study_group_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_group_members_study_group_id_fkey"
+            columns: ["study_group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      study_groups: {
+        Row: {
+          class_section_id: string
+          created_at: string
+          description: string | null
+          id: string
+          moderated_by_teacher_id: string
+          name: string
+          subject_id: string
+          updated_at: string
+        }
+        Insert: {
+          class_section_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          moderated_by_teacher_id: string
+          name: string
+          subject_id: string
+          updated_at?: string
+        }
+        Update: {
+          class_section_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          moderated_by_teacher_id?: string
+          name?: string
+          subject_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_groups_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_groups_moderated_by_teacher_id_fkey"
+            columns: ["moderated_by_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "study_groups_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
+          code: string | null
           created_at: string
           description: string | null
           id: string
           name: string
+          school_id: string | null
         }
         Insert: {
+          code?: string | null
           created_at?: string
           description?: string | null
           id?: string
           name: string
+          school_id?: string | null
         }
         Update: {
+          code?: string | null
           created_at?: string
           description?: string | null
           id?: string
           name?: string
+          school_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subjects_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      teachers: {
+      teacher_profiles: {
         Row: {
           created_at: string
-          employee_id: string | null
           hire_date: string | null
           id: string
+          qualifications: string[] | null
           school_id: string
+          staff_no: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
-          employee_id?: string | null
           hire_date?: string | null
           id?: string
+          qualifications?: string[] | null
           school_id: string
+          staff_no?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
-          employee_id?: string | null
           hire_date?: string | null
           id?: string
+          qualifications?: string[] | null
           school_id?: string
+          staff_no?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "teachers_school_id_fkey"
+            foreignKeyName: "teacher_profiles_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "teachers_user_id_fkey"
+            foreignKeyName: "teacher_profiles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      teaching_assignments: {
+        Row: {
+          academic_year_id: string
+          class_section_id: string
+          created_at: string
+          id: string
+          subject_id: string
+          teacher_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          academic_year_id: string
+          class_section_id: string
+          created_at?: string
+          id?: string
+          subject_id: string
+          teacher_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          academic_year_id?: string
+          class_section_id?: string
+          created_at?: string
+          id?: string
+          subject_id?: string
+          teacher_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teaching_assignments_academic_year_id_fkey"
+            columns: ["academic_year_id"]
+            isOneToOne: false
+            referencedRelation: "academic_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_assignments_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_assignments_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_assignments_teacher_user_id_fkey"
+            columns: ["teacher_user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
