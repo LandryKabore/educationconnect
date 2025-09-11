@@ -9,7 +9,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { School, MapPin, Phone, Mail, Globe } from "lucide-react";
+import { School, MapPin, Phone, Mail, Globe, Edit, Trash2 } from "lucide-react";
+import { EditSchoolModal } from "./EditSchoolModal";
+import { DeleteSchoolModal } from "./DeleteSchoolModal";
 
 interface SchoolSelectorProps {
   onSchoolSelect: (schoolId: string | null) => void;
@@ -21,6 +23,9 @@ export function SchoolSelector({ onSchoolSelect, selectedSchoolId, onRefresh }: 
   const [schools, setSchools] = useState<any[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [schoolToEdit, setSchoolToEdit] = useState<any>(null);
 
   useEffect(() => {
     fetchSchools();
@@ -62,6 +67,22 @@ export function SchoolSelector({ onSchoolSelect, selectedSchoolId, onRefresh }: 
     onSchoolSelect(null);
     setSelectedSchool(null);
   };
+
+  const handleEditSchool = (school: any) => {
+    setSchoolToEdit(school);
+    setEditModalOpen(true);
+  };
+
+  const handleDeleteSchool = (school: any) => {
+    setSchoolToEdit(school);
+    setDeleteModalOpen(true);
+  };
+
+  const handleSchoolUpdated = () => {
+    fetchSchools();
+    if (onRefresh) onRefresh();
+  };
+
 
   if (loading) {
     return (
@@ -166,9 +187,46 @@ export function SchoolSelector({ onSchoolSelect, selectedSchoolId, onRefresh }: 
                 </div>
               )}
             </div>
+            
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEditSchool(selectedSchool)}
+                className="border-slate-600 text-slate-200 hover:bg-slate-700"
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                Edit School
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteSchool(selectedSchool)}
+                className="border-red-600 text-red-400 hover:bg-red-900/20"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete School
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Modals */}
+      <EditSchoolModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        school={schoolToEdit}
+        onSuccess={handleSchoolUpdated}
+      />
+      
+      <DeleteSchoolModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        school={schoolToEdit}
+        onSuccess={handleSchoolUpdated}
+      />
     </div>
   );
 }

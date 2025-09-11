@@ -214,14 +214,9 @@ const AdminDashboard = () => {
     setUserModalOpen(true);
   };
 
-  const handleAdminLoginSuccess = () => {
-    setHasAdminAccess(true);
-    setLoading(true);
-    fetchAdminData();
-  };
 
   if (!hasAdminAccess) {
-    return <AdminLogin onSuccess={handleAdminLoginSuccess} />;
+    return <AdminLogin onSuccess={() => {}} />;
   }
 
   if (loading) {
