@@ -76,12 +76,13 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
       if (isSignUp) {
         const redirectUrl = `${window.location.origin}/admin-dashboard`;
         // Validate school selection for non-admin roles
-        if ((formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && !formData.schoolId) {
+        if ((formData.role === 'teacher' || formData.role === 'student' || formData.role === 'parent') && (!formData.schoolId || formData.schoolId === '')) {
           toast({
-            title: "School required",
+            title: "School required", 
             description: "Please select a school for this role.",
             variant: "destructive",
           });
+          setLoading(false);
           return;
         }
 
@@ -94,7 +95,7 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
               first_name: formData.firstName,
               last_name: formData.lastName,
               role: formData.role,
-              school_id: formData.schoolId || null // Convert empty string to null
+              school_id: formData.schoolId && formData.schoolId !== '' ? formData.schoolId : null
             }
           }
         });
@@ -190,19 +191,13 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
                       className="w-full px-3 py-2 border border-input bg-background rounded-md z-50 relative"
                       required
                     >
-                      <option value="">Select a school ({schools.length} available)</option>
+                      <option value="">Select a school</option>
                       {schools.map((school) => (
                         <option key={school.id} value={school.id}>
                           {school.name}
                         </option>
                       ))}
                     </select>
-                  </div>
-                )}
-                {/* Debug info */}
-                {isSignUp && (
-                  <div className="text-xs text-gray-500">
-                    Debug: Role={formData.role}, Schools={schools.length}, SignUp={isSignUp.toString()}
                   </div>
                 )}
               </>
