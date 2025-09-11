@@ -18,7 +18,7 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    role: 'admin' as 'admin' | 'teacher' | 'student' | 'parent',
+    role: 'parent' as 'admin' | 'teacher' | 'student' | 'parent',
     schoolId: ''
   });
   const [schools, setSchools] = useState<Array<{id: string, name: string}>>([]);
