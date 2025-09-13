@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Auth from "./pages/Auth";
 import ParentDashboard from "./pages/ParentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
+import TeacherAssignment from "./pages/TeacherAssignment";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
@@ -23,6 +24,7 @@ const App = () => (
         <Route path="/auth" element={<Auth />} />
         <Route path="/parent-dashboard" element={<RequireAuth><ParentDashboard /></RequireAuth>} />
         <Route path="/teacher-dashboard" element={<RequireAuth><TeacherDashboard /></RequireAuth>} />
+        <Route path="/teacher-assignment" element={<RequireAuth><TeacherAssignment /></RequireAuth>} />
         <Route path="/student-dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

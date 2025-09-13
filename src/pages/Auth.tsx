@@ -106,9 +106,24 @@ export default function Auth() {
     }
 
     // Redirect based on user's actual role
-    if (userRole === "parent") navigate("/parent-dashboard", { replace: true });
-    else if (userRole === "teacher") navigate("/teacher-dashboard", { replace: true });
-    else navigate("/student-dashboard", { replace: true });
+    if (userRole === "parent") {
+      navigate("/parent-dashboard", { replace: true });
+    } else if (userRole === "teacher") {
+      // Check if teacher has teaching assignments
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select("id")
+        .eq("teacher_user_id", userId)
+        .limit(1);
+      
+      if (!assignments || assignments.length === 0) {
+        navigate("/teacher-assignment", { replace: true });
+      } else {
+        navigate("/teacher-dashboard", { replace: true });
+      }
+    } else {
+      navigate("/student-dashboard", { replace: true });
+    }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
