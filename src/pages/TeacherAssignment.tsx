@@ -67,12 +67,22 @@ const TeacherAssignment = () => {
       }
 
       // Get active academic year
-      const { data: academicYear } = await supabase
+      const { data: academicYear, error: academicYearError } = await supabase
         .from("academic_years")
         .select("*")
         .eq("school_id", teacherProfile.school_id)
         .eq("active", true)
-        .single();
+        .maybeSingle();
+
+      if (academicYearError) {
+        console.error("Academic year fetch error:", academicYearError);
+        toast({
+          title: "Error",
+          description: "Failed to load academic year information",
+          variant: "destructive"
+        });
+        return;
+      }
 
       if (!academicYear) {
         toast({
