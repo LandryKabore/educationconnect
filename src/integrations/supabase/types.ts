@@ -1073,6 +1073,10 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          schedule_days: string[] | null
+          schedule_duration: number | null
+          schedule_time_end: string | null
+          schedule_time_start: string | null
           school_id: string | null
         }
         Insert: {
@@ -1081,6 +1085,10 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          schedule_days?: string[] | null
+          schedule_duration?: number | null
+          schedule_time_end?: string | null
+          schedule_time_start?: string | null
           school_id?: string | null
         }
         Update: {
@@ -1089,6 +1097,10 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          schedule_days?: string[] | null
+          schedule_duration?: number | null
+          schedule_time_end?: string | null
+          schedule_time_start?: string | null
           school_id?: string | null
         }
         Relationships: [
