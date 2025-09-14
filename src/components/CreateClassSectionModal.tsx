@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Loader2 } from "lucide-react";
+import { Users, Loader2, BookOpen } from "lucide-react";
 
 interface CreateClassSectionModalProps {
   isOpen: boolean;
@@ -27,13 +28,15 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
   const [schools, setSchools] = useState<any[]>([]);
   const [campuses, setCampuses] = useState<any[]>([]);
   const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     grade_level: "",
     capacity: "30",
     school_id: selectedSchoolId || "",
     campus_id: "",
-    academic_year_id: ""
+    academic_year_id: "",
+    selected_subjects: [] as string[]
   });
 
   useEffect(() => {
@@ -43,6 +46,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
         setFormData(prev => ({ ...prev, school_id: selectedSchoolId }));
         fetchCampuses(selectedSchoolId);
         fetchAcademicYears(selectedSchoolId);
+        fetchSubjects(selectedSchoolId);
       }
     }
   }, [isOpen, selectedSchoolId]);
@@ -51,6 +55,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     if (formData.school_id) {
       fetchCampuses(formData.school_id);
       fetchAcademicYears(formData.school_id);
+      fetchSubjects(formData.school_id);
     }
   }, [formData.school_id]);
 
@@ -99,6 +104,21 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     }
   };
 
+  const fetchSubjects = async (schoolId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('subjects')
+        .select('id, name, code, schedule_days, schedule_time_start, schedule_time_end')
+        .eq('school_id', schoolId)
+        .order('name');
+
+      if (error) throw error;
+      setSubjects(data || []);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.grade_level || !formData.school_id || !formData.campus_id || !formData.academic_year_id) {
@@ -112,7 +132,8 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      // First create the class section
+      const { data: classSectionData, error: classSectionError } = await supabase
         .from('class_sections')
         .insert([{
           name: formData.name,
@@ -121,9 +142,25 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
           school_id: formData.school_id,
           campus_id: formData.campus_id,
           academic_year_id: formData.academic_year_id
-        }]);
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (classSectionError) throw classSectionError;
+
+      // Then link the selected subjects to the class section
+      if (formData.selected_subjects.length > 0) {
+        const subjectLinks = formData.selected_subjects.map(subjectId => ({
+          class_section_id: classSectionData.id,
+          subject_id: subjectId
+        }));
+
+        const { error: linkError } = await supabase
+          .from('class_section_subjects')
+          .insert(subjectLinks);
+
+        if (linkError) throw linkError;
+      }
 
       toast({
         title: "Success",
@@ -151,9 +188,19 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
       capacity: "30",
       school_id: selectedSchoolId || "",
       campus_id: "",
-      academic_year_id: ""
+      academic_year_id: "",
+      selected_subjects: []
     });
     onClose();
+  };
+
+  const toggleSubject = (subjectId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selected_subjects: prev.selected_subjects.includes(subjectId)
+        ? prev.selected_subjects.filter(id => id !== subjectId)
+        : [...prev.selected_subjects, subjectId]
+    }));
   };
 
   return (
@@ -261,6 +308,48 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
               min="1"
               max="100"
             />
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4" />
+              <Label className="text-sm font-medium">Subjects for this Class</Label>
+            </div>
+            
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {subjects.length > 0 ? (
+                subjects.map((subject) => (
+                  <div key={subject.id} className="flex items-start space-x-3 p-2 border rounded">
+                    <Checkbox
+                      id={subject.id}
+                      checked={formData.selected_subjects.includes(subject.id)}
+                      onCheckedChange={() => toggleSubject(subject.id)}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Label htmlFor={subject.id} className="text-sm font-medium cursor-pointer">
+                        {subject.name} {subject.code && `(${subject.code})`}
+                      </Label>
+                      {(subject.schedule_days || subject.schedule_time_start) && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {subject.schedule_days && subject.schedule_days.length > 0 && (
+                            <span>{subject.schedule_days.join(', ')}</span>
+                          )}
+                          {subject.schedule_time_start && subject.schedule_time_end && (
+                            <span className="ml-2">
+                              {subject.schedule_time_start} - {subject.schedule_time_end}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {formData.school_id ? "No subjects found for this school. Create subjects first." : "Select a school to see available subjects."}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end space-x-2">
