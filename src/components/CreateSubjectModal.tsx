@@ -149,7 +149,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BookOpen className="w-5 h-5" />
@@ -160,114 +160,126 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Subject Name *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Mathematics"
-              required
-            />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Subject Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Mathematics"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="code">Subject Code</Label>
+                <Input
+                  id="code"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  placeholder="e.g., MATH101"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="school">School *</Label>
+                <Select
+                  value={formData.school_id}
+                  onValueChange={(value) => setFormData({ ...formData, school_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a school" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((school) => (
+                      <SelectItem key={school.id} value={school.id}>
+                        {school.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Brief description of the subject"
+                  rows={4}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="code">Subject Code</Label>
-            <Input
-              id="code"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-              placeholder="e.g., MATH101"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="school">School *</Label>
-            <Select
-              value={formData.school_id}
-              onValueChange={(value) => setFormData({ ...formData, school_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((school) => (
-                  <SelectItem key={school.id} value={school.id}>
-                    {school.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Brief description of the subject"
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-4 border-t pt-4">
-            <div className="flex items-center gap-2">
+          <div className="border-t pt-6">
+            <div className="flex items-center gap-2 mb-4">
               <Clock className="w-4 h-4" />
               <Label className="text-sm font-medium">Class Schedule</Label>
             </div>
             
-            <div className="space-y-2">
-              <Label>Days of the Week</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {weekDays.map((day) => (
-                  <div key={day.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={day.id}
-                      checked={formData.schedule_days.includes(day.id)}
-                      onCheckedChange={() => toggleDay(day.id)}
-                    />
-                    <Label htmlFor={day.id} className="text-sm font-normal">
-                      {day.label}
-                    </Label>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Days of the Week</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {weekDays.map((day) => (
+                      <div key={day.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={day.id}
+                          checked={formData.schedule_days.includes(day.id)}
+                          onCheckedChange={() => toggleDay(day.id)}
+                        />
+                        <Label htmlFor={day.id} className="text-sm font-normal">
+                          {day.label}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start-time">Start Time</Label>
-                <Input
-                  id="start-time"
-                  type="time"
-                  value={formData.schedule_time_start}
-                  onChange={(e) => setFormData({ ...formData, schedule_time_start: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-time">End Time</Label>
-                <Input
-                  id="end-time"
-                  type="time"
-                  value={formData.schedule_time_end}
-                  onChange={(e) => setFormData({ ...formData, schedule_time_end: e.target.value })}
-                />
-              </div>
-            </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="start-time">Start Time</Label>
+                    <Input
+                      id="start-time"
+                      type="time"
+                      value={formData.schedule_time_start}
+                      onChange={(e) => setFormData({ ...formData, schedule_time_start: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="end-time">End Time</Label>
+                    <Input
+                      id="end-time"
+                      type="time"
+                      value={formData.schedule_time_end}
+                      onChange={(e) => setFormData({ ...formData, schedule_time_end: e.target.value })}
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration (minutes)</Label>
-              <Input
-                id="duration"
-                type="number"
-                value={formData.schedule_duration}
-                onChange={(e) => setFormData({ ...formData, schedule_duration: e.target.value })}
-                placeholder="e.g., 60"
-                min="1"
-                max="480"
-              />
+                <div className="space-y-2">
+                  <Label htmlFor="duration">Duration (minutes)</Label>
+                  <Input
+                    id="duration"
+                    type="number"
+                    value={formData.schedule_duration}
+                    onChange={(e) => setFormData({ ...formData, schedule_duration: e.target.value })}
+                    placeholder="e.g., 60"
+                    min="1"
+                    max="480"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

@@ -205,7 +205,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
@@ -216,136 +216,145 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Class Section Name *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Grade 7A"
-              required
-            />
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Class Section Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Grade 7A"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="grade_level">Grade Level *</Label>
+                <Input
+                  id="grade_level"
+                  value={formData.grade_level}
+                  onChange={(e) => setFormData({ ...formData, grade_level: e.target.value })}
+                  placeholder="e.g., Grade 7"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="school">School *</Label>
+                <Select
+                  value={formData.school_id}
+                  onValueChange={(value) => setFormData({ ...formData, school_id: value, campus_id: "", academic_year_id: "" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a school" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {schools.map((school) => (
+                      <SelectItem key={school.id} value={school.id}>
+                        {school.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="campus">Campus *</Label>
+                <Select
+                  value={formData.campus_id}
+                  onValueChange={(value) => setFormData({ ...formData, campus_id: value })}
+                  disabled={!formData.school_id}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a campus" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campuses.map((campus) => (
+                      <SelectItem key={campus.id} value={campus.id}>
+                        {campus.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="academic_year">Academic Year *</Label>
+                <Select
+                  value={formData.academic_year_id}
+                  onValueChange={(value) => setFormData({ ...formData, academic_year_id: value })}
+                  disabled={!formData.school_id}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an academic year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {academicYears.map((year) => (
+                      <SelectItem key={year.id} value={year.id}>
+                        {year.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="capacity">Capacity</Label>
+                <Input
+                  id="capacity"
+                  type="number"
+                  value={formData.capacity}
+                  onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                  min="1"
+                  max="100"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="grade_level">Grade Level *</Label>
-            <Input
-              id="grade_level"
-              value={formData.grade_level}
-              onChange={(e) => setFormData({ ...formData, grade_level: e.target.value })}
-              placeholder="e.g., Grade 7"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="school">School *</Label>
-            <Select
-              value={formData.school_id}
-              onValueChange={(value) => setFormData({ ...formData, school_id: value, campus_id: "", academic_year_id: "" })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((school) => (
-                  <SelectItem key={school.id} value={school.id}>
-                    {school.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="campus">Campus *</Label>
-            <Select
-              value={formData.campus_id}
-              onValueChange={(value) => setFormData({ ...formData, campus_id: value })}
-              disabled={!formData.school_id}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a campus" />
-              </SelectTrigger>
-              <SelectContent>
-                {campuses.map((campus) => (
-                  <SelectItem key={campus.id} value={campus.id}>
-                    {campus.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="academic_year">Academic Year *</Label>
-            <Select
-              value={formData.academic_year_id}
-              onValueChange={(value) => setFormData({ ...formData, academic_year_id: value })}
-              disabled={!formData.school_id}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select an academic year" />
-              </SelectTrigger>
-              <SelectContent>
-                {academicYears.map((year) => (
-                  <SelectItem key={year.id} value={year.id}>
-                    {year.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="capacity">Capacity</Label>
-            <Input
-              id="capacity"
-              type="number"
-              value={formData.capacity}
-              onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-              min="1"
-              max="100"
-            />
-          </div>
-
-          <div className="space-y-4 border-t pt-4">
-            <div className="flex items-center gap-2">
+          <div className="border-t pt-6">
+            <div className="flex items-center gap-2 mb-4">
               <BookOpen className="w-4 h-4" />
               <Label className="text-sm font-medium">Subjects for this Class</Label>
             </div>
             
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="max-h-64 overflow-y-auto">
               {subjects.length > 0 ? (
-                subjects.map((subject) => (
-                  <div key={subject.id} className="flex items-start space-x-3 p-2 border rounded">
-                    <Checkbox
-                      id={subject.id}
-                      checked={formData.selected_subjects.includes(subject.id)}
-                      onCheckedChange={() => toggleSubject(subject.id)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label htmlFor={subject.id} className="text-sm font-medium cursor-pointer">
-                        {subject.name} {subject.code && `(${subject.code})`}
-                      </Label>
-                      {(subject.schedule_days || subject.schedule_time_start) && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {subject.schedule_days && subject.schedule_days.length > 0 && (
-                            <span>{subject.schedule_days.join(', ')}</span>
-                          )}
-                          {subject.schedule_time_start && subject.schedule_time_end && (
-                            <span className="ml-2">
-                              {subject.schedule_time_start} - {subject.schedule_time_end}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {subjects.map((subject) => (
+                    <div key={subject.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        id={subject.id}
+                        checked={formData.selected_subjects.includes(subject.id)}
+                        onCheckedChange={() => toggleSubject(subject.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={subject.id} className="text-sm font-medium cursor-pointer block">
+                          {subject.name} {subject.code && `(${subject.code})`}
+                        </Label>
+                        {(subject.schedule_days || subject.schedule_time_start) && (
+                          <div className="text-xs text-muted-foreground mt-1 space-y-1">
+                            {subject.schedule_days && subject.schedule_days.length > 0 && (
+                              <div>{subject.schedule_days.join(', ')}</div>
+                            )}
+                            {subject.schedule_time_start && subject.schedule_time_end && (
+                              <div>
+                                {subject.schedule_time_start} - {subject.schedule_time_end}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground text-center py-4">
                   {formData.school_id ? "No subjects found for this school. Create subjects first." : "Select a school to see available subjects."}
                 </p>
               )}
