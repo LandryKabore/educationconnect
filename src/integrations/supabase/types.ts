@@ -687,6 +687,33 @@ export type Database = {
           },
         ]
       }
+      magic_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          token: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          token: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachments: string[] | null
@@ -1160,6 +1187,10 @@ export type Database = {
           created_at: string
           hire_date: string | null
           id: string
+          last_magic_link_sent: string | null
+          phone: string | null
+          pin_hash: string | null
+          pin_set_at: string | null
           qualifications: string[] | null
           school_id: string
           staff_no: string | null
@@ -1170,6 +1201,10 @@ export type Database = {
           created_at?: string
           hire_date?: string | null
           id?: string
+          last_magic_link_sent?: string | null
+          phone?: string | null
+          pin_hash?: string | null
+          pin_set_at?: string | null
           qualifications?: string[] | null
           school_id: string
           staff_no?: string | null
@@ -1180,6 +1215,10 @@ export type Database = {
           created_at?: string
           hire_date?: string | null
           id?: string
+          last_magic_link_sent?: string | null
+          phone?: string | null
+          pin_hash?: string | null
+          pin_set_at?: string | null
           qualifications?: string[] | null
           school_id?: string
           staff_no?: string | null
@@ -1300,6 +1339,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_magic_link: {
+        Args: { teacher_user_id: string }
+        Returns: string
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1315,6 +1358,10 @@ export type Database = {
       is_teacher: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      verify_magic_link_and_set_pin: {
+        Args: { new_pin: string; token_value: string }
+        Returns: Json
       }
     }
     Enums: {

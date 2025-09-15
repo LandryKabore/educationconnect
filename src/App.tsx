@@ -5,6 +5,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Auth from "./pages/Auth";
+import TeacherLogin from "./pages/TeacherLogin";
+import TeacherMagicLink from "./pages/TeacherMagicLink";
 import ParentDashboard from "./pages/ParentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import TeacherAssignment from "./pages/TeacherAssignment";
@@ -25,6 +27,8 @@ const App = () => (
         <Route path="/parent-dashboard" element={<RequireAuth><ParentDashboard /></RequireAuth>} />
         <Route path="/teacher-dashboard" element={<RequireAuth><TeacherDashboard /></RequireAuth>} />
         <Route path="/teacher-assignment" element={<RequireAuth><TeacherAssignment /></RequireAuth>} />
+        <Route path="/teacher-login" element={<TeacherLogin />} />
+        <Route path="/teacher-setup" element={<TeacherMagicLink />} />
         <Route path="/student-dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

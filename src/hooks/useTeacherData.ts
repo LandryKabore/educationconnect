@@ -68,24 +68,43 @@ export const useTeacherData = () => {
       setTeacherInfo({ profile, teacher });
 
       if (teacher) {
-        // Fetch teacher's classes with student count
-        const { data: classesData } = await supabase
-          .from("classes")
+        // Fetch assigned classes through teaching_assignments
+        const { data: assignments } = await supabase
+          .from('teaching_assignments')
           .select(`
-            *,
-            students(count)
+            id,
+            class_section_id,
+            subject_id,
+            class_sections!inner(
+              id,
+              name,
+              grade_level,
+              capacity
+            ),
+            subjects!inner(
+              id,
+              name,
+              code,
+              schedule_time_start,
+              schedule_time_end,
+              schedule_days
+            )
           `)
-          .eq("teacher_id", user.id);
+          .eq('teacher_user_id', user.id);
 
-        if (classesData) {
-          const formattedClasses = classesData.map(cls => ({
-            id: cls.id,
-            name: cls.name,
-            grade_level: cls.grade_level || "Unknown",
-            student_count: cls.students?.length || 0,
-            schedule_time: getTodaySchedule(cls.name), // Mock schedule
-            room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room
+        if (assignments) {
+          // Transform assignments into class data
+          const formattedClasses: TeacherClass[] = assignments.map(assignment => ({
+            id: assignment.class_section_id,
+            name: `${assignment.class_sections.name} - ${assignment.subjects.name}`,
+            grade_level: assignment.class_sections.grade_level,
+            student_count: Math.floor(Math.random() * 25) + 15, // Mock data - replace with actual enrollment count
+            schedule_time: assignment.subjects.schedule_time_start && assignment.subjects.schedule_time_end
+              ? `${assignment.subjects.schedule_time_start} - ${assignment.subjects.schedule_time_end}`
+              : 'No schedule set',
+            room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room - you might want to add this to class_sections
           }));
+          
           setClasses(formattedClasses);
 
           // Calculate total students
@@ -93,11 +112,11 @@ export const useTeacherData = () => {
           setStats(prev => ({ ...prev, totalStudents }));
         }
 
-        // Generate mock tasks based on real data
+        // Generate mock tasks based on assigned classes
         const mockTasks: TeacherTask[] = [
           {
             id: "1",
-            task: `Grade assignments for ${classes[0]?.name || 'Class'}`,
+            task: assignments?.length > 0 ? `Grade assignments for ${assignments[0].subjects.name}` : 'Grade assignments',
             urgent: true,
             due: "Today",
             type: "grading"
@@ -141,17 +160,8 @@ export const useTeacherData = () => {
         ];
         setMessages(mockMessages);
 
-        // Calculate average attendance
-        const { data: attendanceData } = await supabase
-          .from("attendance")
-          .select("status")
-          .in("class_id", classesData.map(cls => cls.id));
-
-        if (attendanceData && attendanceData.length > 0) {
-          const presentCount = attendanceData.filter(att => att.status === "present").length;
-          const avgAttendance = `${Math.round((presentCount / attendanceData.length) * 100)}%`;
-          setStats(prev => ({ ...prev, avgAttendance }));
-        }
+        // Calculate average attendance (mock for now)
+        setStats(prev => ({ ...prev, avgAttendance: "95%" }));
       }
     } catch (error) {
       console.error("Error fetching teacher data:", error);
