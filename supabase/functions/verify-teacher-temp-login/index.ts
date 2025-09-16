@@ -25,6 +25,7 @@ const handler = async (req: Request): Promise<Response> => {
     const { username, tempPassword }: VerifyTempLoginRequest = await req.json();
 
     console.log('Verifying temp login for username:', username);
+    console.log('Received password length:', tempPassword ? tempPassword.length : 'null');
 
     // Hash the provided password
     const encoder = new TextEncoder();
@@ -34,15 +35,22 @@ const handler = async (req: Request): Promise<Response> => {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
+    console.log('Generated hash:', tempPasswordHash);
+
     // Find temp credentials
     const { data: tempCreds, error: credsError } = await supabase
       .from('teacher_temp_credentials')
       .select('*')
       .eq('username', username)
-      .eq('temp_password_hash', tempPasswordHash)
       .eq('is_used', false)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
+
+    console.log('Found credentials:', tempCreds ? 'yes' : 'no');
+    if (tempCreds) {
+      console.log('Stored hash:', tempCreds.temp_password_hash);
+      console.log('Hash match:', tempCreds.temp_password_hash === tempPasswordHash);
+    }
 
     if (credsError || !tempCreds) {
       console.log('Invalid temp credentials:', { username, credsError });
