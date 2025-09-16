@@ -49,31 +49,16 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Invalid username or password');
     }
 
-    // Get teacher info
-    const { data: teacherProfile, error: teacherError } = await supabase
-      .from('teacher_profiles')
-      .select(`
-        *,
-        schools!inner(name)
-      `)
-      .eq('user_id', tempCreds.teacher_user_id)
+    // Get school info
+    const { data: school, error: schoolError } = await supabase
+      .from('schools')
+      .select('name')
+      .eq('id', tempCreds.school_id)
       .maybeSingle();
 
-    if (teacherError || !teacherProfile) {
-      console.error('Teacher profile fetch error:', teacherError);
-      throw new Error('Teacher profile not found');
-    }
-
-    // Get profile info
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', tempCreds.teacher_user_id)
-      .maybeSingle();
-
-    if (profileError || !profile) {
-      console.error('Profile fetch error:', profileError);
-      throw new Error('Profile not found');
+    if (schoolError || !school) {
+      console.error('School fetch error:', schoolError);
+      throw new Error('School not found');
     }
 
     console.log('Temp login verified successfully for:', username);
@@ -83,8 +68,21 @@ const handler = async (req: Request): Promise<Response> => {
         success: true,
         teacherInfo: {
           user_id: tempCreds.teacher_user_id,
-          profile: profile,
-          teacher: teacherProfile
+          profile: {
+            first_name: tempCreds.first_name,
+            last_name: tempCreds.last_name,
+            email: null // Will be set during setup
+          },
+          teacher: {
+            school_id: tempCreds.school_id,
+            school: { name: school.name },
+            first_name: tempCreds.first_name,
+            middle_initial: tempCreds.middle_initial,
+            last_name: tempCreds.last_name,
+            phone: tempCreds.phone,
+            staff_no: tempCreds.staff_no,
+            qualifications: tempCreds.qualifications
+          }
         }
       }),
       {
