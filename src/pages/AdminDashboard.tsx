@@ -17,6 +17,7 @@ import { CreateClassSectionModal } from "@/components/CreateClassSectionModal";
 import { EditClassSectionModal } from "@/components/EditClassSectionModal";
 import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { EditSubjectModal } from "@/components/EditSubjectModal";
+import { CreateTeacherModal } from "@/components/CreateTeacherModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -51,6 +52,7 @@ const AdminDashboard = () => {
   const [editClassSectionModalOpen, setEditClassSectionModalOpen] = useState(false);
   const [createSubjectModalOpen, setCreateSubjectModalOpen] = useState(false);
   const [editSubjectModalOpen, setEditSubjectModalOpen] = useState(false);
+  const [createTeacherModalOpen, setCreateTeacherModalOpen] = useState(false);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -621,6 +623,12 @@ const AdminDashboard = () => {
                   Import/Export
                 </Button>
               </div>
+              <Button 
+                className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white"
+                onClick={() => setCreateTeacherModalOpen(true)}
+              >
+                Create Teacher Account
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -702,6 +710,13 @@ const AdminDashboard = () => {
         onClose={() => setEditSubjectModalOpen(false)}
         onSuccess={fetchAdminData}
         subject={editingSubject}
+      />
+
+      <CreateTeacherModal
+        isOpen={createTeacherModalOpen}
+        onClose={() => setCreateTeacherModalOpen(false)}
+        onTeacherCreated={fetchAdminData}
+        selectedSchoolId={selectedSchoolId || undefined}
       />
     </div>
   );

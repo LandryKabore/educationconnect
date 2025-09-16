@@ -26,6 +26,7 @@ export default function Auth() {
   // Shared fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
 
   // Signup-only fields
   const [firstName, setFirstName] = useState("");
@@ -126,6 +127,35 @@ export default function Auth() {
     }
   };
 
+  const handleTeacherTempLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      // Call edge function to verify temp credentials
+      const { data, error } = await supabase.functions.invoke('verify-teacher-temp-login', {
+        body: { username, tempPassword: password }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        // Create a temporary session for first login flow
+        localStorage.setItem('teacher_first_login', JSON.stringify(data.teacherInfo));
+        navigate('/teacher-first-login', { replace: true });
+      }
+    } catch (err: any) {
+      toast({ 
+        title: "Login failed", 
+        description: err.message ?? "Invalid username or password.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) return;
@@ -141,6 +171,12 @@ export default function Auth() {
           description: "Welcome to the admin panel",
         });
         navigate("/admin-dashboard", { replace: true });
+        return;
+      }
+
+      // For teachers, check if they're using temp credentials
+      if (selectedRole === "teacher" && username) {
+        await handleTeacherTempLogin(e);
         return;
       }
       
@@ -333,14 +369,36 @@ export default function Auth() {
 
             {mode === "signin" ? (
               <form onSubmit={handleSignIn} className="space-y-4">
+                {selectedRole === "teacher" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username (if first time)</Label>
+                    <Input 
+                      id="username" 
+                      value={username} 
+                      onChange={(e) => setUsername(e.target.value)} 
+                      placeholder="Leave empty if you have an account"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <Label htmlFor="email">
+                    {selectedRole === "teacher" && username ? "Temporary Password" : "Email"}
+                  </Label>
+                  <Input 
+                    id="email" 
+                    type={selectedRole === "teacher" && username ? "password" : "email"} 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    placeholder={selectedRole === "teacher" && username ? "Enter temp password" : "Enter your email"}
+                    required 
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                </div>
+                {(!username || selectedRole !== "teacher") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing in..." : `Sign In as ${selectedRoleInfo?.title}`}
                 </Button>

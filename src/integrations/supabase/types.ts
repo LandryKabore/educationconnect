@@ -687,6 +687,33 @@ export type Database = {
           },
         ]
       }
+      magic_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          token: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          token: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachments: string[] | null
@@ -1158,33 +1185,54 @@ export type Database = {
       teacher_profiles: {
         Row: {
           created_at: string
+          first_login_completed: boolean | null
           hire_date: string | null
           id: string
+          last_magic_link_sent: string | null
+          phone: string | null
+          pin_hash: string | null
+          pin_set_at: string | null
           qualifications: string[] | null
           school_id: string
           staff_no: string | null
+          temp_password_expires_at: string | null
           updated_at: string
           user_id: string
+          username: string | null
         }
         Insert: {
           created_at?: string
+          first_login_completed?: boolean | null
           hire_date?: string | null
           id?: string
+          last_magic_link_sent?: string | null
+          phone?: string | null
+          pin_hash?: string | null
+          pin_set_at?: string | null
           qualifications?: string[] | null
           school_id: string
           staff_no?: string | null
+          temp_password_expires_at?: string | null
           updated_at?: string
           user_id: string
+          username?: string | null
         }
         Update: {
           created_at?: string
+          first_login_completed?: boolean | null
           hire_date?: string | null
           id?: string
+          last_magic_link_sent?: string | null
+          phone?: string | null
+          pin_hash?: string | null
+          pin_set_at?: string | null
           qualifications?: string[] | null
           school_id?: string
           staff_no?: string | null
+          temp_password_expires_at?: string | null
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -1202,6 +1250,42 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      teacher_temp_credentials: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          is_used: boolean | null
+          teacher_user_id: string
+          temp_password_hash: string
+          used_at: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          is_used?: boolean | null
+          teacher_user_id: string
+          temp_password_hash: string
+          used_at?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          is_used?: boolean | null
+          teacher_user_id?: string
+          temp_password_hash?: string
+          used_at?: string | null
+          username?: string
+        }
+        Relationships: []
       }
       teaching_assignments: {
         Row: {
@@ -1300,6 +1384,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_teacher_account: {
+        Args: {
+          class_section_ids?: string[]
+          subject_ids?: string[]
+          teacher_email: string
+          teacher_first_name: string
+          teacher_last_name: string
+          teacher_phone?: string
+          teacher_qualifications?: string[]
+          teacher_school_id: string
+          teacher_staff_no?: string
+        }
+        Returns: Json
+      }
+      generate_magic_link: {
+        Args: { teacher_user_id: string }
+        Returns: string
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1315,6 +1417,10 @@ export type Database = {
       is_teacher: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      verify_magic_link_and_set_pin: {
+        Args: { new_pin: string; token_value: string }
+        Returns: Json
       }
     }
     Enums: {
