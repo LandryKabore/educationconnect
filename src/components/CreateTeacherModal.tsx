@@ -113,87 +113,29 @@ export function CreateTeacherModal({ onTeacherCreated, selectedSchoolId }: Creat
     try {
       setLoading(true);
 
-      // Create auth user (admin creates the user)
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        email_confirm: true, // Auto-confirm email
-        user_metadata: {
-          first_name: firstName,
-          last_name: lastName,
-          role: 'teacher',
-          school_id: schoolId
-        }
+      // Use the RPC function to create teacher
+      const { data: result, error: rpcError } = await supabase.rpc('create_teacher_account', {
+        teacher_email: email,
+        teacher_first_name: firstName,
+        teacher_last_name: lastName,
+        teacher_school_id: schoolId,
+        teacher_phone: phone || null,
+        teacher_staff_no: staffNo || null,
+        teacher_qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : null,
+        class_section_ids: selectedClassSections,
+        subject_ids: selectedSubjects
       });
 
-      if (authError) throw authError;
+      if (rpcError) throw rpcError;
 
-      if (authData.user) {
-        // Create teacher profile
-        const { error: profileError } = await supabase
-          .from('teacher_profiles')
-          .insert({
-            user_id: authData.user.id,
-            school_id: schoolId,
-            staff_no: staffNo || null,
-            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : null,
-            phone,
-            hire_date: new Date().toISOString().split('T')[0]
-          });
+      // Type assertion for the result since RPC returns Json type
+      const typedResult = result as { success: boolean; magic_token: string; user_id: string } | null;
 
-        if (profileError) throw profileError;
-
-        // Get current academic year for assignments
-        const { data: academicYear } = await supabase
-          .from('academic_years')
-          .select('id')
-          .eq('school_id', schoolId)
-          .eq('active', true)
-          .single();
-
-        // Create teaching assignments
-        if (selectedClassSections.length > 0 && selectedSubjects.length > 0 && academicYear) {
-          const assignments = [];
-          for (const classSectionId of selectedClassSections) {
-            for (const subjectId of selectedSubjects) {
-              assignments.push({
-                teacher_user_id: authData.user.id,
-                class_section_id: classSectionId,
-                subject_id: subjectId,
-                academic_year_id: academicYear.id
-              });
-            }
-          }
-
-          const { error: assignmentError } = await supabase
-            .from('teaching_assignments')
-            .insert(assignments);
-
-          if (assignmentError) {
-            console.error('Error creating teaching assignments:', assignmentError);
-            // Don't fail the entire process if assignments fail
-          }
-        }
-
-        // Generate and send magic link
-        try {
-          const { data: tokenData, error: tokenError } = await supabase
-            .rpc('generate_magic_link', { teacher_user_id: authData.user.id });
-
-          if (tokenError) throw tokenError;
-
-          // In a real app, you would send this via email/SMS
-          // For now, we'll show it in the toast
-          toast({
-            title: "Teacher created successfully!",
-            description: `Magic link token: ${tokenData} (In production, this would be sent via email)`,
-          });
-        } catch (linkError) {
-          console.error('Error generating magic link:', linkError);
-          toast({
-            title: "Teacher created",
-            description: "Teacher created successfully, but failed to generate magic link. You can create one later.",
-          });
-        }
+      if (typedResult?.success) {
+        toast({
+          title: "Teacher created successfully!",
+          description: `Magic link token: ${typedResult.magic_token} (In production, this would be sent via email)`,
+        });
 
         // Reset form
         setFirstName("");

@@ -1339,6 +1339,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_teacher_account: {
+        Args: {
+          class_section_ids?: string[]
+          subject_ids?: string[]
+          teacher_email: string
+          teacher_first_name: string
+          teacher_last_name: string
+          teacher_phone?: string
+          teacher_qualifications?: string[]
+          teacher_school_id: string
+          teacher_staff_no?: string
+        }
+        Returns: Json
+      }
       generate_magic_link: {
         Args: { teacher_user_id: string }
         Returns: string
