@@ -101,13 +101,22 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
             </p>
           </div>
 
-          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Login Details:</strong> You will use your username "<strong>{teacherInfo.teacher?.username}</strong>" to sign in with your new password.
-            </p>
+          <div className="mb-6 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium mb-2">Login Credentials</h3>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-sm font-medium">Username</Label>
+                <div className="mt-1 p-2 bg-background border rounded-md text-muted-foreground">
+                  {teacherInfo.teacher?.username}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use this username to sign in after setup
+                </p>
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">New Password *</Label>
               <div className="relative">
