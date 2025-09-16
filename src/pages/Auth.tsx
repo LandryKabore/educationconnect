@@ -174,9 +174,49 @@ export default function Auth() {
         return;
       }
 
-      // For teachers, check if they're using temp credentials
+      // For teachers, check if they're using temp credentials first
       if (selectedRole === "teacher" && username) {
         await handleTeacherTempLogin(e);
+        return;
+      }
+      
+      // For teachers who completed setup, try username-based login
+      if (selectedRole === "teacher" && !username && !email.includes('@')) {
+        // If they entered a username instead of email, convert it to system email format
+        const systemEmail = `${email}@system.internal`;
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          email: systemEmail, 
+          password 
+        });
+        if (error) throw error;
+        if (data.user) {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("user_id", data.user.id)
+            .maybeSingle();
+
+          if (profileError) {
+            console.error("Profile fetch error", profileError);
+            await supabase.auth.signOut();
+            throw new Error("Failed to validate user role");
+          }
+
+          const userRole = profile?.role as UserRole;
+          
+          if (userRole !== selectedRole) {
+            await supabase.auth.signOut();
+            toast({
+              title: "Access Denied",
+              description: `These credentials belong to a ${userRole} account. Please select the correct role.`,
+              variant: "destructive"
+            });
+            return;
+          }
+
+          toast({ title: "Welcome back", description: "Signed in successfully." });
+          redirectToRole(data.user.id, selectedRole);
+        }
         return;
       }
       
@@ -382,14 +422,14 @@ export default function Auth() {
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="email">
-                    {selectedRole === "teacher" && username ? "Temporary Password" : "Email"}
+                    {selectedRole === "teacher" && username ? "Temporary Password" : selectedRole === "teacher" ? "Username or Email" : "Email"}
                   </Label>
                   <Input 
                     id="email" 
-                    type={selectedRole === "teacher" && username ? "password" : "email"} 
+                    type={selectedRole === "teacher" && username ? "password" : selectedRole === "teacher" ? "text" : "email"} 
                     value={selectedRole === "teacher" && username ? password : email} 
                     onChange={(e) => selectedRole === "teacher" && username ? setPassword(e.target.value) : setEmail(e.target.value)} 
-                    placeholder={selectedRole === "teacher" && username ? "Enter temp password" : "Enter your email"}
+                    placeholder={selectedRole === "teacher" && username ? "Enter temp password" : selectedRole === "teacher" ? "Enter username or email" : "Enter your email"}
                     required 
                   />
                 </div>

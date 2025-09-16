@@ -20,7 +20,6 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -50,7 +49,7 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
       // Call edge function to complete teacher setup
       const { data, error } = await supabase.functions.invoke('complete-teacher-setup', {
         body: {
-          email,
+          username: teacherInfo.teacher?.username,
           password,
           teacherId: teacherInfo.user_id
         }
@@ -60,7 +59,7 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
 
       toast({
         title: "Account setup complete",
-        description: "You can now sign in with your email and password",
+        description: "You can now sign in with your username and password",
       });
 
       // Sign out current session and redirect to login
@@ -102,22 +101,13 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email address"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                This will be your login email for future access
-              </p>
-            </div>
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              <strong>Login Details:</strong> You will use your username "<strong>{teacherInfo.teacher?.username}</strong>" to sign in with your new password.
+            </p>
+          </div>
 
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">New Password *</Label>
               <div className="relative">

@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface CompleteSetupRequest {
-  email: string;
+  username: string;
   password: string;
   teacherId: string;
 }
@@ -23,9 +23,9 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { email, password, teacherId }: CompleteSetupRequest = await req.json();
+    const { username, password, teacherId }: CompleteSetupRequest = await req.json();
 
-    console.log('Completing teacher setup for:', { teacherId, email });
+    console.log('Completing teacher setup for:', { teacherId, username });
 
     // First, get teacher info from temp credentials
     const { data: tempCreds, error: tempCredsError } = await supabase
@@ -41,15 +41,20 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Found temp credentials for teacher:', tempCreds.first_name, tempCreds.last_name);
 
+    // Create system email using username for Supabase auth
+    const systemEmail = `${username}@system.internal`;
+
     // Create real auth user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: email,
+      email: systemEmail,
       password: password,
       email_confirm: true, // Skip email confirmation
       user_metadata: {
         first_name: tempCreds.first_name,
         last_name: tempCreds.last_name,
-        role: 'teacher'
+        role: 'teacher',
+        username: username,
+        school_id: tempCreds.school_id
       }
     });
 
@@ -64,7 +69,7 @@ const handler = async (req: Request): Promise<Response> => {
       .from('profiles')
       .insert({
         user_id: authData.user.id,
-        email: email,
+        email: systemEmail,
         first_name: tempCreds.first_name,
         last_name: tempCreds.last_name,
         role: 'teacher'
@@ -83,6 +88,7 @@ const handler = async (req: Request): Promise<Response> => {
       .insert({
         user_id: authData.user.id,
         school_id: tempCreds.school_id,
+        username: username,
         phone: tempCreds.phone,
         staff_no: tempCreds.staff_no,
         qualifications: tempCreds.qualifications,
