@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface CreateTeacherRequest {
   firstName: string;
+  middleInitial?: string;
   lastName: string;
   username: string;
   tempPassword: string;
@@ -30,7 +31,7 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications, classSectionIds, subjectIds }: CreateTeacherRequest = await req.json();
+    const { firstName, middleInitial, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications, classSectionIds, subjectIds }: CreateTeacherRequest = await req.json();
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 

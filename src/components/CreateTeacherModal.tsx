@@ -24,6 +24,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
   
   // Form fields
   const [firstName, setFirstName] = useState("");
+  const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [tempPassword, setTempPassword] = useState("");
@@ -61,10 +62,11 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
 
   useEffect(() => {
     if (firstName && lastName) {
-      const generatedUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z.]/g, '');
+      const middle = middleInitial ? `.${middleInitial.toLowerCase()}` : '';
+      const generatedUsername = `${firstName.toLowerCase()}${middle}.${lastName.toLowerCase()}`.replace(/[^a-z.]/g, '');
       setUsername(generatedUsername);
     }
-  }, [firstName, lastName]);
+  }, [firstName, middleInitial, lastName]);
 
   const fetchSchools = async () => {
     const { data } = await supabase.from('schools').select('*').eq('active', true);
@@ -108,6 +110,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       const { data, error } = await supabase.functions.invoke('create-teacher-with-temp-creds', {
         body: {
           firstName,
+          middleInitial: middleInitial || null,
           lastName,
           username,
           tempPassword,
@@ -129,6 +132,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
 
       // Reset form
       setFirstName("");
+      setMiddleInitial("");
       setLastName("");
       setUsername("");
       setTempPassword("");
@@ -161,7 +165,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
               <Input
@@ -169,6 +173,16 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="middleInitial">Middle Initial</Label>
+              <Input
+                id="middleInitial"
+                value={middleInitial}
+                onChange={(e) => setMiddleInitial(e.target.value.charAt(0).toUpperCase())}
+                maxLength={1}
+                placeholder="Optional"
               />
             </div>
             <div className="space-y-2">
