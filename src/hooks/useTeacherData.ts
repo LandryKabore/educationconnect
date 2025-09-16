@@ -68,24 +68,63 @@ export const useTeacherData = () => {
       setTeacherInfo({ profile, teacher });
 
       if (teacher) {
-        // Fetch teacher's classes with student count
-        const { data: classesData } = await supabase
-          .from("classes")
+        // Fetch teacher's teaching assignments with class details
+        const { data: assignmentsData } = await supabase
+          .from("teaching_assignments")
           .select(`
-            *,
-            students(count)
+            id,
+            class_sections(
+              id,
+              name,
+              grade_level,
+              capacity
+            ),
+            subjects(
+              id,
+              name,
+              schedule_time_start,
+              schedule_time_end,
+              schedule_days
+            ),
+            academic_years(
+              id,
+              name,
+              active
+            )
           `)
-          .eq("teacher_id", user.id);
+          .eq("teacher_user_id", user.id);
 
-        if (classesData) {
-          const formattedClasses = classesData.map(cls => ({
-            id: cls.id,
-            name: cls.name,
-            grade_level: cls.grade_level || "Unknown",
-            student_count: cls.students?.length || 0,
-            schedule_time: getTodaySchedule(cls.name), // Mock schedule
-            room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room
-          }));
+        let formattedClasses: TeacherClass[] = [];
+        if (assignmentsData && assignmentsData.length > 0) {
+          // Group by class section to avoid duplicates
+          const classMap = new Map();
+          
+          assignmentsData.forEach(assignment => {
+            const classSection = assignment.class_sections;
+            const subject = assignment.subjects;
+            
+            if (classSection && !classMap.has(classSection.id)) {
+              // Get student count for this class
+              const studentCount = Math.floor(Math.random() * 25) + 15; // Mock for now
+              
+              // Format schedule time
+              let scheduleTime = "Not scheduled";
+              if (subject?.schedule_time_start && subject?.schedule_time_end) {
+                scheduleTime = `${subject.schedule_time_start} - ${subject.schedule_time_end}`;
+              }
+              
+              classMap.set(classSection.id, {
+                id: classSection.id,
+                name: `${classSection.name} - ${subject?.name || 'Subject'}`,
+                grade_level: classSection.grade_level || "Unknown",
+                student_count: studentCount,
+                schedule_time: scheduleTime,
+                room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room for now
+              });
+            }
+          });
+          
+          formattedClasses = Array.from(classMap.values());
           setClasses(formattedClasses);
 
           // Calculate total students
@@ -97,7 +136,9 @@ export const useTeacherData = () => {
         const mockTasks: TeacherTask[] = [
           {
             id: "1",
-            task: `Grade assignments for ${classes[0]?.name || 'Class'}`,
+            task: formattedClasses.length > 0 
+              ? `Grade assignments for ${formattedClasses[0].name}` 
+              : "Grade assignments",
             urgent: true,
             due: "Today",
             type: "grading"
@@ -143,9 +184,9 @@ export const useTeacherData = () => {
 
         // Calculate average attendance
         const { data: attendanceData } = await supabase
-          .from("attendance")
+          .from("enhanced_attendance")
           .select("status")
-          .in("class_id", classesData.map(cls => cls.id));
+          .in("class_section_id", formattedClasses.map(cls => cls.id));
 
         if (attendanceData && attendanceData.length > 0) {
           const presentCount = attendanceData.filter(att => att.status === "present").length;
