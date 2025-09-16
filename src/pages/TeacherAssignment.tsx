@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, GraduationCap, BookOpen } from "lucide-react";
+import { Loader2, GraduationCap, BookOpen, CheckCircle } from "lucide-react";
 
 interface ClassSection {
   id: string;
@@ -26,9 +26,23 @@ interface AcademicYear {
   active: boolean;
 }
 
+interface TeachingAssignment {
+  id: string;
+  class_section: {
+    name: string;
+    grade_level: string;
+  };
+  subject: {
+    name: string;
+    code: string;
+  };
+}
+
 const TeacherAssignment = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [hasExistingAssignments, setHasExistingAssignments] = useState(false);
+  const [existingAssignments, setExistingAssignments] = useState<TeachingAssignment[]>([]);
   const [classSections, setClassSections] = useState<ClassSection[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [activeAcademicYear, setActiveAcademicYear] = useState<AcademicYear | null>(null);
@@ -50,6 +64,24 @@ const TeacherAssignment = () => {
         return;
       }
 
+      // First, check if teacher already has teaching assignments
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select(`
+          id,
+          class_section:class_sections(name, grade_level),
+          subject:subjects(name, code)
+        `)
+        .eq("teacher_user_id", user.id);
+
+      if (assignments && assignments.length > 0) {
+        setHasExistingAssignments(true);
+        setExistingAssignments(assignments as TeachingAssignment[]);
+        setLoading(false);
+        return;
+      }
+
+      // If no assignments, continue with the selection flow
       // Get teacher's school
       const { data: teacherProfile } = await supabase
         .from("teacher_profiles")
@@ -124,6 +156,29 @@ const TeacherAssignment = () => {
     }
   };
 
+  const handleConfirmAssignments = async () => {
+    try {
+      setSubmitting(true);
+      
+      toast({
+        title: "Assignments Confirmed",
+        description: "Welcome to your teacher dashboard!"
+      });
+
+      navigate("/teacher-dashboard", { replace: true });
+
+    } catch (error) {
+      console.error("Error confirming assignments:", error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm assignments",
+        variant: "destructive"
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedClassSection || !selectedSubject || !activeAcademicYear) {
       toast({
@@ -179,6 +234,69 @@ const TeacherAssignment = () => {
     );
   }
 
+  // Show existing assignments for confirmation
+  if (hasExistingAssignments) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl flex items-center justify-center gap-2">
+              <CheckCircle className="h-6 w-6 text-green-500" />
+              Confirm Your Teaching Assignment
+            </CardTitle>
+            <CardDescription>
+              Making sure it's you teaching these classes
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="text-center text-sm text-muted-foreground">
+              We found the following teaching assignments for you:
+            </div>
+            
+            {existingAssignments.map((assignment, index) => (
+              <div key={assignment.id} className="p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium">
+                      {assignment.class_section.name} - Grade {assignment.class_section.grade_level}
+                    </h3>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" />
+                      {assignment.subject.name} {assignment.subject.code && `(${assignment.subject.code})`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="space-y-3">
+              <Button 
+                onClick={handleConfirmAssignments} 
+                disabled={submitting}
+                className="w-full"
+              >
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Yes, That's Me - Continue to Dashboard
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                onClick={() => navigate("/auth", { replace: true })}
+                className="w-full"
+              >
+                No, This Isn't Me - Back to Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show selection interface if no existing assignments
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
