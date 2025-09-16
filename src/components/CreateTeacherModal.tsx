@@ -34,6 +34,10 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
   
   // Data
   const [schools, setSchools] = useState<any[]>([]);
+  const [classSections, setClassSections] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [selectedClassSections, setSelectedClassSections] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +47,17 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       }
     }
   }, [isOpen, autoGenerate]);
+
+  useEffect(() => {
+    if (schoolId) {
+      fetchClassSectionsAndSubjects();
+    } else {
+      setClassSections([]);
+      setSubjects([]);
+      setSelectedClassSections([]);
+      setSelectedSubjects([]);
+    }
+  }, [schoolId]);
 
   useEffect(() => {
     if (firstName && lastName) {
@@ -56,11 +71,22 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
     if (data) setSchools(data);
   };
 
+  const fetchClassSectionsAndSubjects = async () => {
+    if (!schoolId) return;
+    
+    const [classResponse, subjectResponse] = await Promise.all([
+      supabase.from('class_sections').select('id, name, grade_level').eq('school_id', schoolId),
+      supabase.from('subjects').select('id, name, code').eq('school_id', schoolId)
+    ]);
+    
+    if (classResponse.data) setClassSections(classResponse.data);
+    if (subjectResponse.data) setSubjects(subjectResponse.data);
+  };
+
   const generateTempPassword = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < 4; i++) {
+      result += Math.floor(Math.random() * 10).toString();
     }
     setTempPassword(result);
   };
@@ -88,7 +114,9 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
           schoolId,
           phone: phone || null,
           staffNo: staffNo || null,
-          qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : []
+          qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+          classSectionIds: selectedClassSections,
+          subjectIds: selectedSubjects
         }
       });
 
@@ -107,6 +135,8 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       setPhone("");
       setStaffNo("");
       setQualifications("");
+      setSelectedClassSections([]);
+      setSelectedSubjects([]);
       if (autoGenerate) generateTempPassword();
       
       onTeacherCreated();
@@ -252,6 +282,68 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
               placeholder="Comma-separated (e.g., BSc Education, MEd Mathematics)"
             />
           </div>
+
+          {schoolId && (
+            <>
+              <div className="space-y-2">
+                <Label>Assign Class Sections</Label>
+                <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-2">
+                  {classSections.map((classSection) => (
+                    <div key={classSection.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`class-${classSection.id}`}
+                        checked={selectedClassSections.includes(classSection.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClassSections([...selectedClassSections, classSection.id]);
+                          } else {
+                            setSelectedClassSections(selectedClassSections.filter(id => id !== classSection.id));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <Label htmlFor={`class-${classSection.id}`} className="text-sm">
+                        {classSection.name} ({classSection.grade_level})
+                      </Label>
+                    </div>
+                  ))}
+                  {classSections.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No class sections available for this school</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Assign Subjects</Label>
+                <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-2">
+                  {subjects.map((subject) => (
+                    <div key={subject.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`subject-${subject.id}`}
+                        checked={selectedSubjects.includes(subject.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSubjects([...selectedSubjects, subject.id]);
+                          } else {
+                            setSelectedSubjects(selectedSubjects.filter(id => id !== subject.id));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <Label htmlFor={`subject-${subject.id}`} className="text-sm">
+                        {subject.name} {subject.code && `(${subject.code})`}
+                      </Label>
+                    </div>
+                  ))}
+                  {subjects.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No subjects available for this school</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>

@@ -15,6 +15,8 @@ interface CreateTeacherRequest {
   phone?: string;
   staffNo?: string;
   qualifications?: string[];
+  classSectionIds?: string[];
+  subjectIds?: string[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -28,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications }: CreateTeacherRequest = await req.json();
+    const { firstName, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications, classSectionIds, subjectIds }: CreateTeacherRequest = await req.json();
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 
@@ -115,6 +117,40 @@ const handler = async (req: Request): Promise<Response> => {
       await supabase.from('teacher_profiles').delete().eq('user_id', tempUserId);
       await supabase.from('profiles').delete().eq('user_id', tempUserId);
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
+    }
+
+    // Create teaching assignments if provided
+    if (classSectionIds && subjectIds && classSectionIds.length > 0 && subjectIds.length > 0) {
+      // Get current academic year for the school
+      const { data: academicYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('active', true)
+        .single();
+
+      if (academicYear) {
+        const assignments = [];
+        for (const classSectionId of classSectionIds) {
+          for (const subjectId of subjectIds) {
+            assignments.push({
+              teacher_user_id: tempUserId,
+              class_section_id: classSectionId,
+              subject_id: subjectId,
+              academic_year_id: academicYear.id
+            });
+          }
+        }
+
+        const { error: assignmentError } = await supabase
+          .from('teaching_assignments')
+          .insert(assignments);
+
+        if (assignmentError) {
+          console.error('Teaching assignments creation error:', assignmentError);
+          // Don't fail the entire operation, just log the error
+        }
+      }
     }
 
     console.log('Teacher created successfully with temp credentials');
