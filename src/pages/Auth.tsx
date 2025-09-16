@@ -387,8 +387,8 @@ export default function Auth() {
                   <Input 
                     id="email" 
                     type={selectedRole === "teacher" && username ? "password" : "email"} 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
+                    value={selectedRole === "teacher" && username ? password : email} 
+                    onChange={(e) => selectedRole === "teacher" && username ? setPassword(e.target.value) : setEmail(e.target.value)} 
                     placeholder={selectedRole === "teacher" && username ? "Enter temp password" : "Enter your email"}
                     required 
                   />
