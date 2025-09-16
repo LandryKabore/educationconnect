@@ -112,20 +112,34 @@ serve(async (req) => {
       // Don't fail the process
     }
 
-    // Generate magic link
-    const { data: tokenData, error: tokenError } = await supabaseAdmin
-      .rpc('generate_magic_link', { teacher_user_id: authData.user.id });
+    // Generate magic link directly (since we have service role access)
+    const tokenValue = btoa(crypto.getRandomValues(new Uint8Array(32)).join(''));
+    const expiryTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    if (tokenError) {
-      console.error('Magic link error:', tokenError);
-      throw tokenError;
+    const { error: magicLinkError } = await supabaseAdmin
+      .from('magic_links')
+      .insert({
+        user_id: authData.user.id,
+        token: tokenValue,
+        expires_at: expiryTime.toISOString()
+      });
+
+    if (magicLinkError) {
+      console.error('Magic link error:', magicLinkError);
+      throw magicLinkError;
     }
+
+    // Update teacher profile with last sent timestamp
+    await supabaseAdmin
+      .from('teacher_profiles')
+      .update({ last_magic_link_sent: new Date().toISOString() })
+      .eq('user_id', authData.user.id);
 
     return new Response(
       JSON.stringify({
         success: true,
         user_id: authData.user.id,
-        magic_token: tokenData
+        magic_token: tokenValue
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
