@@ -92,36 +92,12 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
-    // Create teaching assignments if provided
+    // Store class/subject assignments for later use when teacher completes setup
+    let classSectionSubjectPairs = [];
     if (classSectionIds && subjectIds && classSectionIds.length > 0 && subjectIds.length > 0) {
-      // Get current academic year for the school
-      const { data: academicYear } = await supabase
-        .from('academic_years')
-        .select('id')
-        .eq('school_id', schoolId)
-        .eq('active', true)
-        .single();
-
-      if (academicYear) {
-        const assignments = [];
-        for (const classSectionId of classSectionIds) {
-          for (const subjectId of subjectIds) {
-            assignments.push({
-              teacher_user_id: tempUserId,
-              class_section_id: classSectionId,
-              subject_id: subjectId,
-              academic_year_id: academicYear.id
-            });
-          }
-        }
-
-        const { error: assignmentError } = await supabase
-          .from('teaching_assignments')
-          .insert(assignments);
-
-        if (assignmentError) {
-          console.error('Teaching assignments creation error:', assignmentError);
-          // Don't fail the entire operation, just log the error
+      for (const classSectionId of classSectionIds) {
+        for (const subjectId of subjectIds) {
+          classSectionSubjectPairs.push({ classSectionId, subjectId });
         }
       }
     }
@@ -132,7 +108,8 @@ const handler = async (req: Request): Promise<Response> => {
       JSON.stringify({ 
         success: true, 
         teacherId: tempUserId,
-        username: username
+        username: username,
+        classSectionSubjectPairs: classSectionSubjectPairs
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

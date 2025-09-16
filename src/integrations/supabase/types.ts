@@ -1256,8 +1256,15 @@ export type Database = {
           created_at: string
           created_by: string
           expires_at: string | null
+          first_name: string | null
           id: string
           is_used: boolean | null
+          last_name: string | null
+          middle_initial: string | null
+          phone: string | null
+          qualifications: string[] | null
+          school_id: string | null
+          staff_no: string | null
           teacher_user_id: string
           temp_password_hash: string
           used_at: string | null
@@ -1267,8 +1274,15 @@ export type Database = {
           created_at?: string
           created_by: string
           expires_at?: string | null
+          first_name?: string | null
           id?: string
           is_used?: boolean | null
+          last_name?: string | null
+          middle_initial?: string | null
+          phone?: string | null
+          qualifications?: string[] | null
+          school_id?: string | null
+          staff_no?: string | null
           teacher_user_id: string
           temp_password_hash: string
           used_at?: string | null
@@ -1278,14 +1292,29 @@ export type Database = {
           created_at?: string
           created_by?: string
           expires_at?: string | null
+          first_name?: string | null
           id?: string
           is_used?: boolean | null
+          last_name?: string | null
+          middle_initial?: string | null
+          phone?: string | null
+          qualifications?: string[] | null
+          school_id?: string | null
+          staff_no?: string | null
           teacher_user_id?: string
           temp_password_hash?: string
           used_at?: string | null
           username?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teacher_temp_credentials_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teaching_assignments: {
         Row: {
