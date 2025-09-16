@@ -41,6 +41,13 @@ export function CreateTeacherModal({ onTeacherCreated, selectedSchoolId }: Creat
     }
   }, [open, selectedSchoolId]);
 
+  // Update classes/subjects when school selection changes
+  useEffect(() => {
+    if (schoolId) {
+      updateSchoolData(schoolId);
+    }
+  }, [schoolId]);
+
   const fetchData = async () => {
     try {
       const [schoolsRes, classSectionsRes, subjectsRes] = await Promise.all([
@@ -69,6 +76,26 @@ export function CreateTeacherModal({ onTeacherCreated, selectedSchoolId }: Creat
         description: "Failed to load form data.",
         variant: "destructive",
       });
+    }
+  };
+
+  const updateSchoolData = async (selectedSchool: string) => {
+    try {
+      const [classSectionsRes, subjectsRes] = await Promise.all([
+        supabase.from('class_sections').select('*').eq('school_id', selectedSchool),
+        supabase.from('subjects').select('*').or(`school_id.is.null,school_id.eq.${selectedSchool}`)
+      ]);
+
+      if (classSectionsRes.data) {
+        setClassSections(classSectionsRes.data);
+        setSelectedClassSections([]); // Reset selections
+      }
+      if (subjectsRes.data) {
+        setSubjects(subjectsRes.data);
+        setSelectedSubjects([]); // Reset selections
+      }
+    } catch (error) {
+      console.error('Error updating school data:', error);
     }
   };
 
