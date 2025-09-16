@@ -68,22 +68,6 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Unauthorized: Admin access required');
     }
 
-    // Create teacher profile first
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: tempUserId,
-        email: `temp_${username}@temp.local`, // Temporary email
-        first_name: firstName,
-        last_name: lastName,
-        role: 'teacher'
-      });
-
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-      throw new Error(`Failed to create profile: ${profileError.message}`);
-    }
-
     // Create teacher profile
     const { error: teacherError } = await supabase
       .from('teacher_profiles')
@@ -101,8 +85,6 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (teacherError) {
       console.error('Teacher profile creation error:', teacherError);
-      // Clean up profile
-      await supabase.from('profiles').delete().eq('user_id', tempUserId);
       throw new Error(`Failed to create teacher profile: ${teacherError.message}`);
     }
 
@@ -121,7 +103,6 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('Temp credentials creation error:', credsError);
       // Clean up created records
       await supabase.from('teacher_profiles').delete().eq('user_id', tempUserId);
-      await supabase.from('profiles').delete().eq('user_id', tempUserId);
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
