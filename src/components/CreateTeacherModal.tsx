@@ -113,28 +113,27 @@ export function CreateTeacherModal({ onTeacherCreated, selectedSchoolId }: Creat
     try {
       setLoading(true);
 
-      // Use the RPC function to create teacher
-      const { data: result, error: rpcError } = await supabase.rpc('create_teacher_account', {
-        teacher_email: email,
-        teacher_first_name: firstName,
-        teacher_last_name: lastName,
-        teacher_school_id: schoolId,
-        teacher_phone: phone || null,
-        teacher_staff_no: staffNo || null,
-        teacher_qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : null,
-        class_section_ids: selectedClassSections,
-        subject_ids: selectedSubjects
+      // Use the edge function to create teacher (has service role access)
+      const { data: result, error: edgeError } = await supabase.functions.invoke('create-teacher', {
+        body: {
+          teacher_email: email,
+          teacher_first_name: firstName,
+          teacher_last_name: lastName,
+          teacher_school_id: schoolId,
+          teacher_phone: phone || null,
+          teacher_staff_no: staffNo || null,
+          teacher_qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : null,
+          class_section_ids: selectedClassSections,
+          subject_ids: selectedSubjects
+        }
       });
 
-      if (rpcError) throw rpcError;
+      if (edgeError) throw edgeError;
 
-      // Type assertion for the result since RPC returns Json type
-      const typedResult = result as { success: boolean; magic_token: string; user_id: string } | null;
-
-      if (typedResult?.success) {
+      if (result?.success) {
         toast({
           title: "Teacher created successfully!",
-          description: `Magic link token: ${typedResult.magic_token} (In production, this would be sent via email)`,
+          description: `Magic link token: ${result.magic_token} (In production, this would be sent via email)`,
         });
 
         // Reset form
