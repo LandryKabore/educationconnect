@@ -52,8 +52,8 @@ const handler = async (req: Request): Promise<Response> => {
       console.log('Hash match:', tempCreds.temp_password_hash === tempPasswordHash);
     }
 
-    if (credsError || !tempCreds) {
-      console.log('Invalid temp credentials:', { username, credsError });
+    if (credsError || !tempCreds || tempCreds.temp_password_hash !== tempPasswordHash) {
+      console.log('Invalid temp credentials:', { username, credsError, hashMatch: tempCreds?.temp_password_hash === tempPasswordHash });
       throw new Error('Invalid username or password');
     }
 
@@ -84,6 +84,7 @@ const handler = async (req: Request): Promise<Response> => {
           teacher: {
             school_id: tempCreds.school_id,
             school: { name: school.name },
+            username: tempCreds.username,
             first_name: tempCreds.first_name,
             middle_initial: tempCreds.middle_initial,
             last_name: tempCreds.last_name,

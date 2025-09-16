@@ -98,7 +98,7 @@ export function TeacherFirstLogin({ teacherInfo, onComplete }: TeacherFirstLogin
               <strong>Username:</strong> {teacherInfo.teacher?.username}
             </p>
             <p className="text-sm text-muted-foreground">
-              <strong>School:</strong> {teacherInfo.teacher?.schools?.name}
+              <strong>School:</strong> {teacherInfo.teacher?.school?.name}
             </p>
           </div>
 
