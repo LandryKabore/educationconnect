@@ -17,7 +17,6 @@ import { CreateClassSectionModal } from "@/components/CreateClassSectionModal";
 import { EditClassSectionModal } from "@/components/EditClassSectionModal";
 import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { EditSubjectModal } from "@/components/EditSubjectModal";
-import { CreateTeacherModal } from "@/components/CreateTeacherModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -578,46 +577,6 @@ const AdminDashboard = () => {
               >
                 Add New Subject
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* Teachers Management */}
-          <Card className="bg-slate-800/50 border-slate-700 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Users className="w-5 h-5 text-green-400" />
-                Teachers
-              </CardTitle>
-              <CardDescription className="text-slate-300">
-                Manage teaching staff
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                {adminData.users.filter(u => u.role === 'teacher').slice(0, 3).map((teacher) => (
-                  <div key={teacher.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                    <span className="text-slate-200 text-sm">
-                      {teacher.first_name} {teacher.last_name}
-                    </span>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-slate-600 text-slate-200 hover:bg-slate-700"
-                    >
-                      View
-                    </Button>
-                  </div>
-                ))}
-                {adminData.users.filter(u => u.role === 'teacher').length > 3 && (
-                  <p className="text-xs text-slate-400">
-                    +{adminData.users.filter(u => u.role === 'teacher').length - 3} more
-                  </p>
-                )}
-              </div>
-              <CreateTeacherModal 
-                onTeacherCreated={fetchAdminData}
-                selectedSchoolId={selectedSchoolId || undefined}
-              />
             </CardContent>
           </Card>
 

@@ -226,6 +226,13 @@ export default function Auth() {
       color: "from-blue-500 to-blue-600"
     },
     {
+      id: "teacher" as UserRole,
+      title: "Teacher",
+      description: "Manage classes, assignments, and student progress",
+      icon: BookOpen,
+      color: "from-green-500 to-green-600"
+    },
+    {
       id: "parent" as UserRole,
       title: "Parent",
       description: "Monitor your child's academic progress and school communication",
@@ -260,15 +267,6 @@ export default function Auth() {
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold mb-4">Welcome to EduConnect</h1>
             <p className="text-muted-foreground text-lg">Please select your role to continue</p>
-            <div className="mt-4">
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/teacher-login')}
-                className="mr-4"
-              >
-                Teacher Sign In
-              </Button>
-            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
