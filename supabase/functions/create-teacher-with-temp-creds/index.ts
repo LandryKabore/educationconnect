@@ -57,8 +57,13 @@ const handler = async (req: Request): Promise<Response> => {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
-    // Get current user (admin)
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Get current user (admin) from the authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      throw new Error('Unauthorized: No authorization header');
+    }
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (userError || !user) {
       throw new Error('Unauthorized: Admin access required');
     }
