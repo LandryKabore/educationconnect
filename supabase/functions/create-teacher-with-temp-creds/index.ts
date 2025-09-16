@@ -68,27 +68,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Unauthorized: Admin access required');
     }
 
-    // Create teacher profile
-    const { error: teacherError } = await supabase
-      .from('teacher_profiles')
-      .insert({
-        user_id: tempUserId,
-        school_id: schoolId,
-        username: username,
-        staff_no: staffNo,
-        qualifications: qualifications,
-        phone: phone,
-        hire_date: new Date().toISOString().split('T')[0],
-        first_login_completed: false,
-        temp_password_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
-      });
-
-    if (teacherError) {
-      console.error('Teacher profile creation error:', teacherError);
-      throw new Error(`Failed to create teacher profile: ${teacherError.message}`);
-    }
-
-    // Create temporary credentials
+    // Create temporary credentials with all teacher information
     const { error: credsError } = await supabase
       .from('teacher_temp_credentials')
       .insert({
@@ -96,13 +76,19 @@ const handler = async (req: Request): Promise<Response> => {
         temp_password_hash: tempPasswordHash,
         teacher_user_id: tempUserId,
         created_by: user.id,
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        // Store teacher info in temp credentials
+        first_name: firstName,
+        middle_initial: middleInitial,
+        last_name: lastName,
+        school_id: schoolId,
+        phone: phone,
+        staff_no: staffNo,
+        qualifications: qualifications
       });
 
     if (credsError) {
       console.error('Temp credentials creation error:', credsError);
-      // Clean up created records
-      await supabase.from('teacher_profiles').delete().eq('user_id', tempUserId);
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
