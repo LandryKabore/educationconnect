@@ -125,9 +125,10 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
 
       if (error) throw error;
 
+      const actualUsername = data?.username || username;
       toast({
         title: "Teacher created successfully",
-        description: `Username: ${username}, Temp Password: ${tempPassword}`,
+        description: `Username: ${actualUsername}, Temp Password: ${tempPassword}`,
       });
 
       // Reset form
