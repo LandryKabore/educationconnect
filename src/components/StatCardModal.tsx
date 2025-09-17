@@ -88,21 +88,23 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
                 .from("profiles")
                 .select("first_name, last_name")
                 .eq("user_id", enrollment.student_user_id)
-                .single();
+                .maybeSingle();
 
               console.log("Profile found:", profile);
               if (profileError) {
                 console.error("Error fetching profile:", profileError);
-                continue;
               }
 
-              if (profile) {
-                allStudents.push({
-                  id: enrollment.student_user_id,
-                  name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown Student',
-                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
-                });
-              }
+              // Add student even if no profile exists
+              const studentName = profile 
+                ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() 
+                : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+
+              allStudents.push({
+                id: enrollment.student_user_id,
+                name: studentName || 'Unknown Student',
+                className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+              });
             }
           }
         }
