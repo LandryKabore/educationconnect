@@ -171,6 +171,55 @@ async function handler(req: Request): Promise<Response> {
       console.error('Error creating/updating student profile:', studentProfileError);
     }
 
+    // Auto-enroll student in their class based on grade_level
+    if (studentCreds.grade_level) {
+      console.log('Auto-enrolling student in class for grade level:', studentCreds.grade_level);
+      
+      // Find the class section that matches their grade level
+      const { data: classSection, error: classFindError } = await supabase
+        .from('class_sections')
+        .select('id, academic_year_id')
+        .eq('school_id', studentCreds.school_id)
+        .or(`grade_level.eq.${studentCreds.grade_level},name.eq.${studentCreds.grade_level}`)
+        .maybeSingle();
+
+      if (classFindError) {
+        console.error('Error finding class section:', classFindError);
+      } else if (classSection) {
+        console.log('Found class section:', classSection);
+        
+        // Check if already enrolled
+        const { data: existingEnrollment } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('student_user_id', studentCreds.student_user_id)
+          .eq('class_section_id', classSection.id)
+          .maybeSingle();
+
+        if (!existingEnrollment) {
+          // Enroll the student
+          const { error: enrollmentError } = await supabase
+            .from('enrollments')
+            .insert({
+              student_user_id: studentCreds.student_user_id,
+              class_section_id: classSection.id,
+              academic_year_id: classSection.academic_year_id,
+              status: 'active'
+            });
+
+          if (enrollmentError) {
+            console.error('Error enrolling student:', enrollmentError);
+          } else {
+            console.log('Student successfully enrolled in class');
+          }
+        } else {
+          console.log('Student already enrolled in class');
+        }
+      } else {
+        console.log('No matching class section found for grade level:', studentCreds.grade_level);
+      }
+    }
+
     // Mark temporary credentials as used
     const { error: markUsedError } = await supabase
       .from('student_temp_credentials')
