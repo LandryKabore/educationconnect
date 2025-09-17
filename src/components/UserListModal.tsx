@@ -37,9 +37,10 @@ interface UserListModalProps {
   userType: 'student' | 'teacher' | 'parent' | 'all';
   title: string;
   selectedSchoolId?: string | null;
+  onUserDeleted?: () => void;
 }
 
-export function UserListModal({ isOpen, onClose, userType, title, selectedSchoolId }: UserListModalProps) {
+export function UserListModal({ isOpen, onClose, userType, title, selectedSchoolId, onUserDeleted }: UserListModalProps) {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
@@ -109,6 +110,12 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
 
       // Refresh the user list
       fetchUsers();
+      
+      // Notify parent component to refresh its data
+      if (onUserDeleted) {
+        onUserDeleted();
+      }
+      
       setDeleteDialogOpen(false);
       setUserToDelete(null);
 

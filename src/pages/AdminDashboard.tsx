@@ -673,6 +673,7 @@ const AdminDashboard = () => {
         userType={userModalType}
         title={userModalTitle}
         selectedSchoolId={selectedSchoolId}
+        onUserDeleted={fetchAdminData}
       />
 
       <CreateSchoolModal
