@@ -186,7 +186,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] bg-slate-900 border-slate-700">
+      <DialogContent className="max-w-6xl max-h-[85vh] bg-slate-900 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -218,78 +218,80 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             ) : (
               filteredUsers.map((user) => (
                 <Card key={user.id} className="bg-slate-800 border-slate-700">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-slate-300" />
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
+                        <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="w-6 h-6 text-slate-300" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-white">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-white text-lg">
                               {user.first_name} {user.last_name}
                             </h3>
                             <Badge className={getRoleColor(user.role)}>
                               {user.role}
                             </Badge>
                           </div>
-                           <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
-                             <div className="flex items-center gap-1">
-                               <Mail className="w-3 h-3" />
-                               {user.email}
-                             </div>
-                             {user.username && (
-                               <div className="flex items-center gap-1">
-                                 <User className="w-3 h-3" />
-                                 Username: {user.username}
-                               </div>
-                             )}
-                             {user.tempPassword && (
-                               <div className="flex items-center gap-1">
-                                 <span className="text-xs">Password:</span>
-                                 <code className="bg-slate-700 px-1 rounded text-xs">
-                                   {showPasswords[user.id] ? user.tempPassword : '••••'}
-                                 </code>
-                                 <button
-                                   onClick={() => togglePasswordVisibility(user.id)}
-                                   className="text-slate-400 hover:text-white"
-                                 >
-                                   {showPasswords[user.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                 </button>
-                                 <button
-                                   onClick={() => copyToClipboard(user.tempPassword!)}
-                                   className="text-slate-400 hover:text-white"
-                                 >
-                                   <Copy className="w-3 h-3" />
-                                 </button>
-                               </div>
-                             )}
-                             {user.phone && (
-                               <div className="flex items-center gap-1">
-                                 <Phone className="w-3 h-3" />
-                                 {user.phone}
-                               </div>
-                             )}
-                             <div className="flex items-center gap-1">
-                               <Calendar className="w-3 h-3" />
-                               {new Date(user.created_at).toLocaleDateString()}
-                             </div>
-                           </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 text-sm text-slate-400">
+                            <div className="flex items-center gap-2">
+                              <Mail className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{user.email}</span>
+                            </div>
+                            {user.username && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span>Username: {user.username}</span>
+                              </div>
+                            )}
+                            {user.tempPassword && (
+                              <div className="flex items-center gap-2 col-span-full">
+                                <span className="text-sm font-medium">Password:</span>
+                                <code className="bg-slate-700 px-2 py-1 rounded text-sm font-mono">
+                                  {showPasswords[user.id] ? user.tempPassword : '••••'}
+                                </code>
+                                <button
+                                  onClick={() => togglePasswordVisibility(user.id)}
+                                  className="text-slate-400 hover:text-white transition-colors"
+                                  title={showPasswords[user.id] ? "Hide password" : "Show password"}
+                                >
+                                  {showPasswords[user.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  onClick={() => copyToClipboard(user.tempPassword!)}
+                                  className="text-slate-400 hover:text-white transition-colors"
+                                  title="Copy password"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                            {user.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="w-4 h-4 flex-shrink-0" />
+                                <span>{user.phone}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 flex-shrink-0" />
+                              <span>{new Date(user.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                       <div className="flex items-center gap-2">
-                         <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
-                           {user.status}
-                         </Badge>
-                         {user.role === 'student' && user.isVerified !== undefined && (
-                           <Badge variant={user.isVerified ? 'default' : 'destructive'}>
-                             {user.isVerified ? 'Verified' : 'Not Verified'}
-                           </Badge>
-                         )}
-                         <Button size="sm" variant="outline" className="border-slate-600 text-slate-200">
-                           Edit
-                         </Button>
-                       </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
+                          {user.status}
+                        </Badge>
+                        {user.role === 'student' && user.isVerified !== undefined && (
+                          <Badge variant={user.isVerified ? 'default' : 'destructive'}>
+                            {user.isVerified ? 'Verified' : 'Not Verified'}
+                          </Badge>
+                        )}
+                        <Button size="sm" variant="outline" className="border-slate-600 text-slate-200">
+                          Edit
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
