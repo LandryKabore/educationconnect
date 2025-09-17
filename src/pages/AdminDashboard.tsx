@@ -258,6 +258,7 @@ const AdminDashboard = () => {
   };
 
   const handleUserStatClick = (type: 'student' | 'teacher' | 'parent' | 'all', title: string) => {
+    console.log('Opening UserListModal with:', { type, title, selectedSchoolId });
     setUserModalType(type);
     setUserModalTitle(title);
     setUserModalOpen(true);

@@ -103,6 +103,9 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             )
         ]);
 
+        console.log('Completed students data:', completedData);
+        console.log('Temp credentials data:', tempCredsData);
+
         const completedStudents = completedData.data?.map(item => ({
           ...item.profiles,
           isVerified: true
@@ -126,7 +129,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         console.log('Found students:', { 
           completed: completedStudents.length, 
           pending: pendingStudents.length, 
-          total: allStudents.length 
+          total: allStudents.length,
+          pendingWithPasswords: pendingStudents.filter(s => s.tempPassword).length
         });
         setUsers(allStudents);
         setFilteredUsers(allStudents);
