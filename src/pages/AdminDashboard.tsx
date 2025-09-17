@@ -29,6 +29,7 @@ interface AdminData {
   classSections: any[];
   subjects: any[];
   users: any[];
+  studentTempCredentials: any[];
   totalStudents: number;
   totalTeachers: number;
   totalParents: number;
@@ -72,6 +73,7 @@ const AdminDashboard = () => {
     classSections: [],
     subjects: [],
     users: [],
+    studentTempCredentials: [],
     totalStudents: 0,
     totalTeachers: 0,
     totalParents: 0,
@@ -150,6 +152,7 @@ const AdminDashboard = () => {
         subjectsData,
         profilesData,
         studentProfilesData,
+        studentTempCredsData,
         teacherProfilesData,
         parentProfilesData
       ] = await Promise.all([
@@ -176,6 +179,11 @@ const AdminDashboard = () => {
         supabase.from('student_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
           data: selectedSchoolId ? result.data?.filter(sp => sp.school_id === selectedSchoolId) : result.data
+        })),
+        // And get student temp credentials to include pending students
+        supabase.from('student_temp_credentials').select('*').then(result => ({
+          ...result,
+          data: selectedSchoolId ? result.data?.filter(stc => stc.school_id === selectedSchoolId) : result.data
         })),
         // And teacher profiles to link teachers to schools
         supabase.from('teacher_profiles').select('*, profiles!inner(*)').then(result => ({
@@ -204,15 +212,19 @@ const AdminDashboard = () => {
       let parents = 0;
 
       if (selectedSchoolId) {
-        // Count students linked to this school
-        students = studentProfilesData.data?.length || 0;
+        // Count students linked to this school (both completed profiles and temp credentials)
+        const completedStudents = studentProfilesData.data?.length || 0;
+        const pendingStudents = studentTempCredsData.data?.length || 0;
+        students = completedStudents + pendingStudents;
         // Count teachers linked to this school
         teachers = teacherProfilesData.data?.length || 0;
         // Count parents linked to this school
         parents = parentProfilesData.data?.length || 0;
       } else {
-        // Count all users
-        students = profilesData.data?.filter(p => p.role === 'student').length || 0;
+        // Count all users (completed profiles and temp credentials)
+        const completedStudents = profilesData.data?.filter(p => p.role === 'student').length || 0;
+        const pendingStudents = studentTempCredsData.data?.length || 0;
+        students = completedStudents + pendingStudents;
         teachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
         parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
       }
@@ -228,6 +240,7 @@ const AdminDashboard = () => {
         classSections: classSectionsData.data || [],
         subjects: subjectsData.data || [],
         users: profilesData.data || [],
+        studentTempCredentials: studentTempCredsData.data || [],
         totalStudents: students,
         totalTeachers: teachers,
         totalParents: parents,
