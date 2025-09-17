@@ -7,10 +7,13 @@ import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
+import { StatCardModal } from "@/components/StatCardModal";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
   const { loading, teacherInfo, classes, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
   useEffect(() => {
@@ -24,6 +27,11 @@ const TeacherDashboard = () => {
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
+
+  const handleCardClick = (type: "classes" | "students" | "tasks" | "attendance") => {
+    setModalType(type);
+    setModalOpen(true);
+  };
 
   const floatingIcons = [
     { icon: Calculator, x: 15, y: 20, size: 25, delay: 0 },
@@ -111,25 +119,37 @@ const TeacherDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-orange-400/50"
+            onClick={() => handleCardClick("classes")}
+          >
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-orange-400">{classes.length}</div>
               <div className="text-sm text-slate-300">Active Classes</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-blue-400/50"
+            onClick={() => handleCardClick("students")}
+          >
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
               <div className="text-sm text-slate-300">Total Students</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-red-400/50"
+            onClick={() => handleCardClick("tasks")}
+          >
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-red-400">{stats.pendingTasks}</div>
               <div className="text-sm text-slate-300">Pending Tasks</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-green-400/50"
+            onClick={() => handleCardClick("attendance")}
+          >
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-green-400">{stats.avgAttendance}</div>
               <div className="text-sm text-slate-300">Avg Attendance</div>
@@ -283,6 +303,15 @@ const TeacherDashboard = () => {
           </Card>
         </div>
       </main>
+
+      {/* Stat Card Modal */}
+      <StatCardModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        type={modalType}
+        data={modalType === "tasks" ? tasks : classes}
+        stats={stats}
+      />
     </div>
   );
 };

@@ -49,13 +49,30 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Fetch classes from teaching assignments instead of the old classes table
       const { data, error } = await supabase
-        .from("classes")
-        .select("id, name")
-        .eq("teacher_id", user.id);
+        .from("teaching_assignments")
+        .select(`
+          class_sections(
+            id,
+            name,
+            grade_level
+          ),
+          subjects(
+            name
+          )
+        `)
+        .eq("teacher_user_id", user.id);
 
       if (error) throw error;
-      setClasses(data || []);
+      
+      // Format the data to match the expected Class interface
+      const formattedClasses = data?.map(assignment => ({
+        id: assignment.class_sections?.id || '',
+        name: `${assignment.class_sections?.name} - ${assignment.subjects?.name}`
+      })) || [];
+      
+      setClasses(formattedClasses);
     } catch (error) {
       console.error("Error fetching classes:", error);
     }
@@ -100,38 +117,38 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Prepare attendance records
+      // Prepare attendance records for the enhanced_attendance table
       const attendanceRecords = Object.entries(attendance).map(([studentId, status]) => ({
-        student_id: studentId,
-        class_id: selectedClass,
+        student_user_id: studentId,
+        class_section_id: selectedClass,
         date: selectedDate,
         status,
-        recorded_by: user.id
+        taken_by: user.id
       }));
 
       // Check if attendance already exists for this date and class
       const { data: existingAttendance } = await supabase
-        .from("attendance")
-        .select("id, student_id")
-        .eq("class_id", selectedClass)
+        .from("enhanced_attendance")
+        .select("id, student_user_id")
+        .eq("class_section_id", selectedClass)
         .eq("date", selectedDate);
 
       if (existingAttendance && existingAttendance.length > 0) {
         // Update existing attendance
         for (const record of attendanceRecords) {
-          const existing = existingAttendance.find(att => att.student_id === record.student_id);
+          const existing = existingAttendance.find(att => att.student_user_id === record.student_user_id);
           if (existing) {
             await supabase
-              .from("attendance")
+              .from("enhanced_attendance")
               .update({
                 status: record.status,
-                recorded_by: record.recorded_by
+                taken_by: record.taken_by
               })
               .eq("id", existing.id);
           } else {
             // Insert new record if student wasn't previously recorded
             await supabase
-              .from("attendance")
+              .from("enhanced_attendance")
               .insert(record);
           }
         }
@@ -143,7 +160,7 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       } else {
         // Insert new attendance records
         const { error } = await supabase
-          .from("attendance")
+          .from("enhanced_attendance")
           .insert(attendanceRecords);
 
         if (error) throw error;
