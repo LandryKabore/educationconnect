@@ -59,18 +59,22 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   const downloadTemplate = () => {
     const templateData = [
       {
-        'First Name': 'John',
-        'Middle Name': 'A',
-        'Last Name': 'Doe',
-        'Grade Level': 'Grade 10',
-        'Student Number': 'STU001'
+        'First Name': 'David',
+        'Middle Name': '',
+        'Last Name': 'Okafor',
+        'Class': 'Grade 9A'
       },
       {
-        'First Name': 'Jane',
-        'Middle Name': '',
-        'Last Name': 'Smith',
-        'Grade Level': 'Grade 11',
-        'Student Number': 'STU002'
+        'First Name': 'Daniel',
+        'Middle Name': 'Amara',
+        'Last Name': 'Nzinga',
+        'Class': 'Grade 9A'
+      },
+      {
+        'First Name': 'Fatou',
+        'Middle Name': 'Kwame',
+        'Last Name': 'Lamine',
+        'Class': 'Grade 9A'
       }
     ];
 
@@ -96,7 +100,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         const firstName = row['First Name'] || row['first_name'] || row['firstName'] || '';
         const middleName = row['Middle Name'] || row['middle_name'] || row['middleName'] || '';
         const lastName = row['Last Name'] || row['last_name'] || row['lastName'] || '';
-        const gradeLevel = row['Grade Level'] || row['grade_level'] || row['gradeLevel'] || '';
+        const gradeLevel = row['Class'] || row['class'] || row['Grade Level'] || row['grade_level'] || row['gradeLevel'] || '';
         const studentNo = row['Student Number'] || row['student_number'] || row['studentNo'] || '';
 
         if (!firstName || !lastName) {
@@ -313,7 +317,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
                   <thead className="bg-muted">
                     <tr>
                       <th className="p-2 text-left">Name</th>
-                      <th className="p-2 text-left">Grade</th>
+                      <th className="p-2 text-left">Class</th>
                       <th className="p-2 text-left">Student #</th>
                       <th className="p-2 text-left">Username</th>
                       <th className="p-2 text-left">Temp Password</th>
