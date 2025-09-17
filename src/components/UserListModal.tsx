@@ -45,23 +45,27 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
 
   useEffect(() => {
     if (isOpen) {
+      console.log('UserListModal opened with:', { userType, selectedSchoolId });
       fetchUsers();
     }
-  }, [isOpen, userType]);
+  }, [isOpen, userType, selectedSchoolId]);
 
   useEffect(() => {
     const filtered = users.filter(user => 
       user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredUsers(filtered);
   }, [searchTerm, users]);
 
   const fetchUsers = async () => {
     setLoading(true);
+    console.log('Fetching users for:', { userType, selectedSchoolId });
     try {
       if (userType === 'student') {
+        console.log('Fetching student data (both completed and temp credentials)');
         // For students, get both completed profiles and temp credentials
         const [completedData, tempCredsData] = await Promise.all([
           // Get completed student profiles
@@ -101,6 +105,11 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         })) || [];
 
         const allStudents = [...completedStudents, ...pendingStudents];
+        console.log('Found students:', { 
+          completed: completedStudents.length, 
+          pending: pendingStudents.length, 
+          total: allStudents.length 
+        });
         setUsers(allStudents);
         setFilteredUsers(allStudents);
       } else if (selectedSchoolId && userType === 'teacher') {
