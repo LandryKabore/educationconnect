@@ -106,9 +106,13 @@ const Login = () => {
 
   const handleRoleSelect = (role: typeof roles[0]) => {
     setSelectedRole(role.id);
-    // Simulate login process - in real app, this would involve authentication
+    // Route to username login for students and teachers
     setTimeout(() => {
-      navigate(role.route);
+      if (role.id === 'student' || role.id === 'teacher') {
+        navigate('/username-login');
+      } else {
+        navigate(role.route);
+      }
     }, 500);
   };
 

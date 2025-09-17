@@ -18,6 +18,7 @@ import { EditClassSectionModal } from "@/components/EditClassSectionModal";
 import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { EditSubjectModal } from "@/components/EditSubjectModal";
 import { CreateTeacherModal } from "@/components/CreateTeacherModal";
+import { CreateStudentModal } from "@/components/CreateStudentModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -53,6 +54,7 @@ const AdminDashboard = () => {
   const [createSubjectModalOpen, setCreateSubjectModalOpen] = useState(false);
   const [editSubjectModalOpen, setEditSubjectModalOpen] = useState(false);
   const [createTeacherModalOpen, setCreateTeacherModalOpen] = useState(false);
+  const [createStudentModalOpen, setCreateStudentModalOpen] = useState(false);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -623,12 +625,20 @@ const AdminDashboard = () => {
                   Import/Export
                 </Button>
               </div>
-              <Button 
-                className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white"
-                onClick={() => setCreateTeacherModalOpen(true)}
-              >
-                Create Teacher Account
-              </Button>
+              <div className="space-y-2 mt-3">
+                <Button 
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={() => setCreateTeacherModalOpen(true)}
+                >
+                  Create Teacher Account
+                </Button>
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => setCreateStudentModalOpen(true)}
+                >
+                  Create Student Account
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -717,6 +727,13 @@ const AdminDashboard = () => {
         onClose={() => setCreateTeacherModalOpen(false)}
         onTeacherCreated={fetchAdminData}
         selectedSchoolId={selectedSchoolId || undefined}
+      />
+      
+      <CreateStudentModal
+        isOpen={createStudentModalOpen}
+        onClose={() => setCreateStudentModalOpen(false)}
+        onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId}
       />
     </div>
   );

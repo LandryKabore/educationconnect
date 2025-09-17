@@ -11,6 +11,9 @@ import TeacherAssignment from "./pages/TeacherAssignment";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherFirstLogin from "./pages/TeacherFirstLogin";
+import StudentClassSelection from "./pages/StudentClassSelection";
+import UsernameLogin from "./pages/UsernameLogin";
+import CompleteStudentSetup from "./pages/CompleteStudentSetup";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "./components/RequireAuth";
 
@@ -27,6 +30,9 @@ const App = () => (
         <Route path="/teacher-dashboard" element={<RequireAuth><TeacherDashboard /></RequireAuth>} />
         <Route path="/teacher-assignment" element={<RequireAuth><TeacherAssignment /></RequireAuth>} />
         <Route path="/teacher-first-login" element={<TeacherFirstLogin />} />
+        <Route path="/username-login" element={<UsernameLogin />} />
+        <Route path="/complete-student-setup" element={<CompleteStudentSetup />} />
+        <Route path="/student-class-selection" element={<StudentClassSelection />} />
         <Route path="/student-dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

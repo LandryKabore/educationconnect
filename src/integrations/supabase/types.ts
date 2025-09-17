@@ -1041,6 +1041,60 @@ export type Database = {
           },
         ]
       }
+      student_temp_credentials: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          first_name: string | null
+          grade_level: string | null
+          id: string
+          is_used: boolean | null
+          last_name: string | null
+          middle_name: string | null
+          school_id: string | null
+          student_no: string | null
+          student_user_id: string
+          temp_password_hash: string
+          used_at: string | null
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          first_name?: string | null
+          grade_level?: string | null
+          id?: string
+          is_used?: boolean | null
+          last_name?: string | null
+          middle_name?: string | null
+          school_id?: string | null
+          student_no?: string | null
+          student_user_id: string
+          temp_password_hash: string
+          used_at?: string | null
+          username: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          first_name?: string | null
+          grade_level?: string | null
+          id?: string
+          is_used?: boolean | null
+          last_name?: string | null
+          middle_name?: string | null
+          school_id?: string | null
+          student_no?: string | null
+          student_user_id?: string
+          temp_password_hash?: string
+          used_at?: string | null
+          username?: string
+        }
+        Relationships: []
+      }
       study_group_members: {
         Row: {
           created_at: string
