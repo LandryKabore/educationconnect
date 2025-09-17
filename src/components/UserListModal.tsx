@@ -93,10 +93,11 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
               { ...result, data: result.data?.filter(sp => sp.school_id === selectedSchoolId) } : 
               result
             ),
-          // Get temp credentials (pending students)
+          // Get temp credentials (pending students) - only those not yet used
           supabase
             .from('student_temp_credentials')
             .select('*')
+            .eq('is_used', false)  // Only get unused temp credentials
             .then(result => selectedSchoolId ? 
               { ...result, data: result.data?.filter(stc => stc.school_id === selectedSchoolId) } : 
               result
