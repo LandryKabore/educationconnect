@@ -1,7 +1,15 @@
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, CheckSquare, TrendingUp } from "lucide-react";
+import { Calendar, Users, CheckSquare, TrendingUp, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Student {
+  id: string;
+  name: string;
+  className: string;
+}
 
 interface StatCardModalProps {
   open: boolean;
@@ -12,6 +20,70 @@ interface StatCardModalProps {
 }
 
 export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCardModalProps) {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  useEffect(() => {
+    if (open && type === "students") {
+      fetchAllStudents();
+    }
+  }, [open, type]);
+
+  const fetchAllStudents = async () => {
+    setLoadingStudents(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get all teaching assignments for this teacher
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select(`
+          class_sections(
+            id,
+            name,
+            grade_level
+          )
+        `)
+        .eq("teacher_user_id", user.id);
+
+      if (!assignments) return;
+
+      const allStudents: Student[] = [];
+
+      // For each class, get the enrolled students
+      for (const assignment of assignments) {
+        if (assignment.class_sections) {
+          const { data: enrollments } = await supabase
+            .from("enrollments")
+            .select(`
+              student_user_id,
+              profiles!enrollments_student_user_id_fkey(first_name, last_name)
+            `)
+            .eq("class_section_id", assignment.class_sections.id)
+            .eq("status", "active");
+
+          if (enrollments) {
+            enrollments.forEach(enrollment => {
+              if (enrollment.profiles) {
+                allStudents.push({
+                  id: enrollment.student_user_id,
+                  name: `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim(),
+                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+                });
+              }
+            });
+          }
+        }
+      }
+
+      setStudents(allStudents);
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
   const getModalContent = () => {
     switch (type) {
       case "classes":
@@ -48,19 +120,30 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
           title: "Total Students",
           icon: <Users className="w-5 h-5" />,
           description: `You are teaching ${stats.totalStudents} students across all your classes`,
-          content: (
+          content: loadingStudents ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+              <span className="ml-2 text-slate-300">Loading students...</span>
+            </div>
+          ) : (
             <div className="space-y-3">
-              {data.map((classInfo) => (
-                <div key={classInfo.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
-                  <div>
-                    <div className="font-medium text-white">{classInfo.name}</div>
-                    <div className="text-sm text-slate-300">{classInfo.grade_level}</div>
+              {students.length > 0 ? (
+                students.map((student) => (
+                  <div key={student.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-white">{student.name}</div>
+                      <div className="text-sm text-slate-300">{student.className}</div>
+                    </div>
+                    <Badge variant="secondary" className="bg-blue-400/20 text-blue-400 border-blue-400/30">
+                      Student
+                    </Badge>
                   </div>
-                  <Badge variant="secondary" className="bg-blue-400/20 text-blue-400 border-blue-400/30">
-                    {classInfo.student_count} students
-                  </Badge>
+                ))
+              ) : (
+                <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                  No students found
                 </div>
-              ))}
+              )}
             </div>
           )
         };
