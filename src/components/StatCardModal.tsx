@@ -62,46 +62,35 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
 
       const allStudents: Student[] = [];
 
-      // For each class, get the enrolled students
+      // For each class, get the enrolled students with their profiles in one query
       for (const assignment of assignments) {
         if (assignment.class_sections) {
-          console.log("Fetching enrollments for class:", assignment.class_sections.id);
+          console.log("Fetching students for class:", assignment.class_sections.id);
           
-          const { data: enrollments, error: enrollmentsError } = await supabase
+          const { data: studentsData, error: studentsError } = await supabase
             .from("enrollments")
-            .select("student_user_id")
+            .select(`
+              student_user_id,
+              profiles!inner(first_name, last_name)
+            `)
             .eq("class_section_id", assignment.class_sections.id)
             .eq("status", "active");
 
-          console.log("Enrollments found:", enrollments);
-          if (enrollmentsError) {
-            console.error("Error fetching enrollments:", enrollmentsError);
+          console.log("Students data found:", studentsData);
+          if (studentsError) {
+            console.error("Error fetching students:", studentsError);
             continue;
           }
 
-          if (enrollments && enrollments.length > 0) {
-            // Fetch profile data for each student
-            for (const enrollment of enrollments) {
-              console.log("Fetching profile for student:", enrollment.student_user_id);
-              
-              const { data: profile, error: profileError } = await supabase
-                .from("profiles")
-                .select("first_name, last_name")
-                .eq("user_id", enrollment.student_user_id)
-                .maybeSingle();
-
-              console.log("Profile found:", profile);
-              if (profileError) {
-                console.error("Error fetching profile:", profileError);
-              }
-
-              // Add student even if no profile exists
+          if (studentsData && studentsData.length > 0) {
+            for (const studentData of studentsData) {
+              const profile = studentData.profiles;
               const studentName = profile 
                 ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() 
-                : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+                : `Student ${studentData.student_user_id.slice(0, 8)}`;
 
               allStudents.push({
-                id: enrollment.student_user_id,
+                id: studentData.student_user_id,
                 name: studentName || 'Unknown Student',
                 className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
               });
