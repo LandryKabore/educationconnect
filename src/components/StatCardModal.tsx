@@ -67,7 +67,7 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
         if (assignment.class_sections) {
           console.log("Fetching students for class:", assignment.class_sections.id);
           
-          // First get enrollments
+          // Get enrollments with student profiles using a different approach
           const { data: enrollments, error: enrollmentsError } = await supabase
             .from("enrollments")
             .select("student_user_id")
@@ -80,42 +80,53 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
           }
 
           if (enrollments && enrollments.length > 0) {
-            // Get all student user IDs
+            // Since teacher RLS might be restricting access to profiles, 
+            // let's check if we can access them differently by using a service call
+            // or try accessing through a specific teacher context
             const studentIds = enrollments.map(e => e.student_user_id);
             
-            // Try to get student names from temp credentials table which teachers can access
-            const { data: studentCredentials, error: credentialsError } = await supabase
-              .from("student_temp_credentials")
-              .select("student_user_id, first_name, last_name")
-              .in("student_user_id", studentIds);
-
-            console.log("Student credentials found:", studentCredentials);
-
+            // Let's try using the current user as a teacher context
+            const { data: { user } } = await supabase.auth.getUser();
+            console.log("Current teacher user:", user?.id);
             
-            if (credentialsError) {
-              console.error("Error fetching student credentials:", credentialsError);
-            }
-
-            // Create a map for quick lookup
-            const studentMap = new Map();
-            if (studentCredentials) {
-              studentCredentials.forEach(student => {
-                studentMap.set(student.student_user_id, student);
+            // Try a raw query approach that respects teacher RLS
+            const { data: studentNames, error: namesError } = await supabase
+              .rpc('get_student_names_for_teacher', {
+                student_ids: studentIds,
+                teacher_id: user?.id
               });
-            }
 
-            // Add students with their names
-            for (const enrollment of enrollments) {
-              const studentData = studentMap.get(enrollment.student_user_id);
-              const studentName = studentData 
-                ? `${studentData.first_name || ''} ${studentData.last_name || ''}`.trim() 
-                : `Student ${enrollment.student_user_id.slice(0, 8)}`;
-
-              allStudents.push({
-                id: enrollment.student_user_id,
-                name: studentName || 'Unknown Student',
-                className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+            console.log("Student names from RPC:", studentNames);
+            
+            if (namesError) {
+              console.error("Error calling RPC:", namesError);
+              // Fallback: use student IDs
+              for (const enrollment of enrollments) {
+                allStudents.push({
+                  id: enrollment.student_user_id,
+                  name: `Student ${enrollment.student_user_id.slice(0, 8)}`,
+                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+                });
+              }
+            } else if (studentNames) {
+              // Use the names from RPC
+              const nameMap = new Map();
+              studentNames.forEach((item: any) => {
+                nameMap.set(item.user_id, item);
               });
+              
+              for (const enrollment of enrollments) {
+                const nameData = nameMap.get(enrollment.student_user_id);
+                const studentName = nameData 
+                  ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
+                  : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+
+                allStudents.push({
+                  id: enrollment.student_user_id,
+                  name: studentName || 'Unknown Student',
+                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+                });
+              }
             }
           }
         }
