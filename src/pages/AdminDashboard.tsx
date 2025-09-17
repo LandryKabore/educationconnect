@@ -180,8 +180,8 @@ const AdminDashboard = () => {
           ...result,
           data: selectedSchoolId ? result.data?.filter(sp => sp.school_id === selectedSchoolId) : result.data
         })),
-        // And get student temp credentials to include pending students
-        supabase.from('student_temp_credentials').select('*').then(result => ({
+        // And get student temp credentials to include pending students (only unused ones)
+        supabase.from('student_temp_credentials').select('*').eq('is_used', false).then(result => ({
           ...result,
           data: selectedSchoolId ? result.data?.filter(stc => stc.school_id === selectedSchoolId) : result.data
         })),
