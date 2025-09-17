@@ -99,13 +99,20 @@ export const useTeacherData = () => {
           // Group by class section to avoid duplicates
           const classMap = new Map();
           
-          assignmentsData.forEach(assignment => {
+          // Fetch actual student counts for each class
+          for (const assignment of assignmentsData) {
             const classSection = assignment.class_sections;
             const subject = assignment.subjects;
             
             if (classSection && !classMap.has(classSection.id)) {
-              // Get student count for this class
-              const studentCount = Math.floor(Math.random() * 25) + 15; // Mock for now
+              // Get actual student count for this class
+              const { data: enrollments } = await supabase
+                .from("enrollments")
+                .select("id")
+                .eq("class_section_id", classSection.id)
+                .eq("status", "active");
+              
+              const studentCount = enrollments?.length || 0;
               
               // Format schedule time
               let scheduleTime = "Not scheduled";
@@ -122,7 +129,7 @@ export const useTeacherData = () => {
                 room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room for now
               });
             }
-          });
+          }
           
           formattedClasses = Array.from(classMap.values());
           setClasses(formattedClasses);
