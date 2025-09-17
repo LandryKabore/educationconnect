@@ -124,6 +124,7 @@ async function handler(req: Request): Promise<Response> {
         student_user_id: studentUserId,
         username: username,
         temp_password_hash: tempPasswordHashHex,
+        temp_password_plain: tempPassword, // Store plain text for admin access
         first_name: firstName,
         middle_name: middleName || null,
         last_name: lastName,

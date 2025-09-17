@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Mail, User, Phone, Calendar } from "lucide-react";
+import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -24,6 +24,7 @@ interface UserProfile {
   created_at: string;
   status: string;
   username?: string;
+  tempPassword?: string;
   isVerified?: boolean;
   tempPasswordExpires?: string;
 }
@@ -42,6 +43,22 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showPasswords, setShowPasswords] = useState<{[key: string]: boolean}>({});
+
+  const togglePasswordVisibility = (userId: string) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Copied",
+      description: "Copied to clipboard",
+    });
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -100,6 +117,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           created_at: item.created_at,
           status: 'pending',
           username: item.username,
+          tempPassword: item.temp_password_plain,
           isVerified: item.is_used || false,
           tempPasswordExpires: item.expires_at
         })) || [];
@@ -220,6 +238,26 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                                <div className="flex items-center gap-1">
                                  <User className="w-3 h-3" />
                                  Username: {user.username}
+                               </div>
+                             )}
+                             {user.tempPassword && (
+                               <div className="flex items-center gap-1">
+                                 <span className="text-xs">Password:</span>
+                                 <code className="bg-slate-700 px-1 rounded text-xs">
+                                   {showPasswords[user.id] ? user.tempPassword : '••••'}
+                                 </code>
+                                 <button
+                                   onClick={() => togglePasswordVisibility(user.id)}
+                                   className="text-slate-400 hover:text-white"
+                                 >
+                                   {showPasswords[user.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                 </button>
+                                 <button
+                                   onClick={() => copyToClipboard(user.tempPassword!)}
+                                   className="text-slate-400 hover:text-white"
+                                 >
+                                   <Copy className="w-3 h-3" />
+                                 </button>
                                </div>
                              )}
                              {user.phone && (

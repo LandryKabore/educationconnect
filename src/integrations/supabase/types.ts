@@ -1056,6 +1056,7 @@ export type Database = {
           student_no: string | null
           student_user_id: string
           temp_password_hash: string
+          temp_password_plain: string | null
           used_at: string | null
           username: string
         }
@@ -1073,6 +1074,7 @@ export type Database = {
           student_no?: string | null
           student_user_id: string
           temp_password_hash: string
+          temp_password_plain?: string | null
           used_at?: string | null
           username: string
         }
@@ -1090,6 +1092,7 @@ export type Database = {
           student_no?: string | null
           student_user_id?: string
           temp_password_hash?: string
+          temp_password_plain?: string | null
           used_at?: string | null
           username?: string
         }
