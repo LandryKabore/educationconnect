@@ -35,15 +35,29 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 
-    // Check if username already exists
-    const { data: existingCreds } = await supabase
-      .from('teacher_temp_credentials')
-      .select('username')
-      .eq('username', username)
-      .maybeSingle();
+    // Check if username already exists and make it unique if needed
+    let finalUsername = username;
+    let counter = 1;
+    
+    while (true) {
+      const { data: existingCreds } = await supabase
+        .from('teacher_temp_credentials')
+        .select('username')
+        .eq('username', finalUsername)
+        .maybeSingle();
 
-    if (existingCreds) {
-      throw new Error('Username already exists');
+      if (!existingCreds) {
+        break; // Username is available
+      }
+      
+      // Try with a number suffix
+      finalUsername = `${username}${counter}`;
+      counter++;
+      
+      // Prevent infinite loop
+      if (counter > 100) {
+        throw new Error('Unable to generate unique username');
+      }
     }
 
     // Generate a placeholder user ID for the teacher profile
@@ -72,7 +86,7 @@ const handler = async (req: Request): Promise<Response> => {
     const { error: credsError } = await supabase
       .from('teacher_temp_credentials')
       .insert({
-        username: username,
+        username: finalUsername,
         temp_password_hash: tempPasswordHash,
         teacher_user_id: tempUserId,
         created_by: user.id,
@@ -108,7 +122,7 @@ const handler = async (req: Request): Promise<Response> => {
       JSON.stringify({ 
         success: true, 
         teacherId: tempUserId,
-        username: username,
+        username: finalUsername,
         classSectionSubjectPairs: classSectionSubjectPairs
       }),
       {
