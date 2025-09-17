@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff, RefreshCw } from "lucide-react";
 
 interface CreateStudentModalProps {
   isOpen: boolean;
@@ -18,123 +19,102 @@ interface CreateStudentModalProps {
 export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolId }: CreateStudentModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [autoGenerate, setAutoGenerate] = useState(true);
   const [schools, setSchools] = useState<any[]>([]);
-  const [schoolsLoading, setSchoolsLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    schoolId: selectedSchoolId || "",
-    gradeLevel: "",
-    studentNo: "",
-    tempPassword: "",
-  });
+  // Form fields
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [tempPassword, setTempPassword] = useState("");
+  const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
+  const [gradeLevel, setGradeLevel] = useState("");
+  const [studentNo, setStudentNo] = useState("");
 
-  // Fetch schools when modal opens if no school is selected
-  useState(() => {
-    if (isOpen && !selectedSchoolId) {
+  useEffect(() => {
+    if (isOpen) {
       fetchSchools();
+      if (autoGenerate) {
+        generateTempPassword();
+      }
     }
-  });
+  }, [isOpen, autoGenerate]);
+
+  useEffect(() => {
+    if (firstName && lastName) {
+      const middle = middleName ? middleName.charAt(0).toLowerCase() : '';
+      const generatedUsername = `${firstName.charAt(0).toLowerCase()}${middle}${lastName.toLowerCase()}`.replace(/[^a-z]/g, '');
+      setUsername(generatedUsername);
+    }
+  }, [firstName, middleName, lastName]);
 
   const fetchSchools = async () => {
-    setSchoolsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('schools')
-        .select('id, name')
-        .eq('active', true)
-        .order('name');
-      
-      if (error) throw error;
-      setSchools(data || []);
-    } catch (error) {
-      console.error('Error fetching schools:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load schools.",
-        variant: "destructive",
-      });
-    } finally {
-      setSchoolsLoading(false);
-    }
-  };
-
-  const generateUsername = (firstName: string, middleName: string, lastName: string) => {
-    // Generate username: first letter of first name + middle initial + last name (lowercase, no spaces)
-    const firstInitial = firstName.charAt(0).toLowerCase();
-    const middleInitial = middleName ? middleName.charAt(0).toLowerCase() : '';
-    const lastNameFormatted = lastName.toLowerCase().replace(/\s+/g, '');
-    
-    return firstInitial + middleInitial + lastNameFormatted;
+    const { data } = await supabase.from('schools').select('*').eq('active', true);
+    if (data) setSchools(data);
   };
 
   const generateTempPassword = () => {
-    // Generate a simple temporary password (could be improved with more complexity)
-    return Math.random().toString(36).slice(-8);
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      result += Math.floor(Math.random() * 10).toString();
+    }
+    setTempPassword(result);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.firstName || !formData.lastName || !formData.schoolId) {
+    if (!firstName || !lastName || !username || !tempPassword || !schoolId) {
       toast({
-        title: "Error",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
+        title: "Missing fields",
+        description: "Please fill in all required fields",
+        variant: "destructive"
       });
       return;
     }
 
     setLoading(true);
-    
     try {
-      // Generate username and temp password
-      const username = generateUsername(formData.firstName, formData.middleName, formData.lastName);
-      const tempPassword = generateTempPassword();
-
       // Call edge function to create student with temp credentials
       const { data, error } = await supabase.functions.invoke('create-student-with-temp-creds', {
         body: {
-          firstName: formData.firstName,
-          middleName: formData.middleName || null,
-          lastName: formData.lastName,
-          schoolId: formData.schoolId,
-          gradeLevel: formData.gradeLevel,
-          studentNo: formData.studentNo || null,
-          username: username,
-          tempPassword: tempPassword
+          firstName,
+          middleName: middleName || null,
+          lastName,
+          username,
+          tempPassword,
+          schoolId,
+          gradeLevel: gradeLevel || null,
+          studentNo: studentNo || null
         }
       });
 
       if (error) throw error;
 
       toast({
-        title: "Student Created Successfully",
-        description: `Username: ${username}\nTemporary Password: ${tempPassword}\nStudent can now login and complete their setup.`,
+        title: "Student created successfully",
+        description: `Username: ${username}, Temp Password: ${tempPassword}`,
       });
 
       // Reset form
-      setFormData({
-        firstName: "",
-        middleName: "",
-        lastName: "",
-        schoolId: selectedSchoolId || "",
-        gradeLevel: "",
-        studentNo: "",
-        tempPassword: "",
-      });
-
+      setFirstName("");
+      setMiddleName("");
+      setLastName("");
+      setUsername("");
+      setTempPassword("");
+      setGradeLevel("");
+      setStudentNo("");
+      if (autoGenerate) generateTempPassword();
+      
       onSuccess();
       onClose();
-      
     } catch (error: any) {
       console.error('Error creating student:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create student.",
-        variant: "destructive",
+        title: "Error creating student",
+        description: error.message || "Failed to create student account",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
@@ -143,96 +123,139 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] bg-slate-800 border-slate-700 text-white">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Student</DialogTitle>
-          <DialogDescription className="text-slate-300">
-            Enter student information to create an account with temporary credentials.
-          </DialogDescription>
+          <DialogTitle>Create Student Account</DialogTitle>
         </DialogHeader>
-
+        
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName" className="text-slate-200">First Name *</Label>
+              <Label htmlFor="firstName">First Name *</Label>
               <Input
                 id="firstName"
-                value={formData.firstName}
-                onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                className="bg-slate-700 border-slate-600 text-white"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastName" className="text-slate-200">Last Name *</Label>
+              <Label htmlFor="middleName">Middle Name</Label>
+              <Input
+                id="middleName"
+                value={middleName}
+                onChange={(e) => setMiddleName(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name *</Label>
               <Input
                 id="lastName"
-                value={formData.lastName}
-                onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                className="bg-slate-700 border-slate-600 text-white"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
                 required
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="middleName" className="text-slate-200">Middle Name (Optional)</Label>
+            <Label htmlFor="username">Username *</Label>
             <Input
-              id="middleName"
-              value={formData.middleName}
-              onChange={(e) => setFormData(prev => ({ ...prev, middleName: e.target.value }))}
-              className="bg-slate-700 border-slate-600 text-white"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Auto-generated from name"
+              required
             />
           </div>
 
-          {!selectedSchoolId && (
-            <div className="space-y-2">
-              <Label htmlFor="school" className="text-slate-200">School *</Label>
-              <Select value={formData.schoolId} onValueChange={(value) => setFormData(prev => ({ ...prev, schoolId: value }))}>
-                <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                  <SelectValue placeholder={schoolsLoading ? "Loading schools..." : "Select a school"} />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-700 border-slate-600">
-                  {schools.map((school) => (
-                    <SelectItem key={school.id} value={school.id} className="text-white hover:bg-slate-600">
-                      {school.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="tempPassword">Temporary Password *</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="autoGenerate" className="text-sm">Auto-generate</Label>
+                <Switch
+                  id="autoGenerate"
+                  checked={autoGenerate}
+                  onCheckedChange={setAutoGenerate}
+                />
+                {autoGenerate && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={generateTempPassword}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
-          )}
+            <div className="relative">
+              <Input
+                id="tempPassword"
+                type={showPassword ? "text" : "password"}
+                value={tempPassword}
+                onChange={(e) => setTempPassword(e.target.value)}
+                disabled={autoGenerate}
+                required
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="school">School *</Label>
+            <Select value={schoolId} onValueChange={setSchoolId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a school" />
+              </SelectTrigger>
+              <SelectContent>
+                {schools.map((school) => (
+                  <SelectItem key={school.id} value={school.id}>
+                    {school.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="gradeLevel" className="text-slate-200">Grade Level</Label>
+              <Label htmlFor="gradeLevel">Grade Level</Label>
               <Input
                 id="gradeLevel"
-                value={formData.gradeLevel}
-                onChange={(e) => setFormData(prev => ({ ...prev, gradeLevel: e.target.value }))}
-                className="bg-slate-700 border-slate-600 text-white"
+                value={gradeLevel}
+                onChange={(e) => setGradeLevel(e.target.value)}
                 placeholder="e.g., Grade 10"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="studentNo" className="text-slate-200">Student Number</Label>
+              <Label htmlFor="studentNo">Student Number</Label>
               <Input
                 id="studentNo"
-                value={formData.studentNo}
-                onChange={(e) => setFormData(prev => ({ ...prev, studentNo: e.target.value }))}
-                className="bg-slate-700 border-slate-600 text-white"
+                value={studentNo}
+                onChange={(e) => setStudentNo(e.target.value)}
                 placeholder="Optional"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="border-slate-600 text-slate-200 hover:bg-slate-700">
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Create Student
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create Student"}
             </Button>
           </div>
         </form>

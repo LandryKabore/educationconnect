@@ -19,6 +19,7 @@ import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { EditSubjectModal } from "@/components/EditSubjectModal";
 import { CreateTeacherModal } from "@/components/CreateTeacherModal";
 import { CreateStudentModal } from "@/components/CreateStudentModal";
+import { ImportStudentsModal } from "@/components/ImportStudentsModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 
 interface AdminData {
@@ -55,6 +56,7 @@ const AdminDashboard = () => {
   const [editSubjectModalOpen, setEditSubjectModalOpen] = useState(false);
   const [createTeacherModalOpen, setCreateTeacherModalOpen] = useState(false);
   const [createStudentModalOpen, setCreateStudentModalOpen] = useState(false);
+  const [importStudentsModalOpen, setImportStudentsModalOpen] = useState(false);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -638,6 +640,12 @@ const AdminDashboard = () => {
                 >
                   Create Student Account
                 </Button>
+                <Button 
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setImportStudentsModalOpen(true)}
+                >
+                  Import Students from Excel
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -734,6 +742,13 @@ const AdminDashboard = () => {
         onClose={() => setCreateStudentModalOpen(false)}
         onSuccess={fetchAdminData}
         selectedSchoolId={selectedSchoolId}
+      />
+
+      <ImportStudentsModal
+        isOpen={importStudentsModalOpen}
+        onClose={() => setImportStudentsModalOpen(false)}
+        onSuccess={fetchAdminData}
+        selectedSchoolId={selectedSchoolId || undefined}
       />
     </div>
   );
