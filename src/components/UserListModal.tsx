@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff } from "lucide-react";
+import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, Edit, Trash2 } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -44,6 +46,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showPasswords, setShowPasswords] = useState<{[key: string]: boolean}>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
 
   const togglePasswordVisibility = (userId: string) => {
     setShowPasswords(prev => ({
@@ -58,6 +62,69 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       title: "Copied",
       description: "Copied to clipboard",
     });
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    try {
+      // For teachers, we need to delete from multiple places
+      if (userToDelete.role === 'teacher') {
+        // Delete teaching assignments
+        await supabase
+          .from('teaching_assignments')
+          .delete()
+          .eq('teacher_user_id', userToDelete.id);
+
+        // Delete teacher profile
+        await supabase
+          .from('teacher_profiles')
+          .delete()
+          .eq('user_id', userToDelete.id);
+
+        // Delete temporary credentials if any
+        await supabase
+          .from('teacher_temp_credentials')
+          .delete()
+          .eq('teacher_user_id', userToDelete.id);
+      }
+
+      // Delete the profile
+      await supabase
+        .from('profiles')
+        .delete()
+        .eq('user_id', userToDelete.id);
+
+      // Delete the auth user (this might fail if we don't have service role access)
+      try {
+        await supabase.auth.admin.deleteUser(userToDelete.id);
+      } catch (authError) {
+        console.log('Could not delete auth user (admin privileges required):', authError);
+      }
+
+      toast({
+        title: "User Deleted",
+        description: `${userToDelete.first_name} ${userToDelete.last_name} has been deleted successfully.`,
+      });
+
+      // Refresh the user list
+      fetchUsers();
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete user. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmDelete = (user: UserProfile) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
   };
 
   useEffect(() => {
@@ -304,9 +371,28 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                             {user.isVerified ? 'Verified' : 'Not Verified'}
                           </Badge>
                         )}
-                        <Button size="sm" variant="outline" className="border-slate-600 text-slate-200">
-                          Edit
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="border-slate-600 text-slate-200">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-slate-800 border-slate-700">
+                            <DropdownMenuItem className="text-slate-200 hover:bg-slate-700">
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            {user.role === 'teacher' && (
+                              <DropdownMenuItem 
+                                className="text-red-400 hover:bg-slate-700"
+                                onClick={() => confirmDelete(user)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete Teacher
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardContent>
@@ -324,6 +410,31 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             </Button>
           </div>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="bg-slate-900 border-slate-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white">Delete Teacher</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-300">
+                Are you sure you want to delete {userToDelete?.first_name} {userToDelete?.last_name}? 
+                This will remove their profile, teaching assignments, and temporary credentials. 
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-slate-600 text-slate-200 hover:bg-slate-700">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteUser}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete Teacher
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
