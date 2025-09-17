@@ -1315,6 +1315,8 @@ export type Database = {
           expires_at: string | null
           first_name: string | null
           id: string
+          intended_class_section_ids: string[] | null
+          intended_subject_ids: string[] | null
           is_used: boolean | null
           last_name: string | null
           middle_initial: string | null
@@ -1333,6 +1335,8 @@ export type Database = {
           expires_at?: string | null
           first_name?: string | null
           id?: string
+          intended_class_section_ids?: string[] | null
+          intended_subject_ids?: string[] | null
           is_used?: boolean | null
           last_name?: string | null
           middle_initial?: string | null
@@ -1351,6 +1355,8 @@ export type Database = {
           expires_at?: string | null
           first_name?: string | null
           id?: string
+          intended_class_section_ids?: string[] | null
+          intended_subject_ids?: string[] | null
           is_used?: boolean | null
           last_name?: string | null
           middle_initial?: string | null

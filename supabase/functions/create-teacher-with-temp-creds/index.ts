@@ -82,7 +82,7 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error('Unauthorized: Admin access required');
     }
 
-    // Create temporary credentials with all teacher information
+    // Create temporary credentials with all teacher information including intended assignments
     const { error: credsError } = await supabase
       .from('teacher_temp_credentials')
       .insert({
@@ -98,7 +98,10 @@ const handler = async (req: Request): Promise<Response> => {
         school_id: schoolId,
         phone: phone,
         staff_no: staffNo,
-        qualifications: qualifications
+        qualifications: qualifications,
+        // Store intended assignments for later creation
+        intended_class_section_ids: classSectionIds || [],
+        intended_subject_ids: subjectIds || []
       });
 
     if (credsError) {
@@ -106,48 +109,14 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
-    // Create teaching assignments if class/subject assignments are provided
-    let classSectionSubjectPairs = [];
-    if (classSectionIds && subjectIds && classSectionIds.length > 0 && subjectIds.length > 0) {
-      // Get the active academic year for this school
-      const { data: academicYear } = await supabase
-        .from('academic_years')
-        .select('id')
-        .eq('school_id', schoolId)
-        .eq('active', true)
-        .maybeSingle();
-
-      if (academicYear) {
-        // Create teaching assignments for each class-subject combination
-        for (const classSectionId of classSectionIds) {
-          for (const subjectId of subjectIds) {
-            const { error: assignmentError } = await supabase
-              .from('teaching_assignments')
-              .insert({
-                teacher_user_id: tempUserId,
-                class_section_id: classSectionId,
-                subject_id: subjectId,
-                academic_year_id: academicYear.id
-              });
-
-            if (assignmentError) {
-              console.error('Teaching assignment creation error:', assignmentError);
-            } else {
-              classSectionSubjectPairs.push({ classSectionId, subjectId });
-            }
-          }
-        }
-      }
-    }
-
-    console.log('Teacher created successfully with temp credentials and assignments');
+    console.log('Teacher temp credentials created successfully with intended assignments stored');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         teacherId: tempUserId,
         username: finalUsername,
-        classSectionSubjectPairs: classSectionSubjectPairs
+        message: 'Teacher created successfully with intended assignments stored'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -205,29 +205,49 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('Temp credentials update error:', credsUpdateError);
     }
 
-    // Create teaching assignments from the CreateTeacherModal stored data
-    console.log('7. Creating teaching assignments...');
+    // Create teaching assignments from stored intentions in temp credentials
+    console.log('7. Creating teaching assignments from stored intentions...');
     
-    // First check if there are any existing assignments to update
-    const { data: existingAssignments } = await supabase
-      .from('teaching_assignments')
-      .select('*')
-      .eq('teacher_user_id', teacherId);
+    const { intended_class_section_ids, intended_subject_ids } = tempCreds;
+    
+    if (intended_class_section_ids && intended_subject_ids && 
+        intended_class_section_ids.length > 0 && intended_subject_ids.length > 0) {
+      
+      // Get the active academic year for this school
+      const { data: academicYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', tempCreds.school_id)
+        .eq('active', true)
+        .maybeSingle();
 
-    if (existingAssignments && existingAssignments.length > 0) {
-      // Update existing assignments
-      const { error: assignmentUpdateError } = await supabase
-        .from('teaching_assignments')
-        .update({ teacher_user_id: authUserId })
-        .eq('teacher_user_id', teacherId);
+      if (academicYear) {
+        console.log('Creating assignments for academic year:', academicYear.id);
+        
+        // Create teaching assignments for each class-subject combination
+        for (const classSectionId of intended_class_section_ids) {
+          for (const subjectId of intended_subject_ids) {
+            const { error: assignmentError } = await supabase
+              .from('teaching_assignments')
+              .insert({
+                teacher_user_id: authUserId,
+                class_section_id: classSectionId,
+                subject_id: subjectId,
+                academic_year_id: academicYear.id
+              });
 
-      if (assignmentUpdateError) {
-        console.error('Teaching assignments update error:', assignmentUpdateError);
+            if (assignmentError) {
+              console.error('Teaching assignment creation error:', assignmentError);
+            } else {
+              console.log('Created assignment:', { classSectionId, subjectId });
+            }
+          }
+        }
       } else {
-        console.log('Updated existing teaching assignments');
+        console.log('No active academic year found');
       }
     } else {
-      console.log('No existing assignments found to update');
+      console.log('No intended assignments stored in temp credentials');
     }
 
     console.log('=== TEACHER SETUP COMPLETED SUCCESSFULLY ===');
