@@ -91,7 +91,7 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
             
             // Try a raw query approach that respects teacher RLS
             const { data: studentNames, error: namesError } = await supabase
-              .rpc('get_student_names_for_teacher', {
+              .rpc('get_student_names_for_teacher' as any, {
                 student_ids: studentIds,
                 teacher_id: user?.id
               });
@@ -108,7 +108,7 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
                   className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
                 });
               }
-            } else if (studentNames) {
+            } else if (Array.isArray(studentNames)) {
               // Use the names from RPC
               const nameMap = new Map();
               studentNames.forEach((item: any) => {

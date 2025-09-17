@@ -1494,6 +1494,14 @@ export type Database = {
         Args: { teacher_user_id: string }
         Returns: string
       }
+      get_student_names_for_teacher: {
+        Args: { student_ids: string[]; teacher_id: string }
+        Returns: {
+          first_name: string
+          last_name: string
+          user_id: string
+        }[]
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
