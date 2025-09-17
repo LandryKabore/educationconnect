@@ -205,15 +205,29 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('Temp credentials update error:', credsUpdateError);
     }
 
-    // Update teaching assignments
-    console.log('7. Updating teaching assignments...');
-    const { error: assignmentUpdateError } = await supabase
+    // Create teaching assignments from the CreateTeacherModal stored data
+    console.log('7. Creating teaching assignments...');
+    
+    // First check if there are any existing assignments to update
+    const { data: existingAssignments } = await supabase
       .from('teaching_assignments')
-      .update({ teacher_user_id: authUserId })
+      .select('*')
       .eq('teacher_user_id', teacherId);
 
-    if (assignmentUpdateError) {
-      console.error('Teaching assignments update error:', assignmentUpdateError);
+    if (existingAssignments && existingAssignments.length > 0) {
+      // Update existing assignments
+      const { error: assignmentUpdateError } = await supabase
+        .from('teaching_assignments')
+        .update({ teacher_user_id: authUserId })
+        .eq('teacher_user_id', teacherId);
+
+      if (assignmentUpdateError) {
+        console.error('Teaching assignments update error:', assignmentUpdateError);
+      } else {
+        console.log('Updated existing teaching assignments');
+      }
+    } else {
+      console.log('No existing assignments found to update');
     }
 
     console.log('=== TEACHER SETUP COMPLETED SUCCESSFULLY ===');
