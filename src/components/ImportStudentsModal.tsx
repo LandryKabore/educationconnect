@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,15 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
   const [studentsData, setStudentsData] = useState<StudentData[]>([]);
   const [autoGenerate, setAutoGenerate] = useState(true);
+  const [showAllStudents, setShowAllStudents] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch schools when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchSchools();
+    }
+  }, [isOpen]);
 
   const fetchSchools = async () => {
     const { data } = await supabase.from('schools').select('*').eq('active', true);
@@ -42,10 +50,15 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   };
 
   const generateUsername = (firstName: string, middleName: string, lastName: string) => {
-    const firstInitial = firstName.charAt(0).toLowerCase();
-    const middleInitial = middleName ? middleName.charAt(0).toLowerCase() : '';
     const lastNameFormatted = lastName.toLowerCase().replace(/[^a-z]/g, '');
-    return firstInitial + middleInitial + lastNameFormatted;
+    const firstNameFormatted = firstName.toLowerCase().replace(/[^a-z]/g, '');
+    const middleNameFormatted = middleName ? middleName.toLowerCase().replace(/[^a-z]/g, '') : '';
+    
+    if (middleNameFormatted) {
+      return `${lastNameFormatted}.${middleNameFormatted}.${firstNameFormatted}`;
+    } else {
+      return `${lastNameFormatted}.${firstNameFormatted}`;
+    }
   };
 
   const generateTempPassword = () => {
@@ -324,7 +337,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
                     </tr>
                   </thead>
                   <tbody>
-                    {studentsData.slice(0, 10).map((student, index) => (
+                    {(showAllStudents ? studentsData : studentsData.slice(0, 10)).map((student, index) => (
                       <tr key={index} className="border-b">
                         <td className="p-2">
                           {student.firstName} {student.middleName} {student.lastName}
@@ -335,10 +348,29 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
                         <td className="p-2 font-mono">{student.tempPassword}</td>
                       </tr>
                     ))}
-                    {studentsData.length > 10 && (
+                    {studentsData.length > 10 && !showAllStudents && (
                       <tr>
-                        <td colSpan={5} className="p-2 text-center text-muted-foreground">
-                          ... and {studentsData.length - 10} more students
+                        <td colSpan={5} className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setShowAllStudents(true)}
+                            className="text-primary hover:underline"
+                          >
+                            ... and {studentsData.length - 10} more students (click to show all)
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                    {showAllStudents && studentsData.length > 10 && (
+                      <tr>
+                        <td colSpan={5} className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setShowAllStudents(false)}
+                            className="text-primary hover:underline"
+                          >
+                            Show less
+                          </button>
                         </td>
                       </tr>
                     )}
