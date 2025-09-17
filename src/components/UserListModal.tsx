@@ -68,37 +68,73 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
 
+    console.log('Starting delete process for user:', userToDelete);
+
     try {
       // For teachers, we need to delete from multiple places
       if (userToDelete.role === 'teacher') {
+        console.log('Deleting teacher-related data...');
+        
         // Delete teaching assignments
-        await supabase
+        const { error: assignmentError } = await supabase
           .from('teaching_assignments')
           .delete()
           .eq('teacher_user_id', userToDelete.id);
+        
+        if (assignmentError) {
+          console.error('Error deleting teaching assignments:', assignmentError);
+        } else {
+          console.log('Teaching assignments deleted successfully');
+        }
 
         // Delete teacher profile
-        await supabase
+        const { error: teacherProfileError } = await supabase
           .from('teacher_profiles')
           .delete()
           .eq('user_id', userToDelete.id);
+        
+        if (teacherProfileError) {
+          console.error('Error deleting teacher profile:', teacherProfileError);
+        } else {
+          console.log('Teacher profile deleted successfully');
+        }
 
         // Delete temporary credentials if any
-        await supabase
+        const { error: tempCredsError } = await supabase
           .from('teacher_temp_credentials')
           .delete()
           .eq('teacher_user_id', userToDelete.id);
+        
+        if (tempCredsError) {
+          console.error('Error deleting temp credentials:', tempCredsError);
+        } else {
+          console.log('Temp credentials deleted successfully');
+        }
       }
 
       // Delete the profile
-      await supabase
+      console.log('Deleting user profile...');
+      const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('user_id', userToDelete.id);
 
+      if (profileError) {
+        console.error('Error deleting profile:', profileError);
+        throw profileError;
+      } else {
+        console.log('Profile deleted successfully');
+      }
+
       // Delete the auth user (this might fail if we don't have service role access)
       try {
-        await supabase.auth.admin.deleteUser(userToDelete.id);
+        console.log('Attempting to delete auth user...');
+        const { error: authError } = await supabase.auth.admin.deleteUser(userToDelete.id);
+        if (authError) {
+          console.log('Auth user deletion failed (expected):', authError);
+        } else {
+          console.log('Auth user deleted successfully');
+        }
       } catch (authError) {
         console.log('Could not delete auth user (admin privileges required):', authError);
       }
@@ -108,11 +144,14 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         description: `${userToDelete.first_name} ${userToDelete.last_name} has been deleted successfully.`,
       });
 
+      console.log('Delete operation completed, refreshing data...');
+
       // Refresh the user list
       fetchUsers();
       
       // Notify parent component to refresh its data
       if (onUserDeleted) {
+        console.log('Calling onUserDeleted callback...');
         onUserDeleted();
       }
       
