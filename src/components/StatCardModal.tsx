@@ -83,30 +83,32 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
             // Get all student user IDs
             const studentIds = enrollments.map(e => e.student_user_id);
             
-            // Fetch all profiles at once
-            const { data: profiles, error: profilesError } = await supabase
-              .from("profiles")
-              .select("user_id, first_name, last_name")
-              .in("user_id", studentIds);
+            // Try to get student names from temp credentials table which teachers can access
+            const { data: studentCredentials, error: credentialsError } = await supabase
+              .from("student_temp_credentials")
+              .select("student_user_id, first_name, last_name")
+              .in("student_user_id", studentIds);
 
-            console.log("Profiles found:", profiles);
-            if (profilesError) {
-              console.error("Error fetching profiles:", profilesError);
+            console.log("Student credentials found:", studentCredentials);
+
+            
+            if (credentialsError) {
+              console.error("Error fetching student credentials:", credentialsError);
             }
 
-            // Create a map for quick profile lookup
-            const profileMap = new Map();
-            if (profiles) {
-              profiles.forEach(profile => {
-                profileMap.set(profile.user_id, profile);
+            // Create a map for quick lookup
+            const studentMap = new Map();
+            if (studentCredentials) {
+              studentCredentials.forEach(student => {
+                studentMap.set(student.student_user_id, student);
               });
             }
 
             // Add students with their names
             for (const enrollment of enrollments) {
-              const profile = profileMap.get(enrollment.student_user_id);
-              const studentName = profile 
-                ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() 
+              const studentData = studentMap.get(enrollment.student_user_id);
+              const studentName = studentData 
+                ? `${studentData.first_name || ''} ${studentData.last_name || ''}`.trim() 
                 : `Student ${enrollment.student_user_id.slice(0, 8)}`;
 
               allStudents.push({
