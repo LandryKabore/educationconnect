@@ -35,8 +35,10 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      console.log("Fetching students for teacher:", user.id);
+
       // Get all teaching assignments for this teacher
-      const { data: assignments } = await supabase
+      const { data: assignments, error: assignmentsError } = await supabase
         .from("teaching_assignments")
         .select(`
           class_sections(
@@ -47,36 +49,66 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
         `)
         .eq("teacher_user_id", user.id);
 
-      if (!assignments) return;
+      console.log("Teaching assignments:", assignments);
+      if (assignmentsError) {
+        console.error("Error fetching assignments:", assignmentsError);
+        return;
+      }
+
+      if (!assignments || assignments.length === 0) {
+        console.log("No teaching assignments found");
+        return;
+      }
 
       const allStudents: Student[] = [];
 
       // For each class, get the enrolled students
       for (const assignment of assignments) {
         if (assignment.class_sections) {
-          const { data: enrollments } = await supabase
+          console.log("Fetching enrollments for class:", assignment.class_sections.id);
+          
+          const { data: enrollments, error: enrollmentsError } = await supabase
             .from("enrollments")
-            .select(`
-              student_user_id,
-              profiles!enrollments_student_user_id_fkey(first_name, last_name)
-            `)
+            .select("student_user_id")
             .eq("class_section_id", assignment.class_sections.id)
             .eq("status", "active");
 
-          if (enrollments) {
-            enrollments.forEach(enrollment => {
-              if (enrollment.profiles) {
+          console.log("Enrollments found:", enrollments);
+          if (enrollmentsError) {
+            console.error("Error fetching enrollments:", enrollmentsError);
+            continue;
+          }
+
+          if (enrollments && enrollments.length > 0) {
+            // Fetch profile data for each student
+            for (const enrollment of enrollments) {
+              console.log("Fetching profile for student:", enrollment.student_user_id);
+              
+              const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("first_name, last_name")
+                .eq("user_id", enrollment.student_user_id)
+                .single();
+
+              console.log("Profile found:", profile);
+              if (profileError) {
+                console.error("Error fetching profile:", profileError);
+                continue;
+              }
+
+              if (profile) {
                 allStudents.push({
                   id: enrollment.student_user_id,
-                  name: `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim(),
+                  name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown Student',
                   className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
                 });
               }
-            });
+            }
           }
         }
       }
 
+      console.log("All students found:", allStudents);
       setStudents(allStudents);
     } catch (error) {
       console.error("Error fetching students:", error);
