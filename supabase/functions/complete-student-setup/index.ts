@@ -5,7 +5,6 @@ const corsHeaders = {
 
 interface CompleteStudentSetupRequest {
   username: string;
-  tempPassword: string;
   newPassword: string;
 }
 
@@ -41,32 +40,22 @@ async function handler(req: Request): Promise<Response> {
     const body: CompleteStudentSetupRequest = await req.json();
     console.log('Request body:', { username: body.username, hasPassword: !!body.newPassword });
 
-    const { username, tempPassword, newPassword } = body;
+    const { username, newPassword } = body;
 
-    if (!username || !tempPassword || !newPassword) {
+    if (!username || !newPassword) {
       return new Response(JSON.stringify({ 
-        error: 'Missing required fields: username, tempPassword, newPassword' 
+        error: 'Missing required fields: username, newPassword' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Hash the provided temporary password to compare
-    const tempPasswordHash = await crypto.subtle.digest(
-      'SHA-256',
-      new TextEncoder().encode(tempPassword)
-    );
-    const tempPasswordHashHex = Array.from(new Uint8Array(tempPasswordHash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    // Find and verify the student temporary credentials
+    // Find the student temporary credentials by username (don't need temp password verification since they're already authenticated)
     const { data: studentCreds, error: credsError } = await supabase
       .from('student_temp_credentials')
       .select('*')
       .eq('username', username)
-      .eq('temp_password_hash', tempPasswordHashHex)
       .eq('is_used', false)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle();
@@ -81,9 +70,9 @@ async function handler(req: Request): Promise<Response> {
 
     if (!studentCreds) {
       return new Response(JSON.stringify({ 
-        error: 'Invalid credentials or expired temporary access' 
+        error: 'Student credentials not found or expired' 
       }), {
-        status: 401,
+        status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

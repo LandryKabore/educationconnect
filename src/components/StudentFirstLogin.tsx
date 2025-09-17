@@ -50,8 +50,7 @@ export function StudentFirstLogin({ studentInfo, onComplete }: StudentFirstLogin
       const { data, error } = await supabase.functions.invoke('complete-student-setup', {
         body: {
           username: studentInfo.username,
-          password,
-          studentId: studentInfo.student_id
+          newPassword: password
         }
       });
 
