@@ -106,17 +106,41 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
-    // Store class/subject assignments for later use when teacher completes setup
+    // Create teaching assignments if class/subject assignments are provided
     let classSectionSubjectPairs = [];
     if (classSectionIds && subjectIds && classSectionIds.length > 0 && subjectIds.length > 0) {
-      for (const classSectionId of classSectionIds) {
-        for (const subjectId of subjectIds) {
-          classSectionSubjectPairs.push({ classSectionId, subjectId });
+      // Get the active academic year for this school
+      const { data: academicYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (academicYear) {
+        // Create teaching assignments for each class-subject combination
+        for (const classSectionId of classSectionIds) {
+          for (const subjectId of subjectIds) {
+            const { error: assignmentError } = await supabase
+              .from('teaching_assignments')
+              .insert({
+                teacher_user_id: tempUserId,
+                class_section_id: classSectionId,
+                subject_id: subjectId,
+                academic_year_id: academicYear.id
+              });
+
+            if (assignmentError) {
+              console.error('Teaching assignment creation error:', assignmentError);
+            } else {
+              classSectionSubjectPairs.push({ classSectionId, subjectId });
+            }
+          }
         }
       }
     }
 
-    console.log('Teacher created successfully with temp credentials');
+    console.log('Teacher created successfully with temp credentials and assignments');
 
     return new Response(
       JSON.stringify({ 
