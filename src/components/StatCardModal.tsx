@@ -62,35 +62,55 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
 
       const allStudents: Student[] = [];
 
-      // For each class, get the enrolled students with their profiles in one query
+      // For each class, get the enrolled students with their profiles
       for (const assignment of assignments) {
         if (assignment.class_sections) {
           console.log("Fetching students for class:", assignment.class_sections.id);
           
-          const { data: studentsData, error: studentsError } = await supabase
+          // First get enrollments
+          const { data: enrollments, error: enrollmentsError } = await supabase
             .from("enrollments")
-            .select(`
-              student_user_id,
-              profiles!inner(first_name, last_name)
-            `)
+            .select("student_user_id")
             .eq("class_section_id", assignment.class_sections.id)
             .eq("status", "active");
 
-          console.log("Students data found:", studentsData);
-          if (studentsError) {
-            console.error("Error fetching students:", studentsError);
+          if (enrollmentsError) {
+            console.error("Error fetching enrollments:", enrollmentsError);
             continue;
           }
 
-          if (studentsData && studentsData.length > 0) {
-            for (const studentData of studentsData) {
-              const profile = studentData.profiles;
+          if (enrollments && enrollments.length > 0) {
+            // Get all student user IDs
+            const studentIds = enrollments.map(e => e.student_user_id);
+            
+            // Fetch all profiles at once
+            const { data: profiles, error: profilesError } = await supabase
+              .from("profiles")
+              .select("user_id, first_name, last_name")
+              .in("user_id", studentIds);
+
+            console.log("Profiles found:", profiles);
+            if (profilesError) {
+              console.error("Error fetching profiles:", profilesError);
+            }
+
+            // Create a map for quick profile lookup
+            const profileMap = new Map();
+            if (profiles) {
+              profiles.forEach(profile => {
+                profileMap.set(profile.user_id, profile);
+              });
+            }
+
+            // Add students with their names
+            for (const enrollment of enrollments) {
+              const profile = profileMap.get(enrollment.student_user_id);
               const studentName = profile 
                 ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() 
-                : `Student ${studentData.student_user_id.slice(0, 8)}`;
+                : `Student ${enrollment.student_user_id.slice(0, 8)}`;
 
               allStudents.push({
-                id: studentData.student_user_id,
+                id: enrollment.student_user_id,
                 name: studentName || 'Unknown Student',
                 className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
               });
