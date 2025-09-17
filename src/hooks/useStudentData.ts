@@ -70,7 +70,34 @@ export const useStudentData = () => {
         .eq("student_user_id", user.id)
         .maybeSingle();
 
-      setStudentInfo({ profile, student, enrollment });
+      // Fetch teachers for the student's class
+      let teachers = [];
+      let subjects = [];
+      if (enrollment?.class_section_id) {
+        const { data: teachingAssignments } = await supabase
+          .from("teaching_assignments")
+          .select(`
+            *,
+            teacher_user_id,
+            subjects(id, name, code),
+            profiles!teaching_assignments_teacher_user_id_fkey(first_name, last_name)
+          `)
+          .eq("class_section_id", enrollment.class_section_id);
+
+        teachers = teachingAssignments || [];
+        
+        // Get unique subjects for this class
+        const { data: classSubjects } = await supabase
+          .from("class_section_subjects")
+          .select(`
+            subjects(id, name, code)
+          `)
+          .eq("class_section_id", enrollment.class_section_id);
+
+        subjects = classSubjects?.map(cs => cs.subjects).filter(Boolean) || [];
+      }
+
+      setStudentInfo({ profile, student, enrollment, teachers, subjects });
 
       if (student) {
         // Fetch grades with assignment and subject info

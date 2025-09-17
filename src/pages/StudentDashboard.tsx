@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 
 const StudentDashboard = () => {
@@ -134,7 +134,7 @@ const StudentDashboard = () => {
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-blue-400">8</div>
+              <div className="text-2xl font-bold text-blue-400">{studentInfo?.subjects?.length || 0}</div>
               <div className="text-sm text-slate-300">Active Subjects</div>
             </CardContent>
           </Card>
@@ -148,6 +148,44 @@ const StudentDashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Teachers Card */}
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-purple-400" />
+                <CardTitle className="text-white">Your Teachers</CardTitle>
+              </div>
+              <CardDescription className="text-slate-300">Professors teaching in your class</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {studentInfo?.teachers && studentInfo.teachers.length > 0 ? 
+                  studentInfo.teachers.map((teacher, index) => (
+                    <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-white">
+                            {teacher.profiles?.first_name} {teacher.profiles?.last_name}
+                          </div>
+                          <div className="text-sm text-slate-300">
+                            {teacher.subjects?.name} ({teacher.subjects?.code})
+                          </div>
+                        </div>
+                        <div className="p-2 bg-purple-500/20 rounded-lg">
+                          <GraduationCap className="w-4 h-4 text-purple-400" />
+                        </div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                      No teachers assigned yet
+                    </div>
+                  )
+                }
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Recent Grades */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
