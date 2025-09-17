@@ -60,7 +60,17 @@ export const useStudentData = () => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      setStudentInfo({ profile, student });
+      // Fetch student enrollment to get class information
+      const { data: enrollment } = await supabase
+        .from("enrollments")
+        .select(`
+          *,
+          class_sections(name, grade_level)
+        `)
+        .eq("student_user_id", user.id)
+        .maybeSingle();
+
+      setStudentInfo({ profile, student, enrollment });
 
       if (student) {
         // Fetch grades with assignment and subject info

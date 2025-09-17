@@ -100,7 +100,7 @@ const StudentDashboard = () => {
                 <h1 className="text-xl font-bold text-white">Student Dashboard</h1>
                 <p className="text-sm text-slate-300">
                   {studentInfo?.profile ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` : "Student"} - 
-                  {studentInfo?.student?.classes?.name || "Unknown Class"}
+                  {studentInfo?.enrollment?.class_sections?.name || "Unknown Class"}
                 </p>
               </div>
             </div>
