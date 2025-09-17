@@ -105,25 +105,40 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
 
         console.log('Completed students data:', completedData);
         console.log('Temp credentials data:', tempCredsData);
+        console.log('Sample temp cred record:', tempCredsData.data?.[0]);
 
         const completedStudents = completedData.data?.map(item => ({
           ...item.profiles,
           isVerified: true
         })) || [];
 
-        const pendingStudents = tempCredsData.data?.map(item => ({
-          id: item.id,
-          email: `${item.username}@student.local`,
-          first_name: item.first_name || '',
-          last_name: item.last_name || '',
-          role: 'student',
-          created_at: item.created_at,
-          status: 'pending',
-          username: item.username,
-          tempPassword: item.temp_password_plain,
-          isVerified: item.is_used || false,
-          tempPasswordExpires: item.expires_at
-        })) || [];
+        const pendingStudents = tempCredsData.data?.map(item => {
+          const student = {
+            id: item.id,
+            email: `${item.username}@student.local`,
+            first_name: item.first_name || '',
+            last_name: item.last_name || '',
+            role: 'student',
+            created_at: item.created_at,
+            status: 'pending',
+            username: item.username,
+            tempPassword: item.temp_password_plain,
+            isVerified: item.is_used || false,
+            tempPasswordExpires: item.expires_at
+          };
+          
+          // Debug specific students
+          if (item.first_name === 'Yasmin' || item.first_name === 'Esther') {
+            console.log(`Student ${item.first_name} ${item.last_name}:`, {
+              username: item.username,
+              temp_password_plain: item.temp_password_plain,
+              tempPassword: student.tempPassword,
+              hasPassword: !!student.tempPassword
+            });
+          }
+          
+          return student;
+        }) || [];
 
         const allStudents = [...completedStudents, ...pendingStudents];
         console.log('Found students:', { 
