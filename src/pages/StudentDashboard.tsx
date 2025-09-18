@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 
 const StudentDashboard = () => {
@@ -105,6 +106,33 @@ const StudentDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Subject Dropdown */}
+              {studentInfo?.subjects && studentInfo.subjects.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+                      <BookOpen className="w-4 h-4 mr-2" />
+                      My Subjects
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-slate-800 border-slate-600 z-50">
+                    <DropdownMenuLabel className="text-slate-200">Active Subjects</DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-slate-600" />
+                    {studentInfo.subjects.map((subject) => (
+                      <DropdownMenuItem 
+                        key={subject.id} 
+                        className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">{subject.name}</span>
+                          {subject.code && <span className="text-xs text-slate-400">{subject.code}</span>}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>

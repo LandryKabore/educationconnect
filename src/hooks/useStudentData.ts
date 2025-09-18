@@ -86,15 +86,14 @@ export const useStudentData = () => {
 
         teachers = teachingAssignments || [];
         
-        // Get unique subjects for this class
-        const { data: classSubjects } = await supabase
-          .from("class_section_subjects")
-          .select(`
-            subjects(id, name, code)
-          `)
-          .eq("class_section_id", enrollment.class_section_id);
-
-        subjects = classSubjects?.map(cs => cs.subjects).filter(Boolean) || [];
+        // Get unique subjects from teaching assignments instead of class_section_subjects
+        const subjectsMap = new Map();
+        teachingAssignments?.forEach(ta => {
+          if (ta.subjects && !subjectsMap.has(ta.subjects.id)) {
+            subjectsMap.set(ta.subjects.id, ta.subjects);
+          }
+        });
+        subjects = Array.from(subjectsMap.values());
       }
 
       setStudentInfo({ profile, student, enrollment, teachers, subjects });
