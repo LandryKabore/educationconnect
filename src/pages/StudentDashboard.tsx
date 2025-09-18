@@ -192,12 +192,17 @@ const StudentDashboard = () => {
                     <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-medium text-white">
-                            {teacher.profiles?.first_name} {teacher.profiles?.last_name}
-                          </div>
-                          <div className="text-sm text-slate-300">
-                            {teacher.subjects?.name} ({teacher.subjects?.code})
-                          </div>
+                <div className="font-medium text-white">
+                  {teacher.profiles?.first_name} {teacher.profiles?.last_name}
+                </div>
+                <div className="text-sm text-slate-300">
+                  {teacher.subjects?.name} {teacher.subjects?.code && `(${teacher.subjects.code})`}
+                </div>
+                {teacher.profiles?.email && (
+                  <div className="text-xs text-slate-400">
+                    {teacher.profiles.email}
+                  </div>
+                )}
                         </div>
                         <div className="p-2 bg-purple-500/20 rounded-lg">
                           <GraduationCap className="w-4 h-4 text-purple-400" />
