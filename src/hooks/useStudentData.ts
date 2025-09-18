@@ -80,7 +80,7 @@ export const useStudentData = () => {
             *,
             teacher_user_id,
             subjects(id, name, code),
-            profiles!teaching_assignments_teacher_user_id_fkey(first_name, last_name)
+            profiles!teacher_user_id(first_name, last_name, email)
           `)
           .eq("class_section_id", enrollment.class_section_id);
 
