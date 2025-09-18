@@ -113,12 +113,22 @@ const TeacherDashboard = () => {
                 {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : "Teacher"}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-slate-300">
-              <Clock className="w-4 h-4" />
-              <div className="text-sm">
-                <div>{format(currentTime, 'EEEE, MMMM d, yyyy')}</div>
-                <div className="text-xs text-slate-400">{format(currentTime, 'h:mm a')}</div>
+            <div className="flex items-center gap-4 text-slate-300">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <div className="text-sm">
+                  <div>{format(currentTime, 'EEEE, MMMM d, yyyy')}</div>
+                  <div className="text-xs text-slate-400">{format(currentTime, 'h:mm a')}</div>
+                </div>
               </div>
+              {classes.length > 0 && (
+                <div className="flex items-center gap-2 border-l border-slate-600 pl-4">
+                  <div className="text-sm">
+                    <div className="text-slate-200 font-medium">{classes[0].name}</div>
+                    <div className="text-xs text-slate-400">{classes[0].subject}</div>
+                  </div>
+                </div>
+              )}
             </div>
             </div>
             <div className="flex items-center gap-3">

@@ -10,6 +10,7 @@ export interface TeacherClass {
   student_count: number;
   schedule_time?: string;
   room?: string;
+  subject?: string;
 }
 
 export interface TeacherTask {
@@ -158,11 +159,12 @@ export const useTeacherData = () => {
               
               classMap.set(classSection.id, {
                 id: classSection.id,
-                name: `${classSection.name} - ${subject?.name || 'Subject'}`,
+                name: classSection.name,
                 grade_level: classSection.grade_level || "Unknown",
                 student_count: studentCount,
                 schedule_time: scheduleTime,
-                room: `Room ${Math.floor(Math.random() * 300) + 100}` // Mock room for now
+                room: `Room ${Math.floor(Math.random() * 300) + 100}`, // Mock room for now
+                subject: subject?.name || "Subject"
               });
             }
           }

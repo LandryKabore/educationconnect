@@ -124,14 +124,14 @@ export const useStudentData = () => {
           setGrades(formattedGrades);
         }
 
-        // Fetch attendance
+        // Fetch attendance from enhanced_attendance table
         const { data: attendanceData } = await supabase
-          .from("attendance")
+          .from("enhanced_attendance")
           .select(`
             *,
-            classes(name)
+            class_sections(name)
           `)
-          .eq("student_id", user.id)
+          .eq("student_user_id", user.id)
           .order("date", { ascending: false })
           .limit(30);
 
@@ -140,7 +140,7 @@ export const useStudentData = () => {
             id: att.id,
             date: new Date(att.date).toLocaleDateString(),
             status: att.status,
-            class_name: att.classes?.name || "Unknown Class"
+            class_name: att.class_sections?.name || "Unknown Class"
           }));
           setAttendance(formattedAttendance);
         }
