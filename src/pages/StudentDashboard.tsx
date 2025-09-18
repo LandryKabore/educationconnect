@@ -188,28 +188,34 @@ const StudentDashboard = () => {
             <CardContent>
               <div className="space-y-3">
                 {studentInfo?.teachers && studentInfo.teachers.length > 0 ? 
-                  studentInfo.teachers.map((teacher, index) => (
-                    <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                <div className="font-medium text-white">
-                  {teacher.profiles?.first_name} {teacher.profiles?.last_name}
-                </div>
-                <div className="text-sm text-slate-300">
-                  {teacher.subjects?.name} {teacher.subjects?.code && `(${teacher.subjects.code})`}
-                </div>
-                {teacher.profiles?.email && (
-                  <div className="text-xs text-slate-400">
-                    {teacher.profiles.email}
-                  </div>
-                )}
-                        </div>
-                        <div className="p-2 bg-purple-500/20 rounded-lg">
-                          <GraduationCap className="w-4 h-4 text-purple-400" />
+                  studentInfo.teachers.map((teacher, index) => {
+                    console.log('Teacher data:', teacher); // Debug log
+                    return (
+                      <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-white">
+                              {teacher.profiles?.first_name && teacher.profiles?.last_name 
+                                ? `${teacher.profiles.first_name} ${teacher.profiles.last_name}`
+                                : 'Teacher Name Not Available'
+                              }
+                            </div>
+                            <div className="text-sm text-slate-300">
+                              {teacher.subjects?.name} {teacher.subjects?.code && `(${teacher.subjects.code})`}
+                            </div>
+                            {teacher.profiles?.email && (
+                              <div className="text-xs text-slate-400">
+                                {teacher.profiles.email}
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-2 bg-purple-500/20 rounded-lg">
+                            <GraduationCap className="w-4 h-4 text-purple-400" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )) : (
+                    )
+                  }) : (
                     <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
                       No teachers assigned yet
                     </div>
