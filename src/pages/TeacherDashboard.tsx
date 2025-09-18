@@ -2,18 +2,20 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock } from "lucide-react";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
+import { format } from "date-fns";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
   useEffect(() => {
@@ -26,6 +28,15 @@ const TeacherDashboard = () => {
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Update current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
   }, []);
 
   const handleCardClick = (type: "classes" | "students" | "tasks" | "attendance") => {
@@ -96,12 +107,19 @@ const TeacherDashboard = () => {
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div>
-                <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
-                <p className="text-sm text-slate-300">
-                  {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : "Teacher"}
-                </p>
+            <div>
+              <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
+              <p className="text-sm text-slate-300">
+                {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : "Teacher"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300">
+              <Clock className="w-4 h-4" />
+              <div className="text-sm">
+                <div>{format(currentTime, 'EEEE, MMMM d, yyyy')}</div>
+                <div className="text-xs text-slate-400">{format(currentTime, 'h:mm a')}</div>
               </div>
+            </div>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
@@ -232,7 +250,7 @@ const TeacherDashboard = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="font-medium text-white">{task.task}</div>
-                        <div className="text-sm text-slate-300">Due: {task.due}</div>
+                        <div className="text-sm text-slate-300">Due: {task.dueText}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {task.urgent && (
@@ -286,7 +304,7 @@ const TeacherDashboard = () => {
                         <div className="text-sm font-medium text-slate-300">{message.subject}</div>
                         <div className="text-sm text-slate-300 mt-1">{message.preview}</div>
                       </div>
-                      <div className="text-xs text-slate-400">{message.time}</div>
+                      <div className="text-xs text-slate-400">{message.timeText}</div>
                     </div>
                   </div>
                 )) : (

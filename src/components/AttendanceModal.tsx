@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Calendar } from "lucide-react";
+import { format } from "date-fns";
 
 interface Student {
   id: string;
@@ -243,9 +244,12 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Take Attendance</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Take Attendance - {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
+          </DialogTitle>
           <DialogDescription>
-            Record attendance for your class.
+            Record attendance for your class on {format(new Date(selectedDate), 'MMMM d, yyyy')}.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

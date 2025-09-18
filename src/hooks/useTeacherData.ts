@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { format, addDays, isToday, isTomorrow, differenceInHours, differenceInDays } from "date-fns";
 
 export interface TeacherClass {
   id: string;
@@ -15,7 +16,8 @@ export interface TeacherTask {
   id: string;
   task: string;
   urgent: boolean;
-  due: string;
+  due: Date;
+  dueText: string;
   type: 'grading' | 'attendance' | 'meeting' | 'admin';
 }
 
@@ -24,7 +26,8 @@ export interface TeacherMessage {
   from: string;
   subject: string;
   preview: string;
-  time: string;
+  time: Date;
+  timeText: string;
   unread: boolean;
 }
 
@@ -43,6 +46,39 @@ export const useTeacherData = () => {
   useEffect(() => {
     fetchTeacherData();
   }, []);
+
+  // Utility function to format due dates
+  const formatDueDate = (date: Date): string => {
+    if (isToday(date)) {
+      return `Today ${format(date, 'h:mm a')}`;
+    } else if (isTomorrow(date)) {
+      return `Tomorrow ${format(date, 'h:mm a')}`;
+    } else {
+      const daysDiff = differenceInDays(date, new Date());
+      if (daysDiff <= 7) {
+        return format(date, 'EEEE h:mm a');
+      }
+      return format(date, 'MMM d, h:mm a');
+    }
+  };
+
+  // Utility function to format message times
+  const formatMessageTime = (date: Date): string => {
+    const hoursDiff = differenceInHours(new Date(), date);
+    if (hoursDiff < 1) {
+      return 'Just now';
+    } else if (hoursDiff < 24) {
+      return `${hoursDiff} hour${hoursDiff > 1 ? 's' : ''} ago`;
+    } else {
+      const daysDiff = differenceInDays(new Date(), date);
+      if (daysDiff === 1) {
+        return '1 day ago';
+      } else if (daysDiff <= 7) {
+        return `${daysDiff} days ago`;
+      }
+      return format(date, 'MMM d');
+    }
+  };
 
   const fetchTeacherData = async () => {
     try {
@@ -139,7 +175,8 @@ export const useTeacherData = () => {
           setStats(prev => ({ ...prev, totalStudents }));
         }
 
-        // Generate mock tasks based on real data
+        // Generate realistic tasks based on real data and current date
+        const now = new Date();
         const mockTasks: TeacherTask[] = [
           {
             id: "1",
@@ -147,35 +184,52 @@ export const useTeacherData = () => {
               ? `Grade assignments for ${formattedClasses[0].name}` 
               : "Grade assignments",
             urgent: true,
-            due: "Today",
+            due: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0), // Today 5PM
+            dueText: "",
             type: "grading"
           },
           {
             id: "2",
             task: "Review attendance records",
             urgent: false,
-            due: "Tomorrow",
+            due: addDays(now, 1), // Tomorrow
+            dueText: "",
             type: "attendance"
           },
           {
             id: "3",
             task: "Parent meeting scheduled",
             urgent: true,
-            due: "Today 3PM",
+            due: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0), // Today 3PM
+            dueText: "",
             type: "meeting"
+          },
+          {
+            id: "4",
+            task: "Submit weekly progress report",
+            urgent: false,
+            due: addDays(now, 5), // This Friday
+            dueText: "",
+            type: "admin"
           }
         ];
+
+        // Format due dates
+        mockTasks.forEach(task => {
+          task.dueText = formatDueDate(task.due);
+        });
         setTasks(mockTasks);
         setStats(prev => ({ ...prev, pendingTasks: mockTasks.length }));
 
-        // Generate mock messages
+        // Generate realistic messages with actual timestamps
         const mockMessages: TeacherMessage[] = [
           {
             id: "1",
             from: "Parent - John Smith",
             subject: "Question about homework",
             preview: "Could you clarify the mathematics assignment...",
-            time: "2 hours ago",
+            time: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+            timeText: "",
             unread: true
           },
           {
@@ -183,10 +237,25 @@ export const useTeacherData = () => {
             from: "School Admin",
             subject: "Weekly Report Due",
             preview: "Please submit your weekly progress report...",
-            time: "1 day ago",
+            time: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+            timeText: "",
             unread: false
+          },
+          {
+            id: "3",
+            from: "Parent - Sarah Johnson", 
+            subject: "Student absence notification",
+            preview: "My child will be absent tomorrow due to...",
+            time: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
+            timeText: "",
+            unread: true
           }
         ];
+
+        // Format message times
+        mockMessages.forEach(message => {
+          message.timeText = formatMessageTime(message.time);
+        });
         setMessages(mockMessages);
 
         // Calculate average attendance
@@ -214,9 +283,21 @@ export const useTeacherData = () => {
   };
 
   const getTodaySchedule = (className: string): string => {
-    // Mock schedule generation
-    const times = ["9:00 AM", "11:00 AM", "2:00 PM", "3:30 PM"];
-    return times[Math.floor(Math.random() * times.length)];
+    // Generate schedule based on current day of week
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Different schedule for different days
+    const schedules = {
+      1: ["8:00 AM", "10:00 AM", "1:00 PM", "3:00 PM"], // Monday
+      2: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"], // Tuesday  
+      3: ["8:30 AM", "10:30 AM", "1:30 PM", "3:30 PM"], // Wednesday
+      4: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"], // Thursday
+      5: ["8:00 AM", "10:00 AM", "12:00 PM", "2:00 PM"]  // Friday
+    };
+    
+    const daySchedule = schedules[dayOfWeek as keyof typeof schedules] || schedules[1];
+    return daySchedule[Math.floor(Math.random() * daySchedule.length)];
   };
 
   const markTaskComplete = async (taskId: string) => {
