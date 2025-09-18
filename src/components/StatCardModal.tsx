@@ -2,13 +2,16 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CircularProgress } from "@/components/ui/circular-progress";
 import { Calendar, Users, CheckSquare, TrendingUp, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface Student {
   id: string;
   name: string;
   className: string;
+  attendancePercentage?: number;
 }
 
 interface StatCardModalProps {
@@ -22,10 +25,14 @@ interface StatCardModalProps {
 export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCardModalProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [attendanceData, setAttendanceData] = useState<Student[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   useEffect(() => {
     if (open && type === "students") {
       fetchAllStudents();
+    } else if (open && type === "attendance") {
+      fetchStudentAttendanceData();
     }
   }, [open, type]);
 
@@ -140,6 +147,118 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
       setLoadingStudents(false);
     }
   };
+
+  const fetchStudentAttendanceData = async () => {
+    setLoadingAttendance(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get all teaching assignments for this teacher
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from("teaching_assignments")
+        .select(`
+          class_sections(
+            id,
+            name,
+            grade_level
+          )
+        `)
+        .eq("teacher_user_id", user.id);
+
+      if (assignmentsError || !assignments || assignments.length === 0) {
+        return;
+      }
+
+      const allStudentsWithAttendance: Student[] = [];
+
+      // For each class, get students and their attendance
+      for (const assignment of assignments) {
+        if (assignment.class_sections) {
+          // Get enrollments
+          const { data: enrollments, error: enrollmentsError } = await supabase
+            .from("enrollments")
+            .select("student_user_id")
+            .eq("class_section_id", assignment.class_sections.id)
+            .eq("status", "active");
+
+          if (enrollmentsError || !enrollments || enrollments.length === 0) {
+            continue;
+          }
+
+          const studentIds = enrollments.map(e => e.student_user_id);
+
+          // Get student names using RPC
+          const { data: studentNames, error: namesError } = await supabase
+            .rpc('get_student_names_for_teacher' as any, {
+              student_ids: studentIds,
+              teacher_id: user.id
+            });
+
+          if (namesError || !Array.isArray(studentNames)) {
+            continue;
+          }
+
+          // Get attendance data for these students
+          const { data: attendanceRecords, error: attendanceError } = await supabase
+            .from("enhanced_attendance")
+            .select("student_user_id, status")
+            .eq("class_section_id", assignment.class_sections.id)
+            .in("student_user_id", studentIds);
+
+          if (attendanceError) {
+            console.error("Error fetching attendance:", attendanceError);
+          }
+
+          // Calculate attendance percentage for each student
+          const nameMap = new Map();
+          studentNames.forEach((item: any) => {
+            nameMap.set(item.user_id, item);
+          });
+
+          for (const enrollment of enrollments) {
+            const nameData = nameMap.get(enrollment.student_user_id);
+            const studentName = nameData 
+              ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
+              : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+
+            // Calculate attendance percentage
+            const studentAttendanceRecords = attendanceRecords?.filter(
+              record => record.student_user_id === enrollment.student_user_id
+            ) || [];
+
+            let attendancePercentage = 0;
+            if (studentAttendanceRecords.length > 0) {
+              const presentCount = studentAttendanceRecords.filter(
+                record => record.status === "present"
+              ).length;
+              attendancePercentage = Math.round((presentCount / studentAttendanceRecords.length) * 100);
+            } else {
+              // Default to 95% if no records (new student)
+              attendancePercentage = 95;
+            }
+
+            allStudentsWithAttendance.push({
+              id: enrollment.student_user_id,
+              name: studentName || 'Unknown Student',
+              className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`,
+              attendancePercentage
+            });
+          }
+        }
+      }
+
+      // Sort by attendance percentage (lowest first to highlight issues)
+      allStudentsWithAttendance.sort((a, b) => (a.attendancePercentage || 0) - (b.attendancePercentage || 0));
+      
+      setAttendanceData(allStudentsWithAttendance);
+    } catch (error) {
+      console.error("Error fetching attendance data:", error);
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+  
   const getModalContent = () => {
     switch (type) {
       case "classes":
@@ -235,40 +354,95 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
       
       case "attendance":
         return {
-          title: "Average Attendance",
+          title: "Student Attendance Overview",
           icon: <TrendingUp className="w-5 h-5" />,
-          description: `Current average attendance across all your classes is ${stats.avgAttendance}`,
-          content: (
-            <div className="space-y-3">
+          description: `Individual attendance tracking for all your students (${attendanceData.length} students)`,
+          content: loadingAttendance ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin text-green-400" />
+              <span className="ml-2 text-slate-300">Loading attendance data...</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Summary stats */}
               <Card className="bg-slate-700/50 border-slate-600">
                 <CardHeader>
-                  <CardTitle className="text-white text-sm">Attendance Overview</CardTitle>
+                  <CardTitle className="text-white text-sm">Overall Statistics</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Overall Average:</span>
-                      <span className="text-green-400 font-medium">{stats.avgAttendance}</span>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-green-400">
+                        {attendanceData.filter(s => (s.attendancePercentage || 0) >= 90).length}
+                      </div>
+                      <div className="text-xs text-slate-300">Excellent (90%+)</div>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Total Classes:</span>
-                      <span className="text-white">{data.length}</span>
+                    <div>
+                      <div className="text-2xl font-bold text-orange-400">
+                        {attendanceData.filter(s => (s.attendancePercentage || 0) >= 60 && (s.attendancePercentage || 0) < 90).length}
+                      </div>
+                      <div className="text-xs text-slate-300">Needs Attention</div>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-300">Total Students:</span>
-                      <span className="text-white">{stats.totalStudents}</span>
+                    <div>
+                      <div className="text-2xl font-bold text-red-400">
+                        {attendanceData.filter(s => (s.attendancePercentage || 0) < 60).length}
+                      </div>
+                      <div className="text-xs text-slate-300">Critical (&lt;60%)</div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-orange-400/10 border-orange-400/30">
-                <CardContent className="p-4">
-                  <div className="text-sm text-orange-200">
-                    <strong>Note:</strong> Attendance tracking helps monitor student engagement and identify patterns. 
-                    Regular attendance updates provide better insights into class performance.
+
+              {/* Individual student attendance */}
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {attendanceData.length > 0 ? (
+                  attendanceData.map((student, index) => (
+                    <div 
+                      key={student.id} 
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-lg border transition-all duration-300 hover:scale-[1.02] animate-fade-in",
+                        (student.attendancePercentage || 0) >= 90 
+                          ? "bg-green-400/10 border-green-400/30" 
+                          : (student.attendancePercentage || 0) >= 75
+                          ? "bg-yellow-400/10 border-yellow-400/30"
+                          : (student.attendancePercentage || 0) >= 60
+                          ? "bg-orange-400/10 border-orange-400/30"
+                          : "bg-red-400/10 border-red-400/30"
+                      )}
+                      style={{
+                        animationDelay: `${index * 100}ms`
+                      }}
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium text-white">{student.name}</div>
+                        <div className="text-sm text-slate-300">{student.className}</div>
+                        <div className="text-xs text-slate-400 mt-1">
+                          {(student.attendancePercentage || 0) >= 90 ? "Excellent attendance" :
+                           (student.attendancePercentage || 0) >= 75 ? "Good attendance" :
+                           (student.attendancePercentage || 0) >= 60 ? "Needs improvement" :
+                           "Critical - Contact parent"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CircularProgress 
+                          percentage={student.attendancePercentage || 0}
+                          size={50}
+                          strokeWidth={3}
+                          animationDelay={index * 150}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 bg-slate-700/50 rounded-lg text-center">
+                    <TrendingUp className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                    <div className="text-slate-300">No attendance data available</div>
+                    <div className="text-sm text-slate-400 mt-1">
+                      Start taking attendance to see student progress here
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+              </div>
             </div>
           )
         };
