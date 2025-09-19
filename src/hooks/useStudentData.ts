@@ -79,12 +79,27 @@ export const useStudentData = () => {
           .select(`
             *,
             teacher_user_id,
-            subjects(id, name, code),
-            profiles!teaching_assignments_teacher_user_id_fkey(first_name, last_name, email)
+            subjects(id, name, code)
           `)
           .eq("class_section_id", enrollment.class_section_id);
+          
+        // Get teacher profiles separately and merge them
+        let teachersWithProfiles: any[] = [];
+        if (teachingAssignments && teachingAssignments.length > 0) {
+          const teacherIds = teachingAssignments.map(ta => ta.teacher_user_id);
+          const { data: teacherProfiles } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, last_name, email")
+            .in("user_id", teacherIds);
+          
+          // Merge teacher profiles with teaching assignments
+          teachersWithProfiles = teachingAssignments.map(ta => ({
+            ...ta,
+            profiles: teacherProfiles?.find(profile => profile.user_id === ta.teacher_user_id) || null
+          }));
+        }
 
-        teachers = teachingAssignments || [];
+        teachers = teachersWithProfiles;
         
         // Get unique subjects from teaching assignments instead of class_section_subjects
         const subjectsMap = new Map();
