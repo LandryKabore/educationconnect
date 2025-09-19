@@ -6,9 +6,13 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 import { StatCardModal } from "@/components/StatCardModal";
+import { useTranslation } from "react-i18next";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("attendance");
@@ -51,7 +55,7 @@ const StudentDashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="flex items-center gap-2 text-white">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading your dashboard...</span>
+          <span>{t('loading')}</span>
         </div>
       </div>
     );
@@ -101,9 +105,9 @@ const StudentDashboard = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-white">Student Dashboard</h1>
+                <h1 className="text-xl font-bold text-white">{t('studentDashboard')}</h1>
                 <p className="text-sm text-slate-300">
-                  {studentInfo?.profile ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` : "Student"} - 
+                  {studentInfo?.profile ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` : t('student')} - 
                   {studentInfo?.enrollment?.class_sections?.name || "Unknown Class"}
                 </p>
               </div>
@@ -115,12 +119,12 @@ const StudentDashboard = () => {
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                       <BookOpen className="w-4 h-4 mr-2" />
-                      My Subjects
+                      {t('subjects') || 'My Subjects'}
                       <ChevronDown className="w-4 h-4 ml-2" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-slate-800 border-slate-600 z-50">
-                    <DropdownMenuLabel className="text-slate-200">Active Subjects</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-slate-200">{t('activeSubjects') || 'Active Subjects'}</DropdownMenuLabel>
                     <DropdownMenuSeparator className="bg-slate-600" />
                     {studentInfo.subjects.map((subject) => (
                       <DropdownMenuItem 
@@ -136,6 +140,8 @@ const StudentDashboard = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              <ThemeToggle />
+              <LanguageToggle />
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
@@ -152,7 +158,7 @@ const StudentDashboard = () => {
             <CardContent className="p-6 text-center">
               <Award className="w-8 h-8 text-orange-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-orange-400">{gpa}</div>
-              <div className="text-sm text-slate-300">Overall GPA</div>
+              <div className="text-sm text-slate-300">{t('overallGPA')}</div>
             </CardContent>
           </Card>
           <Card 
@@ -165,21 +171,21 @@ const StudentDashboard = () => {
             <CardContent className="p-6 text-center">
               <Clock className="w-8 h-8 text-green-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-green-400">{attendanceRate}</div>
-              <div className="text-sm text-slate-300">Attendance</div>
+              <div className="text-sm text-slate-300">{t('attendance')}</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-400">{studentInfo?.subjects?.length || 0}</div>
-              <div className="text-sm text-slate-300">Active Subjects</div>
+              <div className="text-sm text-slate-300">{t('activeSubjectsCount')}</div>
             </CardContent>
           </Card>
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <Users className="w-8 h-8 text-red-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-red-400">{assignments.length}</div>
-              <div className="text-sm text-slate-300">Upcoming Assignments</div>
+              <div className="text-sm text-slate-300">{t('upcomingAssignments')}</div>
             </CardContent>
           </Card>
         </div>
