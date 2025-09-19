@@ -199,11 +199,12 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
             continue;
           }
 
-          // Get attendance data for these students
+          // Get attendance data for these students - only records taken by this teacher
           const { data: attendanceRecords, error: attendanceError } = await supabase
             .from("enhanced_attendance")
             .select("student_user_id, status")
             .eq("class_section_id", assignment.class_sections.id)
+            .eq("taken_by", user.id)
             .in("student_user_id", studentIds);
 
           if (attendanceError) {
