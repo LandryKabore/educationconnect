@@ -5,10 +5,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
+import { StatCardModal } from "@/components/StatCardModal";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("attendance");
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -152,7 +155,13 @@ const StudentDashboard = () => {
               <div className="text-sm text-slate-300">Overall GPA</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer"
+            onClick={() => {
+              setModalType("attendance");
+              setModalOpen(true);
+            }}
+          >
             <CardContent className="p-6 text-center">
               <Clock className="w-8 h-8 text-green-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-green-400">{attendanceRate}</div>
@@ -365,6 +374,15 @@ const StudentDashboard = () => {
           </Card>
         </div>
       </main>
+
+      {/* Attendance Modal */}
+      <StatCardModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        type={modalType}
+        data={[]}
+        stats={{ totalStudents: 0, pendingTasks: 0 }}
+      />
     </div>
   );
 };

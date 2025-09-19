@@ -154,110 +154,193 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get all teaching assignments for this teacher
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from("teaching_assignments")
-        .select(`
-          class_sections(
-            id,
-            name,
-            grade_level
-          )
-        `)
-        .eq("teacher_user_id", user.id);
+      // Check if this is a student by looking at the current user's role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
 
-      if (assignmentsError || !assignments || assignments.length === 0) {
-        return;
+      if (profile?.role === 'student') {
+        // Student view: Show attendance breakdown by class/subject
+        await fetchStudentClassAttendanceBreakdown(user.id);
+      } else {
+        // Teacher view: Show students in their classes
+        await fetchTeacherStudentAttendance(user.id);
       }
-
-      const allStudentsWithAttendance: Student[] = [];
-
-      // For each class, get students and their attendance
-      for (const assignment of assignments) {
-        if (assignment.class_sections) {
-          // Get enrollments
-          const { data: enrollments, error: enrollmentsError } = await supabase
-            .from("enrollments")
-            .select("student_user_id")
-            .eq("class_section_id", assignment.class_sections.id)
-            .eq("status", "active");
-
-          if (enrollmentsError || !enrollments || enrollments.length === 0) {
-            continue;
-          }
-
-          const studentIds = enrollments.map(e => e.student_user_id);
-
-          // Get student names using RPC
-          const { data: studentNames, error: namesError } = await supabase
-            .rpc('get_student_names_for_teacher' as any, {
-              student_ids: studentIds,
-              teacher_id: user.id
-            });
-
-          if (namesError || !Array.isArray(studentNames)) {
-            continue;
-          }
-
-          // Get attendance data for these students - only records taken by this teacher
-          const { data: attendanceRecords, error: attendanceError } = await supabase
-            .from("enhanced_attendance")
-            .select("student_user_id, status")
-            .eq("class_section_id", assignment.class_sections.id)
-            .eq("taken_by", user.id)
-            .in("student_user_id", studentIds);
-
-          if (attendanceError) {
-            console.error("Error fetching attendance:", attendanceError);
-          }
-
-          // Calculate attendance percentage for each student
-          const nameMap = new Map();
-          studentNames.forEach((item: any) => {
-            nameMap.set(item.user_id, item);
-          });
-
-          for (const enrollment of enrollments) {
-            const nameData = nameMap.get(enrollment.student_user_id);
-            const studentName = nameData 
-              ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
-              : `Student ${enrollment.student_user_id.slice(0, 8)}`;
-
-            // Calculate attendance percentage
-            const studentAttendanceRecords = attendanceRecords?.filter(
-              record => record.student_user_id === enrollment.student_user_id
-            ) || [];
-
-            let attendancePercentage = 0;
-            if (studentAttendanceRecords.length > 0) {
-              const presentCount = studentAttendanceRecords.filter(
-                record => record.status === "present"
-              ).length;
-              attendancePercentage = Math.round((presentCount / studentAttendanceRecords.length) * 100);
-            } else {
-              // Default to 95% if no records (new student)
-              attendancePercentage = 95;
-            }
-
-            allStudentsWithAttendance.push({
-              id: enrollment.student_user_id,
-              name: studentName || 'Unknown Student',
-              className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`,
-              attendancePercentage
-            });
-          }
-        }
-      }
-
-      // Sort by attendance percentage (lowest first to highlight issues)
-      allStudentsWithAttendance.sort((a, b) => (a.attendancePercentage || 0) - (b.attendancePercentage || 0));
-      
-      setAttendanceData(allStudentsWithAttendance);
     } catch (error) {
       console.error("Error fetching attendance data:", error);
     } finally {
       setLoadingAttendance(false);
     }
+  };
+
+  const fetchStudentClassAttendanceBreakdown = async (studentUserId: string) => {
+    // Get student's enrollment to find their class
+    const { data: enrollment } = await supabase
+      .from("enrollments")
+      .select(`
+        class_section_id,
+        class_sections(name, grade_level)
+      `)
+      .eq("student_user_id", studentUserId)
+      .eq("status", "active")
+      .single();
+
+    if (!enrollment) return;
+
+    // Get all subjects/teachers for this class
+    const { data: teachingAssignments } = await supabase
+      .from("teaching_assignments")
+      .select(`
+        teacher_user_id,
+        subject_id,
+        subjects(name, code),
+        profiles!teaching_assignments_teacher_user_id_fkey(first_name, last_name)
+      `)
+      .eq("class_section_id", enrollment.class_section_id);
+
+    if (!teachingAssignments) return;
+
+    const classAttendanceData: Student[] = [];
+
+    // For each subject/teacher, calculate attendance
+    for (const assignment of teachingAssignments) {
+      const { data: attendanceRecords } = await supabase
+        .from("enhanced_attendance")
+        .select("status")
+        .eq("student_user_id", studentUserId)
+        .eq("class_section_id", enrollment.class_section_id)
+        .eq("taken_by", assignment.teacher_user_id);
+
+      let attendancePercentage = 0;
+      if (attendanceRecords && attendanceRecords.length > 0) {
+        const presentCount = attendanceRecords.filter(
+          record => record.status === "present"
+        ).length;
+        attendancePercentage = Math.round((presentCount / attendanceRecords.length) * 100);
+      } else {
+        // Default to 95% if no records
+        attendancePercentage = 95;
+      }
+
+      const teacherName = assignment.profiles
+        ? `${assignment.profiles.first_name || ''} ${assignment.profiles.last_name || ''}`.trim()
+        : 'Unknown Teacher';
+
+      classAttendanceData.push({
+        id: assignment.teacher_user_id,
+        name: `${assignment.subjects?.name || 'Unknown Subject'} ${assignment.subjects?.code ? `(${assignment.subjects.code})` : ''}`,
+        className: `Teacher: ${teacherName}`,
+        attendancePercentage
+      });
+    }
+
+    // Sort by attendance percentage (lowest first)
+    classAttendanceData.sort((a, b) => (a.attendancePercentage || 0) - (b.attendancePercentage || 0));
+    setAttendanceData(classAttendanceData);
+  };
+
+  const fetchTeacherStudentAttendance = async (teacherUserId: string) => {
+    // Get all teaching assignments for this teacher
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from("teaching_assignments")
+      .select(`
+        class_sections(
+          id,
+          name,
+          grade_level
+        )
+      `)
+      .eq("teacher_user_id", teacherUserId);
+
+    if (assignmentsError || !assignments || assignments.length === 0) {
+      return;
+    }
+
+    const allStudentsWithAttendance: Student[] = [];
+
+    // For each class, get students and their attendance
+    for (const assignment of assignments) {
+      if (assignment.class_sections) {
+        // Get enrollments
+        const { data: enrollments, error: enrollmentsError } = await supabase
+          .from("enrollments")
+          .select("student_user_id")
+          .eq("class_section_id", assignment.class_sections.id)
+          .eq("status", "active");
+
+        if (enrollmentsError || !enrollments || enrollments.length === 0) {
+          continue;
+        }
+
+        const studentIds = enrollments.map(e => e.student_user_id);
+
+        // Get student names using RPC
+        const { data: studentNames, error: namesError } = await supabase
+          .rpc('get_student_names_for_teacher' as any, {
+            student_ids: studentIds,
+            teacher_id: teacherUserId
+          });
+
+        if (namesError || !Array.isArray(studentNames)) {
+          continue;
+        }
+
+        // Get attendance data for these students - only records taken by this teacher
+        const { data: attendanceRecords, error: attendanceError } = await supabase
+          .from("enhanced_attendance")
+          .select("student_user_id, status")
+          .eq("class_section_id", assignment.class_sections.id)
+          .eq("taken_by", teacherUserId)
+          .in("student_user_id", studentIds);
+
+        if (attendanceError) {
+          console.error("Error fetching attendance:", attendanceError);
+        }
+
+        // Calculate attendance percentage for each student
+        const nameMap = new Map();
+        studentNames.forEach((item: any) => {
+          nameMap.set(item.user_id, item);
+        });
+
+        for (const enrollment of enrollments) {
+          const nameData = nameMap.get(enrollment.student_user_id);
+          const studentName = nameData 
+            ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
+            : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+
+          // Calculate attendance percentage
+          const studentAttendanceRecords = attendanceRecords?.filter(
+            record => record.student_user_id === enrollment.student_user_id
+          ) || [];
+
+          let attendancePercentage = 0;
+          if (studentAttendanceRecords.length > 0) {
+            const presentCount = studentAttendanceRecords.filter(
+              record => record.status === "present"
+            ).length;
+            attendancePercentage = Math.round((presentCount / studentAttendanceRecords.length) * 100);
+          } else {
+            // Default to 95% if no records (new student)
+            attendancePercentage = 95;
+          }
+
+          allStudentsWithAttendance.push({
+            id: enrollment.student_user_id,
+            name: studentName || 'Unknown Student',
+            className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`,
+            attendancePercentage
+          });
+        }
+      }
+    }
+
+    // Sort by attendance percentage (lowest first to highlight issues)
+    allStudentsWithAttendance.sort((a, b) => (a.attendancePercentage || 0) - (b.attendancePercentage || 0));
+    
+    setAttendanceData(allStudentsWithAttendance);
   };
   
   const getModalContent = () => {
@@ -355,9 +438,13 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
       
       case "attendance":
         return {
-          title: "Student Attendance Overview",
+          title: attendanceData.length > 0 && attendanceData[0]?.className?.includes("Teacher:") 
+            ? "My Attendance by Subject" 
+            : "Student Attendance Overview",
           icon: <TrendingUp className="w-5 h-5" />,
-          description: `Individual attendance tracking for all your students (${attendanceData.length} students)`,
+          description: attendanceData.length > 0 && attendanceData[0]?.className?.includes("Teacher:") 
+            ? `Your attendance breakdown across different subjects (${attendanceData.length} subjects)`
+            : `Individual attendance tracking for all your students (${attendanceData.length} students)`,
           content: loadingAttendance ? (
             <div className="flex items-center justify-center p-8">
               <Loader2 className="w-6 h-6 animate-spin text-green-400" />
