@@ -260,16 +260,20 @@ export const useTeacherData = () => {
         });
         setMessages(mockMessages);
 
-        // Calculate average attendance
+        // Calculate average attendance for classes where this teacher took attendance
         const { data: attendanceData } = await supabase
           .from("enhanced_attendance")
           .select("status")
+          .eq("taken_by", user?.id)
           .in("class_section_id", formattedClasses.map(cls => cls.id));
 
         if (attendanceData && attendanceData.length > 0) {
           const presentCount = attendanceData.filter(att => att.status === "present").length;
           const avgAttendance = `${Math.round((presentCount / attendanceData.length) * 100)}%`;
           setStats(prev => ({ ...prev, avgAttendance }));
+        } else {
+          // If no attendance taken yet, show 0%
+          setStats(prev => ({ ...prev, avgAttendance: "0%" }));
         }
       }
     } catch (error) {
