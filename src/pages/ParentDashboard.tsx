@@ -3,10 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useParentData } from "@/hooks/useParentData";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements } = useParentData();
 
@@ -36,7 +39,7 @@ const ParentDashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="flex items-center gap-2 text-white">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading your dashboard...</span>
+          <span>{t('loading')}</span>
         </div>
       </div>
     );
@@ -46,8 +49,8 @@ const ParentDashboard = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center text-white">
-          <h2 className="text-2xl font-bold mb-4">No Children Found</h2>
-          <p className="text-slate-300">You don't have any children linked to your account yet.</p>
+          <h2 className="text-2xl font-bold mb-4">{t('parent.noChildren')}</h2>
+          <p className="text-slate-300">{t('parent.noChildren')}</p>
         </div>
       </div>
     );
@@ -97,11 +100,12 @@ const ParentDashboard = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-white">Parent Dashboard</h1>
-                <p className="text-sm text-slate-300">Welcome back!</p>
+                <h1 className="text-xl font-bold text-white">{t('parent.dashboard')}</h1>
+                <p className="text-sm text-slate-300">{t('welcomeBack')}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <LanguageToggle />
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <Bell className="w-4 h-4" />
               </Button>

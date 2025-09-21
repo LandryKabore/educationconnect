@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { Calendar, Users, CheckSquare, TrendingUp, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ interface StatCardModalProps {
 }
 
 export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCardModalProps) {
+  const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [attendanceData, setAttendanceData] = useState<Student[]>([]);

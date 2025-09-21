@@ -3,15 +3,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { format } from "date-fns";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
@@ -58,7 +61,7 @@ const TeacherDashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="flex items-center gap-2 text-white">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading your dashboard...</span>
+          <span>{t('loading')}</span>
         </div>
       </div>
     );
@@ -108,12 +111,13 @@ const TeacherDashboard = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
             <div>
-              <h1 className="text-xl font-bold text-white">Teacher Dashboard</h1>
+              <h1 className="text-xl font-bold text-white">{t('teacher.dashboard')}</h1>
               <p className="text-sm text-slate-300">
-                {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : "Teacher"}
+                {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : t('teacher')}
               </p>
             </div>
             <div className="flex items-center gap-4 text-slate-300">
+              <LanguageToggle />
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <div className="text-sm">

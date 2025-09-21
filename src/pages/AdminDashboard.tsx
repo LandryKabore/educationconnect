@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import { AdminLogin } from "@/components/AdminLogin";
 import { UserListModal } from "@/components/UserListModal";
 import { CreateSchoolModal } from "@/components/CreateSchoolModal";
@@ -21,6 +22,7 @@ import { CreateTeacherModal } from "@/components/CreateTeacherModal";
 import { CreateStudentModal } from "@/components/CreateStudentModal";
 import { ImportStudentsModal } from "@/components/ImportStudentsModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 interface AdminData {
   schools: any[];
@@ -38,6 +40,7 @@ interface AdminData {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
   

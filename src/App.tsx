@@ -17,6 +17,7 @@ import UsernameLogin from "./pages/UsernameLogin";
 import CompleteStudentSetup from "./pages/CompleteStudentSetup";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "./components/RequireAuth";
+import "./i18n";
 
 const App = () => (
   <TooltipProvider>
