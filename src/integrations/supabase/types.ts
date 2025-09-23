@@ -1534,6 +1534,22 @@ export type Database = {
         Args: { teacher_user_id: string }
         Returns: string
       }
+      get_student_grades: {
+        Args: { student_user_id: string }
+        Returns: {
+          assignment_id: string
+          assignment_title: string
+          class_id: string
+          grade_points: number
+          graded_at: string
+          max_points: number
+          percentage: number
+          points_earned: number
+          student_id: string
+          subject_id: string
+          subject_name: string
+        }[]
+      }
       get_student_names_for_teacher: {
         Args: { student_ids: string[]; teacher_id: string }
         Returns: {

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 import { StatCardModal } from "@/components/StatCardModal";
+import { StudentGradesModal } from "@/components/StudentGradesModal";
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -16,6 +17,7 @@ const StudentDashboard = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("attendance");
+  const [gradesModalOpen, setGradesModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -154,7 +156,10 @@ const StudentDashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Academic Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-orange-400/50"
+            onClick={() => setGradesModalOpen(true)}
+          >
             <CardContent className="p-6 text-center">
               <Award className="w-8 h-8 text-orange-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-orange-400">{gpa}</div>
@@ -268,7 +273,10 @@ const StudentDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+                onClick={() => setGradesModalOpen(true)}
+              >
                 View All Grades
               </Button>
             </CardContent>
@@ -388,6 +396,12 @@ const StudentDashboard = () => {
         type={modalType}
         data={[]}
         stats={{ totalStudents: 0, pendingTasks: 0 }}
+      />
+      
+      {/* Student Grades Modal */}
+      <StudentGradesModal
+        open={gradesModalOpen}
+        onOpenChange={setGradesModalOpen}
       />
     </div>
   );
