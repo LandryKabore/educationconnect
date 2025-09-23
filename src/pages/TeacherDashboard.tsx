@@ -19,7 +19,7 @@ const TeacherDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { loading, teacherInfo, classes, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
+  const { loading, teacherInfo, classes, subjects, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -237,7 +237,7 @@ const TeacherDashboard = () => {
                 <GradeStudentModal onGradeSubmitted={() => {}} />
                 <CreateAssignmentModal 
                   classes={classes.map(c => ({ id: c.id, name: c.name }))} 
-                  subjects={[{ id: "1", name: "Mathematics" }, { id: "2", name: "Science" }]} 
+                  subjects={subjects} 
                   onAssignmentCreated={() => {}} 
                 />
                 <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">

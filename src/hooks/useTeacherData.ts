@@ -32,10 +32,16 @@ export interface TeacherMessage {
   unread: boolean;
 }
 
+export interface TeacherSubject {
+  id: string;
+  name: string;
+}
+
 export const useTeacherData = () => {
   const [loading, setLoading] = useState(true);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
   const [classes, setClasses] = useState<TeacherClass[]>([]);
+  const [subjects, setSubjects] = useState<TeacherSubject[]>([]);
   const [tasks, setTasks] = useState<TeacherTask[]>([]);
   const [messages, setMessages] = useState<TeacherMessage[]>([]);
   const [stats, setStats] = useState({
@@ -132,9 +138,24 @@ export const useTeacherData = () => {
           .eq("teacher_user_id", user.id);
 
         let formattedClasses: TeacherClass[] = [];
+        let formattedSubjects: TeacherSubject[] = [];
         if (assignmentsData && assignmentsData.length > 0) {
           // Group by class section to avoid duplicates
           const classMap = new Map();
+          const subjectMap = new Map();
+          
+          // Extract unique subjects
+          for (const assignment of assignmentsData) {
+            const subject = assignment.subjects;
+            if (subject && !subjectMap.has(subject.id)) {
+              subjectMap.set(subject.id, {
+                id: subject.id,
+                name: subject.name
+              });
+            }
+          }
+          formattedSubjects = Array.from(subjectMap.values());
+          setSubjects(formattedSubjects);
           
           // Fetch actual student counts for each class
           for (const assignment of assignmentsData) {
@@ -328,6 +349,7 @@ export const useTeacherData = () => {
     loading,
     teacherInfo,
     classes,
+    subjects,
     tasks,
     messages,
     stats,
