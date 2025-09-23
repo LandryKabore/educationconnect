@@ -1473,9 +1473,49 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      student_grades: {
+        Row: {
+          assignment_id: string | null
+          class_id: string | null
+          grade_points: number | null
+          graded_at: string | null
+          max_points: number | null
+          percentage: number | null
+          points_earned: number | null
+          student_id: string | null
+          subject_id: string | null
+          subject_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignments_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignments_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grades_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      calculate_student_gpa: {
+        Args: { student_user_id: string }
+        Returns: number
+      }
       create_teacher_account: {
         Args: {
           class_section_ids?: string[]
