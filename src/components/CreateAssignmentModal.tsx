@@ -45,7 +45,7 @@ export function CreateAssignmentModal({ classes, subjects, onAssignmentCreated }
           title: formData.title,
           description: formData.description,
           teacher_id: user.id,
-          class_id: formData.class_id,
+          class_id: formData.class_id, // This should reference class_sections, not classes
           subject_id: formData.subject_id,
           due_date: formData.due_date ? new Date(formData.due_date).toISOString() : null,
           max_points: parseInt(formData.max_points)
