@@ -35,6 +35,10 @@ export function CreateAssignmentModal({ classes, subjects, onAssignmentCreated }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      console.log("Creating assignment with data:", formData);
+      console.log("Available classes:", classes);
+      console.log("Available subjects:", subjects);
+
       const { error } = await supabase
         .from("assignments")
         .insert({
@@ -47,7 +51,10 @@ export function CreateAssignmentModal({ classes, subjects, onAssignmentCreated }
           max_points: parseInt(formData.max_points)
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error:", error);
+        throw error;
+      }
 
       toast({
         title: "Assignment Created",
