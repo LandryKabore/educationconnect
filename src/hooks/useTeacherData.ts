@@ -37,17 +37,32 @@ export interface TeacherSubject {
   name: string;
 }
 
+export interface TeacherAssignment {
+  id: string;
+  title: string;
+  description?: string;
+  due_date?: Date;
+  max_points?: number;
+  class_name: string;
+  subject_name: string;
+  created_at: Date;
+  formattedDueDate?: string;
+  formattedCreatedDate: string;
+}
+
 export const useTeacherData = () => {
   const [loading, setLoading] = useState(true);
   const [teacherInfo, setTeacherInfo] = useState<any>(null);
   const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [subjects, setSubjects] = useState<TeacherSubject[]>([]);
+  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [tasks, setTasks] = useState<TeacherTask[]>([]);
   const [messages, setMessages] = useState<TeacherMessage[]>([]);
   const [stats, setStats] = useState({
     totalStudents: 0,
     pendingTasks: 0,
-    avgAttendance: "0%"
+    avgAttendance: "0%",
+    totalAssignments: 0
   });
 
   useEffect(() => {
@@ -112,7 +127,7 @@ export const useTeacherData = () => {
 
       if (teacher) {
         // Fetch teacher's teaching assignments with class details
-        const { data: assignmentsData } = await supabase
+        const { data: teachingAssignments } = await supabase
           .from("teaching_assignments")
           .select(`
             id,
@@ -139,13 +154,13 @@ export const useTeacherData = () => {
 
         let formattedClasses: TeacherClass[] = [];
         let formattedSubjects: TeacherSubject[] = [];
-        if (assignmentsData && assignmentsData.length > 0) {
+        if (teachingAssignments && teachingAssignments.length > 0) {
           // Group by class section to avoid duplicates
           const classMap = new Map();
           const subjectMap = new Map();
           
           // Extract unique subjects
-          for (const assignment of assignmentsData) {
+          for (const assignment of teachingAssignments) {
             const subject = assignment.subjects;
             if (subject && !subjectMap.has(subject.id)) {
               subjectMap.set(subject.id, {
@@ -158,7 +173,7 @@ export const useTeacherData = () => {
           setSubjects(formattedSubjects);
           
           // Fetch actual student counts for each class
-          for (const assignment of assignmentsData) {
+          for (const assignment of teachingAssignments) {
             const classSection = assignment.class_sections;
             const subject = assignment.subjects;
             
@@ -196,6 +211,40 @@ export const useTeacherData = () => {
           // Calculate total students
           const totalStudents = formattedClasses.reduce((sum, cls) => sum + cls.student_count, 0);
           setStats(prev => ({ ...prev, totalStudents }));
+        }
+
+        // Fetch assignments created by this teacher
+        const { data: createdAssignments } = await supabase
+          .from("assignments")
+          .select(`
+            id,
+            title,
+            description,
+            due_date,
+            max_points,
+            created_at,
+            class_sections!assignments_class_id_fkey(name),
+            subjects(name)
+          `)
+          .eq("teacher_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (createdAssignments) {
+          const formattedAssignments: TeacherAssignment[] = createdAssignments.map(assignment => ({
+            id: assignment.id,
+            title: assignment.title,
+            description: assignment.description,
+            due_date: assignment.due_date ? new Date(assignment.due_date) : undefined,
+            max_points: assignment.max_points,
+            class_name: assignment.class_sections?.name || "Unknown Class",
+            subject_name: assignment.subjects?.name || "No Subject",
+            created_at: new Date(assignment.created_at),
+            formattedDueDate: assignment.due_date ? formatDueDate(new Date(assignment.due_date)) : undefined,
+            formattedCreatedDate: format(new Date(assignment.created_at), 'MMM d, yyyy')
+          }));
+          
+          setAssignments(formattedAssignments);
+          setStats(prev => ({ ...prev, totalAssignments: formattedAssignments.length }));
         }
 
         // Generate realistic tasks based on real data and current date
@@ -350,6 +399,7 @@ export const useTeacherData = () => {
     teacherInfo,
     classes,
     subjects,
+    assignments,
     tasks,
     messages,
     stats,

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock } from "lucide-react";
+import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
@@ -19,7 +19,7 @@ const TeacherDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { loading, teacherInfo, classes, subjects, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
+  const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -189,7 +189,7 @@ const TeacherDashboard = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
           {/* Today's Classes */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
@@ -225,6 +225,53 @@ const TeacherDashboard = () => {
             </CardContent>
           </Card>
 
+          {/* Recent Assignments */}
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-400" />
+                <CardTitle className="text-white">Recent Assignments</CardTitle>
+              </div>
+              <CardDescription className="text-slate-300">Your created assignments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => (
+                  <div key={assignment.id} className="p-4 bg-slate-700/50 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-white">{assignment.title}</div>
+                        <div className="text-sm text-slate-300">
+                          {assignment.class_name} • {assignment.subject_name}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-1">
+                          Created: {assignment.formattedCreatedDate}
+                          {assignment.formattedDueDate && (
+                            <> • Due: {assignment.formattedDueDate}</>
+                          )}
+                        </div>
+                      </div>
+                      {assignment.max_points && (
+                        <div className="text-sm text-slate-400">
+                          {assignment.max_points} pts
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )) : (
+                  <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                    No assignments created yet
+                  </div>
+                )}
+              </div>
+              {assignments.length > 3 && (
+                <Button className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
+                  View All Assignments ({assignments.length})
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Quick Actions */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
@@ -247,6 +294,9 @@ const TeacherDashboard = () => {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
 
           {/* Pending Tasks */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
