@@ -155,7 +155,7 @@ export type Database = {
             foreignKeyName: "assignments_class_id_fkey"
             columns: ["class_id"]
             isOneToOne: false
-            referencedRelation: "classes"
+            referencedRelation: "class_sections"
             referencedColumns: ["id"]
           },
           {
@@ -1491,7 +1491,7 @@ export type Database = {
             foreignKeyName: "assignments_class_id_fkey"
             columns: ["class_id"]
             isOneToOne: false
-            referencedRelation: "classes"
+            referencedRelation: "class_sections"
             referencedColumns: ["id"]
           },
           {
