@@ -11,6 +11,7 @@ import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { format } from "date-fns";
+import { getCountdown } from "@/utils/countdownHelpers";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -236,7 +237,11 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => (
+{assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => {
+                  const dueDate = assignment.due_date ? new Date(assignment.due_date) : null;
+                  const countdown = dueDate ? getCountdown(dueDate) : null;
+                  
+                  return (
                   <div key={assignment.id} className="p-4 bg-slate-700/50 rounded-lg">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -251,14 +256,28 @@ const TeacherDashboard = () => {
                           )}
                         </div>
                       </div>
-                      {assignment.max_points && (
-                        <div className="text-sm text-slate-400">
-                          {assignment.max_points} pts
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )) : (
+                       <div className="flex flex-col items-end gap-1">
+                         {assignment.max_points && (
+                           <div className="text-sm text-slate-400">
+                             {assignment.max_points} pts
+                           </div>
+                         )}
+                         {countdown && (
+                           <div className={`text-xs px-2 py-1 rounded ${
+                             countdown.overdue 
+                               ? 'bg-red-500/20 text-red-400' 
+                               : countdown.urgent 
+                                 ? 'bg-yellow-500/20 text-yellow-400'
+                                 : 'bg-green-500/20 text-green-400'
+                           }`}>
+                             {countdown.display}
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                   );
+                 }) : (
                   <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
                     No assignments created yet
                   </div>

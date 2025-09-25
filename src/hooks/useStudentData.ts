@@ -24,8 +24,10 @@ export interface StudentAssignment {
   title: string;
   description: string;
   due_date: string;
+  due_date_formatted: string;
   subject: string;
   max_points: number;
+  type: 'assignment' | 'exam';
 }
 
 export const useStudentData = () => {
@@ -179,17 +181,51 @@ export const useStudentData = () => {
           .order("due_date", { ascending: true })
           .limit(10);
 
+        // Fetch upcoming exams
+        const { data: examsData } = await supabase
+          .from("exams")
+          .select(`
+            *,
+            subjects(name)
+          `)
+          .in("class_section_id", classSectionIds)
+          .gte("exam_date", new Date().toISOString().split('T')[0])
+          .order("exam_date", { ascending: true })
+          .limit(10);
+
+        const allUpcoming = [];
+
         if (assignmentsData) {
           const formattedAssignments = assignmentsData.map(assignment => ({
             id: assignment.id,
             title: assignment.title,
             description: assignment.description || "",
-            due_date: new Date(assignment.due_date).toLocaleDateString(),
+            due_date: assignment.due_date,
+            due_date_formatted: new Date(assignment.due_date).toLocaleDateString(),
             subject: assignment.subjects?.name || "Unknown Subject",
-            max_points: assignment.max_points || 100
+            max_points: assignment.max_points || 100,
+            type: 'assignment'
           }));
-          setAssignments(formattedAssignments);
+          allUpcoming.push(...formattedAssignments);
         }
+
+        if (examsData) {
+          const formattedExams = examsData.map(exam => ({
+            id: exam.id,
+            title: exam.title,
+            description: `${exam.term || 'Exam'} - ${exam.title}`,
+            due_date: exam.exam_date,
+            due_date_formatted: new Date(exam.exam_date).toLocaleDateString(),
+            subject: exam.subjects?.name || "Unknown Subject",
+            max_points: exam.max_score || 100,
+            type: 'exam'
+          }));
+          allUpcoming.push(...formattedExams);
+        }
+
+        // Sort all items by due date
+        allUpcoming.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+        setAssignments(allUpcoming);
       }
     } catch (error) {
       console.error("Error fetching student data:", error);

@@ -10,6 +10,7 @@ import { StudentGradesModal } from "@/components/StudentGradesModal";
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { getCountdown } from "@/utils/countdownHelpers";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -282,28 +283,46 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Upcoming Exams */}
+          {/* Upcoming Assignments & Exams */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-red-400" />
-                <CardTitle className="text-white">Upcoming Exams</CardTitle>
+                <CardTitle className="text-white">Upcoming Tasks</CardTitle>
               </div>
-              <CardDescription className="text-slate-300">Important test dates to remember</CardDescription>
+              <CardDescription className="text-slate-300">Assignments and exams coming up</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => (
-                  <div key={assignment.id} className="p-3 bg-slate-700/50 rounded-lg">
-                    <div className="font-medium text-white">{assignment.subject}</div>
-                    <div className="text-sm text-slate-300">{assignment.title}</div>
-                    <div className="text-sm text-slate-400">
-                      Due: {assignment.due_date}
+                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => {
+                  const dueDate = new Date(assignment.due_date);
+                  const countdown = getCountdown(dueDate);
+                  
+                  return (
+                    <div key={assignment.id} className="p-3 bg-slate-700/50 rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="font-medium text-white">{assignment.title}</div>
+                          <div className="text-sm text-slate-300">{assignment.subject}</div>
+                          <div className="text-sm text-slate-400">
+                            {assignment.type === 'exam' ? 'Exam' : 'Assignment'} • Due: {assignment.due_date_formatted}
+                          </div>
+                        </div>
+                        <div className={`text-xs px-2 py-1 rounded ${
+                          countdown.overdue 
+                            ? 'bg-red-500/20 text-red-400' 
+                            : countdown.urgent 
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : 'bg-green-500/20 text-green-400'
+                        }`}>
+                          {countdown.display}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )) : (
+                  );
+                }) : (
                   <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
-                    No upcoming assignments
+                    No upcoming tasks
                   </div>
                 )}
               </div>
