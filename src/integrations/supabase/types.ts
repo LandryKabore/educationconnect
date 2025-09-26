@@ -1195,6 +1195,7 @@ export type Database = {
       subjects: {
         Row: {
           code: string | null
+          coefficient: number | null
           created_at: string
           description: string | null
           id: string
@@ -1207,6 +1208,7 @@ export type Database = {
         }
         Insert: {
           code?: string | null
+          coefficient?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1219,6 +1221,7 @@ export type Database = {
         }
         Update: {
           code?: string | null
+          coefficient?: number | null
           created_at?: string
           description?: string | null
           id?: string

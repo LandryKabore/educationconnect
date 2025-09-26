@@ -35,7 +35,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     schedule_days: [] as string[],
     schedule_time_start: "",
     schedule_time_end: "",
-    schedule_duration: ""
+    schedule_duration: "",
+    coefficient: "1.0"
   });
 
   const weekDays = [
@@ -79,7 +80,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.school_id) {
+    if (!formData.name || !formData.school_id || !formData.coefficient) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -100,7 +101,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
           schedule_days: formData.schedule_days.length > 0 ? formData.schedule_days : null,
           schedule_time_start: formData.schedule_time_start || null,
           schedule_time_end: formData.schedule_time_end || null,
-          schedule_duration: formData.schedule_duration ? parseInt(formData.schedule_duration) : null
+          schedule_duration: formData.schedule_duration ? parseInt(formData.schedule_duration) : null,
+          coefficient: parseFloat(formData.coefficient)
         }]);
 
       if (error) throw error;
@@ -133,7 +135,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       schedule_days: [],
       schedule_time_start: "",
       schedule_time_end: "",
-      schedule_duration: ""
+      schedule_duration: "",
+      coefficient: "1.0"
     });
     onClose();
   };
@@ -206,13 +209,31 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="coefficient">Subject Coefficient (Credit Hours) *</Label>
+                <Input
+                  id="coefficient"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="10.0"
+                  value={formData.coefficient}
+                  onChange={(e) => setFormData({ ...formData, coefficient: e.target.value })}
+                  placeholder="e.g., 1.0"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for calculating weighted GPA. Higher values have more impact on GPA.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Brief description of the subject"
-                  rows={4}
+                  rows={3}
                 />
               </div>
             </div>

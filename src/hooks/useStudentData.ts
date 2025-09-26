@@ -258,6 +258,8 @@ export const useStudentData = () => {
   const calculateGPA = (): string => {
     if (grades.length === 0) return "0.0";
     
+    // For client-side calculation, we use standard GPA calculation since we don't have coefficients in the grades data
+    // The server-side function handles weighted GPA properly
     const gradePoints = grades.map(grade => {
       const percentage = (grade.points_earned / grade.max_points) * 100;
       if (percentage >= 97) return 4.0;
