@@ -34,6 +34,10 @@ export default function Auth() {
   const [selectedSchool, setSelectedSchool] = useState("");
   const [schools, setSchools] = useState<any[]>([]);
 
+  // Parent verification code fields
+  const [verificationCode, setVerificationCode] = useState("");
+  const [parentLinkMode, setParentLinkMode] = useState<"existing" | "code">("existing");
+
   useEffect(() => {
     // Fetch schools for signup
     const fetchSchools = async () => {
@@ -191,9 +195,120 @@ export default function Auth() {
     }
   };
 
+  const handleParentVerificationCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      // Find the parent-student link with this verification code
+      const { data: linkData, error: linkError } = await supabase
+        .from('parent_student_links')
+        .select(`
+          *, 
+          student_profile:profiles!parent_student_links_student_user_id_fkey(
+            user_id, first_name, last_name
+          )
+        `)
+        .eq('verification_code', verificationCode)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (linkError || !linkData) {
+        throw new Error("Invalid or expired verification code");
+      }
+
+      // Create parent account or sign in
+      if (mode === "signup") {
+        const redirectUrl = `${window.location.origin}/`;
+        const { data: authData, error: signupError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { 
+              first_name: firstName, 
+              last_name: lastName, 
+              role: "parent",
+              school_id: selectedSchool 
+            },
+            emailRedirectTo: redirectUrl,
+          },
+        });
+        
+        if (signupError) throw signupError;
+        
+        if (authData.user) {
+          // Update the parent-student link with the new parent user ID
+          const { error: updateError } = await supabase
+            .from('parent_student_links')
+            .update({
+              parent_user_id: authData.user.id,
+              status: 'active',
+              created_at: new Date().toISOString()
+            })
+            .eq('id', linkData.id);
+
+          if (updateError) {
+            console.error('Error updating parent link:', updateError);
+          }
+
+          toast({
+            title: "Account created and linked!",
+            description: `Successfully linked to ${linkData.student_profile?.first_name} ${linkData.student_profile?.last_name}. Please check your email to confirm your account.`,
+          });
+        }
+      } else {
+        // Sign in existing parent
+        const { data: authData, error: signinError } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password 
+        });
+        
+        if (signinError) throw signinError;
+        
+        if (authData.user) {
+          // Update the parent-student link with the existing parent user ID
+          const { error: updateError } = await supabase
+            .from('parent_student_links')
+            .update({
+              parent_user_id: authData.user.id,
+              status: 'active',
+              created_at: new Date().toISOString()
+            })
+            .eq('id', linkData.id);
+
+          if (updateError) {
+            console.error('Error updating parent link:', updateError);
+          }
+
+          toast({
+            title: "Successfully linked!",
+            description: `Connected to ${linkData.student_profile?.first_name} ${linkData.student_profile?.last_name}`,
+          });
+          
+          redirectToRole(authData.user.id, "parent");
+        }
+      }
+    } catch (err: any) {
+      toast({ 
+        title: "Verification failed", 
+        description: err.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) return;
+    
+    // Handle parent verification code flow
+    if (selectedRole === "parent" && parentLinkMode === "code") {
+      await handleParentVerificationCode(e);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -345,6 +460,12 @@ export default function Auth() {
     e.preventDefault();
     if (!selectedRole) return;
     
+    // Handle parent verification code flow
+    if (selectedRole === "parent" && parentLinkMode === "code") {
+      await handleParentVerificationCode(e);
+      return;
+    }
+    
     try {
       setLoading(true);
       const redirectUrl = `${window.location.origin}/`;
@@ -488,8 +609,44 @@ export default function Auth() {
               </Button>
             </div>
 
+            {selectedRole === "parent" && (
+              <div className="flex gap-2 mb-6 p-3 bg-secondary/20 rounded-lg">
+                <Button 
+                  variant={parentLinkMode === "existing" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setParentLinkMode("existing")}
+                >
+                  Existing Account
+                </Button>
+                <Button 
+                  variant={parentLinkMode === "code" ? "default" : "outline"} 
+                  size="sm"
+                  onClick={() => setParentLinkMode("code")}
+                >
+                  Link with Code
+                </Button>
+              </div>
+            )}
+
             {mode === "signin" ? (
               <form onSubmit={handleSignIn} className="space-y-4">
+                {selectedRole === "parent" && parentLinkMode === "code" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="verificationCode">Student Verification Code</Label>
+                    <Input 
+                      id="verificationCode" 
+                      value={verificationCode} 
+                      onChange={(e) => setVerificationCode(e.target.value)} 
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      required 
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Enter the code provided when your child's student account was created.
+                    </p>
+                  </div>
+                )}
+                
                 {(selectedRole === "teacher" || selectedRole === "student") && (
                   <div className="space-y-2">
                     <Label htmlFor="username">Username (if first time)</Label>
@@ -501,6 +658,7 @@ export default function Auth() {
                     />
                   </div>
                 )}
+                
                 <div className="space-y-2">
                   <Label htmlFor="email">
                     {(selectedRole === "teacher" || selectedRole === "student") && username ? "Temporary Password" : 
@@ -517,18 +675,48 @@ export default function Auth() {
                     required 
                   />
                 </div>
-                {(!username || (selectedRole !== "teacher" && selectedRole !== "student")) && (
+                
+                {(!username || (selectedRole !== "teacher" && selectedRole !== "student")) && 
+                 !(selectedRole === "parent" && parentLinkMode === "code") && (
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
                     <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                   </div>
                 )}
+                
+                {selectedRole === "parent" && parentLinkMode === "code" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Create Password</Label>
+                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  </div>
+                )}
+                
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : `Sign In as ${selectedRoleInfo?.title}`}
+                  {loading ? 
+                    (selectedRole === "parent" && parentLinkMode === "code" ? "Linking..." : "Signing in...") : 
+                    (selectedRole === "parent" && parentLinkMode === "code" ? "Link Account" : `Sign In as ${selectedRoleInfo?.title}`)
+                  }
                 </Button>
               </form>
             ) : (
               <form onSubmit={handleSignUp} className="space-y-4">
+                {selectedRole === "parent" && parentLinkMode === "code" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="verificationCode">Student Verification Code</Label>
+                    <Input 
+                      id="verificationCode" 
+                      value={verificationCode} 
+                      onChange={(e) => setVerificationCode(e.target.value)} 
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      required 
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Enter the code provided when your child's student account was created.
+                    </p>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First name</Label>
@@ -547,7 +735,8 @@ export default function Auth() {
                   <Label htmlFor="password">Password</Label>
                   <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
-                {(selectedRole === 'student' || selectedRole === 'teacher' || selectedRole === 'parent') && (
+                {(selectedRole === 'student' || selectedRole === 'teacher' || selectedRole === 'parent') && 
+                 !(selectedRole === "parent" && parentLinkMode === "code") && (
                   <div className="space-y-2">
                     <Label htmlFor="school">School</Label>
                     <select 
@@ -567,7 +756,10 @@ export default function Auth() {
                   </div>
                 )}
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : `Create ${selectedRoleInfo?.title} Account`}
+                  {loading ? 
+                    (selectedRole === "parent" && parentLinkMode === "code" ? "Creating & Linking..." : "Creating account...") : 
+                    (selectedRole === "parent" && parentLinkMode === "code" ? "Create & Link Account" : `Create ${selectedRoleInfo?.title} Account`)
+                  }
                 </Button>
               </form>
             )}
