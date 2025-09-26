@@ -92,9 +92,12 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
 
       if (error) throw error;
 
+      const parentCode = data?.parent_verification_code;
+      
       toast({
         title: "Student created successfully",
-        description: `Username: ${username}, Temp Password: ${tempPassword}`,
+        description: `Username: ${username}, Temp Password: ${tempPassword}${parentCode ? `, Parent Code: ${parentCode}` : ''}`,
+        duration: 10000, // Show longer so admin can copy the codes
       });
 
       // Reset form
