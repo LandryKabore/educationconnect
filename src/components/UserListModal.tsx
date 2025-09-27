@@ -29,6 +29,7 @@ interface UserProfile {
   tempPassword?: string;
   isVerified?: boolean;
   tempPasswordExpires?: string;
+  parentVerificationCode?: string;
 }
 
 interface UserListModalProps {
@@ -197,7 +198,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       if (userType === 'student') {
         console.log('Fetching student data (both completed and temp credentials)');
         // For students, get both completed profiles and temp credentials
-        const [completedData, tempCredsData] = await Promise.all([
+        const [completedData, tempCredsData, parentLinksData] = await Promise.all([
           // Get completed student profiles
           supabase
             .from('student_profiles')
@@ -214,16 +215,27 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             .then(result => selectedSchoolId ? 
               { ...result, data: result.data?.filter(stc => stc.school_id === selectedSchoolId) } : 
               result
-            )
+            ),
+          // Get parent verification codes
+          supabase
+            .from('parent_student_links')
+            .select('student_user_id, verification_code, status')
+            .eq('status', 'pending')
         ]);
 
         console.log('Completed students data:', completedData);
         console.log('Temp credentials data:', tempCredsData);
-        console.log('Sample temp cred record:', tempCredsData.data?.[0]);
+        console.log('Parent links data:', parentLinksData);
+
+        const parentVerificationCodes = new Map();
+        parentLinksData.data?.forEach(link => {
+          parentVerificationCodes.set(link.student_user_id, link.verification_code);
+        });
 
         const completedStudents = completedData.data?.map(item => ({
           ...item.profiles,
-          isVerified: true
+          isVerified: true,
+          parentVerificationCode: parentVerificationCodes.get(item.profiles.user_id)
         })) || [];
 
         const pendingStudents = tempCredsData.data?.map(item => {
@@ -238,7 +250,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             username: item.username,
             tempPassword: item.temp_password_plain,
             isVerified: item.is_used || false,
-            tempPasswordExpires: item.expires_at
+            tempPasswordExpires: item.expires_at,
+            parentVerificationCode: parentVerificationCodes.get(item.student_user_id)
           };
           
           // Debug specific students
@@ -371,6 +384,21 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                               <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 flex-shrink-0" />
                                 <span>Username: {user.username}</span>
+                              </div>
+                            )}
+                            {user.parentVerificationCode && (
+                              <div className="flex items-center gap-2 col-span-full">
+                                <span className="text-sm font-medium">Parent Code:</span>
+                                <code className="bg-slate-700 px-2 py-1 rounded text-sm font-mono">
+                                  {user.parentVerificationCode}
+                                </code>
+                                <button
+                                  onClick={() => copyToClipboard(user.parentVerificationCode!)}
+                                  className="text-slate-400 hover:text-white transition-colors"
+                                  title="Copy parent code"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
                               </div>
                             )}
                             {user.tempPassword && (
