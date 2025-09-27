@@ -1,1 +1,4 @@
 project_id = "hclblglvrelkrzbzyxua"
+
+[functions.create-student-with-temp-creds]
+verify_jwt = false
