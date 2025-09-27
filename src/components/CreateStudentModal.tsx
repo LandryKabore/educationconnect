@@ -22,6 +22,7 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   const [showPassword, setShowPassword] = useState(false);
   const [autoGenerate, setAutoGenerate] = useState(true);
   const [schools, setSchools] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
 
   // Form fields
   const [firstName, setFirstName] = useState("");
@@ -30,6 +31,7 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   const [username, setUsername] = useState("");
   const [tempPassword, setTempPassword] = useState("");
   const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
+  const [classId, setClassId] = useState("");
   const [gradeLevel, setGradeLevel] = useState("");
   const [studentNo, setStudentNo] = useState("");
 
@@ -43,12 +45,38 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   }, [isOpen, autoGenerate]);
 
   useEffect(() => {
+    if (schoolId) {
+      fetchClasses();
+    } else {
+      setClasses([]);
+      setClassId("");
+    }
+  }, [schoolId]);
+
+  useEffect(() => {
     if (firstName && lastName) {
       const middle = middleName ? middleName.charAt(0).toLowerCase() : '';
       const generatedUsername = `${firstName.charAt(0).toLowerCase()}${middle}${lastName.toLowerCase()}`.replace(/[^a-z]/g, '');
       setUsername(generatedUsername);
     }
   }, [firstName, middleName, lastName]);
+
+  const fetchClasses = async () => {
+    if (!schoolId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('class_sections')
+        .select('id, name, grade_level')
+        .eq('school_id', schoolId)
+        .order('grade_level, name');
+      
+      if (error) throw error;
+      setClasses(data || []);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    }
+  };
 
   const fetchSchools = async () => {
     const { data } = await supabase.from('schools').select('*').eq('active', true);
@@ -65,7 +93,7 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !lastName || !username || !tempPassword || !schoolId) {
+    if (!firstName || !lastName || !username || !tempPassword || !schoolId || !classId) {
       toast({
         title: "Missing fields",
         description: "Please fill in all required fields",
@@ -85,6 +113,7 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
           username,
           tempPassword,
           schoolId,
+          classId,
           gradeLevel: gradeLevel || null,
           studentNo: studentNo || null
         }
@@ -106,6 +135,7 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
       setLastName("");
       setUsername("");
       setTempPassword("");
+      setClassId("");
       setGradeLevel("");
       setStudentNo("");
       if (autoGenerate) generateTempPassword();
@@ -219,13 +249,29 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
           <div className="space-y-2">
             <Label htmlFor="school">School *</Label>
             <Select value={schoolId} onValueChange={setSchoolId}>
-              <SelectTrigger>
+              <SelectTrigger className="bg-slate-700 border-slate-600">
                 <SelectValue placeholder="Select a school" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-slate-800 border-slate-600 z-50">
                 {schools.map((school) => (
                   <SelectItem key={school.id} value={school.id}>
                     {school.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="classId">Class *</Label>
+            <Select value={classId} onValueChange={setClassId} disabled={!schoolId || classes.length === 0}>
+              <SelectTrigger className="bg-slate-700 border-slate-600">
+                <SelectValue placeholder={schoolId ? "Select class" : "Select school first"} />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 z-50">
+                {classes.map((classSection) => (
+                  <SelectItem key={classSection.id} value={classSection.id}>
+                    {classSection.name} ({classSection.grade_level})
                   </SelectItem>
                 ))}
               </SelectContent>

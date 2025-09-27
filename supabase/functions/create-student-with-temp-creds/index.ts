@@ -8,6 +8,7 @@ interface CreateStudentRequest {
   middleName?: string | null;
   lastName: string;
   schoolId: string;
+  classId: string;
   gradeLevel?: string;
   studentNo?: string | null;
   username: string;
@@ -45,16 +46,17 @@ async function handler(req: Request): Promise<Response> {
       firstName, 
       middleName, 
       lastName, 
-      schoolId, 
+      schoolId,
+      classId,
       gradeLevel, 
       studentNo, 
       username, 
       tempPassword 
     } = body;
 
-    if (!firstName || !lastName || !schoolId || !username || !tempPassword) {
+    if (!firstName || !lastName || !schoolId || !classId || !username || !tempPassword) {
       return new Response(JSON.stringify({ 
-        error: 'Missing required fields: firstName, lastName, schoolId, username, tempPassword' 
+        error: 'Missing required fields: firstName, lastName, schoolId, classId, username, tempPassword' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -129,6 +131,7 @@ async function handler(req: Request): Promise<Response> {
         middle_name: middleName || null,
         last_name: lastName,
         school_id: schoolId,
+        class_id: classId,
         grade_level: gradeLevel || null,
         student_no: studentNo || null,
         created_by: user.id,
