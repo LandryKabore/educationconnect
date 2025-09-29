@@ -9,7 +9,6 @@ interface CreateStudentRequest {
   lastName: string;
   schoolId: string;
   classId: string;
-  gradeLevel?: string;
   studentNo?: string | null;
   username: string;
   tempPassword: string;
@@ -53,7 +52,6 @@ async function handler(req: Request): Promise<Response> {
       lastName, 
       schoolId,
       classId,
-      gradeLevel, 
       studentNo, 
       username, 
       tempPassword 
@@ -137,7 +135,6 @@ async function handler(req: Request): Promise<Response> {
         last_name: lastName,
         school_id: schoolId,
         class_id: classId,
-        grade_level: gradeLevel || null,
         student_no: studentNo || null,
         created_by: user.id,
       })

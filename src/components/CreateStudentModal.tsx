@@ -32,7 +32,6 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   const [tempPassword, setTempPassword] = useState("");
   const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
   const [classId, setClassId] = useState("");
-  const [gradeLevel, setGradeLevel] = useState("");
   const [studentNo, setStudentNo] = useState("");
 
   useEffect(() => {
@@ -114,7 +113,6 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
           tempPassword,
           schoolId,
           classId,
-          gradeLevel: gradeLevel || null,
           studentNo: studentNo || null
         }
       });
@@ -136,7 +134,6 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
       setUsername("");
       setTempPassword("");
       setClassId("");
-      setGradeLevel("");
       setStudentNo("");
       if (autoGenerate) generateTempPassword();
       
@@ -278,25 +275,14 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="gradeLevel">Grade Level</Label>
-              <Input
-                id="gradeLevel"
-                value={gradeLevel}
-                onChange={(e) => setGradeLevel(e.target.value)}
-                placeholder="e.g., Grade 10"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="studentNo">Student Number</Label>
-              <Input
-                id="studentNo"
-                value={studentNo}
-                onChange={(e) => setStudentNo(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="studentNo">Student Number</Label>
+            <Input
+              id="studentNo"
+              value={studentNo}
+              onChange={(e) => setStudentNo(e.target.value)}
+              placeholder="Optional"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
