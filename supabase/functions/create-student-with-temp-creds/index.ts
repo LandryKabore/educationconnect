@@ -134,7 +134,7 @@ async function handler(req: Request): Promise<Response> {
         middle_name: middleName || null,
         last_name: lastName,
         school_id: schoolId,
-        class_id: classId,
+        class_section_id: classId,
         student_no: studentNo || null,
         created_by: user.id,
       })
