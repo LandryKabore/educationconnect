@@ -158,20 +158,10 @@ async function handler(req: Request): Promise<Response> {
     const parentVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Create parent-student link entry with verification code
-    const { error: linkError } = await supabase
-      .from('parent_student_links')
-      .insert({
-        student_user_id: studentUserId,
-        parent_user_id: null, // Will be filled when parent uses the code
-        verification_code: parentVerificationCode,
-        verification_method: 'verification_code',
-        status: 'pending' // Changed from 'active' to 'pending' until parent claims it
-      });
-
-    if (linkError) {
-      console.error('Error creating parent link:', linkError);
-      // Don't fail the student creation, just log the error
-    }
+    // Note: parent_user_id will be updated when parent uses the verification code
+    // For now, we'll skip creating the link since parent_user_id is required
+    // The parent will create the link when they verify the code
+    console.log('Parent verification code generated:', parentVerificationCode);
 
     return new Response(JSON.stringify({ 
       success: true,
