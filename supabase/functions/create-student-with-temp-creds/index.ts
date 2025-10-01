@@ -30,9 +30,13 @@ async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    console.log('Edge function called - create-student-with-temp-creds');
+    
     // Initialize Supabase client with service role key for admin operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    console.log('Supabase URL:', supabaseUrl);
     
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.57.4');
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -82,15 +86,21 @@ async function handler(req: Request): Promise<Response> {
     }
 
     if (existingStudent) {
+      console.log('Username already exists:', username);
       return new Response(JSON.stringify({ error: 'Username already exists' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    console.log('Username is available');
+
     // Get admin authorization header
     const authHeader = req.headers.get('Authorization');
+    console.log('Auth header present:', !!authHeader);
+    
     if (!authHeader) {
+      console.log('No authorization header found');
       return new Response(JSON.stringify({ error: 'Authorization header required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -98,17 +108,20 @@ async function handler(req: Request): Promise<Response> {
     }
 
     // Verify admin user
+    console.log('Verifying admin user...');
     const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
 
     if (authError || !user) {
       console.error('Auth error:', authError);
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized', details: authError?.message }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('User authenticated:', user.id);
 
     // Generate student user ID and hash password
     const studentUserId = crypto.randomUUID();
