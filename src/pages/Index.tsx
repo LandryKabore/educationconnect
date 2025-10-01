@@ -2,87 +2,31 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { motion, stagger, useAnimate } from "motion/react";
+import Floating, { FloatingElement } from "@/components/ui/parallax-floating";
 
 const Index = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [scope, animate] = useAnimate();
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({
-        x: (e.clientX / window.innerWidth - 0.5) * 2,
-        y: (e.clientY / window.innerHeight - 0.5) * 2,
-      });
-    };
-
-    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
-      if (e.gamma !== null && e.beta !== null) {
-        // gamma: left/right tilt (-90 to 90)
-        // beta: front/back tilt (-180 to 180)
-        // Clamp values to prevent extreme movements
-        const gamma = Math.max(-45, Math.min(45, e.gamma));
-        const beta = Math.max(-45, Math.min(45, e.beta));
-        
-        setMousePosition({
-          x: gamma / 22.5, // Normalize to -2 to 2 range
-          y: beta / 22.5, // Normalize to -2 to 2 range
-        });
-      }
-    };
-
-    const requestOrientationPermission = async () => {
-      // For iOS 13+ devices, request permission
-      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-        try {
-          const permission = await (DeviceOrientationEvent as any).requestPermission();
-          if (permission === 'granted') {
-            window.addEventListener('deviceorientation', handleDeviceOrientation);
-          }
-        } catch (error) {
-          console.log('Device orientation permission denied');
-        }
-      } else if (window.DeviceOrientationEvent) {
-        // For non-iOS or older iOS devices
-        window.addEventListener('deviceorientation', handleDeviceOrientation);
-      }
-    };
-
-    // Add click handler to request permissions on user interaction
-    const handleFirstInteraction = () => {
-      requestOrientationPermission();
-      document.removeEventListener('click', handleFirstInteraction);
-      document.removeEventListener('touchstart', handleFirstInteraction);
-    };
-
-    // Request permission on first user interaction
-    document.addEventListener('click', handleFirstInteraction);
-    document.addEventListener('touchstart', handleFirstInteraction);
-    
-    // Always add mouse support for desktop
-    window.addEventListener('mousemove', handleMouseMove);
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('deviceorientation', handleDeviceOrientation);
-      document.removeEventListener('click', handleFirstInteraction);
-      document.removeEventListener('touchstart', handleFirstInteraction);
-    };
+    animate(".floating-icon", { opacity: [0, 0.3] }, { duration: 0.5, delay: stagger(0.15) });
   }, []);
 
   const floatingIcons = [
-    { icon: Calculator, x: 15, y: 20, size: 40, delay: 0 },
-    { icon: Brain, x: 85, y: 25, size: 50, delay: 0.1 },
-    { icon: Microscope, x: 25, y: 70, size: 45, delay: 0.2 },
-    { icon: Code2, x: 75, y: 65, size: 35, delay: 0.3 },
-    { icon: Lightbulb, x: 10, y: 45, size: 38, delay: 0.4 },
-    { icon: Database, x: 90, y: 80, size: 42, delay: 0.5 },
-    { icon: Globe, x: 60, y: 15, size: 36, delay: 0.6 },
-    { icon: BookOpen, x: 45, y: 85, size: 48, delay: 0.7 },
+    { icon: Calculator, x: "15%", y: "20%", size: 40, depth: 0.5 },
+    { icon: Brain, x: "85%", y: "25%", size: 50, depth: 1 },
+    { icon: Microscope, x: "25%", y: "70%", size: 45, depth: 2 },
+    { icon: Code2, x: "75%", y: "65%", size: 35, depth: 1 },
+    { icon: Lightbulb, x: "10%", y: "45%", size: 38, depth: 0.5 },
+    { icon: Database, x: "90%", y: "80%", size: 42, depth: 1 },
+    { icon: Globe, x: "60%", y: "15%", size: 36, depth: 2 },
+    { icon: BookOpen, x: "45%", y: "85%", size: 48, depth: 1 },
   ];
 
   const features = [
@@ -119,7 +63,7 @@ const Index = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" ref={scope}>
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 light:from-slate-50 light:via-white light:to-slate-100 min-h-screen flex items-center">
         {/* Theme and Language Controls */}
@@ -128,37 +72,41 @@ const Index = () => {
           <ThemeToggle />
         </div>
         
-        {/* Floating Interactive Elements */}
-        {floatingIcons.map((item, index) => {
-          const IconComponent = item.icon;
-          const moveX = mousePosition.x * (15 + index * 3);
-          const moveY = mousePosition.y * (10 + index * 2);
-          
-          return (
-            <div
-              key={index}
-              className="absolute opacity-20 pointer-events-none"
-              style={{
-                left: `${item.x}%`,
-                top: `${item.y}%`,
-                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.1}deg)`,
-              }}
-            >
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20">
-                <IconComponent 
-                  size={item.size} 
-                  className="text-orange-400/60"
-                />
-              </div>
-            </div>
-          );
-        })}
-        
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
+        {/* Parallax Floating Elements */}
+        <Floating sensitivity={-1} className="overflow-hidden">
+          {floatingIcons.map((item, index) => {
+            const IconComponent = item.icon;
+            return (
+              <FloatingElement 
+                key={index} 
+                depth={item.depth} 
+                className="floating-icon"
+              >
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20 hover:scale-105 duration-200 cursor-pointer transition-transform"
+                  style={{ position: 'absolute', left: item.x, top: item.y }}
+                >
+                  <IconComponent 
+                    size={item.size} 
+                    className="text-orange-400/60"
+                  />
+                </motion.div>
+              </FloatingElement>
+            );
+          })}
+        </Floating>
+        
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 z-10">
-          <div className="text-center">
+          <motion.div 
+            className="text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.88, delay: 1.5 }}
+          >
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-3xl backdrop-blur-sm border border-orange-500/30 mb-8">
               <GraduationCap className="w-10 h-10 text-orange-400" />
             </div>
@@ -188,7 +136,7 @@ const Index = () => {
                 {t('learnMore')}
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
         
         {/* Additional floating elements */}
@@ -199,32 +147,6 @@ const Index = () => {
 
       {/* Features Section */}
       <section className="py-24 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-        {/* Floating Interactive Elements */}
-        {floatingIcons.slice(0, 6).map((item, index) => {
-          const IconComponent = item.icon;
-          const moveX = mousePosition.x * (8 + index * 1.5);
-          const moveY = mousePosition.y * (6 + index * 1);
-          
-          return (
-            <div
-              key={index}
-              className="absolute opacity-10 pointer-events-none"
-              style={{
-                left: `${item.x}%`,
-                top: `${item.y}%`,
-                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.03}deg)`,
-              }}
-            >
-              <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/10 to-red-500/10 backdrop-blur-sm border border-orange-500/10">
-                <IconComponent 
-                  size={item.size * 0.6} 
-                  className="text-orange-400/30"
-                />
-              </div>
-            </div>
-          );
-        })}
-        
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
@@ -282,32 +204,6 @@ const Index = () => {
 
       {/* CTA Section */}
       <section className="py-32 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-        {/* Floating Interactive Elements */}
-        {floatingIcons.slice(0, 4).map((item, index) => {
-          const IconComponent = item.icon;
-          const moveX = mousePosition.x * (8 + index * 2);
-          const moveY = mousePosition.y * (6 + index * 1.5);
-          
-          return (
-            <div
-              key={index}
-              className="absolute opacity-15 pointer-events-none"
-              style={{
-                left: `${item.x}%`,
-                top: `${item.y}%`,
-                transform: `translate(${moveX}px, ${moveY}px) rotate(${moveX * 0.05}deg)`,
-              }}
-            >
-              <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500/15 to-red-500/15 backdrop-blur-sm border border-orange-500/15">
-                <IconComponent 
-                  size={item.size * 0.8} 
-                  className="text-orange-400/40"
-                />
-              </div>
-            </div>
-          );
-        })}
-        
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
