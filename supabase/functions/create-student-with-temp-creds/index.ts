@@ -180,7 +180,7 @@ async function handler(req: Request): Promise<Response> {
         student_user_id: studentUserId,
         parent_user_id: null, // Will be updated when parent verifies
         verification_code: parentVerificationCode,
-        verification_method: 'verification_code',
+        verification_method: 'code',
         status: 'pending'
       });
 
