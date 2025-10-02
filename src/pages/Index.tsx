@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone, Calculator, Brain, Microscope, Code2, Lightbulb, Database } from "lucide-react";
+import { GraduationCap, Users, BookOpen, Shield, Wifi, Globe, Smartphone } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -18,15 +18,63 @@ const Index = () => {
     animate(".floating-icon", { opacity: [0, 0.3] }, { duration: 0.5, delay: stagger(0.15) });
   }, []);
 
-  const floatingIcons = [
-    { icon: Calculator, x: "15%", y: "20%", size: 40, depth: 0.5 },
-    { icon: Brain, x: "85%", y: "25%", size: 50, depth: 1 },
-    { icon: Microscope, x: "25%", y: "70%", size: 45, depth: 2 },
-    { icon: Code2, x: "75%", y: "65%", size: 35, depth: 1 },
-    { icon: Lightbulb, x: "10%", y: "45%", size: 38, depth: 0.5 },
-    { icon: Database, x: "90%", y: "80%", size: 42, depth: 1 },
-    { icon: Globe, x: "60%", y: "15%", size: 36, depth: 2 },
-    { icon: BookOpen, x: "45%", y: "85%", size: 48, depth: 1 },
+  const floatingImages = [
+    {
+      url: "https://images.unsplash.com/photo-1727341554370-80e0fe9ad082?q=80&w=2276&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-16 h-16 md:w-24 md:h-24",
+      depth: 0.5,
+      x: "11%",
+      y: "8%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1640680608781-2e4199dd1579?q=80&w=3087&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-20 h-20 md:w-28 md:h-28",
+      depth: 1,
+      x: "32%",
+      y: "10%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1726083085160-feeb4e1e5b00?q=80&w=3024&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-28 h-40 md:w-40 md:h-52",
+      depth: 2,
+      x: "53%",
+      y: "2%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1562016600-ece13e8ba570?q=80&w=2838&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-24 h-24 md:w-32 md:h-32",
+      depth: 1,
+      x: "83%",
+      y: "0%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1624344965199-ed40391d20f2?q=80&w=2960&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-28 h-28 md:w-36 md:h-36",
+      depth: 1,
+      x: "2%",
+      y: "40%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1677338354108-223e807fb1bd?q=80&w=3087&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-28 h-28 md:w-36 md:h-48",
+      depth: 2,
+      x: "77%",
+      y: "70%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1689553079282-45df1b35741b?q=80&w=3087&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-40 md:w-52 h-full",
+      depth: 4,
+      x: "15%",
+      y: "73%"
+    },
+    {
+      url: "https://images.unsplash.com/photo-1721968317938-cf8c60fccd1a?q=80&w=2728&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      className: "w-24 h-24 md:w-32 md:h-32",
+      depth: 1,
+      x: "50%",
+      y: "80%"
+    },
   ];
 
   const features = [
@@ -77,27 +125,21 @@ const Index = () => {
         
         {/* Parallax Floating Elements */}
         <Floating sensitivity={-1} className="overflow-hidden">
-          {floatingIcons.map((item, index) => {
-            const IconComponent = item.icon;
-            return (
-              <FloatingElement 
-                key={index} 
-                depth={item.depth} 
-                className="floating-icon"
-              >
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-sm border border-orange-500/20 hover:scale-105 duration-200 cursor-pointer transition-transform"
-                  style={{ position: 'absolute', left: item.x, top: item.y }}
-                >
-                  <IconComponent 
-                    size={item.size} 
-                    className="text-orange-400/60"
-                  />
-                </motion.div>
-              </FloatingElement>
-            );
-          })}
+          {floatingImages.map((item, index) => (
+            <FloatingElement 
+              key={index} 
+              depth={item.depth} 
+              className="floating-icon"
+            >
+              <motion.img
+                initial={{ opacity: 0 }}
+                src={item.url}
+                alt=""
+                className={`${item.className} object-cover hover:scale-105 duration-200 cursor-pointer transition-transform`}
+                style={{ position: 'absolute', left: item.x, top: item.y }}
+              />
+            </FloatingElement>
+          ))}
         </Floating>
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 z-10">
