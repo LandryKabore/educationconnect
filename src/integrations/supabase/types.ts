@@ -804,7 +804,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          parent_user_id: string
+          parent_user_id: string | null
           status: string | null
           student_user_id: string
           updated_at: string
@@ -814,7 +814,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          parent_user_id: string
+          parent_user_id?: string | null
           status?: string | null
           student_user_id: string
           updated_at?: string
@@ -824,7 +824,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          parent_user_id?: string
+          parent_user_id?: string | null
           status?: string | null
           student_user_id?: string
           updated_at?: string
@@ -835,13 +835,6 @@ export type Database = {
           {
             foreignKeyName: "parent_student_links_parent_user_id_fkey"
             columns: ["parent_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "parent_student_links_student_user_id_fkey"
-            columns: ["student_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
@@ -1043,6 +1036,7 @@ export type Database = {
       }
       student_temp_credentials: {
         Row: {
+          class_section_id: string | null
           created_at: string
           created_by: string
           expires_at: string | null
@@ -1061,6 +1055,7 @@ export type Database = {
           username: string
         }
         Insert: {
+          class_section_id?: string | null
           created_at?: string
           created_by: string
           expires_at?: string | null
@@ -1079,6 +1074,7 @@ export type Database = {
           username: string
         }
         Update: {
+          class_section_id?: string | null
           created_at?: string
           created_by?: string
           expires_at?: string | null
@@ -1096,7 +1092,15 @@ export type Database = {
           used_at?: string | null
           username?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "student_temp_credentials_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       study_group_members: {
         Row: {
