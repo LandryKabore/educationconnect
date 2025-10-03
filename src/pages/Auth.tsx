@@ -204,18 +204,24 @@ export default function Auth() {
       // Find the parent-student link with this verification code
       const { data: linkData, error: linkError } = await supabase
         .from('parent_student_links')
-        .select(`
-          *, 
-          student_profile:profiles!parent_student_links_student_user_id_fkey(
-            user_id, first_name, last_name
-          )
-        `)
+        .select('*')
         .eq('verification_code', verificationCode)
         .eq('status', 'pending')
         .maybeSingle();
 
       if (linkError || !linkData) {
         throw new Error("Invalid or expired verification code");
+      }
+
+      // Fetch student info from temp credentials
+      const { data: studentData, error: studentError } = await supabase
+        .from('student_temp_credentials')
+        .select('first_name, last_name, student_user_id')
+        .eq('student_user_id', linkData.student_user_id)
+        .single();
+
+      if (studentError || !studentData) {
+        throw new Error("Student information not found");
       }
 
       // Create parent account or sign in
@@ -254,7 +260,7 @@ export default function Auth() {
 
           toast({
             title: "Account created and linked!",
-            description: `Successfully linked to ${linkData.student_profile?.first_name} ${linkData.student_profile?.last_name}. Please check your email to confirm your account.`,
+            description: `Successfully linked to ${studentData.first_name} ${studentData.last_name}. Please check your email to confirm your account.`,
           });
         }
       } else {
@@ -283,7 +289,7 @@ export default function Auth() {
 
           toast({
             title: "Successfully linked!",
-            description: `Connected to ${linkData.student_profile?.first_name} ${linkData.student_profile?.last_name}`,
+            description: `Connected to ${studentData.first_name} ${studentData.last_name}`,
           });
           
           redirectToRole(authData.user.id, "parent");
