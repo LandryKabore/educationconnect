@@ -256,13 +256,18 @@ export default function Auth() {
             .from('parent_student_links')
             .update({
               parent_user_id: authData.user.id,
-              status: 'active',
-              created_at: new Date().toISOString()
+              status: 'active'
             })
             .eq('id', linkData.id);
 
           if (updateError) {
             console.error('Error updating parent link:', updateError);
+            toast({
+              title: "Link update failed",
+              description: "Your account was created but the link couldn't be activated. Please contact support.",
+              variant: "destructive"
+            });
+            return;
           }
 
           toast({
@@ -285,13 +290,18 @@ export default function Auth() {
             .from('parent_student_links')
             .update({
               parent_user_id: authData.user.id,
-              status: 'active',
-              created_at: new Date().toISOString()
+              status: 'active'
             })
             .eq('id', linkData.id);
 
           if (updateError) {
             console.error('Error updating parent link:', updateError);
+            toast({
+              title: "Link update failed",
+              description: "Sign in succeeded but the link couldn't be activated. Please contact support.",
+              variant: "destructive"
+            });
+            return;
           }
 
           toast({
