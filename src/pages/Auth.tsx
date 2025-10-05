@@ -38,6 +38,13 @@ export default function Auth() {
   const [verificationCode, setVerificationCode] = useState("");
   const [parentLinkMode, setParentLinkMode] = useState<"existing" | "code">("existing");
 
+  // Sync parent link mode with sign in/sign up mode
+  useEffect(() => {
+    if (selectedRole === "parent") {
+      setParentLinkMode(mode === "signin" ? "existing" : "code");
+    }
+  }, [mode, selectedRole]);
+
   useEffect(() => {
     // Fetch schools for signup
     const fetchSchools = async () => {
@@ -617,20 +624,23 @@ export default function Auth() {
 
             {selectedRole === "parent" && (
               <div className="flex gap-2 mb-6 p-3 bg-secondary/20 rounded-lg">
-                <Button 
-                  variant={parentLinkMode === "existing" ? "default" : "outline"} 
-                  size="sm"
-                  onClick={() => setParentLinkMode("existing")}
-                >
-                  Existing Account
-                </Button>
-                <Button 
-                  variant={parentLinkMode === "code" ? "default" : "outline"} 
-                  size="sm"
-                  onClick={() => setParentLinkMode("code")}
-                >
-                  Link with Code
-                </Button>
+                {mode === "signin" ? (
+                  <Button 
+                    variant={parentLinkMode === "existing" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setParentLinkMode("existing")}
+                  >
+                    Existing Account
+                  </Button>
+                ) : (
+                  <Button 
+                    variant={parentLinkMode === "code" ? "default" : "outline"} 
+                    size="sm"
+                    onClick={() => setParentLinkMode("code")}
+                  >
+                    Link with Code
+                  </Button>
+                )}
               </div>
             )}
 
