@@ -64,7 +64,7 @@ export const useParentData = () => {
         .from("parent_student_links")
         .select(`
           student_user_id,
-          profiles!parent_student_links_student_user_id_fkey(*)
+          profiles(*)
         `)
         .eq("parent_user_id", user.id)
         .eq("status", "active");

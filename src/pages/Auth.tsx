@@ -213,10 +213,10 @@ export default function Auth() {
         throw new Error("Invalid or expired verification code");
       }
 
-      // Fetch student info from temp credentials
+      // Fetch student info from temp credentials (including school_id)
       const { data: studentData, error: studentError } = await supabase
         .from('student_temp_credentials')
-        .select('first_name, last_name, student_user_id')
+        .select('first_name, last_name, student_user_id, school_id')
         .eq('student_user_id', linkData.student_user_id)
         .single();
 
@@ -235,7 +235,7 @@ export default function Auth() {
               first_name: firstName, 
               last_name: lastName, 
               role: "parent",
-              school_id: selectedSchool 
+              school_id: studentData.school_id 
             },
             emailRedirectTo: redirectUrl,
           },
