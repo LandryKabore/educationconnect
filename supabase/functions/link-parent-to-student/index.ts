@@ -55,30 +55,56 @@ serve(async (req) => {
       );
     }
 
-    // Ensure parent profile exists (wait for trigger to complete if needed)
-    let profileExists = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('user_id', parentUserId)
-        .single();
+    // Ensure parent profile exists - create if needed
+    let { data: profile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('user_id', parentUserId)
+      .single();
+    
+    if (!profile) {
+      // Profile doesn't exist - get user data and create it
+      const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(parentUserId);
       
-      if (profile) {
-        profileExists = true;
-        break;
+      if (userError || !user) {
+        console.error('Failed to get user data:', userError);
+        return new Response(
+          JSON.stringify({ error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-      
-      // Wait 200ms before retrying
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
 
-    if (!profileExists) {
-      console.error('Parent profile not found after retries:', parentUserId);
-      return new Response(
-        JSON.stringify({ error: 'Parent profile not created yet. Please try again in a moment.' }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Create profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: parentUserId,
+          email: user.email,
+          first_name: user.user_metadata?.first_name,
+          last_name: user.user_metadata?.last_name,
+          role: 'parent'
+        });
+
+      if (profileError) {
+        console.error('Failed to create profile:', profileError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to create parent profile' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Create parent_profiles record
+      const { error: parentProfileError } = await supabase
+        .from('parent_profiles')
+        .insert({
+          user_id: parentUserId,
+          school_id: user.user_metadata?.school_id
+        });
+
+      if (parentProfileError) {
+        console.error('Failed to create parent_profiles:', parentProfileError);
+        // Don't fail the whole operation for this
+      }
     }
 
     // Update the link to active status with the parent user ID
@@ -93,7 +119,7 @@ serve(async (req) => {
     if (updateError) {
       console.error('Error updating parent link:', updateError);
       return new Response(
-        JSON.stringify({ error: 'Failed to activate link' }),
+        JSON.stringify({ error: 'Failed to activate link', details: updateError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
