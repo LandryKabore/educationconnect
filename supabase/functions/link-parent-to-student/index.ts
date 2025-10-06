@@ -55,6 +55,32 @@ serve(async (req) => {
       );
     }
 
+    // Ensure parent profile exists (wait for trigger to complete if needed)
+    let profileExists = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('user_id', parentUserId)
+        .single();
+      
+      if (profile) {
+        profileExists = true;
+        break;
+      }
+      
+      // Wait 200ms before retrying
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    if (!profileExists) {
+      console.error('Parent profile not found after retries:', parentUserId);
+      return new Response(
+        JSON.stringify({ error: 'Parent profile not created yet. Please try again in a moment.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Update the link to active status with the parent user ID
     const { error: updateError } = await supabase
       .from('parent_student_links')
