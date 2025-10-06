@@ -251,18 +251,23 @@ export default function Auth() {
         if (signupError) throw signupError;
         
         if (authData.user) {
-          // Update the parent-student link with the new parent user ID
-          const { error: updateError } = await supabase
-            .from('parent_student_links')
-            .update({
-              parent_user_id: authData.user.id,
-              status: 'active',
-              created_at: new Date().toISOString()
-            })
-            .eq('id', linkData.id);
+          // Call edge function to link parent to student
+          const { error: linkError } = await supabase.functions.invoke('link-parent-to-student', {
+            body: {
+              linkId: linkData.id,
+              parentUserId: authData.user.id,
+              verificationCode: verificationCode
+            }
+          });
 
-          if (updateError) {
-            console.error('Error updating parent link:', updateError);
+          if (linkError) {
+            console.error('Error linking parent:', linkError);
+            toast({
+              title: "Account created but linking failed",
+              description: "Your account was created but we couldn't link it to the student. Please contact support.",
+              variant: "destructive"
+            });
+            return;
           }
 
           toast({
@@ -280,18 +285,23 @@ export default function Auth() {
         if (signinError) throw signinError;
         
         if (authData.user) {
-          // Update the parent-student link with the existing parent user ID
-          const { error: updateError } = await supabase
-            .from('parent_student_links')
-            .update({
-              parent_user_id: authData.user.id,
-              status: 'active',
-              created_at: new Date().toISOString()
-            })
-            .eq('id', linkData.id);
+          // Call edge function to link parent to student
+          const { error: linkError } = await supabase.functions.invoke('link-parent-to-student', {
+            body: {
+              linkId: linkData.id,
+              parentUserId: authData.user.id,
+              verificationCode: verificationCode
+            }
+          });
 
-          if (updateError) {
-            console.error('Error updating parent link:', updateError);
+          if (linkError) {
+            console.error('Error linking parent:', linkError);
+            toast({
+              title: "Linking failed",
+              description: "We couldn't link your account to the student. Please try again.",
+              variant: "destructive"
+            });
+            return;
           }
 
           toast({
