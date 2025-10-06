@@ -251,23 +251,18 @@ export default function Auth() {
         if (signupError) throw signupError;
         
         if (authData.user) {
-          // Use Edge Function to securely link parent to student
-          const { data: linkResult, error: linkError } = await supabase.functions.invoke('link-parent-to-student', {
-            body: {
-              linkId: linkData.id,
-              parentUserId: authData.user.id,
-              verificationCode: verificationCode
-            }
-          });
+          // Update the parent-student link with the new parent user ID
+          const { error: updateError } = await supabase
+            .from('parent_student_links')
+            .update({
+              parent_user_id: authData.user.id,
+              status: 'active',
+              created_at: new Date().toISOString()
+            })
+            .eq('id', linkData.id);
 
-          if (linkError || !linkResult?.success) {
-            console.error('Error linking parent:', linkError || linkResult);
-            toast({
-              title: "Link update failed",
-              description: "Your account was created but the link couldn't be activated. Please contact support.",
-              variant: "destructive"
-            });
-            return;
+          if (updateError) {
+            console.error('Error updating parent link:', updateError);
           }
 
           toast({
@@ -285,23 +280,18 @@ export default function Auth() {
         if (signinError) throw signinError;
         
         if (authData.user) {
-          // Use Edge Function to securely link parent to student
-          const { data: linkResult, error: linkError } = await supabase.functions.invoke('link-parent-to-student', {
-            body: {
-              linkId: linkData.id,
-              parentUserId: authData.user.id,
-              verificationCode: verificationCode
-            }
-          });
+          // Update the parent-student link with the existing parent user ID
+          const { error: updateError } = await supabase
+            .from('parent_student_links')
+            .update({
+              parent_user_id: authData.user.id,
+              status: 'active',
+              created_at: new Date().toISOString()
+            })
+            .eq('id', linkData.id);
 
-          if (linkError || !linkResult?.success) {
-            console.error('Error linking parent:', linkError || linkResult);
-            toast({
-              title: "Link update failed",
-              description: "Sign in succeeded but the link couldn't be activated. Please contact support.",
-              variant: "destructive"
-            });
-            return;
+          if (updateError) {
+            console.error('Error updating parent link:', updateError);
           }
 
           toast({
