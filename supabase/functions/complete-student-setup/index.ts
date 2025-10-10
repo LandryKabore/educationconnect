@@ -193,8 +193,13 @@ async function handler(req: Request): Promise<Response> {
 
       if (classFindError) {
         console.error('Error finding class section:', classFindError);
-      } else if (classSection) {
-        console.log('Found class section:', classSection);
+      } else {
+        classSection = section;
+      }
+    }
+
+    if (classSection) {
+      console.log('Found class section:', classSection);
         
         // Check if already enrolled
         const { data: existingEnrollment } = await supabase
@@ -223,9 +228,8 @@ async function handler(req: Request): Promise<Response> {
         } else {
           console.log('Student already enrolled in class');
         }
-      } else {
-        console.log('No matching class section found for grade level:', studentCreds.grade_level);
-      }
+    } else {
+      console.log('No matching class section found');
     }
 
     // Mark temporary credentials as used
