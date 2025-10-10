@@ -1585,6 +1585,10 @@ export type Database = {
         Args: { parent_link_student_id: string; teacher_id: string }
         Returns: boolean
       }
+      teacher_can_view_parent_profile: {
+        Args: { parent_id: string; teacher_id: string }
+        Returns: boolean
+      }
       verify_magic_link_and_set_pin: {
         Args: { new_pin: string; token_value: string }
         Returns: Json
