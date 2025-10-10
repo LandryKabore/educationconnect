@@ -129,23 +129,28 @@ export const useParentData = () => {
 
   const fetchChildData = async (childId: string) => {
     try {
-      // Fetch child's grades
+      // Fetch child's grades from enhanced_grades
       const { data: gradesData } = await supabase
-        .from("grades")
+        .from("enhanced_grades")
         .select(`
           *,
-          assignments(title, max_points, subjects(name))
+          exams(
+            title,
+            max_score,
+            subject_id,
+            subjects(name)
+          )
         `)
-        .eq("student_id", childId)
+        .eq("student_user_id", childId)
         .order("created_at", { ascending: false })
         .limit(10);
 
       if (gradesData) {
         const formattedGrades = gradesData.map(grade => ({
           id: grade.id,
-          subject: grade.assignments?.subjects?.name || "Unknown",
-          assignment: grade.assignments?.title || "Unknown Assignment",
-          grade: calculateLetterGrade(grade.points_earned, grade.assignments?.max_points || 100),
+          subject: grade.exams?.subjects?.name || "Unknown",
+          assignment: grade.exams?.title || "Unknown Exam",
+          grade: calculateLetterGrade(grade.score, grade.max_score),
           date: new Date(grade.created_at).toLocaleDateString()
         }));
         setGrades(formattedGrades);
@@ -161,37 +166,44 @@ export const useParentData = () => {
         );
       }
 
-      // Fetch upcoming exams (assignments with future due dates)
-      const { data: examsData } = await supabase
-        .from("assignments")
-        .select(`
-          *,
-          subjects(name),
-          classes!inner(
-            students!inner(user_id)
-          )
-        `)
-        .eq("classes.students.user_id", childId)
-        .gte("due_date", new Date().toISOString())
-        .order("due_date", { ascending: true })
-        .limit(5);
+      // Fetch upcoming exams for the child's enrolled classes
+      const { data: enrollmentsData } = await supabase
+        .from("enrollments")
+        .select("class_section_id")
+        .eq("student_user_id", childId)
+        .eq("status", "active");
 
-      if (examsData) {
-        const formattedExams = examsData.map(exam => ({
-          id: exam.id,
-          subject: exam.subjects?.name || "Unknown Subject",
-          date: new Date(exam.due_date).toLocaleDateString(),
-          time: new Date(exam.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          topic: exam.title
-        }));
-        setExams(formattedExams);
+      if (enrollmentsData && enrollmentsData.length > 0) {
+        const classSectionIds = enrollmentsData.map(e => e.class_section_id);
+        
+        const { data: examsData } = await supabase
+          .from("exams")
+          .select(`
+            *,
+            subjects(name)
+          `)
+          .in("class_section_id", classSectionIds)
+          .gte("exam_date", new Date().toISOString().split('T')[0])
+          .order("exam_date", { ascending: true })
+          .limit(5);
+
+        if (examsData) {
+          const formattedExams = examsData.map(exam => ({
+            id: exam.id,
+            subject: exam.subjects?.name || "Unknown Subject",
+            date: new Date(exam.exam_date).toLocaleDateString(),
+            time: "TBD",
+            topic: exam.title
+          }));
+          setExams(formattedExams);
+        }
       }
 
-      // Calculate attendance
+      // Calculate attendance from enhanced_attendance
       const { data: attendanceData } = await supabase
-        .from("attendance")
+        .from("enhanced_attendance")
         .select("status")
-        .eq("student_id", childId);
+        .eq("student_user_id", childId);
 
       if (attendanceData && attendanceData.length > 0) {
         const presentDays = attendanceData.filter(att => att.status === "present").length;
@@ -216,8 +228,8 @@ export const useParentData = () => {
     }
   };
 
-  const calculateLetterGrade = (points: number, maxPoints: number): string => {
-    const percentage = (points / maxPoints) * 100;
+  const calculateLetterGrade = (score: number, maxScore: number): string => {
+    const percentage = (score / maxScore) * 100;
     if (percentage >= 97) return "A+";
     if (percentage >= 93) return "A";
     if (percentage >= 90) return "A-";
