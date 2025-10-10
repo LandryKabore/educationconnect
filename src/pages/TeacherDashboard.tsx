@@ -21,6 +21,7 @@ const TeacherDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
+  const [selectedMessageSender, setSelectedMessageSender] = useState<{userId: string, name: string} | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
@@ -385,8 +386,16 @@ const TeacherDashboard = () => {
                 {messages.length > 0 ? messages.map((message) => (
                   <div 
                     key={message.id} 
-                    className={`p-3 rounded-lg cursor-pointer ${message.unread ? 'bg-orange-400/10 border border-orange-400/20' : 'bg-slate-700/50'}`}
-                    onClick={() => markMessageRead(message.id)}
+                    className={`p-3 rounded-lg cursor-pointer transition-all hover:bg-slate-700/70 ${message.unread ? 'bg-orange-400/10 border border-orange-400/20' : 'bg-slate-700/50'}`}
+                    onClick={() => {
+                      if (message.senderId) {
+                        setSelectedMessageSender({
+                          userId: message.senderId,
+                          name: message.from
+                        });
+                        setMessagesModalOpen(true);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -403,7 +412,10 @@ const TeacherDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+                onClick={() => setMessagesModalOpen(true)}
+              >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 View All Messages
               </Button>
@@ -423,7 +435,12 @@ const TeacherDashboard = () => {
 
       <MessagesModal
         open={messagesModalOpen}
-        onOpenChange={setMessagesModalOpen}
+        onOpenChange={(open) => {
+          setMessagesModalOpen(open);
+          if (!open) setSelectedMessageSender(null);
+        }}
+        preselectedUserId={selectedMessageSender?.userId}
+        preselectedUserName={selectedMessageSender?.name}
       />
     </div>
   );

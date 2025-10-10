@@ -30,6 +30,7 @@ export interface TeacherMessage {
   time: Date;
   timeText: string;
   unread: boolean;
+  senderId?: string;
 }
 
 export interface TeacherSubject {
@@ -67,6 +68,26 @@ export const useTeacherData = () => {
 
   useEffect(() => {
     fetchTeacherData();
+    
+    // Subscribe to new messages
+    const channel = supabase
+      .channel('teacher-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          fetchTeacherData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Utility function to format due dates
@@ -293,42 +314,44 @@ export const useTeacherData = () => {
         setTasks(mockTasks);
         setStats(prev => ({ ...prev, pendingTasks: mockTasks.length }));
 
-        // Generate realistic messages with actual timestamps
-        const mockMessages: TeacherMessage[] = [
-          {
-            id: "1",
-            from: "Parent - John Smith",
-            subject: "Question about homework",
-            preview: "Could you clarify the mathematics assignment...",
-            time: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-            timeText: "",
-            unread: true
-          },
-          {
-            id: "2",
-            from: "School Admin",
-            subject: "Weekly Report Due",
-            preview: "Please submit your weekly progress report...",
-            time: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-            timeText: "",
-            unread: false
-          },
-          {
-            id: "3",
-            from: "Parent - Sarah Johnson", 
-            subject: "Student absence notification",
-            preview: "My child will be absent tomorrow due to...",
-            time: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
-            timeText: "",
-            unread: true
-          }
-        ];
+        // Fetch real messages from parents and admins
+        const { data: messagesData } = await supabase
+          .from("messages")
+          .select(`
+            id,
+            subject,
+            body,
+            created_at,
+            read_at,
+            sender:profiles!messages_sender_user_id_fkey(
+              user_id,
+              first_name,
+              last_name,
+              role
+            )
+          `)
+          .eq("recipient_user_id", user?.id)
+          .in("sender.role", ["parent", "admin"])
+          .order("created_at", { ascending: false })
+          .limit(5);
 
-        // Format message times
-        mockMessages.forEach(message => {
-          message.timeText = formatMessageTime(message.time);
+        const formattedMessages: TeacherMessage[] = (messagesData || []).map((msg: any) => {
+          const senderName = `${msg.sender?.first_name || 'Unknown'} ${msg.sender?.last_name || 'User'}`;
+          const rolePrefix = msg.sender?.role === 'admin' ? 'School Admin' : 'Parent';
+          
+          return {
+            id: msg.id,
+            from: `${rolePrefix} - ${senderName}`,
+            subject: msg.subject || "No subject",
+            preview: msg.body.substring(0, 50) + (msg.body.length > 50 ? '...' : ''),
+            time: new Date(msg.created_at),
+            timeText: formatMessageTime(new Date(msg.created_at)),
+            unread: !msg.read_at,
+            senderId: msg.sender?.user_id
+          };
         });
-        setMessages(mockMessages);
+
+        setMessages(formattedMessages);
 
         // Calculate average attendance for classes where this teacher took attendance
         const { data: attendanceData } = await supabase

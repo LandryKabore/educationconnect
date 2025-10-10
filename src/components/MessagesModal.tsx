@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,9 +28,7 @@ export const MessagesModal = ({
   preselectedUserId,
   preselectedUserName,
 }: MessagesModalProps) => {
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(
-    preselectedUserId || null
-  );
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageBody, setMessageBody] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
 
@@ -42,6 +40,13 @@ export const MessagesModal = ({
     fetchConversationWith,
     sendMessage,
   } = useMessages();
+
+  // Auto-select and fetch conversation if preselectedUserId is provided
+  useEffect(() => {
+    if (preselectedUserId && open) {
+      handleSelectConversation(preselectedUserId);
+    }
+  }, [preselectedUserId, open]);
 
   const handleSelectConversation = async (userId: string) => {
     setSelectedConversation(userId);
