@@ -52,6 +52,12 @@ export const useParentData = () => {
   const [exams, setExams] = useState<ChildExam[]>([]);
   const [announcements, setAnnouncements] = useState<SchoolAnnouncement[]>([]);
   const [classAttendance, setClassAttendance] = useState<ClassAttendance[]>([]);
+  const [parentInfo, setParentInfo] = useState<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchParentData();
@@ -67,6 +73,22 @@ export const useParentData = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Fetch parent profile information
+      const { data: parentProfile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, email, phone")
+        .eq("user_id", user.id)
+        .single();
+
+      if (parentProfile) {
+        setParentInfo({
+          firstName: parentProfile.first_name || "Parent",
+          lastName: parentProfile.last_name || "",
+          email: parentProfile.email,
+          phone: parentProfile.phone || undefined,
+        });
+      }
 
       // Fetch children through parent-student links
       const { data: relationships } = await supabase
@@ -331,6 +353,7 @@ export const useParentData = () => {
     exams,
     announcements,
     classAttendance,
+    parentInfo,
     refetch: fetchParentData
   };
 };

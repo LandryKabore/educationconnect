@@ -7,13 +7,15 @@ import { useTranslation } from "react-i18next";
 import { useParentData } from "@/hooks/useParentData";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { AttendanceBreakdownModal } from "@/components/AttendanceBreakdownModal";
+import { ParentProfileModal } from "@/components/ParentProfileModal";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
-  const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance } = useParentData();
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance, parentInfo } = useParentData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -111,7 +113,12 @@ const ParentDashboard = () => {
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <Bell className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={() => setProfileModalOpen(true)}
+                className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+              >
                 <User className="w-4 h-4" />
               </Button>
             </div>
@@ -310,6 +317,13 @@ const ParentDashboard = () => {
         classAttendance={classAttendance}
         overallPercentage={currentChild?.attendance || "N/A"}
         studentName={currentChild?.name || "Student"}
+      />
+
+      <ParentProfileModal
+        open={profileModalOpen}
+        onOpenChange={setProfileModalOpen}
+        parentInfo={parentInfo}
+        children={children}
       />
     </div>
   );
