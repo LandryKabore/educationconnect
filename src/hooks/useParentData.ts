@@ -57,6 +57,8 @@ export const useParentData = () => {
     lastName: string;
     email: string;
     phone?: string;
+    username?: string;
+    createdAt?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export const useParentData = () => {
       // Fetch parent profile information
       const { data: parentProfile } = await supabase
         .from("profiles")
-        .select("first_name, last_name, email, phone")
+        .select("first_name, last_name, email, phone, created_at")
         .eq("user_id", user.id)
         .single();
 
@@ -87,6 +89,8 @@ export const useParentData = () => {
           lastName: parentProfile.last_name || "",
           email: parentProfile.email,
           phone: parentProfile.phone || undefined,
+          username: user.email?.split('@')[0],
+          createdAt: new Date(parentProfile.created_at).toLocaleDateString(),
         });
       }
 
@@ -106,13 +110,27 @@ export const useParentData = () => {
           .select("*")
           .in("user_id", studentIds);
 
+        // Fetch enrollments to get class section info
+        const { data: enrollmentsData } = await supabase
+          .from("enrollments")
+          .select(`
+            student_user_id,
+            class_section_id,
+            class_sections(name, grade_level)
+          `)
+          .in("student_user_id", studentIds)
+          .eq("status", "active");
+
         const childrenData = relationships.map(rel => {
           const profile = studentProfiles?.find(p => p.user_id === rel.student_user_id);
+          const enrollment = enrollmentsData?.find(e => e.student_user_id === rel.student_user_id);
+          const classSection = enrollment?.class_sections;
+          
           return {
             id: rel.student_user_id,
             name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
-            class: "Unknown Class", // Will be fetched separately
-            grade_level: "Unknown Grade", // Will be fetched separately
+            class: classSection?.name || "No class assigned",
+            grade_level: classSection?.grade_level || "N/A",
             overall_grade: "A-", // Will be calculated from actual grades
             attendance: "96%", // Will be calculated from actual attendance
             profile: profile
