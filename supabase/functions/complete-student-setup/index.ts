@@ -160,12 +160,31 @@ async function handler(req: Request): Promise<Response> {
       console.error('Error creating/updating student profile:', studentProfileError);
     }
 
-    // Auto-enroll student in their class based on grade_level
-    if (studentCreds.grade_level) {
+    // Auto-enroll student in their class
+    let classSection = null;
+    
+    // First check if class_section_id is provided
+    if (studentCreds.class_section_id) {
+      console.log('Auto-enrolling student in class section:', studentCreds.class_section_id);
+      
+      const { data: section, error: sectionError } = await supabase
+        .from('class_sections')
+        .select('id, academic_year_id')
+        .eq('id', studentCreds.class_section_id)
+        .maybeSingle();
+      
+      if (sectionError) {
+        console.error('Error finding class section:', sectionError);
+      } else {
+        classSection = section;
+      }
+    } 
+    // Fall back to grade_level if class_section_id not provided
+    else if (studentCreds.grade_level) {
       console.log('Auto-enrolling student in class for grade level:', studentCreds.grade_level);
       
       // Find the class section that matches their grade level
-      const { data: classSection, error: classFindError } = await supabase
+      const { data: section, error: classFindError } = await supabase
         .from('class_sections')
         .select('id, academic_year_id')
         .eq('school_id', studentCreds.school_id)
