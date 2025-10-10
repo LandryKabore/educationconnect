@@ -197,13 +197,10 @@ export const ParentSelectorModal = ({
                         {parent.first_name} {parent.last_name}
                       </h4>
                       {parent.student_names.length > 0 && (
-                        <p className="text-xs text-muted-foreground/80 truncate">
+                        <p className="text-sm text-muted-foreground truncate">
                           Parent of {parent.student_names.join(", ")}
                         </p>
                       )}
-                      <p className="text-sm text-muted-foreground truncate">
-                        {parent.email}
-                      </p>
                     </div>
                   </div>
                 </div>
