@@ -16,6 +16,7 @@ interface Parent {
   first_name: string;
   last_name: string;
   email: string;
+  student_names: string[];
 }
 
 interface ParentSelectorModalProps {
@@ -111,7 +112,33 @@ export const ParentSelectorModal = ({
 
       console.log("Parent profiles:", parentProfiles, "Error:", profileError);
 
-      setParents(parentProfiles || []);
+      // For each parent, get their student names
+      const parentsWithStudents = await Promise.all(
+        (parentProfiles || []).map(async (parent) => {
+          const studentLinksForParent = parentLinks.filter(
+            (link) => link.parent_user_id === parent.user_id
+          );
+          const studentIdsForParent = studentLinksForParent.map(
+            (link) => link.student_user_id
+          );
+
+          const { data: students } = await supabase
+            .from("profiles")
+            .select("first_name, last_name")
+            .in("user_id", studentIdsForParent);
+
+          const studentNames = (students || []).map(
+            (s) => `${s.first_name} ${s.last_name}`
+          );
+
+          return {
+            ...parent,
+            student_names: studentNames,
+          };
+        })
+      );
+
+      setParents(parentsWithStudents);
     } catch (error) {
       console.error("Error fetching parents:", error);
       setParents([]);
@@ -169,6 +196,11 @@ export const ParentSelectorModal = ({
                       <h4 className="font-semibold truncate">
                         {parent.first_name} {parent.last_name}
                       </h4>
+                      {parent.student_names.length > 0 && (
+                        <p className="text-xs text-muted-foreground/80 truncate">
+                          Parent of {parent.student_names.join(", ")}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground truncate">
                         {parent.email}
                       </p>
