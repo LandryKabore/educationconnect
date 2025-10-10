@@ -6,12 +6,14 @@ import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen
 import { useTranslation } from "react-i18next";
 import { useParentData } from "@/hooks/useParentData";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { AttendanceBreakdownModal } from "@/components/AttendanceBreakdownModal";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements } = useParentData();
+  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+  const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance } = useParentData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -154,7 +156,10 @@ const ParentDashboard = () => {
                   <div className="text-2xl font-bold text-orange-500">{currentChild?.overall_grade || "N/A"}</div>
                   <div className="text-sm text-slate-600">Overall Grade</div>
                 </div>
-                <div className="text-center p-4 bg-slate-100/80 rounded-xl">
+                <div 
+                  className="text-center p-4 bg-slate-100/80 rounded-xl cursor-pointer hover:bg-slate-200/80 transition-all hover:scale-105"
+                  onClick={() => setAttendanceModalOpen(true)}
+                >
                   <div className="text-2xl font-bold text-green-500">{currentChild?.attendance || "N/A"}</div>
                   <div className="text-sm text-slate-600">Attendance</div>
                 </div>
@@ -298,6 +303,14 @@ const ParentDashboard = () => {
           </Card>
         </div>
       </main>
+
+      <AttendanceBreakdownModal
+        open={attendanceModalOpen}
+        onOpenChange={setAttendanceModalOpen}
+        classAttendance={classAttendance}
+        overallPercentage={currentChild?.attendance || "N/A"}
+        studentName={currentChild?.name || "Student"}
+      />
     </div>
   );
 };

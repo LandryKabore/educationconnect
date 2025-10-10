@@ -28,6 +28,14 @@ export interface ChildExam {
   topic: string;
 }
 
+export interface ClassAttendance {
+  className: string;
+  subjectName: string;
+  presentDays: number;
+  totalDays: number;
+  percentage: number;
+}
+
 export interface SchoolAnnouncement {
   id: string;
   title: string;
@@ -43,6 +51,7 @@ export const useParentData = () => {
   const [grades, setGrades] = useState<ChildGrade[]>([]);
   const [exams, setExams] = useState<ChildExam[]>([]);
   const [announcements, setAnnouncements] = useState<SchoolAnnouncement[]>([]);
+  const [classAttendance, setClassAttendance] = useState<ClassAttendance[]>([]);
 
   useEffect(() => {
     fetchParentData();
@@ -202,12 +211,58 @@ export const useParentData = () => {
       // Calculate attendance from enhanced_attendance
       const { data: attendanceData } = await supabase
         .from("enhanced_attendance")
-        .select("status")
+        .select(`
+          status,
+          class_section_id,
+          class_sections(
+            name,
+            grade_level
+          )
+        `)
         .eq("student_user_id", childId);
 
       if (attendanceData && attendanceData.length > 0) {
         const presentDays = attendanceData.filter(att => att.status === "present").length;
         const attendanceRate = `${Math.round((presentDays / attendanceData.length) * 100)}%`;
+        
+        // Group attendance by class section
+        const attendanceByClass = new Map<string, { present: number; total: number; className: string }>();
+        
+        attendanceData.forEach(att => {
+          const classId = att.class_section_id;
+          const className = att.class_sections?.name || "Unknown Class";
+          
+          if (!attendanceByClass.has(classId)) {
+            attendanceByClass.set(classId, { present: 0, total: 0, className });
+          }
+          
+          const classData = attendanceByClass.get(classId)!;
+          classData.total++;
+          if (att.status === "present") {
+            classData.present++;
+          }
+        });
+
+        // Fetch subjects for each class section
+        const classAttendanceData: ClassAttendance[] = [];
+        for (const [classId, data] of attendanceByClass.entries()) {
+          const { data: subjectData } = await supabase
+            .from("class_section_subjects")
+            .select("subjects(name)")
+            .eq("class_section_id", classId)
+            .limit(1)
+            .single();
+
+          classAttendanceData.push({
+            className: data.className,
+            subjectName: subjectData?.subjects?.name || "General",
+            presentDays: data.present,
+            totalDays: data.total,
+            percentage: (data.present / data.total) * 100,
+          });
+        }
+
+        setClassAttendance(classAttendanceData);
         
         setChildren(prev => 
           prev.map(child => 
@@ -275,6 +330,7 @@ export const useParentData = () => {
     grades,
     exams,
     announcements,
+    classAttendance,
     refetch: fetchParentData
   };
 };
