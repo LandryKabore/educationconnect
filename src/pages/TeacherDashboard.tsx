@@ -10,6 +10,7 @@ import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
 import { MessagesModal } from "@/components/MessagesModal";
+import { ParentSelectorModal } from "@/components/ParentSelectorModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
@@ -22,6 +23,7 @@ const TeacherDashboard = () => {
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [selectedMessageSender, setSelectedMessageSender] = useState<{userId: string, name: string} | null>(null);
+  const [parentSelectorOpen, setParentSelectorOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
@@ -412,13 +414,22 @@ const TeacherDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button 
-                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
-                onClick={() => setMessagesModalOpen(true)}
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                View All Messages
-              </Button>
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  variant="outline"
+                  className="flex-1 border-slate-600 text-white hover:bg-slate-700"
+                  onClick={() => setMessagesModalOpen(true)}
+                >
+                  View All
+                </Button>
+                <Button 
+                  className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+                  onClick={() => setParentSelectorOpen(true)}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  New Message
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -441,6 +452,16 @@ const TeacherDashboard = () => {
         }}
         preselectedUserId={selectedMessageSender?.userId}
         preselectedUserName={selectedMessageSender?.name}
+      />
+
+      <ParentSelectorModal
+        open={parentSelectorOpen}
+        onOpenChange={setParentSelectorOpen}
+        onSelectParent={(parentId, parentName) => {
+          setSelectedMessageSender({ userId: parentId, name: parentName });
+          setParentSelectorOpen(false);
+          setMessagesModalOpen(true);
+        }}
       />
     </div>
   );
