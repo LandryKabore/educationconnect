@@ -62,16 +62,20 @@ export const useParentData = () => {
       // Fetch children through parent-student links
       const { data: relationships } = await supabase
         .from("parent_student_links")
-        .select(`
-          student_user_id,
-          profiles(*)
-        `)
+        .select("student_user_id")
         .eq("parent_user_id", user.id)
         .eq("status", "active");
 
       if (relationships && relationships.length > 0) {
+        // Fetch student profiles separately
+        const studentIds = relationships.map(rel => rel.student_user_id);
+        const { data: studentProfiles } = await supabase
+          .from("profiles")
+          .select("*")
+          .in("user_id", studentIds);
+
         const childrenData = relationships.map(rel => {
-          const profile = rel.profiles;
+          const profile = studentProfiles?.find(p => p.user_id === rel.student_user_id);
           return {
             id: rel.student_user_id,
             name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
