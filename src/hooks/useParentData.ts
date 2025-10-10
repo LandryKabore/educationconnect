@@ -57,7 +57,6 @@ export const useParentData = () => {
     lastName: string;
     email: string;
     phone?: string;
-    username?: string;
     createdAt?: string;
   } | null>(null);
 
@@ -89,7 +88,6 @@ export const useParentData = () => {
           lastName: parentProfile.last_name || "",
           email: parentProfile.email,
           phone: parentProfile.phone || undefined,
-          username: user.email?.split('@')[0],
           createdAt: new Date(parentProfile.created_at).toLocaleDateString(),
         });
       }

@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Phone, Users, UserCircle, Calendar } from "lucide-react";
+import { User, Mail, Phone, Users, Calendar } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
 interface ChildInfo {
@@ -24,7 +24,6 @@ interface ParentProfileModalProps {
     lastName: string;
     email: string;
     phone?: string;
-    username?: string;
     createdAt?: string;
   } | null;
   children: ChildInfo[];
@@ -71,18 +70,6 @@ export const ParentProfileModal = ({
 
           {/* Contact Information */}
           <div className="space-y-4">
-            {parentInfo.username && (
-              <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
-                <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                  <UserCircle className="w-5 h-5 text-blue-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-slate-400">Username</p>
-                  <p className="text-sm text-white font-medium">{parentInfo.username}</p>
-                </div>
-              </div>
-            )}
-
             <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg">
               <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
                 <Mail className="w-5 h-5 text-orange-400" />
