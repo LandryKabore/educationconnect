@@ -1581,6 +1581,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      teacher_can_view_parent_link: {
+        Args: { parent_link_student_id: string; teacher_id: string }
+        Returns: boolean
+      }
       verify_magic_link_and_set_pin: {
         Args: { new_pin: string; token_value: string }
         Returns: Json
