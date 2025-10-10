@@ -7,6 +7,10 @@ interface LinkParentRequest {
   linkId: string;
   parentUserId: string;
   verificationCode: string;
+  parentEmail: string;
+  parentFirstName: string;
+  parentLastName: string;
+  schoolId: string;
 }
 
 async function handler(req: Request): Promise<Response> {
@@ -36,11 +40,11 @@ async function handler(req: Request): Promise<Response> {
     const body: LinkParentRequest = await req.json();
     console.log('Request body:', { linkId: body.linkId, parentUserId: body.parentUserId });
 
-    const { linkId, parentUserId, verificationCode } = body;
+    const { linkId, parentUserId, verificationCode, parentEmail, parentFirstName, parentLastName, schoolId } = body;
 
-    if (!linkId || !parentUserId || !verificationCode) {
+    if (!linkId || !parentUserId || !verificationCode || !parentEmail || !parentFirstName || !parentLastName || !schoolId) {
       return new Response(JSON.stringify({ 
-        error: 'Missing required fields: linkId, parentUserId, verificationCode' 
+        error: 'Missing required fields: linkId, parentUserId, verificationCode, parentEmail, parentFirstName, parentLastName, schoolId' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -80,34 +84,22 @@ async function handler(req: Request): Promise<Response> {
     if (!parentProfile) {
       console.log('Parent profile not found, creating it...');
       
-      // Get user data from auth
-      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(parentUserId);
-      
-      if (userError || !userData.user) {
-        console.error('Error fetching user data:', userError);
-        return new Response(JSON.stringify({ 
-          error: 'User not found' 
-        }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Create profile
+      // Create profile using provided data
       const { error: createProfileError } = await supabase
         .from('profiles')
         .insert({
           user_id: parentUserId,
-          email: userData.user.email,
-          first_name: userData.user.user_metadata?.first_name,
-          last_name: userData.user.user_metadata?.last_name,
+          email: parentEmail,
+          first_name: parentFirstName,
+          last_name: parentLastName,
           role: 'parent'
         });
 
       if (createProfileError) {
         console.error('Error creating profile:', createProfileError);
         return new Response(JSON.stringify({ 
-          error: 'Failed to create parent profile' 
+          error: 'Failed to create parent profile',
+          details: createProfileError.message
         }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -119,11 +111,18 @@ async function handler(req: Request): Promise<Response> {
         .from('parent_profiles')
         .insert({
           user_id: parentUserId,
-          school_id: userData.user.user_metadata?.school_id
+          school_id: schoolId
         });
 
       if (createParentProfileError) {
         console.error('Error creating parent_profiles entry:', createParentProfileError);
+        return new Response(JSON.stringify({ 
+          error: 'Failed to create parent_profiles entry',
+          details: createParentProfileError.message
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       console.log('Parent profile created successfully');

@@ -256,7 +256,11 @@ export default function Auth() {
             body: {
               linkId: linkData.id,
               parentUserId: authData.user.id,
-              verificationCode: verificationCode
+              verificationCode: verificationCode,
+              parentEmail: email,
+              parentFirstName: firstName,
+              parentLastName: lastName,
+              schoolId: studentData.school_id
             }
           });
 
@@ -290,7 +294,11 @@ export default function Auth() {
             body: {
               linkId: linkData.id,
               parentUserId: authData.user.id,
-              verificationCode: verificationCode
+              verificationCode: verificationCode,
+              parentEmail: email,
+              parentFirstName: firstName,
+              parentLastName: lastName,
+              schoolId: studentData.school_id
             }
           });
 
