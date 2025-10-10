@@ -59,32 +59,24 @@ export const useParentData = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      console.log('Parent user ID:', user.id);
-
       // Fetch children through parent-student links
-      const { data: relationships, error: relError } = await supabase
+      const { data: relationships } = await supabase
         .from("parent_student_links")
         .select("student_user_id")
         .eq("parent_user_id", user.id)
         .eq("status", "active");
 
-      console.log('Relationships:', relationships, 'Error:', relError);
-
       if (relationships && relationships.length > 0) {
         // Fetch student profiles separately
         const studentIds = relationships.map(rel => rel.student_user_id);
-        console.log('Student IDs:', studentIds);
         
-        const { data: studentProfiles, error: profileError } = await supabase
+        const { data: studentProfiles } = await supabase
           .from("profiles")
           .select("*")
           .in("user_id", studentIds);
 
-        console.log('Student profiles:', studentProfiles, 'Error:', profileError);
-
         const childrenData = relationships.map(rel => {
           const profile = studentProfiles?.find(p => p.user_id === rel.student_user_id);
-          console.log('Profile for student', rel.student_user_id, ':', profile);
           return {
             id: rel.student_user_id,
             name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
@@ -96,7 +88,6 @@ export const useParentData = () => {
           };
         });
 
-        console.log('Children data:', childrenData);
         setChildren(childrenData);
         
         // Select first child by default
