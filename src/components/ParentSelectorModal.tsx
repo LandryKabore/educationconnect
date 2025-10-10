@@ -122,14 +122,20 @@ export const ParentSelectorModal = ({
             (link) => link.student_user_id
           );
 
-          const { data: students } = await supabase
+          console.log("Student IDs for parent", parent.first_name, ":", studentIdsForParent);
+
+          const { data: students, error: studentsError } = await supabase
             .from("profiles")
             .select("first_name, last_name")
             .in("user_id", studentIdsForParent);
 
+          console.log("Students for parent", parent.first_name, ":", students, "Error:", studentsError);
+
           const studentNames = (students || []).map(
             (s) => `${s.first_name} ${s.last_name}`
           );
+
+          console.log("Student names for parent", parent.first_name, ":", studentNames);
 
           return {
             ...parent,
@@ -138,6 +144,7 @@ export const ParentSelectorModal = ({
         })
       );
 
+      console.log("Final parents with students:", parentsWithStudents);
       setParents(parentsWithStudents);
     } catch (error) {
       console.error("Error fetching parents:", error);
