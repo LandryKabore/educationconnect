@@ -8,6 +8,7 @@ import { useParentData } from "@/hooks/useParentData";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { AttendanceBreakdownModal } from "@/components/AttendanceBreakdownModal";
 import { ParentProfileModal } from "@/components/ParentProfileModal";
+import { MessagesModal } from "@/components/MessagesModal";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ const ParentDashboard = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance, parentInfo } = useParentData();
 
   useEffect(() => {
@@ -302,7 +304,10 @@ const ParentDashboard = () => {
                   <div className="text-sm text-slate-300 mt-1">Please review the reading assignment for next week's discussion.</div>
                 </div>
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                onClick={() => setMessagesModalOpen(true)}
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+              >
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Send Message to Teacher
               </Button>
@@ -324,6 +329,11 @@ const ParentDashboard = () => {
         onOpenChange={setProfileModalOpen}
         parentInfo={parentInfo}
         children={children}
+      />
+
+      <MessagesModal
+        open={messagesModalOpen}
+        onOpenChange={setMessagesModalOpen}
       />
     </div>
   );

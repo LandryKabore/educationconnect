@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown, MessageCircle } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 import { StatCardModal } from "@/components/StatCardModal";
 import { StudentGradesModal } from "@/components/StudentGradesModal";
+import { MessagesModal } from "@/components/MessagesModal";
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -19,6 +20,7 @@ const StudentDashboard = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("attendance");
   const [gradesModalOpen, setGradesModalOpen] = useState(false);
+  const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -145,6 +147,14 @@ const StudentDashboard = () => {
               )}
               <ThemeToggle />
               <LanguageToggle />
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => setMessagesModalOpen(true)}
+                className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </Button>
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
@@ -421,6 +431,11 @@ const StudentDashboard = () => {
       <StudentGradesModal
         open={gradesModalOpen}
         onOpenChange={setGradesModalOpen}
+      />
+
+      <MessagesModal
+        open={messagesModalOpen}
+        onOpenChange={setMessagesModalOpen}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
+import { MessagesModal } from "@/components/MessagesModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
@@ -19,6 +20,7 @@ const TeacherDashboard = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("classes");
+  const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
 
@@ -137,7 +139,12 @@ const TeacherDashboard = () => {
             </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => setMessagesModalOpen(true)}
+                className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+              >
                 <MessageCircle className="w-4 h-4" />
               </Button>
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
@@ -412,6 +419,11 @@ const TeacherDashboard = () => {
         type={modalType}
         data={modalType === "tasks" ? tasks : classes}
         stats={stats}
+      />
+
+      <MessagesModal
+        open={messagesModalOpen}
+        onOpenChange={setMessagesModalOpen}
       />
     </div>
   );
