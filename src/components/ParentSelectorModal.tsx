@@ -42,55 +42,74 @@ export const ParentSelectorModal = ({
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log("No user found");
+        return;
+      }
+
+      console.log("Fetching parents for teacher:", user.id);
 
       // Get all students taught by this teacher
-      const { data: teachingData } = await supabase
+      const { data: teachingData, error: teachingError } = await supabase
         .from("teaching_assignments")
         .select("class_section_id")
         .eq("teacher_user_id", user.id);
 
+      console.log("Teaching assignments:", teachingData, "Error:", teachingError);
+
       if (!teachingData || teachingData.length === 0) {
+        console.log("No teaching assignments found");
         setParents([]);
         return;
       }
 
       const classSectionIds = teachingData.map((t) => t.class_section_id);
+      console.log("Class section IDs:", classSectionIds);
 
       // Get students in those classes
-      const { data: enrollments } = await supabase
+      const { data: enrollments, error: enrollmentError } = await supabase
         .from("enrollments")
         .select("student_user_id")
         .in("class_section_id", classSectionIds);
 
+      console.log("Enrollments:", enrollments, "Error:", enrollmentError);
+
       if (!enrollments || enrollments.length === 0) {
+        console.log("No enrollments found");
         setParents([]);
         return;
       }
 
       const studentIds = enrollments.map((e) => e.student_user_id);
+      console.log("Student IDs:", studentIds);
 
       // Get parents of those students
-      const { data: parentLinks } = await supabase
+      const { data: parentLinks, error: parentLinkError } = await supabase
         .from("parent_student_links")
-        .select("parent_user_id")
+        .select("parent_user_id, student_user_id, status")
         .in("student_user_id", studentIds)
         .eq("status", "active")
         .not("parent_user_id", "is", null);
 
+      console.log("Parent links:", parentLinks, "Error:", parentLinkError);
+
       if (!parentLinks || parentLinks.length === 0) {
+        console.log("No parent links found for students");
         setParents([]);
         return;
       }
 
       const parentIds = [...new Set(parentLinks.map((p) => p.parent_user_id))];
+      console.log("Parent IDs:", parentIds);
 
       // Get parent profiles
-      const { data: parentProfiles } = await supabase
+      const { data: parentProfiles, error: profileError } = await supabase
         .from("profiles")
         .select("user_id, first_name, last_name, email")
         .in("user_id", parentIds)
         .eq("role", "parent");
+
+      console.log("Parent profiles:", parentProfiles, "Error:", profileError);
 
       setParents(parentProfiles || []);
     } catch (error) {
