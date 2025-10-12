@@ -10,13 +10,14 @@ import { toast } from "@/hooks/use-toast";
 interface StudentGrade {
   student_name: string;
   student_no: string;
-  exam_title: string;
+  assignment_title: string;
   subject_name: string;
   score: number;
   max_score: number;
   percentage: number;
   graded_at: string;
   comment?: string;
+  type: 'assignment' | 'exam';
 }
 
 interface ClassSection {
@@ -99,88 +100,122 @@ export function AllGradesModal() {
         return;
       }
 
-      // Fetch exams for the selected classes
-      const { data: teacherExams, error: examsError } = await supabase
+      const allGrades: StudentGrade[] = [];
+
+      // 1. Fetch ASSIGNMENT grades
+      const { data: assignments } = await supabase
+        .from("assignments")
+        .select("id, title, class_id, teacher_id, subjects(name)")
+        .eq("teacher_id", user.id)
+        .in("class_id", classIdsToFetch);
+
+      if (assignments && assignments.length > 0) {
+        const assignmentIds = assignments.map(a => a.id);
+        
+        const { data: assignmentGrades } = await supabase
+          .from("grades")
+          .select("points_earned, assignment_id, student_id, graded_at, feedback, assignments(max_points)")
+          .in("assignment_id", assignmentIds)
+          .order("graded_at", { ascending: false });
+
+        if (assignmentGrades && assignmentGrades.length > 0) {
+          const studentIds = [...new Set(assignmentGrades.map(g => g.student_id))];
+          
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, last_name")
+            .in("user_id", studentIds);
+
+          const { data: studentProfiles } = await supabase
+            .from("student_profiles")
+            .select("user_id, student_no")
+            .in("user_id", studentIds);
+
+          const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+          const studentProfileMap = new Map(studentProfiles?.map(sp => [sp.user_id, sp]) || []);
+          const assignmentMap = new Map(assignments.map(a => [a.id, a]));
+
+          assignmentGrades.forEach((grade) => {
+            const profile = profileMap.get(grade.student_id);
+            const studentProfile = studentProfileMap.get(grade.student_id);
+            const assignment = assignmentMap.get(grade.assignment_id);
+            const maxPoints = grade.assignments?.max_points || 100;
+            const percentage = ((grade.points_earned / maxPoints) * 100).toFixed(1);
+            
+            allGrades.push({
+              student_name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
+              student_no: studentProfile?.student_no || 'N/A',
+              assignment_title: assignment?.title || 'Unknown Assignment',
+              subject_name: assignment?.subjects?.name || 'N/A',
+              score: grade.points_earned,
+              max_score: maxPoints,
+              percentage: parseFloat(percentage),
+              graded_at: new Date(grade.graded_at).toLocaleDateString(),
+              comment: grade.feedback,
+              type: 'assignment'
+            });
+          });
+        }
+      }
+
+      // 2. Fetch EXAM grades
+      const { data: exams } = await supabase
         .from("exams")
         .select("id, title, class_section_id, subjects(name)")
         .in("class_section_id", classIdsToFetch);
 
-      if (examsError) {
-        console.error("Error fetching exams:", examsError);
-        throw examsError;
-      }
-
-      if (!teacherExams || teacherExams.length === 0) {
-        setGrades([]);
-        return;
-      }
-
-      const examIds = teacherExams.map(e => e.id);
-
-      // Fetch grades for those exams
-      const { data: gradesData, error: gradesError } = await supabase
-        .from("enhanced_grades")
-        .select("score, max_score, comment, created_at, student_user_id, exam_id")
-        .in("exam_id", examIds)
-        .order("created_at", { ascending: false });
-
-      if (gradesError) {
-        console.error("Error fetching grades:", gradesError);
-        throw gradesError;
-      }
-
-      if (!gradesData || gradesData.length === 0) {
-        setGrades([]);
-        return;
-      }
-
-      // Get unique student IDs
-      const studentIds = [...new Set(gradesData.map(g => g.student_user_id))];
-
-      // Fetch student data
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", studentIds);
-
-      if (profilesError) {
-        console.error("Error fetching profiles:", profilesError);
-      }
-
-      const { data: studentProfiles, error: studentProfilesError } = await supabase
-        .from("student_profiles")
-        .select("user_id, student_no")
-        .in("user_id", studentIds);
-
-      if (studentProfilesError) {
-        console.error("Error fetching student profiles:", studentProfilesError);
-      }
-
-      // Create lookup maps
-      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
-      const studentProfileMap = new Map(studentProfiles?.map(sp => [sp.user_id, sp]) || []);
-      const examMap = new Map(teacherExams.map(e => [e.id, e]));
-
-      const formattedGrades: StudentGrade[] = gradesData.map((grade) => {
-        const profile = profileMap.get(grade.student_user_id);
-        const studentProfile = studentProfileMap.get(grade.student_user_id);
-        const exam = examMap.get(grade.exam_id);
-        const percentage = ((grade.score / grade.max_score) * 100).toFixed(1);
+      if (exams && exams.length > 0) {
+        const examIds = exams.map(e => e.id);
         
-        return {
-          student_name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
-          student_no: studentProfile?.student_no || 'N/A',
-          exam_title: exam?.title || 'Unknown Exam',
-          subject_name: exam?.subjects?.name || 'N/A',
-          score: grade.score,
-          max_score: grade.max_score,
-          percentage: parseFloat(percentage),
-          graded_at: new Date(grade.created_at).toLocaleDateString(),
-          comment: grade.comment
-        };
-      });
+        const { data: examGrades } = await supabase
+          .from("enhanced_grades")
+          .select("score, max_score, comment, created_at, student_user_id, exam_id")
+          .in("exam_id", examIds)
+          .order("created_at", { ascending: false });
 
-      setGrades(formattedGrades);
+        if (examGrades && examGrades.length > 0) {
+          const studentIds = [...new Set(examGrades.map(g => g.student_user_id))];
+          
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, last_name")
+            .in("user_id", studentIds);
+
+          const { data: studentProfiles } = await supabase
+            .from("student_profiles")
+            .select("user_id, student_no")
+            .in("user_id", studentIds);
+
+          const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+          const studentProfileMap = new Map(studentProfiles?.map(sp => [sp.user_id, sp]) || []);
+          const examMap = new Map(exams.map(e => [e.id, e]));
+
+          examGrades.forEach((grade) => {
+            const profile = profileMap.get(grade.student_user_id);
+            const studentProfile = studentProfileMap.get(grade.student_user_id);
+            const exam = examMap.get(grade.exam_id);
+            const percentage = ((grade.score / grade.max_score) * 100).toFixed(1);
+            
+            allGrades.push({
+              student_name: `${profile?.first_name || 'Unknown'} ${profile?.last_name || 'Student'}`,
+              student_no: studentProfile?.student_no || 'N/A',
+              assignment_title: exam?.title || 'Unknown Exam',
+              subject_name: exam?.subjects?.name || 'N/A',
+              score: grade.score,
+              max_score: grade.max_score,
+              percentage: parseFloat(percentage),
+              graded_at: new Date(grade.created_at).toLocaleDateString(),
+              comment: grade.comment,
+              type: 'exam'
+            });
+          });
+        }
+      }
+
+      // Sort all grades by date (most recent first)
+      allGrades.sort((a, b) => new Date(b.graded_at).getTime() - new Date(a.graded_at).getTime());
+      
+      setGrades(allGrades);
     } catch (error: any) {
       console.error("Error fetching grades:", error);
       toast({
@@ -251,7 +286,7 @@ export function AllGradesModal() {
                   <TableRow>
                     <TableHead>Student</TableHead>
                     <TableHead>Student No</TableHead>
-                    <TableHead>Exam</TableHead>
+                    <TableHead>Assignment/Exam</TableHead>
                     <TableHead>Subject</TableHead>
                     <TableHead className="text-right">Score</TableHead>
                     <TableHead className="text-right">Percentage</TableHead>
@@ -263,7 +298,7 @@ export function AllGradesModal() {
                     <TableRow key={index}>
                       <TableCell className="font-medium">{grade.student_name}</TableCell>
                       <TableCell>{grade.student_no}</TableCell>
-                      <TableCell>{grade.exam_title}</TableCell>
+                      <TableCell>{grade.assignment_title}</TableCell>
                       <TableCell>{grade.subject_name}</TableCell>
                       <TableCell className="text-right">
                         {grade.score}/{grade.max_score}
