@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
@@ -142,14 +143,21 @@ const TeacherDashboard = () => {
             </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => setMessagesModalOpen(true)}
-                className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </Button>
+              <div className="relative">
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setMessagesModalOpen(true)}
+                  className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </Button>
+                {messages.filter(msg => msg.unread).length > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1 bg-red-500 hover:bg-red-500 text-white text-xs">
+                    {messages.filter(msg => msg.unread).length}
+                  </Badge>
+                )}
+              </div>
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
