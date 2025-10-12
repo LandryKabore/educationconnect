@@ -72,7 +72,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('Starting delete process for user:', userToDelete);
 
     try {
-      // For teachers, we need to delete from multiple places
+      // Delete role-specific data based on user role
       if (userToDelete.role === 'teacher') {
         console.log('Deleting teacher-related data...');
         
@@ -82,11 +82,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           .delete()
           .eq('teacher_user_id', userToDelete.id);
         
-        if (assignmentError) {
-          console.error('Error deleting teaching assignments:', assignmentError);
-        } else {
-          console.log('Teaching assignments deleted successfully');
-        }
+        if (assignmentError) console.error('Error deleting teaching assignments:', assignmentError);
+        else console.log('Teaching assignments deleted successfully');
 
         // Delete teacher profile
         const { error: teacherProfileError } = await supabase
@@ -94,11 +91,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           .delete()
           .eq('user_id', userToDelete.id);
         
-        if (teacherProfileError) {
-          console.error('Error deleting teacher profile:', teacherProfileError);
-        } else {
-          console.log('Teacher profile deleted successfully');
-        }
+        if (teacherProfileError) console.error('Error deleting teacher profile:', teacherProfileError);
+        else console.log('Teacher profile deleted successfully');
 
         // Delete temporary credentials if any
         const { error: tempCredsError } = await supabase
@@ -106,11 +100,93 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           .delete()
           .eq('teacher_user_id', userToDelete.id);
         
-        if (tempCredsError) {
-          console.error('Error deleting temp credentials:', tempCredsError);
-        } else {
-          console.log('Temp credentials deleted successfully');
-        }
+        if (tempCredsError) console.error('Error deleting temp credentials:', tempCredsError);
+        else console.log('Temp credentials deleted successfully');
+      } else if (userToDelete.role === 'student') {
+        console.log('Deleting student-related data...');
+        
+        // Delete enrollments
+        const { error: enrollmentError } = await supabase
+          .from('enrollments')
+          .delete()
+          .eq('student_user_id', userToDelete.id);
+        
+        if (enrollmentError) console.error('Error deleting enrollments:', enrollmentError);
+        else console.log('Enrollments deleted successfully');
+
+        // Delete grades
+        const { error: gradesError } = await supabase
+          .from('grades')
+          .delete()
+          .eq('student_id', userToDelete.id);
+        
+        if (gradesError) console.error('Error deleting grades:', gradesError);
+        else console.log('Grades deleted successfully');
+
+        // Delete enhanced grades
+        const { error: enhancedGradesError } = await supabase
+          .from('enhanced_grades')
+          .delete()
+          .eq('student_user_id', userToDelete.id);
+        
+        if (enhancedGradesError) console.error('Error deleting enhanced grades:', enhancedGradesError);
+        else console.log('Enhanced grades deleted successfully');
+
+        // Delete attendance records
+        const { error: attendanceError } = await supabase
+          .from('enhanced_attendance')
+          .delete()
+          .eq('student_user_id', userToDelete.id);
+        
+        if (attendanceError) console.error('Error deleting attendance:', attendanceError);
+        else console.log('Attendance deleted successfully');
+
+        // Delete parent-student links
+        const { error: parentLinksError } = await supabase
+          .from('parent_student_links')
+          .delete()
+          .eq('student_user_id', userToDelete.id);
+        
+        if (parentLinksError) console.error('Error deleting parent links:', parentLinksError);
+        else console.log('Parent links deleted successfully');
+
+        // Delete student profile
+        const { error: studentProfileError } = await supabase
+          .from('student_profiles')
+          .delete()
+          .eq('user_id', userToDelete.id);
+        
+        if (studentProfileError) console.error('Error deleting student profile:', studentProfileError);
+        else console.log('Student profile deleted successfully');
+
+        // Delete temporary credentials if any
+        const { error: tempCredsError } = await supabase
+          .from('student_temp_credentials')
+          .delete()
+          .eq('student_user_id', userToDelete.id);
+        
+        if (tempCredsError) console.error('Error deleting temp credentials:', tempCredsError);
+        else console.log('Temp credentials deleted successfully');
+      } else if (userToDelete.role === 'parent') {
+        console.log('Deleting parent-related data...');
+        
+        // Delete parent-student links
+        const { error: parentLinksError } = await supabase
+          .from('parent_student_links')
+          .delete()
+          .eq('parent_user_id', userToDelete.id);
+        
+        if (parentLinksError) console.error('Error deleting parent links:', parentLinksError);
+        else console.log('Parent links deleted successfully');
+
+        // Delete parent profile
+        const { error: parentProfileError } = await supabase
+          .from('parent_profiles')
+          .delete()
+          .eq('user_id', userToDelete.id);
+        
+        if (parentProfileError) console.error('Error deleting parent profile:', parentProfileError);
+        else console.log('Parent profile deleted successfully');
       }
 
       // Delete the profile
@@ -456,15 +532,13 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                               <Edit className="w-4 h-4 mr-2" />
                               Edit User
                             </DropdownMenuItem>
-                            {user.role === 'teacher' && (
-                              <DropdownMenuItem 
-                                className="text-red-400 hover:bg-slate-700"
-                                onClick={() => confirmDelete(user)}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete Teacher
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem 
+                              className="text-red-400 hover:bg-slate-700"
+                              onClick={() => confirmDelete(user)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

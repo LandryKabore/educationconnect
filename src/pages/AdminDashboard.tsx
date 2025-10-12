@@ -23,6 +23,7 @@ import { CreateStudentModal } from "@/components/CreateStudentModal";
 import { ImportStudentsModal } from "@/components/ImportStudentsModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { LogoutButton } from "@/components/LogoutButton";
 
 interface AdminData {
   schools: any[];
@@ -330,12 +331,8 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700">
-                <Settings className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700">
-                <User className="w-4 h-4" />
-              </Button>
+              <LanguageToggle />
+              <LogoutButton />
             </div>
           </div>
         </div>
