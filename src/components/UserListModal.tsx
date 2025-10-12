@@ -78,193 +78,23 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('Using user_id:', userId);
     console.log('User role:', userToDelete.role);
 
-    const deletionSteps: string[] = [];
-
     try {
-      // Delete role-specific data based on user role
-      if (userToDelete.role === 'teacher') {
-        console.log('Deleting teacher-related data...');
-        
-        // Delete teaching assignments
-        const { error: assignmentError } = await supabase
-          .from('teaching_assignments')
-          .delete()
-          .eq('teacher_user_id', userId);
-        
-        if (assignmentError) {
-          console.error('Error deleting teaching assignments:', assignmentError);
-          throw new Error(`Failed to delete teaching assignments: ${assignmentError.message}`);
-        }
-        deletionSteps.push('teaching assignments');
+      // Call edge function to delete user with proper service role permissions
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId }
+      });
 
-        // Delete teacher profile
-        const { error: teacherProfileError } = await supabase
-          .from('teacher_profiles')
-          .delete()
-          .eq('user_id', userId);
-        
-        if (teacherProfileError) {
-          console.error('Error deleting teacher profile:', teacherProfileError);
-          throw new Error(`Failed to delete teacher profile: ${teacherProfileError.message}`);
-        }
-        deletionSteps.push('teacher profile');
-
-        // Delete temporary credentials if any
-        const { error: tempCredsError } = await supabase
-          .from('teacher_temp_credentials')
-          .delete()
-          .eq('teacher_user_id', userId);
-        
-        if (tempCredsError) {
-          console.error('Error deleting temp credentials:', tempCredsError);
-          throw new Error(`Failed to delete temp credentials: ${tempCredsError.message}`);
-        }
-        deletionSteps.push('temp credentials');
-
-      } else if (userToDelete.role === 'student') {
-        console.log('Deleting student-related data...');
-        
-        // Delete grades first
-        const { error: gradesError } = await supabase
-          .from('grades')
-          .delete()
-          .eq('student_id', userId);
-        
-        if (gradesError) {
-          console.error('Error deleting grades:', gradesError);
-          throw new Error(`Failed to delete grades: ${gradesError.message}`);
-        }
-        deletionSteps.push('grades');
-
-        // Delete enhanced grades
-        const { error: enhancedGradesError } = await supabase
-          .from('enhanced_grades')
-          .delete()
-          .eq('student_user_id', userId);
-        
-        if (enhancedGradesError) {
-          console.error('Error deleting enhanced grades:', enhancedGradesError);
-          throw new Error(`Failed to delete enhanced grades: ${enhancedGradesError.message}`);
-        }
-        deletionSteps.push('enhanced grades');
-
-        // Delete attendance records
-        const { error: attendanceError } = await supabase
-          .from('enhanced_attendance')
-          .delete()
-          .eq('student_user_id', userId);
-        
-        if (attendanceError) {
-          console.error('Error deleting attendance:', attendanceError);
-          throw new Error(`Failed to delete attendance: ${attendanceError.message}`);
-        }
-        deletionSteps.push('attendance records');
-
-        // Delete parent-student links
-        const { error: parentLinksError } = await supabase
-          .from('parent_student_links')
-          .delete()
-          .eq('student_user_id', userId);
-        
-        if (parentLinksError) {
-          console.error('Error deleting parent links:', parentLinksError);
-          throw new Error(`Failed to delete parent links: ${parentLinksError.message}`);
-        }
-        deletionSteps.push('parent links');
-
-        // Delete enrollments
-        const { error: enrollmentError } = await supabase
-          .from('enrollments')
-          .delete()
-          .eq('student_user_id', userId);
-        
-        if (enrollmentError) {
-          console.error('Error deleting enrollments:', enrollmentError);
-          throw new Error(`Failed to delete enrollments: ${enrollmentError.message}`);
-        }
-        deletionSteps.push('enrollments');
-
-        // Delete student profile
-        const { error: studentProfileError } = await supabase
-          .from('student_profiles')
-          .delete()
-          .eq('user_id', userId);
-        
-        if (studentProfileError) {
-          console.error('Error deleting student profile:', studentProfileError);
-          throw new Error(`Failed to delete student profile: ${studentProfileError.message}`);
-        }
-        deletionSteps.push('student profile');
-
-        // Delete temporary credentials if any
-        const { error: tempCredsError } = await supabase
-          .from('student_temp_credentials')
-          .delete()
-          .eq('student_user_id', userId);
-        
-        if (tempCredsError) {
-          console.error('Error deleting temp credentials:', tempCredsError);
-          throw new Error(`Failed to delete temp credentials: ${tempCredsError.message}`);
-        }
-        deletionSteps.push('temp credentials');
-
-      } else if (userToDelete.role === 'parent') {
-        console.log('Deleting parent-related data...');
-        
-        // Delete parent-student links
-        const { error: parentLinksError } = await supabase
-          .from('parent_student_links')
-          .delete()
-          .eq('parent_user_id', userId);
-        
-        if (parentLinksError) {
-          console.error('Error deleting parent links:', parentLinksError);
-          throw new Error(`Failed to delete parent links: ${parentLinksError.message}`);
-        }
-        deletionSteps.push('parent links');
-
-        // Delete parent profile
-        const { error: parentProfileError } = await supabase
-          .from('parent_profiles')
-          .delete()
-          .eq('user_id', userId);
-        
-        if (parentProfileError) {
-          console.error('Error deleting parent profile:', parentProfileError);
-          throw new Error(`Failed to delete parent profile: ${parentProfileError.message}`);
-        }
-        deletionSteps.push('parent profile');
+      if (error) {
+        console.error('Error from delete-user function:', error);
+        throw new Error(error.message || 'Failed to delete user');
       }
 
-      // Delete the profile
-      console.log('Deleting user profile...');
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', userId);
-
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-        throw new Error(`Failed to delete profile: ${profileError.message}`);
-      }
-      deletionSteps.push('profile');
-
-      // Delete the auth user (this might fail if we don't have service role access)
-      try {
-        console.log('Attempting to delete auth user...');
-        const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-        if (authError) {
-          console.log('Auth user deletion failed (expected):', authError);
-        } else {
-          console.log('Auth user deleted successfully');
-          deletionSteps.push('auth user');
-        }
-      } catch (authError) {
-        console.log('Could not delete auth user (admin privileges required):', authError);
+      if (!data?.success) {
+        console.error('Delete failed:', data?.error);
+        throw new Error(data?.error || 'Failed to delete user');
       }
 
       console.log('=== DELETION COMPLETED ===');
-      console.log('Successfully deleted:', deletionSteps);
 
       toast({
         title: "User Deleted",
@@ -286,7 +116,6 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     } catch (error: any) {
       console.error('=== DELETION FAILED ===');
       console.error('Error:', error);
-      console.log('Deletion steps completed before failure:', deletionSteps);
       toast({
         title: "Deletion Failed",
         description: error.message || "Failed to delete user. Please try again.",
