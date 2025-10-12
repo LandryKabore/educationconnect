@@ -18,6 +18,7 @@ import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, E
 
 interface UserProfile {
   id: string;
+  user_id?: string; // Add this field for auth user ID
   email: string;
   first_name: string;
   last_name: string;
@@ -69,7 +70,14 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
 
-    console.log('Starting delete process for user:', userToDelete);
+    // Get the correct user_id (auth user id) - use user_id if available, otherwise id
+    const userId = userToDelete.user_id || userToDelete.id;
+    
+    console.log('=== STARTING DELETE PROCESS ===');
+    console.log('User to delete:', userToDelete);
+    console.log('Using user_id:', userId);
+    console.log('User role:', userToDelete.role);
+
     const deletionSteps: string[] = [];
 
     try {
@@ -81,7 +89,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: assignmentError } = await supabase
           .from('teaching_assignments')
           .delete()
-          .eq('teacher_user_id', userToDelete.id);
+          .eq('teacher_user_id', userId);
         
         if (assignmentError) {
           console.error('Error deleting teaching assignments:', assignmentError);
@@ -93,7 +101,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: teacherProfileError } = await supabase
           .from('teacher_profiles')
           .delete()
-          .eq('user_id', userToDelete.id);
+          .eq('user_id', userId);
         
         if (teacherProfileError) {
           console.error('Error deleting teacher profile:', teacherProfileError);
@@ -105,7 +113,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: tempCredsError } = await supabase
           .from('teacher_temp_credentials')
           .delete()
-          .eq('teacher_user_id', userToDelete.id);
+          .eq('teacher_user_id', userId);
         
         if (tempCredsError) {
           console.error('Error deleting temp credentials:', tempCredsError);
@@ -120,7 +128,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: gradesError } = await supabase
           .from('grades')
           .delete()
-          .eq('student_id', userToDelete.id);
+          .eq('student_id', userId);
         
         if (gradesError) {
           console.error('Error deleting grades:', gradesError);
@@ -132,7 +140,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: enhancedGradesError } = await supabase
           .from('enhanced_grades')
           .delete()
-          .eq('student_user_id', userToDelete.id);
+          .eq('student_user_id', userId);
         
         if (enhancedGradesError) {
           console.error('Error deleting enhanced grades:', enhancedGradesError);
@@ -144,7 +152,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: attendanceError } = await supabase
           .from('enhanced_attendance')
           .delete()
-          .eq('student_user_id', userToDelete.id);
+          .eq('student_user_id', userId);
         
         if (attendanceError) {
           console.error('Error deleting attendance:', attendanceError);
@@ -156,7 +164,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: parentLinksError } = await supabase
           .from('parent_student_links')
           .delete()
-          .eq('student_user_id', userToDelete.id);
+          .eq('student_user_id', userId);
         
         if (parentLinksError) {
           console.error('Error deleting parent links:', parentLinksError);
@@ -168,7 +176,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: enrollmentError } = await supabase
           .from('enrollments')
           .delete()
-          .eq('student_user_id', userToDelete.id);
+          .eq('student_user_id', userId);
         
         if (enrollmentError) {
           console.error('Error deleting enrollments:', enrollmentError);
@@ -180,7 +188,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: studentProfileError } = await supabase
           .from('student_profiles')
           .delete()
-          .eq('user_id', userToDelete.id);
+          .eq('user_id', userId);
         
         if (studentProfileError) {
           console.error('Error deleting student profile:', studentProfileError);
@@ -192,7 +200,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: tempCredsError } = await supabase
           .from('student_temp_credentials')
           .delete()
-          .eq('student_user_id', userToDelete.id);
+          .eq('student_user_id', userId);
         
         if (tempCredsError) {
           console.error('Error deleting temp credentials:', tempCredsError);
@@ -207,7 +215,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: parentLinksError } = await supabase
           .from('parent_student_links')
           .delete()
-          .eq('parent_user_id', userToDelete.id);
+          .eq('parent_user_id', userId);
         
         if (parentLinksError) {
           console.error('Error deleting parent links:', parentLinksError);
@@ -219,7 +227,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const { error: parentProfileError } = await supabase
           .from('parent_profiles')
           .delete()
-          .eq('user_id', userToDelete.id);
+          .eq('user_id', userId);
         
         if (parentProfileError) {
           console.error('Error deleting parent profile:', parentProfileError);
@@ -233,7 +241,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
-        .eq('user_id', userToDelete.id);
+        .eq('user_id', userId);
 
       if (profileError) {
         console.error('Error deleting profile:', profileError);
@@ -244,7 +252,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       // Delete the auth user (this might fail if we don't have service role access)
       try {
         console.log('Attempting to delete auth user...');
-        const { error: authError } = await supabase.auth.admin.deleteUser(userToDelete.id);
+        const { error: authError } = await supabase.auth.admin.deleteUser(userId);
         if (authError) {
           console.log('Auth user deletion failed (expected):', authError);
         } else {
@@ -255,7 +263,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         console.log('Could not delete auth user (admin privileges required):', authError);
       }
 
-      console.log('Deletion completed successfully. Steps:', deletionSteps);
+      console.log('=== DELETION COMPLETED ===');
+      console.log('Successfully deleted:', deletionSteps);
 
       toast({
         title: "User Deleted",
@@ -275,8 +284,9 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       setUserToDelete(null);
 
     } catch (error: any) {
-      console.error('Error deleting user:', error);
-      console.log('Deletion steps completed:', deletionSteps);
+      console.error('=== DELETION FAILED ===');
+      console.error('Error:', error);
+      console.log('Deletion steps completed before failure:', deletionSteps);
       toast({
         title: "Deletion Failed",
         description: error.message || "Failed to delete user. Please try again.",
@@ -286,6 +296,10 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   };
 
   const confirmDelete = (user: UserProfile) => {
+    console.log('=== DELETE CONFIRMATION ===');
+    console.log('User to delete:', user);
+    console.log('User ID:', user.id);
+    console.log('User role:', user.role);
     setUserToDelete(user);
     setDeleteDialogOpen(true);
   };
@@ -603,10 +617,12 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent className="bg-slate-900 border-slate-700">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-white">Delete Teacher</AlertDialogTitle>
+              <AlertDialogTitle className="text-white">
+                Delete {userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}
+              </AlertDialogTitle>
               <AlertDialogDescription className="text-slate-300">
                 Are you sure you want to delete {userToDelete?.first_name} {userToDelete?.last_name}? 
-                This will remove their profile, teaching assignments, and temporary credentials. 
+                This will permanently remove all their data from the system.
                 This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -618,7 +634,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 onClick={handleDeleteUser}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                Delete Teacher
+                Delete {userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
