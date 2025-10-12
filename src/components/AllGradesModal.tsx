@@ -89,21 +89,26 @@ export function AllGradesModal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // First, get all exams for the teacher's classes
-      const { data: teacherExams } = await supabase
+      // Get class IDs to filter
+      const classIdsToFetch = classId === "all" 
+        ? classes.map(c => c.id)
+        : [classId];
+
+      if (classIdsToFetch.length === 0) {
+        setGrades([]);
+        return;
+      }
+
+      // Fetch exams for the selected classes
+      const { data: teacherExams, error: examsError } = await supabase
         .from("exams")
-        .select(`
-          id,
-          title,
-          class_section_id,
-          subjects(name)
-        `)
-        .in(
-          "class_section_id",
-          classId === "all" 
-            ? classes.map(c => c.id)
-            : [classId]
-        );
+        .select("id, title, class_section_id, subjects(name)")
+        .in("class_section_id", classIdsToFetch);
+
+      if (examsError) {
+        console.error("Error fetching exams:", examsError);
+        throw examsError;
+      }
 
       if (!teacherExams || teacherExams.length === 0) {
         setGrades([]);
@@ -112,42 +117,51 @@ export function AllGradesModal() {
 
       const examIds = teacherExams.map(e => e.id);
 
-      // Then get grades for those exams
-      const { data: gradesData, error } = await supabase
+      // Fetch grades for those exams
+      const { data: gradesData, error: gradesError } = await supabase
         .from("enhanced_grades")
-        .select(`
-          score,
-          max_score,
-          comment,
-          created_at,
-          student_user_id,
-          exam_id
-        `)
+        .select("score, max_score, comment, created_at, student_user_id, exam_id")
         .in("exam_id", examIds)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (gradesError) {
+        console.error("Error fetching grades:", gradesError);
+        throw gradesError;
+      }
+
+      if (!gradesData || gradesData.length === 0) {
+        setGrades([]);
+        return;
+      }
 
       // Get unique student IDs
-      const studentIds = [...new Set(gradesData?.map(g => g.student_user_id) || [])];
+      const studentIds = [...new Set(gradesData.map(g => g.student_user_id))];
 
-      // Fetch student profiles and student_profiles separately
-      const { data: profiles } = await supabase
+      // Fetch student data
+      const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
         .select("user_id, first_name, last_name")
         .in("user_id", studentIds);
 
-      const { data: studentProfiles } = await supabase
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+      }
+
+      const { data: studentProfiles, error: studentProfilesError } = await supabase
         .from("student_profiles")
         .select("user_id, student_no")
         .in("user_id", studentIds);
+
+      if (studentProfilesError) {
+        console.error("Error fetching student profiles:", studentProfilesError);
+      }
 
       // Create lookup maps
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
       const studentProfileMap = new Map(studentProfiles?.map(sp => [sp.user_id, sp]) || []);
       const examMap = new Map(teacherExams.map(e => [e.id, e]));
 
-      const formattedGrades: StudentGrade[] = (gradesData || []).map((grade: any) => {
+      const formattedGrades: StudentGrade[] = gradesData.map((grade) => {
         const profile = profileMap.get(grade.student_user_id);
         const studentProfile = studentProfileMap.get(grade.student_user_id);
         const exam = examMap.get(grade.exam_id);
@@ -167,13 +181,14 @@ export function AllGradesModal() {
       });
 
       setGrades(formattedGrades);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching grades:", error);
       toast({
         title: "Error",
-        description: "Failed to load grades",
+        description: error?.message || "Failed to load grades",
         variant: "destructive"
       });
+      setGrades([]);
     } finally {
       setLoading(false);
     }
