@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
+import { AllGradesModal } from "@/components/AllGradesModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
@@ -26,7 +27,7 @@ const TeacherDashboard = () => {
   const [selectedMessageSender, setSelectedMessageSender] = useState<{userId: string, name: string} | null>(null);
   const [parentSelectorOpen, setParentSelectorOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead } = useTeacherData();
+  const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead, refetch } = useTeacherData();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -317,17 +318,14 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                <AttendanceModal onAttendanceSubmitted={() => {}} />
-                <GradeStudentModal onGradeSubmitted={() => {}} />
+                <AttendanceModal onAttendanceSubmitted={refetch} />
+                <GradeStudentModal onGradeSubmitted={refetch} />
                 <CreateAssignmentModal 
                   classes={classes.map(c => ({ id: c.id, name: c.name }))} 
                   subjects={subjects} 
-                  onAssignmentCreated={() => {}} 
+                  onAssignmentCreated={refetch} 
                 />
-                <Button className="h-16 flex-col bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-                  <Users className="w-5 h-5 mb-1" />
-                  Manage Classes
-                </Button>
+                <AllGradesModal />
               </div>
             </CardContent>
           </Card>
