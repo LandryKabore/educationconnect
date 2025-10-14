@@ -29,6 +29,7 @@ export interface Conversation {
   last_message: string;
   last_message_at: string;
   unread_count: number;
+  teacher_info?: string; // e.g., "Grade 10 - Section A"
 }
 
 export const useMessages = () => {
@@ -104,6 +105,7 @@ export const useMessages = () => {
 
         if (!conversationMap.has(partnerId)) {
           let displayName = `${partner?.first_name || 'Unknown'} ${partner?.last_name || 'User'}`;
+          let teacherInfo: string | undefined = undefined;
           
           // If partner is a parent, fetch their child's name
           if (partner?.role === 'parent') {
@@ -129,6 +131,24 @@ export const useMessages = () => {
             }
           }
           
+          // If partner is a teacher, fetch their teaching assignments
+          if (partner?.role === 'teacher' && currentUserId) {
+            const { data: assignments } = await supabase
+              .from("teaching_assignments")
+              .select(`
+                class_section_id,
+                class_sections!inner(name, grade_level)
+              `)
+              .eq("teacher_user_id", partnerId)
+              .limit(1)
+              .maybeSingle();
+            
+            if (assignments && assignments.class_sections) {
+              const classSection = assignments.class_sections as any;
+              teacherInfo = `Grade ${classSection.grade_level} - ${classSection.name}`;
+            }
+          }
+          
           conversationMap.set(partnerId, {
             user_id: partnerId,
             user_name: displayName,
@@ -136,6 +156,7 @@ export const useMessages = () => {
             last_message: message.body,
             last_message_at: message.created_at,
             unread_count: 0,
+            teacher_info: teacherInfo,
           });
         }
 

@@ -299,7 +299,10 @@ const ParentDashboard = () => {
                   conversations.slice(0, 2).map((conv) => (
                     <div key={conv.user_id} className="p-3 bg-slate-700/50 rounded-xl">
                       <div className="font-medium text-white">{conv.user_name}</div>
-                      <div className="text-sm text-slate-300 capitalize">{conv.user_role}</div>
+                      <div className="text-sm text-slate-300 capitalize">
+                        {conv.user_role}
+                        {conv.teacher_info && ` • ${conv.teacher_info}`}
+                      </div>
                       <div className="text-sm text-slate-300 mt-1 line-clamp-2">{conv.last_message}</div>
                       <div className="text-xs text-slate-400 mt-1">{new Date(conv.last_message_at).toLocaleDateString()}</div>
                     </div>
