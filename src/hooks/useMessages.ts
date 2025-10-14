@@ -147,7 +147,7 @@ export const useMessages = () => {
             if (assignments && assignments.class_sections && assignments.subjects) {
               const classSection = assignments.class_sections as any;
               const subject = assignments.subjects as any;
-              teacherInfo = `${subject.name} - Grade ${classSection.grade_level} ${classSection.name}`;
+              teacherInfo = `${subject.name} - ${classSection.grade_level} ${classSection.name}`;
             }
           }
           

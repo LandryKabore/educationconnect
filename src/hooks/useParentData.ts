@@ -34,6 +34,7 @@ export interface ClassAttendance {
   presentDays: number;
   totalDays: number;
   percentage: number;
+  missedDates: { date: string; status: string }[];
 }
 
 export interface SchoolAnnouncement {
@@ -300,33 +301,45 @@ export const useParentData = () => {
         .from("enhanced_attendance")
         .select(`
           status,
+          date,
           class_section_id,
           class_sections(
             name,
             grade_level
           )
         `)
-        .eq("student_user_id", childId);
+        .eq("student_user_id", childId)
+        .order("date", { ascending: false });
 
       if (attendanceData && attendanceData.length > 0) {
         const presentDays = attendanceData.filter(att => att.status === "present").length;
         const attendanceRate = `${Math.round((presentDays / attendanceData.length) * 100)}%`;
         
         // Group attendance by class section
-        const attendanceByClass = new Map<string, { present: number; total: number; className: string }>();
+        const attendanceByClass = new Map<string, { 
+          present: number; 
+          total: number; 
+          className: string;
+          missedDates: { date: string; status: string }[];
+        }>();
         
         attendanceData.forEach(att => {
           const classId = att.class_section_id;
           const className = att.class_sections?.name || "Unknown Class";
           
           if (!attendanceByClass.has(classId)) {
-            attendanceByClass.set(classId, { present: 0, total: 0, className });
+            attendanceByClass.set(classId, { present: 0, total: 0, className, missedDates: [] });
           }
           
           const classData = attendanceByClass.get(classId)!;
           classData.total++;
           if (att.status === "present") {
             classData.present++;
+          } else {
+            classData.missedDates.push({
+              date: new Date(att.date).toLocaleDateString(),
+              status: att.status
+            });
           }
         });
 
@@ -346,6 +359,7 @@ export const useParentData = () => {
             presentDays: data.present,
             totalDays: data.total,
             percentage: (data.present / data.total) * 100,
+            missedDates: data.missedDates,
           });
         }
 

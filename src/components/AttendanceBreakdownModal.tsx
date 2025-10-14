@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -5,7 +6,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ClassAttendance {
   className: string;
@@ -13,6 +15,7 @@ interface ClassAttendance {
   presentDays: number;
   totalDays: number;
   percentage: number;
+  missedDates: { date: string; status: string }[];
 }
 
 interface AttendanceBreakdownModalProps {
@@ -30,6 +33,8 @@ export const AttendanceBreakdownModal = ({
   overallPercentage,
   studentName,
 }: AttendanceBreakdownModalProps) => {
+  const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
+
   const getStatusColor = (percentage: number) => {
     if (percentage >= 90) return "text-green-500";
     if (percentage >= 75) return "text-yellow-500";
@@ -66,16 +71,9 @@ export const AttendanceBreakdownModal = ({
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusIcon(item.percentage)}
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-slate-300">
-                    <span className="font-medium">{item.presentDays}</span> present out of{" "}
-                    <span className="font-medium">{item.totalDays}</span> days
-                  </div>
-                  <div className={`text-xl font-bold ${getStatusColor(item.percentage)}`}>
-                    {item.percentage.toFixed(1)}%
+                    <div className={`text-xl font-bold ${getStatusColor(item.percentage)}`}>
+                      {item.percentage.toFixed(1)}%
+                    </div>
                   </div>
                 </div>
 
@@ -92,6 +90,38 @@ export const AttendanceBreakdownModal = ({
                     style={{ width: `${item.percentage}%` }}
                   />
                 </div>
+
+                {/* Show missed dates button if there are any */}
+                {item.missedDates.length > 0 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 w-full text-slate-300 hover:text-white"
+                      onClick={() => setExpandedSubject(expandedSubject === index ? null : index)}
+                    >
+                      <span className="flex items-center gap-2">
+                        {expandedSubject === index ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        {expandedSubject === index ? "Hide" : "View"} Missed Days ({item.missedDates.length})
+                      </span>
+                    </Button>
+                    
+                    {expandedSubject === index && (
+                      <div className="mt-3 space-y-2 p-3 bg-slate-800/50 rounded-lg border border-slate-600/30">
+                        {item.missedDates.map((missed, missedIndex) => (
+                          <div key={missedIndex} className="flex items-center justify-between text-sm">
+                            <span className="text-slate-300">{missed.date}</span>
+                            <span className={`px-2 py-1 rounded ${
+                              missed.status === 'absent' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {missed.status.charAt(0).toUpperCase() + missed.status.slice(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             ))
           ) : (
