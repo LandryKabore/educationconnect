@@ -320,6 +320,16 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
                         />
                         <Label htmlFor={`late-${student.id}`} className="text-sm">Late</Label>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`excused-${student.id}`}
+                          checked={attendance[student.user_id] === "excused"}
+                          onCheckedChange={(checked) => 
+                            handleAttendanceChange(student.user_id, checked ? "excused" : "present")
+                          }
+                        />
+                        <Label htmlFor={`excused-${student.id}`} className="text-sm">Excused</Label>
+                      </div>
                     </div>
                   </div>
                 ))}
