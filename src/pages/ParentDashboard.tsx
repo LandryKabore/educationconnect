@@ -10,6 +10,8 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { AttendanceBreakdownModal } from "@/components/AttendanceBreakdownModal";
 import { ParentProfileModal } from "@/components/ParentProfileModal";
 import { MessagesModal } from "@/components/MessagesModal";
+import { ParentGradesModal } from "@/components/ParentGradesModal";
+import { ParentCalendarModal } from "@/components/ParentCalendarModal";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -18,6 +20,8 @@ const ParentDashboard = () => {
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
+  const [gradesModalOpen, setGradesModalOpen] = useState(false);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance, parentInfo } = useParentData();
   const { conversations } = useMessages();
 
@@ -214,7 +218,10 @@ const ParentDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                onClick={() => setGradesModalOpen(true)}
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+              >
                 View All Grades
               </Button>
             </CardContent>
@@ -258,7 +265,10 @@ const ParentDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                onClick={() => setCalendarModalOpen(true)}
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+              >
                 View Full Calendar
               </Button>
             </CardContent>
@@ -356,6 +366,21 @@ const ParentDashboard = () => {
       <MessagesModal
         open={messagesModalOpen}
         onOpenChange={setMessagesModalOpen}
+      />
+
+      <ParentGradesModal
+        open={gradesModalOpen}
+        onOpenChange={setGradesModalOpen}
+        grades={grades}
+        studentName={currentChild?.name || "Student"}
+        overallGrade={currentChild?.overall_grade || "N/A"}
+      />
+
+      <ParentCalendarModal
+        open={calendarModalOpen}
+        onOpenChange={setCalendarModalOpen}
+        tasks={exams}
+        studentName={currentChild?.name || "Student"}
       />
     </div>
   );
