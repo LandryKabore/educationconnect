@@ -11,6 +11,7 @@ export interface TeacherClass {
   schedule_time?: string;
   room?: string;
   subject?: string;
+  attendanceTaken?: boolean;
 }
 
 export interface TeacherTask {
@@ -215,6 +216,16 @@ export const useTeacherData = () => {
                 scheduleTime = `${subject.schedule_time_start} - ${subject.schedule_time_end}`;
               }
               
+              // Check if attendance was taken today for this class
+              const today = new Date().toISOString().split('T')[0];
+              const { data: todayAttendance } = await supabase
+                .from("enhanced_attendance")
+                .select("id")
+                .eq("class_section_id", classSection.id)
+                .eq("taken_by", user.id)
+                .eq("date", today)
+                .limit(1);
+              
               classMap.set(classSection.id, {
                 id: classSection.id,
                 name: classSection.name,
@@ -222,7 +233,8 @@ export const useTeacherData = () => {
                 student_count: studentCount,
                 schedule_time: scheduleTime,
                 room: `Room ${Math.floor(Math.random() * 300) + 100}`, // Mock room for now
-                subject: subject?.name || "Subject"
+                subject: subject?.name || "Subject",
+                attendanceTaken: todayAttendance && todayAttendance.length > 0
               });
             }
           }

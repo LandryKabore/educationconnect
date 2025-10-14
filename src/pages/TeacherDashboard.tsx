@@ -233,9 +233,16 @@ const TeacherDashboard = () => {
                           {classInfo.schedule_time} • {classInfo.room} • {classInfo.student_count} students
                         </div>
                       </div>
-                      <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
+                      <Button 
+                        className={`${
+                          classInfo.attendanceTaken 
+                            ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' 
+                            : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
+                        } text-white border-0`} 
+                        size="sm"
+                      >
                         <CheckSquare className="w-4 h-4 mr-2" />
-                        Attendance
+                        {classInfo.attendanceTaken ? 'Attendance ✓' : 'Attendance'}
                       </Button>
                     </div>
                   </div>
@@ -306,7 +313,10 @@ const TeacherDashboard = () => {
                 )}
               </div>
               {assignments.length > 3 && (
-                <Button className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0">
+                <Button 
+                  onClick={() => navigate("/teacher-assignment")}
+                  className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
+                >
                   View All Assignments ({assignments.length})
                 </Button>
               )}
