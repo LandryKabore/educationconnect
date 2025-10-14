@@ -177,7 +177,7 @@ export const useParentData = () => {
   const fetchChildData = async (childId: string) => {
     try {
       // Fetch child's assignment grades from grades table
-      const { data: assignmentGrades } = await supabase
+      const { data: assignmentGrades, error: assignmentError } = await supabase
         .from("grades")
         .select(`
           *,
@@ -193,8 +193,11 @@ export const useParentData = () => {
         .order("graded_at", { ascending: false })
         .limit(10);
 
+      console.log("Assignment grades data:", assignmentGrades);
+      console.log("Assignment grades error:", assignmentError);
+
       // Fetch child's exam grades from enhanced_grades
-      const { data: examGrades } = await supabase
+      const { data: examGrades, error: examError } = await supabase
         .from("enhanced_grades")
         .select(`
           *,
@@ -208,6 +211,9 @@ export const useParentData = () => {
         .eq("student_user_id", childId)
         .order("created_at", { ascending: false })
         .limit(10);
+
+      console.log("Exam grades data:", examGrades);
+      console.log("Exam grades error:", examError);
 
       // Combine and format all grades
       const allGrades: ChildGrade[] = [];
