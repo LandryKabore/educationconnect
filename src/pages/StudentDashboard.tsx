@@ -15,6 +15,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { getCountdown } from "@/utils/countdownHelpers";
 import { AllTeachersModal } from "@/components/AllTeachersModal";
 import { StudyCalendarModal } from "@/components/StudyCalendarModal";
+import { StudyGroupsModal } from "@/components/StudyGroupsModal";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ const StudentDashboard = () => {
   const [subjectsModalOpen, setSubjectsModalOpen] = useState(false);
   const [teachersModalOpen, setTeachersModalOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [studyGroupsModalOpen, setStudyGroupsModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -54,11 +56,6 @@ const StudentDashboard = () => {
   const studyMaterials = [
     { subject: "Mathematics", title: "Algebra Practice Problems", type: "PDF", uploadedBy: "Ms. Thompson", date: "Dec 7" },
     { subject: "Science", title: "Physics Formula Sheet", type: "PDF", uploadedBy: "Mr. Wilson", date: "Dec 6" },
-  ];
-
-  const studyGroups = [
-    { name: "Math Study Group", subject: "Mathematics", members: 8, lastActivity: "2 hours ago", active: true },
-    { name: "Science Champions", subject: "Physics", members: 12, lastActivity: "1 day ago", active: false },
   ];
 
   if (loading) {
@@ -401,32 +398,12 @@ const StudentDashboard = () => {
               <CardDescription className="text-slate-300">Collaborate with your classmates</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {studyGroups.map((group, index) => (
-                  <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium text-white">{group.name}</div>
-                          {group.active && (
-                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                          )}
-                        </div>
-                        <div className="text-sm text-slate-300">
-                          {group.subject} • {group.members} members
-                        </div>
-                        <div className="text-xs text-slate-400">Last activity: {group.lastActivity}</div>
-                      </div>
-                      <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0" size="sm">
-                        Join Chat
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                onClick={() => setStudyGroupsModalOpen(true)}
+                className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-0"
+              >
                 <Users className="w-4 h-4 mr-2" />
-                Find More Groups
+                Manage Study Groups
               </Button>
             </CardContent>
           </Card>
@@ -501,6 +478,16 @@ const StudentDashboard = () => {
         onOpenChange={setCalendarModalOpen}
         assignments={assignments}
       />
+
+      {studentInfo?.enrollment?.class_section_id && (
+        <StudyGroupsModal
+          open={studyGroupsModalOpen}
+          onOpenChange={setStudyGroupsModalOpen}
+          studentUserId={studentInfo.profile.user_id}
+          classSectionId={studentInfo.enrollment.class_section_id}
+          subjects={studentInfo.subjects || []}
+        />
+      )}
     </div>
   );
 };
