@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown, MessageCircle } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
@@ -21,6 +22,7 @@ const StudentDashboard = () => {
   const [modalType, setModalType] = useState<"classes" | "students" | "tasks" | "attendance">("attendance");
   const [gradesModalOpen, setGradesModalOpen] = useState(false);
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
+  const [subjectsModalOpen, setSubjectsModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -192,10 +194,7 @@ const StudentDashboard = () => {
           </Card>
           <Card 
             className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-blue-400/50"
-            onClick={() => {
-              // Open subjects dropdown programmatically or show subjects modal
-              document.querySelector('[aria-label="My Subjects"]')?.parentElement?.click();
-            }}
+            onClick={() => setSubjectsModalOpen(true)}
           >
             <CardContent className="p-6 text-center">
               <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
@@ -438,6 +437,43 @@ const StudentDashboard = () => {
         open={messagesModalOpen}
         onOpenChange={setMessagesModalOpen}
       />
+
+      {/* Subjects Modal */}
+      <Dialog open={subjectsModalOpen} onOpenChange={setSubjectsModalOpen}>
+        <DialogContent className="bg-slate-800 border-slate-600 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-blue-400" />
+              Your Active Subjects
+            </DialogTitle>
+            <DialogDescription className="text-slate-300">
+              All subjects you're currently enrolled in
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {studentInfo?.subjects && studentInfo.subjects.length > 0 ? (
+              studentInfo.subjects.map((subject) => (
+                <div key={subject.id} className="p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-white text-lg">{subject.name}</div>
+                      {subject.code && <div className="text-sm text-slate-400">{subject.code}</div>}
+                      {subject.description && <div className="text-sm text-slate-300 mt-1">{subject.description}</div>}
+                    </div>
+                    <div className="p-3 bg-blue-500/20 rounded-lg">
+                      <BookOpen className="w-5 h-5 text-blue-400" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
+                No subjects enrolled yet
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
