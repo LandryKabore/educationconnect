@@ -97,15 +97,41 @@ export const useMessages = () => {
       // Group messages by conversation partner
       const conversationMap = new Map<string, Conversation>();
 
-      messages?.forEach((message) => {
+      for (const message of messages || []) {
         const isReceived = message.recipient_user_id === currentUserId;
         const partnerId = isReceived ? message.sender_user_id : message.recipient_user_id;
         const partner = isReceived ? message.sender : message.recipient;
 
         if (!conversationMap.has(partnerId)) {
+          let displayName = `${partner?.first_name || 'Unknown'} ${partner?.last_name || 'User'}`;
+          
+          // If partner is a parent, fetch their child's name
+          if (partner?.role === 'parent') {
+            const { data: parentLinks } = await supabase
+              .from("parent_student_links")
+              .select("student_user_id")
+              .eq("parent_user_id", partnerId)
+              .eq("status", "active")
+              .limit(1)
+              .maybeSingle();
+            
+            if (parentLinks?.student_user_id) {
+              const { data: studentProfile } = await supabase
+                .from("profiles")
+                .select("first_name, last_name")
+                .eq("user_id", parentLinks.student_user_id)
+                .maybeSingle();
+              
+              if (studentProfile) {
+                const childName = `${studentProfile.first_name} ${studentProfile.last_name}`;
+                displayName = `${displayName} (${childName})`;
+              }
+            }
+          }
+          
           conversationMap.set(partnerId, {
             user_id: partnerId,
-            user_name: `${partner?.first_name || 'Unknown'} ${partner?.last_name || 'User'}`,
+            user_name: displayName,
             user_role: partner?.role || 'unknown',
             last_message: message.body,
             last_message_at: message.created_at,
@@ -118,7 +144,7 @@ export const useMessages = () => {
           const conv = conversationMap.get(partnerId)!;
           conv.unread_count++;
         }
-      });
+      }
 
       setConversations(Array.from(conversationMap.values()));
     } catch (error) {

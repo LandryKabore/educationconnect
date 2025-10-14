@@ -306,21 +306,51 @@ export const useTeacherData = () => {
           .order("created_at", { ascending: false })
           .limit(5);
 
-        const formattedMessages: TeacherMessage[] = (messagesData || []).map((msg: any) => {
+        const formattedMessages: TeacherMessage[] = [];
+        
+        for (const msg of messagesData || []) {
           const senderName = `${msg.sender?.first_name || 'Unknown'} ${msg.sender?.last_name || 'User'}`;
           const rolePrefix = msg.sender?.role === 'admin' ? 'School Admin' : 'Parent';
           
-          return {
+          let displayName = `${rolePrefix} - ${senderName}`;
+          
+          // If sender is a parent, fetch their child's name
+          if (msg.sender?.role === 'parent') {
+            const { data: parentLinks } = await supabase
+              .from("parent_student_links")
+              .select(`
+                student_user_id
+              `)
+              .eq("parent_user_id", msg.sender.user_id)
+              .eq("status", "active")
+              .limit(1)
+              .maybeSingle();
+            
+            if (parentLinks?.student_user_id) {
+              const { data: studentProfile } = await supabase
+                .from("profiles")
+                .select("first_name, last_name")
+                .eq("user_id", parentLinks.student_user_id)
+                .maybeSingle();
+              
+              if (studentProfile) {
+                const childName = `${studentProfile.first_name} ${studentProfile.last_name}`;
+                displayName = `${rolePrefix} - ${senderName} (${childName})`;
+              }
+            }
+          }
+          
+          formattedMessages.push({
             id: msg.id,
-            from: `${rolePrefix} - ${senderName}`,
+            from: displayName,
             subject: msg.subject || "No subject",
             preview: msg.body.substring(0, 50) + (msg.body.length > 50 ? '...' : ''),
             time: new Date(msg.created_at),
             timeText: formatMessageTime(new Date(msg.created_at)),
             unread: !msg.read_at,
             senderId: msg.sender?.user_id
-          };
-        });
+          });
+        }
 
         setMessages(formattedMessages);
 
