@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useParentData } from "@/hooks/useParentData";
+import { useMessages } from "@/hooks/useMessages";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { AttendanceBreakdownModal } from "@/components/AttendanceBreakdownModal";
 import { ParentProfileModal } from "@/components/ParentProfileModal";
@@ -18,6 +19,7 @@ const ParentDashboard = () => {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance, parentInfo } = useParentData();
+  const { conversations } = useMessages();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -293,16 +295,20 @@ const ParentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="p-3 bg-slate-700/50 rounded-xl">
-                  <div className="font-medium text-white">Ms. Sarah Thompson</div>
-                  <div className="text-sm text-slate-300">Mathematics Teacher</div>
-                  <div className="text-sm text-slate-300 mt-1">Emma is showing excellent progress in algebra. Keep up the great work!</div>
-                </div>
-                <div className="p-3 bg-slate-700/50 rounded-xl">
-                  <div className="font-medium text-white">Mr. James Wilson</div>
-                  <div className="text-sm text-slate-300">English Teacher</div>
-                  <div className="text-sm text-slate-300 mt-1">Please review the reading assignment for next week's discussion.</div>
-                </div>
+                {conversations.length > 0 ? (
+                  conversations.slice(0, 2).map((conv) => (
+                    <div key={conv.user_id} className="p-3 bg-slate-700/50 rounded-xl">
+                      <div className="font-medium text-white">{conv.user_name}</div>
+                      <div className="text-sm text-slate-300 capitalize">{conv.user_role}</div>
+                      <div className="text-sm text-slate-300 mt-1 line-clamp-2">{conv.last_message}</div>
+                      <div className="text-xs text-slate-400 mt-1">{new Date(conv.last_message_at).toLocaleDateString()}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3 bg-slate-700/50 rounded-xl text-center text-slate-300">
+                    No messages yet
+                  </div>
+                )}
               </div>
               <Button 
                 onClick={() => setMessagesModalOpen(true)}
