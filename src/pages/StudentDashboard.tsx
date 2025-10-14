@@ -178,7 +178,7 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
           <Card 
-            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer"
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-green-400/50"
             onClick={() => {
               setModalType("attendance");
               setModalOpen(true);
@@ -190,7 +190,13 @@ const StudentDashboard = () => {
               <div className="text-sm text-slate-300">{t('attendance')}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-blue-400/50">
+          <Card 
+            className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-blue-400/50"
+            onClick={() => {
+              // Open subjects dropdown programmatically or show subjects modal
+              document.querySelector('[aria-label="My Subjects"]')?.parentElement?.click();
+            }}
+          >
             <CardContent className="p-6 text-center">
               <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-400">{studentInfo?.subjects?.length || 0}</div>
