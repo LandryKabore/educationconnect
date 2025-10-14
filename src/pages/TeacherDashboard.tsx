@@ -16,6 +16,7 @@ import { ParentSelectorModal } from "@/components/ParentSelectorModal";
 import { CreateTaskModal } from "@/components/CreateTaskModal";
 import { TasksModal } from "@/components/TasksModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { AllAssignmentsModal } from "@/components/AllAssignmentsModal";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
 
@@ -29,6 +30,7 @@ const TeacherDashboard = () => {
   const [selectedMessageSender, setSelectedMessageSender] = useState<{userId: string, name: string} | null>(null);
   const [parentSelectorOpen, setParentSelectorOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [allAssignmentsOpen, setAllAssignmentsOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead, refetch } = useTeacherData();
 
@@ -314,7 +316,7 @@ const TeacherDashboard = () => {
               </div>
               {assignments.length > 3 && (
                 <Button 
-                  onClick={() => navigate("/teacher-assignment")}
+                  onClick={() => setAllAssignmentsOpen(true)}
                   className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
                 >
                   View All Assignments ({assignments.length})
@@ -513,6 +515,12 @@ const TeacherDashboard = () => {
         onOpenChange={setTasksModalOpen}
         tasks={tasks}
         onTaskUpdate={refetch}
+      />
+
+      <AllAssignmentsModal
+        open={allAssignmentsOpen}
+        onOpenChange={setAllAssignmentsOpen}
+        assignments={assignments}
       />
     </div>
   );
