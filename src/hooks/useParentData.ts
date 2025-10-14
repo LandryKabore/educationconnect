@@ -176,8 +176,25 @@ export const useParentData = () => {
 
   const fetchChildData = async (childId: string) => {
     try {
-      // Fetch child's grades from enhanced_grades
-      const { data: gradesData } = await supabase
+      // Fetch child's assignment grades from grades table
+      const { data: assignmentGrades } = await supabase
+        .from("grades")
+        .select(`
+          *,
+          assignment_id,
+          assignments(
+            title,
+            max_points,
+            subject_id,
+            subjects(name)
+          )
+        `)
+        .eq("student_id", childId)
+        .order("graded_at", { ascending: false })
+        .limit(10);
+
+      // Fetch child's exam grades from enhanced_grades
+      const { data: examGrades } = await supabase
         .from("enhanced_grades")
         .select(`
           *,
@@ -192,26 +209,52 @@ export const useParentData = () => {
         .order("created_at", { ascending: false })
         .limit(10);
 
-      if (gradesData) {
-        const formattedGrades = gradesData.map(grade => ({
-          id: grade.id,
-          subject: grade.exams?.subjects?.name || "Unknown",
-          assignment: grade.exams?.title || "Unknown Exam",
-          grade: calculateLetterGrade(grade.score, grade.max_score),
-          date: new Date(grade.created_at).toLocaleDateString()
-        }));
-        setGrades(formattedGrades);
+      // Combine and format all grades
+      const allGrades: ChildGrade[] = [];
 
-        // Update child's overall grade
-        const overallGrade = calculateOverallGrade(formattedGrades);
-        setChildren(prev => 
-          prev.map(child => 
-            child.id === childId 
-              ? { ...child, overall_grade: overallGrade }
-              : child
-          )
-        );
+      // Add assignment grades
+      if (assignmentGrades) {
+        assignmentGrades.forEach(grade => {
+          if (grade.points_earned !== null && grade.assignments) {
+            allGrades.push({
+              id: grade.id,
+              subject: grade.assignments?.subjects?.name || "Unknown",
+              assignment: grade.assignments?.title || "Unknown Assignment",
+              grade: calculateLetterGrade(grade.points_earned, grade.assignments.max_points),
+              date: new Date(grade.graded_at || grade.created_at).toLocaleDateString()
+            });
+          }
+        });
       }
+
+      // Add exam grades
+      if (examGrades) {
+        examGrades.forEach(grade => {
+          allGrades.push({
+            id: grade.id,
+            subject: grade.exams?.subjects?.name || "Unknown",
+            assignment: grade.exams?.title || "Unknown Exam",
+            grade: calculateLetterGrade(grade.score, grade.max_score),
+            date: new Date(grade.created_at).toLocaleDateString()
+          });
+        });
+      }
+
+      // Sort by date (most recent first)
+      allGrades.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      setGrades(allGrades);
+
+      // Update child's overall grade
+      const overallGrade = calculateOverallGrade(allGrades);
+      setChildren(prev => 
+        prev.map(child => 
+          child.id === childId 
+            ? { ...child, overall_grade: overallGrade }
+            : child
+        )
+      );
+    
 
       // Fetch upcoming exams for the child's enrolled classes
       const { data: enrollmentsData } = await supabase
