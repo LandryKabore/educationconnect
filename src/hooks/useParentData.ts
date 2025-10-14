@@ -273,7 +273,10 @@ export const useParentData = () => {
       if (enrollmentsData && enrollmentsData.length > 0) {
         const classSectionIds = enrollmentsData.map(e => e.class_section_id);
         
-        const { data: examsData } = await supabase
+        console.log("Parent - Class section IDs for exams:", classSectionIds);
+        console.log("Parent - Looking for exams >= ", new Date().toISOString().split('T')[0]);
+        
+        const { data: examsData, error: examsError } = await supabase
           .from("exams")
           .select(`
             *,
@@ -284,6 +287,9 @@ export const useParentData = () => {
           .order("exam_date", { ascending: true })
           .limit(5);
 
+        console.log("Parent - Exams data:", examsData);
+        console.log("Parent - Exams error:", examsError);
+
         if (examsData) {
           const formattedExams = examsData.map(exam => ({
             id: exam.id,
@@ -293,7 +299,10 @@ export const useParentData = () => {
             topic: exam.title
           }));
           setExams(formattedExams);
+          console.log("Parent - Formatted exams:", formattedExams);
         }
+      } else {
+        console.log("Parent - No enrollments found for child:", childId);
       }
 
       // Calculate attendance from enhanced_attendance
