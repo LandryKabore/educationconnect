@@ -416,24 +416,48 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
           description: `You have ${stats.pendingTasks} tasks that need your attention`,
           content: (
             <div className="space-y-3">
-              {data.map((task) => (
-                <Card key={task.id} className={`bg-slate-700/50 border ${task.urgent ? 'border-red-400/50' : 'border-slate-600'}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-white">{task.task}</div>
-                        <div className="text-sm text-slate-300 mt-1">Due: {task.due}</div>
-                        <div className="text-xs text-slate-400 mt-1">Type: {task.type}</div>
+              {data.map((task) => {
+                const dueDate = new Date(task.due_date);
+                const now = new Date();
+                const diffHours = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                const isUrgent = diffHours > 0 && diffHours <= 24;
+                const isOverdue = dueDate < now;
+                
+                return (
+                  <Card key={task.id} className={`bg-slate-700/50 border ${
+                    isOverdue ? 'border-red-400/50' : 
+                    isUrgent || task.priority === 'urgent' || task.priority === 'high' 
+                      ? 'border-orange-400/50' 
+                      : 'border-slate-600'
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-white">{task.title}</div>
+                          {task.description && (
+                            <div className="text-sm text-slate-400 mt-1">{task.description}</div>
+                          )}
+                          <div className="text-sm text-slate-300 mt-1">
+                            Due: {dueDate.toLocaleDateString()} at {dueDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1 capitalize">
+                            Priority: {task.priority}
+                          </div>
+                        </div>
+                        {(isUrgent || isOverdue || task.priority === 'urgent' || task.priority === 'high') && (
+                          <Badge variant="destructive" className={
+                            isOverdue 
+                              ? "bg-red-500/20 text-red-400 border-red-400/30"
+                              : "bg-orange-500/20 text-orange-400 border-orange-400/30"
+                          }>
+                            {isOverdue ? 'Overdue' : 'Urgent'}
+                          </Badge>
+                        )}
                       </div>
-                      {task.urgent && (
-                        <Badge variant="destructive" className="bg-red-500/20 text-red-400 border-red-400/30">
-                          Urgent
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )
         };
