@@ -13,6 +13,8 @@ import { AttendanceModal } from "@/components/AttendanceModal";
 import { StatCardModal } from "@/components/StatCardModal";
 import { MessagesModal } from "@/components/MessagesModal";
 import { ParentSelectorModal } from "@/components/ParentSelectorModal";
+import { CreateTaskModal } from "@/components/CreateTaskModal";
+import { TasksModal } from "@/components/TasksModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
@@ -26,6 +28,7 @@ const TeacherDashboard = () => {
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [selectedMessageSender, setSelectedMessageSender] = useState<{userId: string, name: string} | null>(null);
   const [parentSelectorOpen, setParentSelectorOpen] = useState(false);
+  const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead, refetch } = useTeacherData();
 
@@ -344,39 +347,64 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {tasks.length > 0 ? tasks.map((task) => (
-                  <div key={task.id} className={`p-3 rounded-lg border ${task.urgent ? 'border-orange-400/50 bg-orange-400/10' : 'bg-slate-700/50'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-white">{task.task}</div>
-                        <div className="text-sm text-slate-300">Due: {task.dueText}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {task.urgent && (
-                          <div className="text-xs bg-orange-500 text-white px-2 py-1 rounded">
-                            Urgent
+                {tasks.length > 0 ? tasks.slice(0, 4).map((task) => {
+                  const dueDate = new Date(task.due_date);
+                  const now = new Date();
+                  const diffHours = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                  const isUrgent = diffHours > 0 && diffHours <= 24;
+                  const isOverdue = dueDate < now;
+                  
+                  return (
+                    <div key={task.id} className={`p-3 rounded-lg border ${
+                      isOverdue ? 'border-red-400/50 bg-red-400/10' : 
+                      isUrgent ? 'border-orange-400/50 bg-orange-400/10' : 
+                      'bg-slate-700/50 border-slate-600'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-white">{task.title}</div>
+                          <div className="text-sm text-slate-300">
+                            Due: {format(dueDate, "MMM d, yyyy 'at' h:mm a")}
                           </div>
-                        )}
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => markTaskComplete(task.id)}
-                          className="text-xs"
-                        >
-                          Complete
-                        </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isOverdue && (
+                            <div className="text-xs bg-red-500 text-white px-2 py-1 rounded">
+                              Overdue
+                            </div>
+                          )}
+                          {isUrgent && !isOverdue && (
+                            <div className="text-xs bg-orange-500 text-white px-2 py-1 rounded">
+                              Urgent
+                            </div>
+                          )}
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => markTaskComplete(task.id)}
+                            className="text-xs"
+                          >
+                            Complete
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )) : (
+                  );
+                }) : (
                   <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
                     No pending tasks
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-                View All Tasks
-              </Button>
+              <div className="flex gap-2 mt-4">
+                <CreateTaskModal onTaskCreated={refetch} />
+                <Button 
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white border-0"
+                  onClick={() => setTasksModalOpen(true)}
+                >
+                  View All Tasks
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -468,6 +496,13 @@ const TeacherDashboard = () => {
           setParentSelectorOpen(false);
           setMessagesModalOpen(true);
         }}
+      />
+
+      <TasksModal
+        open={tasksModalOpen}
+        onOpenChange={setTasksModalOpen}
+        tasks={tasks}
+        onTaskUpdate={refetch}
       />
     </div>
   );

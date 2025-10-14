@@ -15,11 +15,12 @@ export interface TeacherClass {
 
 export interface TeacherTask {
   id: string;
-  task: string;
-  urgent: boolean;
-  due: Date;
-  dueText: string;
-  type: 'grading' | 'attendance' | 'meeting' | 'admin';
+  title: string;
+  description: string | null;
+  due_date: string;
+  priority: string;
+  status: string;
+  completed_at: string | null;
 }
 
 export interface TeacherMessage {
@@ -268,51 +269,21 @@ export const useTeacherData = () => {
           setStats(prev => ({ ...prev, totalAssignments: formattedAssignments.length }));
         }
 
-        // Generate realistic tasks based on real data and current date
-        const now = new Date();
-        const mockTasks: TeacherTask[] = [
-          {
-            id: "1",
-            task: formattedClasses.length > 0 
-              ? `Grade assignments for ${formattedClasses[0].name}` 
-              : "Grade assignments",
-            urgent: true,
-            due: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0), // Today 5PM
-            dueText: "",
-            type: "grading"
-          },
-          {
-            id: "2",
-            task: "Review attendance records",
-            urgent: false,
-            due: addDays(now, 1), // Tomorrow
-            dueText: "",
-            type: "attendance"
-          },
-          {
-            id: "3",
-            task: "Parent meeting scheduled",
-            urgent: true,
-            due: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0), // Today 3PM
-            dueText: "",
-            type: "meeting"
-          },
-          {
-            id: "4",
-            task: "Submit weekly progress report",
-            urgent: false,
-            due: addDays(now, 5), // This Friday
-            dueText: "",
-            type: "admin"
-          }
-        ];
+        // Fetch real tasks from database
+        const { data: tasksData } = await supabase
+          .from("teacher_tasks")
+          .select("*")
+          .eq("teacher_user_id", user.id)
+          .eq("status", "pending")
+          .order("due_date", { ascending: true });
 
-        // Format due dates
-        mockTasks.forEach(task => {
-          task.dueText = formatDueDate(task.due);
-        });
-        setTasks(mockTasks);
-        setStats(prev => ({ ...prev, pendingTasks: mockTasks.length }));
+        if (tasksData) {
+          setTasks(tasksData);
+          setStats(prev => ({ ...prev, pendingTasks: tasksData.length }));
+        } else {
+          setTasks([]);
+          setStats(prev => ({ ...prev, pendingTasks: 0 }));
+        }
 
         // Fetch real messages from parents and admins
         const { data: messagesData } = await supabase
@@ -400,13 +371,32 @@ export const useTeacherData = () => {
   };
 
   const markTaskComplete = async (taskId: string) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
-    setStats(prev => ({ ...prev, pendingTasks: prev.pendingTasks - 1 }));
-    
-    toast({
-      title: "Task Completed",
-      description: "Task marked as complete"
-    });
+    try {
+      const { error } = await supabase
+        .from("teacher_tasks")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString()
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+      setStats(prev => ({ ...prev, pendingTasks: prev.pendingTasks - 1 }));
+      
+      toast({
+        title: "Task Completed",
+        description: "Task marked as complete"
+      });
+    } catch (error) {
+      console.error("Error completing task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to complete task",
+        variant: "destructive"
+      });
+    }
   };
 
   const markMessageRead = async (messageId: string) => {

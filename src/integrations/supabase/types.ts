@@ -1315,6 +1315,45 @@ export type Database = {
           },
         ]
       }
+      teacher_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string
+          id: string
+          priority: string
+          status: string
+          teacher_user_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date: string
+          id?: string
+          priority?: string
+          status?: string
+          teacher_user_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          id?: string
+          priority?: string
+          status?: string
+          teacher_user_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       teacher_temp_credentials: {
         Row: {
           created_at: string
