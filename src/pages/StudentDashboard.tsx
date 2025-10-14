@@ -190,7 +190,7 @@ const StudentDashboard = () => {
               <div className="text-sm text-slate-300">{t('attendance')}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer hover:scale-105 hover:border-blue-400/50">
             <CardContent className="p-6 text-center">
               <BookOpen className="w-8 h-8 text-blue-400 mx-auto mb-2" />
               <div className="text-2xl font-bold text-blue-400">{studentInfo?.subjects?.length || 0}</div>
@@ -234,11 +234,6 @@ const StudentDashboard = () => {
                             <div className="text-sm text-slate-300">
                               {teacher.subjects?.name} {teacher.subjects?.code && `(${teacher.subjects.code})`}
                             </div>
-                            {teacher.profiles?.email && (
-                              <div className="text-xs text-slate-400">
-                                {teacher.profiles.email}
-                              </div>
-                            )}
                           </div>
                           <div className="p-2 bg-purple-500/20 rounded-lg">
                             <GraduationCap className="w-4 h-4 text-purple-400" />
@@ -309,7 +304,7 @@ const StudentDashboard = () => {
                   const countdown = getCountdown(dueDate);
                   
                   return (
-                    <div key={assignment.id} className="p-3 bg-slate-700/50 rounded-lg">
+                    <div key={assignment.id} className="p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-all hover:scale-[1.02]">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="font-medium text-white">{assignment.title}</div>
