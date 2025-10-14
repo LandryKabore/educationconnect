@@ -13,6 +13,8 @@ import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { getCountdown } from "@/utils/countdownHelpers";
+import { AllTeachersModal } from "@/components/AllTeachersModal";
+import { StudyCalendarModal } from "@/components/StudyCalendarModal";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -23,6 +25,8 @@ const StudentDashboard = () => {
   const [gradesModalOpen, setGradesModalOpen] = useState(false);
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [subjectsModalOpen, setSubjectsModalOpen] = useState(false);
+  const [teachersModalOpen, setTeachersModalOpen] = useState(false);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -224,7 +228,7 @@ const StudentDashboard = () => {
             <CardContent>
               <div className="space-y-3">
                 {studentInfo?.teachers && studentInfo.teachers.length > 0 ? 
-                  studentInfo.teachers.map((teacher, index) => {
+                  studentInfo.teachers.slice(0, 3).map((teacher, index) => {
                     console.log('Teacher data:', teacher); // Debug log
                     return (
                       <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
@@ -253,6 +257,14 @@ const StudentDashboard = () => {
                   )
                 }
               </div>
+              {studentInfo?.teachers && studentInfo.teachers.length > 3 && (
+                <Button 
+                  onClick={() => setTeachersModalOpen(true)}
+                  className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
+                >
+                  View All Teachers ({studentInfo.teachers.length})
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -336,7 +348,10 @@ const StudentDashboard = () => {
                   </div>
                 )}
               </div>
-              <Button className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
+              <Button 
+                className="w-full mt-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+                onClick={() => setCalendarModalOpen(true)}
+              >
                 View Study Calendar
               </Button>
             </CardContent>
@@ -474,6 +489,18 @@ const StudentDashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AllTeachersModal
+        open={teachersModalOpen}
+        onOpenChange={setTeachersModalOpen}
+        teachers={studentInfo?.teachers || []}
+      />
+
+      <StudyCalendarModal
+        open={calendarModalOpen}
+        onOpenChange={setCalendarModalOpen}
+        assignments={assignments}
+      />
     </div>
   );
 };
