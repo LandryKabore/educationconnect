@@ -94,17 +94,7 @@ export const useTeacherData = () => {
 
   // Utility function to format due dates
   const formatDueDate = (date: Date): string => {
-    if (isToday(date)) {
-      return `Today ${format(date, 'h:mm a')}`;
-    } else if (isTomorrow(date)) {
-      return `Tomorrow ${format(date, 'h:mm a')}`;
-    } else {
-      const daysDiff = differenceInDays(date, new Date());
-      if (daysDiff <= 7) {
-        return format(date, 'EEEE h:mm a');
-      }
-      return format(date, 'MMM d, h:mm a');
-    }
+    return format(date, 'MMM d, yyyy h:mm a');
   };
 
   // Utility function to format message times
