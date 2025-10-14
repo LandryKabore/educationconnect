@@ -26,6 +26,7 @@ export interface ChildExam {
   date: string;
   time: string;
   topic: string;
+  type: 'exam' | 'assignment';
 }
 
 export interface ClassAttendance {
@@ -263,7 +264,7 @@ export const useParentData = () => {
       );
     
 
-      // Fetch upcoming exams for the child's enrolled classes
+      // Fetch upcoming exams and assignments for the child's enrolled classes
       const { data: enrollmentsData } = await supabase
         .from("enrollments")
         .select("class_section_id")
@@ -276,6 +277,7 @@ export const useParentData = () => {
         console.log("Parent - Class section IDs for exams:", classSectionIds);
         console.log("Parent - Looking for exams >= ", new Date().toISOString().split('T')[0]);
         
+        // Fetch upcoming exams
         const { data: examsData, error: examsError } = await supabase
           .from("exams")
           .select(`
@@ -285,22 +287,62 @@ export const useParentData = () => {
           .in("class_section_id", classSectionIds)
           .gte("exam_date", new Date().toISOString().split('T')[0])
           .order("exam_date", { ascending: true })
-          .limit(5);
+          .limit(10);
+
+        // Fetch upcoming assignments
+        const { data: assignmentsData, error: assignmentsError } = await supabase
+          .from("assignments")
+          .select(`
+            *,
+            subjects(name)
+          `)
+          .in("class_id", classSectionIds)
+          .gte("due_date", new Date().toISOString())
+          .order("due_date", { ascending: true })
+          .limit(10);
 
         console.log("Parent - Exams data:", examsData);
         console.log("Parent - Exams error:", examsError);
+        console.log("Parent - Assignments data:", assignmentsData);
+        console.log("Parent - Assignments error:", assignmentsError);
 
+        const allUpcoming: ChildExam[] = [];
+
+        // Add exams
         if (examsData) {
           const formattedExams = examsData.map(exam => ({
             id: exam.id,
             subject: exam.subjects?.name || "Unknown Subject",
             date: new Date(exam.exam_date).toLocaleDateString(),
             time: "TBD",
-            topic: exam.title
+            topic: exam.title,
+            type: 'exam' as const
           }));
-          setExams(formattedExams);
-          console.log("Parent - Formatted exams:", formattedExams);
+          allUpcoming.push(...formattedExams);
         }
+
+        // Add assignments
+        if (assignmentsData) {
+          const formattedAssignments = assignmentsData.map(assignment => ({
+            id: assignment.id,
+            subject: assignment.subjects?.name || "Unknown Subject",
+            date: new Date(assignment.due_date).toLocaleDateString(),
+            time: new Date(assignment.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            topic: assignment.title,
+            type: 'assignment' as const
+          }));
+          allUpcoming.push(...formattedAssignments);
+        }
+
+        // Sort all by date
+        allUpcoming.sort((a, b) => {
+          const dateA = new Date(a.date);
+          const dateB = new Date(b.date);
+          return dateA.getTime() - dateB.getTime();
+        });
+
+        setExams(allUpcoming);
+        console.log("Parent - All upcoming tasks:", allUpcoming);
       } else {
         console.log("Parent - No enrollments found for child:", childId);
       }

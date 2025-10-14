@@ -180,7 +180,7 @@ const ParentDashboard = () => {
                 </div>
                 <div className="text-center p-4 bg-slate-100/80 rounded-xl">
                   <div className="text-2xl font-bold text-red-500">{exams.length}</div>
-                  <div className="text-sm text-slate-600">Upcoming Exams</div>
+                  <div className="text-sm text-slate-600">Upcoming Tasks</div>
                 </div>
               </div>
             </CardContent>
@@ -220,28 +220,41 @@ const ParentDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Upcoming Exams */}
+          {/* Upcoming Tasks (Exams & Assignments) */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-orange-400" />
-                <CardTitle className="text-white">Upcoming Exams</CardTitle>
+                <CardTitle className="text-white">Upcoming Tasks</CardTitle>
               </div>
-              <CardDescription className="text-slate-300">Important test dates</CardDescription>
+              <CardDescription className="text-slate-300">Exams and assignments coming up</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {exams.length > 0 ? exams.map((exam) => (
-                  <div key={exam.id} className="p-3 bg-slate-700/50 rounded-xl">
-                    <div className="font-medium text-white">{exam.subject}</div>
-                    <div className="text-sm text-slate-300">{exam.topic}</div>
-                    <div className="text-sm text-slate-400">
-                      {exam.date} at {exam.time}
+                {exams.length > 0 ? exams.map((task) => (
+                  <div key={task.id} className="p-3 bg-slate-700/50 rounded-xl">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-white">{task.subject}</div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            task.type === 'exam' 
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                              : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          }`}>
+                            {task.type === 'exam' ? 'Exam' : 'Assignment'}
+                          </span>
+                        </div>
+                        <div className="text-sm text-slate-300 mt-1">{task.topic}</div>
+                        <div className="text-sm text-slate-400 mt-1">
+                          {task.date} at {task.time}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )) : (
                   <div className="p-3 bg-slate-700/50 rounded-xl text-center text-slate-300">
-                    No upcoming exams
+                    No upcoming tasks
                   </div>
                 )}
               </div>
