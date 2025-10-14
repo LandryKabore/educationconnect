@@ -137,15 +137,17 @@ export const useMessages = () => {
               .from("teaching_assignments")
               .select(`
                 class_section_id,
-                class_sections!inner(name, grade_level)
+                class_sections!inner(name, grade_level),
+                subjects!inner(name)
               `)
               .eq("teacher_user_id", partnerId)
               .limit(1)
               .maybeSingle();
             
-            if (assignments && assignments.class_sections) {
+            if (assignments && assignments.class_sections && assignments.subjects) {
               const classSection = assignments.class_sections as any;
-              teacherInfo = `Grade ${classSection.grade_level} - ${classSection.name}`;
+              const subject = assignments.subjects as any;
+              teacherInfo = `${subject.name} - Grade ${classSection.grade_level} ${classSection.name}`;
             }
           }
           
