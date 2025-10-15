@@ -109,6 +109,8 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
 
       if (error) throw error;
 
+      console.log("Enrollments found:", enrollments);
+
       const studentIds = enrollments?.map(e => e.student_user_id) || [];
       
       if (studentIds.length > 0) {
@@ -118,7 +120,11 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
           .in("user_id", studentIds);
 
         if (profilesError) throw profilesError;
+        console.log("Classmates profiles:", profiles);
         setClassmates(profiles || []);
+      } else {
+        console.log("No other students enrolled in this class");
+        setClassmates([]);
       }
     } catch (error) {
       console.error("Error fetching classmates:", error);
@@ -532,9 +538,12 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                         <div className="mt-4 pt-4 border-t border-slate-600">
                           <Label className="text-slate-200">Add Friends to Group</Label>
                           <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                            {classmates
-                              .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
-                              .map((classmate) => (
+                            {classmates.filter(c => !group.study_group_members.some(m => m.user_id === c.user_id)).length === 0 ? (
+                              <p className="text-sm text-slate-400">No classmates available to add. All your classmates are already in this group.</p>
+                            ) : (
+                              classmates
+                                .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
+                                .map((classmate) => (
                                 <div key={classmate.user_id} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`add-${group.id}-${classmate.user_id}`}
@@ -554,7 +563,8 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                                     {classmate.first_name} {classmate.last_name}
                                   </label>
                                 </div>
-                              ))}
+                              ))
+                            )}
                           </div>
                           <div className="flex gap-2 mt-3">
                             <Button
@@ -653,9 +663,12 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                         <div className="mt-4 pt-4 border-t border-slate-600">
                           <Label className="text-slate-200">Add Friends to Group</Label>
                           <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                            {classmates
-                              .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
-                              .map((classmate) => (
+                            {classmates.filter(c => !group.study_group_members.some(m => m.user_id === c.user_id)).length === 0 ? (
+                              <p className="text-sm text-slate-400">No classmates available to add. All your classmates are already in this group.</p>
+                            ) : (
+                              classmates
+                                .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
+                                .map((classmate) => (
                                 <div key={classmate.user_id} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`my-add-${group.id}-${classmate.user_id}`}
@@ -675,7 +688,8 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                                     {classmate.first_name} {classmate.last_name}
                                   </label>
                                 </div>
-                              ))}
+                              ))
+                            )}
                           </div>
                           <div className="flex gap-2 mt-3">
                             <Button
