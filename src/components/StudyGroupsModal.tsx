@@ -647,62 +647,63 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                             </>
                           )}
                         </div>
-                        {addingMembersToGroup === group.id && (
-                          <div className="mt-4 pt-4 border-t border-slate-600">
-                            <Label className="text-slate-200">Add Friends to Group</Label>
-                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                              {classmates
-                                .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
-                                .map((classmate) => (
-                                  <div key={classmate.user_id} className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`my-add-${group.id}-${classmate.user_id}`}
-                                      checked={membersToAdd.includes(classmate.user_id)}
-                                      onCheckedChange={() => {
-                                        setMembersToAdd(prev =>
-                                          prev.includes(classmate.user_id)
-                                            ? prev.filter(id => id !== classmate.user_id)
-                                            : [...prev, classmate.user_id]
-                                        );
-                                      }}
-                                    />
-                                    <label
-                                      htmlFor={`my-add-${group.id}-${classmate.user_id}`}
-                                      className="text-sm text-slate-200 cursor-pointer"
-                                    >
-                                      {classmate.first_name} {classmate.last_name}
-                                    </label>
-                                  </div>
-                                ))}
-                            </div>
-                            <div className="flex gap-2 mt-3">
-                              <Button
-                                onClick={() => {
-                                  handleAddMembers(group.id, membersToAdd);
-                                  setAddingMembersToGroup(null);
-                                  setMembersToAdd([]);
-                                }}
-                                size="sm"
-                                className="bg-green-500 hover:bg-green-600"
-                                disabled={membersToAdd.length === 0}
-                              >
-                                Add Selected
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setAddingMembersToGroup(null);
-                                  setMembersToAdd([]);
-                                }}
-                                size="sm"
-                                variant="outline"
-                                className="border-slate-500 text-slate-200"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        )}
                       </div>
+                      
+                      {addingMembersToGroup === group.id && (
+                        <div className="mt-4 pt-4 border-t border-slate-600">
+                          <Label className="text-slate-200">Add Friends to Group</Label>
+                          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                            {classmates
+                              .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
+                              .map((classmate) => (
+                                <div key={classmate.user_id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`my-add-${group.id}-${classmate.user_id}`}
+                                    checked={membersToAdd.includes(classmate.user_id)}
+                                    onCheckedChange={() => {
+                                      setMembersToAdd(prev =>
+                                        prev.includes(classmate.user_id)
+                                          ? prev.filter(id => id !== classmate.user_id)
+                                          : [...prev, classmate.user_id]
+                                      );
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`my-add-${group.id}-${classmate.user_id}`}
+                                    className="text-sm text-slate-200 cursor-pointer"
+                                  >
+                                    {classmate.first_name} {classmate.last_name}
+                                  </label>
+                                </div>
+                              ))}
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              onClick={() => {
+                                handleAddMembers(group.id, membersToAdd);
+                                setAddingMembersToGroup(null);
+                                setMembersToAdd([]);
+                              }}
+                              size="sm"
+                              className="bg-green-500 hover:bg-green-600"
+                              disabled={membersToAdd.length === 0}
+                            >
+                              Add Selected
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setAddingMembersToGroup(null);
+                                setMembersToAdd([]);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-500 text-slate-200"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
