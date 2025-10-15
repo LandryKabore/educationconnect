@@ -1620,6 +1620,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      shares_class_with: {
+        Args: { target_student_id: string }
+        Returns: boolean
+      }
       teacher_can_view_parent_link: {
         Args: { parent_link_student_id: string; teacher_id: string }
         Returns: boolean
