@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, UserPlus, Loader2, Crown } from "lucide-react";
+import { Users, Plus, UserPlus, Loader2, Crown, Trash2, UserPlus as AddFriend } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -53,6 +53,10 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
   const [groupDescription, setGroupDescription] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  
+  // Add members state
+  const [addingMembersToGroup, setAddingMembersToGroup] = useState<string | null>(null);
+  const [membersToAdd, setMembersToAdd] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -260,6 +264,74 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
     }
   };
 
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!confirm("Are you sure you want to delete this study group? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      // First delete all members
+      const { error: membersError } = await supabase
+        .from("study_group_members")
+        .delete()
+        .eq("study_group_id", groupId);
+
+      if (membersError) throw membersError;
+
+      // Then delete the group
+      const { error: groupError } = await supabase
+        .from("study_groups")
+        .delete()
+        .eq("id", groupId);
+
+      if (groupError) throw groupError;
+
+      toast({
+        title: "Success",
+        description: "Study group deleted successfully",
+      });
+
+      fetchStudyGroups();
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete study group",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddMembers = async (groupId: string, memberIds: string[]) => {
+    try {
+      const membersToAdd = memberIds.map(userId => ({
+        study_group_id: groupId,
+        user_id: userId,
+        role: 'student',
+      }));
+
+      const { error } = await supabase
+        .from("study_group_members")
+        .insert(membersToAdd);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Friends added to the group!",
+      });
+
+      fetchStudyGroups();
+    } catch (error) {
+      console.error("Error adding members:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add friends",
+        variant: "destructive",
+      });
+    }
+  };
+
   const toggleMemberSelection = (userId: string) => {
     setSelectedMembers(prev =>
       prev.includes(userId)
@@ -410,8 +482,31 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                             {group._memberCount} member{group._memberCount !== 1 ? 's' : ''}
                           </p>
                         </div>
-                        <div>
-                          {group._isMember ? (
+                        <div className="flex gap-2">
+                          {group._isCreator ? (
+                            <>
+                              <Button
+                                onClick={() => {
+                                  setAddingMembersToGroup(group.id);
+                                  setMembersToAdd([]);
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="border-green-500 text-green-400 hover:bg-green-500/10"
+                              >
+                                <AddFriend className="w-4 h-4 mr-1" />
+                                Add Friends
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteGroup(group.id)}
+                                size="sm"
+                                variant="outline"
+                                className="border-red-500 text-red-400 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          ) : group._isMember ? (
                             <Button
                               onClick={() => handleLeaveGroup(group.id)}
                               variant="outline"
@@ -432,6 +527,62 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                           )}
                         </div>
                       </div>
+                      
+                      {addingMembersToGroup === group.id && (
+                        <div className="mt-4 pt-4 border-t border-slate-600">
+                          <Label className="text-slate-200">Add Friends to Group</Label>
+                          <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                            {classmates
+                              .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
+                              .map((classmate) => (
+                                <div key={classmate.user_id} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`add-${group.id}-${classmate.user_id}`}
+                                    checked={membersToAdd.includes(classmate.user_id)}
+                                    onCheckedChange={() => {
+                                      setMembersToAdd(prev =>
+                                        prev.includes(classmate.user_id)
+                                          ? prev.filter(id => id !== classmate.user_id)
+                                          : [...prev, classmate.user_id]
+                                      );
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`add-${group.id}-${classmate.user_id}`}
+                                    className="text-sm text-slate-200 cursor-pointer"
+                                  >
+                                    {classmate.first_name} {classmate.last_name}
+                                  </label>
+                                </div>
+                              ))}
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              onClick={() => {
+                                handleAddMembers(group.id, membersToAdd);
+                                setAddingMembersToGroup(null);
+                                setMembersToAdd([]);
+                              }}
+                              size="sm"
+                              className="bg-green-500 hover:bg-green-600"
+                              disabled={membersToAdd.length === 0}
+                            >
+                              Add Selected
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setAddingMembersToGroup(null);
+                                setMembersToAdd([]);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="border-slate-500 text-slate-200"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -470,14 +621,87 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                             {group._memberCount} member{group._memberCount !== 1 ? 's' : ''}
                           </p>
                         </div>
-                        <Button
-                          onClick={() => handleLeaveGroup(group.id)}
-                          variant="outline"
-                          size="sm"
-                          className="border-red-500 text-red-400 hover:bg-red-500/10"
-                        >
-                          Leave
-                        </Button>
+                        <div className="flex gap-2">
+                          {group._isCreator && (
+                            <>
+                              <Button
+                                onClick={() => {
+                                  setAddingMembersToGroup(group.id);
+                                  setMembersToAdd([]);
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="border-green-500 text-green-400 hover:bg-green-500/10"
+                              >
+                                <AddFriend className="w-4 h-4 mr-1" />
+                                Add Friends
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteGroup(group.id)}
+                                size="sm"
+                                variant="outline"
+                                className="border-red-500 text-red-400 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                        {addingMembersToGroup === group.id && (
+                          <div className="mt-4 pt-4 border-t border-slate-600">
+                            <Label className="text-slate-200">Add Friends to Group</Label>
+                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                              {classmates
+                                .filter(c => !group.study_group_members.some(m => m.user_id === c.user_id))
+                                .map((classmate) => (
+                                  <div key={classmate.user_id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`my-add-${group.id}-${classmate.user_id}`}
+                                      checked={membersToAdd.includes(classmate.user_id)}
+                                      onCheckedChange={() => {
+                                        setMembersToAdd(prev =>
+                                          prev.includes(classmate.user_id)
+                                            ? prev.filter(id => id !== classmate.user_id)
+                                            : [...prev, classmate.user_id]
+                                        );
+                                      }}
+                                    />
+                                    <label
+                                      htmlFor={`my-add-${group.id}-${classmate.user_id}`}
+                                      className="text-sm text-slate-200 cursor-pointer"
+                                    >
+                                      {classmate.first_name} {classmate.last_name}
+                                    </label>
+                                  </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <Button
+                                onClick={() => {
+                                  handleAddMembers(group.id, membersToAdd);
+                                  setAddingMembersToGroup(null);
+                                  setMembersToAdd([]);
+                                }}
+                                size="sm"
+                                className="bg-green-500 hover:bg-green-600"
+                                disabled={membersToAdd.length === 0}
+                              >
+                                Add Selected
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  setAddingMembersToGroup(null);
+                                  setMembersToAdd([]);
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="border-slate-500 text-slate-200"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
