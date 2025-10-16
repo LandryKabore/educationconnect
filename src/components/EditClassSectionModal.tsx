@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Loader2 } from "lucide-react";
+import { Users, Loader2, Clock } from "lucide-react";
 
 interface EditClassSectionModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
   const [loading, setLoading] = useState(false);
   const [campuses, setCampuses] = useState<any[]>([]);
   const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     grade_level: "",
@@ -34,6 +36,8 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
     campus_id: "",
     academic_year_id: ""
   });
+
+  const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
   useEffect(() => {
     if (isOpen) {
@@ -52,7 +56,7 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
   const fetchData = async () => {
     try {
-      const [campusesData, academicYearsData] = await Promise.all([
+      const [campusesData, academicYearsData, subjectsData] = await Promise.all([
         supabase
           .from('campuses')
           .select('*')
@@ -66,11 +70,16 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
           .then(result => ({
             ...result,
             data: selectedSchoolId ? result.data?.filter(ay => ay.school_id === selectedSchoolId) : result.data
-          }))
+          })),
+        supabase
+          .from('class_section_subjects')
+          .select('*, subjects(*)')
+          .eq('class_section_id', classSection?.id || '')
       ]);
 
       setCampuses(campusesData.data || []);
       setAcademicYears(academicYearsData.data || []);
+      setSubjects(subjectsData.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -89,7 +98,8 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      // Update class section basic info
+      const { error: classError } = await supabase
         .from('class_sections')
         .update({
           name: formData.name,
@@ -100,7 +110,22 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
         })
         .eq('id', classSection.id);
 
-      if (error) throw error;
+      if (classError) throw classError;
+
+      // Update subject schedules
+      for (const subject of subjects) {
+        const { error: scheduleError } = await supabase
+          .from('class_section_subjects')
+          .update({
+            schedule_days: subject.schedule_days,
+            schedule_time_start: subject.schedule_time_start,
+            schedule_time_end: subject.schedule_time_end,
+            schedule_duration: subject.schedule_duration
+          })
+          .eq('id', subject.id);
+
+        if (scheduleError) throw scheduleError;
+      }
 
       toast({
         title: "Success",
@@ -121,6 +146,25 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
     }
   };
 
+  const updateSubjectSchedule = (subjectId: string, field: string, value: any) => {
+    setSubjects(subjects.map(s => 
+      s.id === subjectId ? { ...s, [field]: value } : s
+    ));
+  };
+
+  const toggleDay = (subjectId: string, day: string) => {
+    setSubjects(subjects.map(s => {
+      if (s.id === subjectId) {
+        const days = s.schedule_days || [];
+        const newDays = days.includes(day)
+          ? days.filter((d: string) => d !== day)
+          : [...days, day];
+        return { ...s, schedule_days: newDays };
+      }
+      return s;
+    }));
+  };
+
   const handleClose = () => {
     setFormData({
       name: "",
@@ -134,18 +178,18 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
             Edit Class Section
           </DialogTitle>
           <DialogDescription>
-            Update the class section information below.
+            Update the class section information and subject schedules below.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">Section Name *</Label>
             <Input
@@ -216,6 +260,73 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
               </SelectContent>
             </Select>
           </div>
+
+          {/* Subject Schedules Section */}
+          {subjects.length > 0 && (
+            <div className="border-t pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Clock className="w-4 h-4" />
+                <Label className="text-base font-semibold">Subject Schedules</Label>
+              </div>
+              
+              <div className="space-y-6">
+                {subjects.map((subject) => (
+                  <div key={subject.id} className="border rounded-lg p-4 space-y-4">
+                    <h4 className="font-medium">{subject.subjects?.name} {subject.subjects?.code && `(${subject.subjects.code})`}</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Start Time</Label>
+                        <Input
+                          type="time"
+                          value={subject.schedule_time_start || ""}
+                          onChange={(e) => updateSubjectSchedule(subject.id, 'schedule_time_start', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>End Time</Label>
+                        <Input
+                          type="time"
+                          value={subject.schedule_time_end || ""}
+                          onChange={(e) => updateSubjectSchedule(subject.id, 'schedule_time_end', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Duration (minutes)</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="e.g., 45"
+                          value={subject.schedule_duration || ""}
+                          onChange={(e) => updateSubjectSchedule(subject.id, 'schedule_duration', parseInt(e.target.value) || null)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Days of Week</Label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {DAYS_OF_WEEK.map((day) => (
+                          <div key={day} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`${subject.id}-${day}`}
+                              checked={(subject.schedule_days || []).includes(day)}
+                              onCheckedChange={() => toggleDay(subject.id, day)}
+                            />
+                            <Label htmlFor={`${subject.id}-${day}`} className="text-sm cursor-pointer">
+                              {day}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={handleClose}>
