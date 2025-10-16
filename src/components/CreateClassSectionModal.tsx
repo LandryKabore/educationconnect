@@ -108,7 +108,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     try {
       const { data, error } = await supabase
         .from('subjects')
-        .select('id, name, code, schedule_days, schedule_time_start, schedule_time_end')
+        .select('id, name, code')
         .eq('school_id', schoolId)
         .order('name');
 
