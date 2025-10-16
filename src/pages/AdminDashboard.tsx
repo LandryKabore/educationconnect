@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2 } from "lucide-react";
+import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -70,6 +70,7 @@ const AdminDashboard = () => {
   const [editingClassSection, setEditingClassSection] = useState<any>(null);
   const [editingSubject, setEditingSubject] = useState<any>(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
+  const [showAllClassSections, setShowAllClassSections] = useState(false);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
     campuses: [],
@@ -292,6 +293,35 @@ const AdminDashboard = () => {
   const handleEditSubject = (subject: any) => {
     setEditingSubject(subject);
     setEditSubjectModalOpen(true);
+  };
+
+  const handleDeleteClassSection = async (classSection: any) => {
+    if (!confirm(`Are you sure you want to delete ${classSection.name}?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('class_sections')
+        .delete()
+        .eq('id', classSection.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Class section deleted successfully",
+      });
+
+      fetchAdminData();
+    } catch (error) {
+      console.error('Error deleting class section:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete class section",
+        variant: "destructive",
+      });
+    }
   };
 
 
@@ -535,21 +565,36 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent className="space-y-3">
                 <div className="space-y-2">
-                  {adminData.classSections.slice(0, 3).map((section) => (
-                    <div key={section.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                      <span className="text-slate-200 text-sm">{section.name} - {section.grade_level}</span>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
-                        onClick={() => handleEditClassSection(section)}
-                      >
-                        Edit
-                      </Button>
+                  {(showAllClassSections ? adminData.classSections : adminData.classSections.slice(0, 3)).map((section) => (
+                    <div key={section.id} className="flex items-center justify-between gap-2 bg-slate-700/30 p-2 rounded">
+                      <span className="text-slate-200 text-sm flex-1">{section.name} - {section.grade_level}</span>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                          onClick={() => handleEditClassSection(section)}
+                        >
+                          Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-red-600 text-red-400 hover:bg-red-600/20"
+                          onClick={() => handleDeleteClassSection(section)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   {adminData.classSections.length > 3 && (
-                    <p className="text-xs text-slate-400">+{adminData.classSections.length - 3} more</p>
+                    <button 
+                      onClick={() => setShowAllClassSections(!showAllClassSections)}
+                      className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer underline"
+                    >
+                      {showAllClassSections ? 'Show less' : `+${adminData.classSections.length - 3} more`}
+                    </button>
                   )}
                 </div>
               <Button 
