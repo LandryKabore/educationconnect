@@ -327,7 +327,12 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
         description: "Friends added to the group!",
       });
 
-      fetchStudyGroups();
+      // Close the add members form and reset state
+      setAddingMembersToGroup(null);
+      setMembersToAdd([]);
+      
+      // Refresh the groups to show the new members
+      await fetchStudyGroups();
     } catch (error) {
       console.error("Error adding members:", error);
       toast({
@@ -568,11 +573,7 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                           </div>
                           <div className="flex gap-2 mt-3">
                             <Button
-                              onClick={() => {
-                                handleAddMembers(group.id, membersToAdd);
-                                setAddingMembersToGroup(null);
-                                setMembersToAdd([]);
-                              }}
+                              onClick={() => handleAddMembers(group.id, membersToAdd)}
                               size="sm"
                               className="bg-green-500 hover:bg-green-600"
                               disabled={membersToAdd.length === 0}
@@ -693,11 +694,7 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
                           </div>
                           <div className="flex gap-2 mt-3">
                             <Button
-                              onClick={() => {
-                                handleAddMembers(group.id, membersToAdd);
-                                setAddingMembersToGroup(null);
-                                setMembersToAdd([]);
-                              }}
+                              onClick={() => handleAddMembers(group.id, membersToAdd)}
                               size="sm"
                               className="bg-green-500 hover:bg-green-600"
                               disabled={membersToAdd.length === 0}
