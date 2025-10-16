@@ -276,15 +276,7 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
     }
 
     try {
-      // First delete all members
-      const { error: membersError } = await supabase
-        .from("study_group_members")
-        .delete()
-        .eq("study_group_id", groupId);
-
-      if (membersError) throw membersError;
-
-      // Then delete the group
+      // Delete the group directly - CASCADE will handle members
       const { error: groupError } = await supabase
         .from("study_groups")
         .delete()
@@ -310,7 +302,24 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
 
   const handleAddMembers = async (groupId: string, memberIds: string[]) => {
     try {
-      const membersToAdd = memberIds.map(userId => ({
+      // Filter out members who are already in the group
+      const group = studyGroups.find(g => g.id === groupId);
+      if (!group) return;
+      
+      const existingMemberIds = group.study_group_members.map(m => m.user_id);
+      const newMemberIds = memberIds.filter(id => !existingMemberIds.includes(id));
+      
+      if (newMemberIds.length === 0) {
+        toast({
+          title: "Already added",
+          description: "All selected classmates are already in this group",
+        });
+        setAddingMembersToGroup(null);
+        setMembersToAdd([]);
+        return;
+      }
+      
+      const membersToAdd = newMemberIds.map(userId => ({
         study_group_id: groupId,
         user_id: userId,
         role: 'student',
@@ -324,7 +333,7 @@ export function StudyGroupsModal({ open, onOpenChange, studentUserId, classSecti
 
       toast({
         title: "Success",
-        description: "Friends added to the group!",
+        description: `${newMemberIds.length} friend${newMemberIds.length > 1 ? 's' : ''} added to the group!`,
       });
 
       // Close the add members form and reset state
