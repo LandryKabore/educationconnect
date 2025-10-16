@@ -265,6 +265,10 @@ export type Database = {
           class_section_id: string
           created_at: string | null
           id: string
+          schedule_days: string[] | null
+          schedule_duration: number | null
+          schedule_time_end: string | null
+          schedule_time_start: string | null
           subject_id: string
           teacher_user_id: string | null
           updated_at: string | null
@@ -273,6 +277,10 @@ export type Database = {
           class_section_id: string
           created_at?: string | null
           id?: string
+          schedule_days?: string[] | null
+          schedule_duration?: number | null
+          schedule_time_end?: string | null
+          schedule_time_start?: string | null
           subject_id: string
           teacher_user_id?: string | null
           updated_at?: string | null
@@ -281,6 +289,10 @@ export type Database = {
           class_section_id?: string
           created_at?: string | null
           id?: string
+          schedule_days?: string[] | null
+          schedule_duration?: number | null
+          schedule_time_end?: string | null
+          schedule_time_start?: string | null
           subject_id?: string
           teacher_user_id?: string | null
           updated_at?: string | null
@@ -1204,10 +1216,6 @@ export type Database = {
           description: string | null
           id: string
           name: string
-          schedule_days: string[] | null
-          schedule_duration: number | null
-          schedule_time_end: string | null
-          schedule_time_start: string | null
           school_id: string | null
         }
         Insert: {
@@ -1217,10 +1225,6 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
-          schedule_days?: string[] | null
-          schedule_duration?: number | null
-          schedule_time_end?: string | null
-          schedule_time_start?: string | null
           school_id?: string | null
         }
         Update: {
@@ -1230,10 +1234,6 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
-          schedule_days?: string[] | null
-          schedule_duration?: number | null
-          schedule_time_end?: string | null
-          schedule_time_start?: string | null
           school_id?: string | null
         }
         Relationships: [

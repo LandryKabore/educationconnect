@@ -152,10 +152,7 @@ export const useTeacherData = () => {
             ),
             subjects(
               id,
-              name,
-              schedule_time_start,
-              schedule_time_end,
-              schedule_days
+              name
             ),
             academic_years(
               id,
@@ -200,12 +197,6 @@ export const useTeacherData = () => {
               
               const studentCount = enrollments?.length || 0;
               
-              // Format schedule time
-              let scheduleTime = "Not scheduled";
-              if (subject?.schedule_time_start && subject?.schedule_time_end) {
-                scheduleTime = `${subject.schedule_time_start} - ${subject.schedule_time_end}`;
-              }
-              
               // Check if attendance was taken today for this class
               const today = new Date().toISOString().split('T')[0];
               const { data: todayAttendance } = await supabase
@@ -221,7 +212,6 @@ export const useTeacherData = () => {
                 name: classSection.name,
                 grade_level: classSection.grade_level || "Unknown",
                 student_count: studentCount,
-                schedule_time: scheduleTime,
                 room: `Room ${Math.floor(Math.random() * 300) + 100}`, // Mock room for now
                 subject: subject?.name || "Subject",
                 attendanceTaken: todayAttendance && todayAttendance.length > 0
