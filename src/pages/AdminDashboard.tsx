@@ -3,6 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -71,6 +81,7 @@ const AdminDashboard = () => {
   const [editingSubject, setEditingSubject] = useState<any>(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [showAllClassSections, setShowAllClassSections] = useState(false);
+  const [deletingClassSection, setDeletingClassSection] = useState<any>(null);
   const [adminData, setAdminData] = useState<AdminData>({
     schools: [],
     campuses: [],
@@ -295,16 +306,14 @@ const AdminDashboard = () => {
     setEditSubjectModalOpen(true);
   };
 
-  const handleDeleteClassSection = async (classSection: any) => {
-    if (!confirm(`Are you sure you want to delete ${classSection.name}?`)) {
-      return;
-    }
+  const handleDeleteClassSection = async () => {
+    if (!deletingClassSection) return;
 
     try {
       const { error } = await supabase
         .from('class_sections')
         .delete()
-        .eq('id', classSection.id);
+        .eq('id', deletingClassSection.id);
 
       if (error) throw error;
 
@@ -313,6 +322,7 @@ const AdminDashboard = () => {
         description: "Class section deleted successfully",
       });
 
+      setDeletingClassSection(null);
       fetchAdminData();
     } catch (error) {
       console.error('Error deleting class section:', error);
@@ -581,7 +591,7 @@ const AdminDashboard = () => {
                           size="sm" 
                           variant="outline" 
                           className="border-red-600 text-red-400 hover:bg-red-600/20"
-                          onClick={() => handleDeleteClassSection(section)}
+                          onClick={() => setDeletingClassSection(section)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -810,6 +820,23 @@ const AdminDashboard = () => {
         onSuccess={fetchAdminData}
         selectedSchoolId={selectedSchoolId || undefined}
       />
+
+      <AlertDialog open={!!deletingClassSection} onOpenChange={(open) => !open && setDeletingClassSection(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Class Section?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingClassSection?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteClassSection} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
