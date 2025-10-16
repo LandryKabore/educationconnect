@@ -203,6 +203,22 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     }));
   };
 
+  const formatClassName = (value: string): string => {
+    // Remove extra spaces and trim
+    const cleaned = value.trim().replace(/\s+/g, ' ');
+    
+    // Match pattern: "Grade [number] [letter]" or "Grade[number][letter]"
+    const match = cleaned.match(/^grade\s*(\d+)\s*([a-z]?)$/i);
+    
+    if (match) {
+      const [, number, letter] = match;
+      return `Grade ${number}${letter.toUpperCase()}`;
+    }
+    
+    // If no match, just return cleaned value with proper capitalization for "Grade"
+    return cleaned.replace(/^grade\s*/i, 'Grade ');
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -224,7 +240,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, name: formatClassName(e.target.value) })}
                   placeholder="e.g., Grade 7A"
                   required
                 />
