@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2, Clock } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +26,7 @@ import { CreateAcademicYearModal } from "@/components/CreateAcademicYearModal";
 import { EditAcademicYearModal } from "@/components/EditAcademicYearModal";
 import { CreateClassSectionModal } from "@/components/CreateClassSectionModal";
 import { EditClassSectionModal } from "@/components/EditClassSectionModal";
+import { ManageSubjectSchedulesModal } from "@/components/ManageSubjectSchedulesModal";
 import { CreateSubjectModal } from "@/components/CreateSubjectModal";
 import { EditSubjectModal } from "@/components/EditSubjectModal";
 import { CreateTeacherModal } from "@/components/CreateTeacherModal";
@@ -67,6 +68,7 @@ const AdminDashboard = () => {
   const [editAcademicYearModalOpen, setEditAcademicYearModalOpen] = useState(false);
   const [createClassSectionModalOpen, setCreateClassSectionModalOpen] = useState(false);
   const [editClassSectionModalOpen, setEditClassSectionModalOpen] = useState(false);
+  const [manageSchedulesModalOpen, setManageSchedulesModalOpen] = useState(false);
   const [createSubjectModalOpen, setCreateSubjectModalOpen] = useState(false);
   const [editSubjectModalOpen, setEditSubjectModalOpen] = useState(false);
   const [createTeacherModalOpen, setCreateTeacherModalOpen] = useState(false);
@@ -583,6 +585,17 @@ const AdminDashboard = () => {
                           size="sm" 
                           variant="outline" 
                           className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                          onClick={() => {
+                            setEditingClassSection(section);
+                            setManageSchedulesModalOpen(true);
+                          }}
+                        >
+                          <Clock className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-slate-600 text-slate-200 hover:bg-slate-700"
                           onClick={() => handleEditClassSection(section)}
                         >
                           Edit
@@ -798,6 +811,13 @@ const AdminDashboard = () => {
         onClose={() => setEditSubjectModalOpen(false)}
         onSuccess={fetchAdminData}
         subject={editingSubject}
+      />
+
+      <ManageSubjectSchedulesModal
+        isOpen={manageSchedulesModalOpen}
+        onClose={() => setManageSchedulesModalOpen(false)}
+        onSuccess={fetchAdminData}
+        classSection={editingClassSection}
       />
 
       <CreateTeacherModal

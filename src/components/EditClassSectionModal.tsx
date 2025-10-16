@@ -12,8 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Loader2, Clock } from "lucide-react";
-import { SubjectScheduleCard } from "./SubjectScheduleCard";
+import { Users, Loader2 } from "lucide-react";
 
 interface EditClassSectionModalProps {
   isOpen: boolean;
@@ -28,7 +27,6 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
   const [loading, setLoading] = useState(false);
   const [campuses, setCampuses] = useState<any[]>([]);
   const [academicYears, setAcademicYears] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     grade_level: "",
@@ -54,7 +52,7 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
   const fetchData = async () => {
     try {
-      const [campusesData, academicYearsData, subjectsData] = await Promise.all([
+      const [campusesData, academicYearsData] = await Promise.all([
         supabase
           .from('campuses')
           .select('*')
@@ -68,16 +66,11 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
           .then(result => ({
             ...result,
             data: selectedSchoolId ? result.data?.filter(ay => ay.school_id === selectedSchoolId) : result.data
-          })),
-        supabase
-          .from('class_section_subjects')
-          .select('*, subjects(*)')
-          .eq('class_section_id', classSection?.id || '')
+          }))
       ]);
 
       setCampuses(campusesData.data || []);
       setAcademicYears(academicYearsData.data || []);
-      setSubjects(subjectsData.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -96,8 +89,7 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
     setLoading(true);
     try {
-      // Update class section basic info
-      const { error: classError } = await supabase
+      const { error } = await supabase
         .from('class_sections')
         .update({
           name: formData.name,
@@ -108,22 +100,7 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
         })
         .eq('id', classSection.id);
 
-      if (classError) throw classError;
-
-      // Update subject schedules
-      for (const subject of subjects) {
-        const { error: scheduleError } = await supabase
-          .from('class_section_subjects')
-          .update({
-            schedule_days: subject.schedule_days,
-            schedule_time_start: subject.schedule_time_start,
-            schedule_time_end: subject.schedule_time_end,
-            schedule_duration: subject.schedule_duration
-          })
-          .eq('id', subject.id);
-
-        if (scheduleError) throw scheduleError;
-      }
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -144,25 +121,6 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
     }
   };
 
-  const updateSubjectSchedule = (subjectId: string, field: string, value: any) => {
-    setSubjects(subjects.map(s => 
-      s.id === subjectId ? { ...s, [field]: value } : s
-    ));
-  };
-
-  const toggleDay = (subjectId: string, day: string) => {
-    setSubjects(subjects.map(s => {
-      if (s.id === subjectId) {
-        const days = s.schedule_days || [];
-        const newDays = days.includes(day)
-          ? days.filter((d: string) => d !== day)
-          : [...days, day];
-        return { ...s, schedule_days: newDays };
-      }
-      return s;
-    }));
-  };
-
   const handleClose = () => {
     setFormData({
       name: "",
@@ -176,18 +134,18 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
             Edit Class Section
           </DialogTitle>
           <DialogDescription>
-            Update the class section information and subject schedules below.
+            Update the class section information below.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Section Name *</Label>
             <Input
@@ -258,27 +216,6 @@ export function EditClassSectionModal({ isOpen, onClose, onSuccess, classSection
               </SelectContent>
             </Select>
           </div>
-
-          {/* Subject Schedules Section */}
-          {subjects.length > 0 && (
-            <div className="border-t pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Clock className="w-4 h-4" />
-                <Label className="text-base font-semibold">Subject Schedules</Label>
-              </div>
-              
-              <div className="space-y-6">
-                {subjects.map((subject) => (
-                  <SubjectScheduleCard
-                    key={subject.id}
-                    subject={subject}
-                    onUpdateSchedule={updateSubjectSchedule}
-                    onToggleDay={toggleDay}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={handleClose}>
