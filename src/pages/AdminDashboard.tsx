@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2, Clock } from "lucide-react";
+import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2, Clock, Shield } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ import { ImportStudentsModal } from "@/components/ImportStudentsModal";
 import { SchoolSelector } from "@/components/SchoolSelector";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LogoutButton } from "@/components/LogoutButton";
+import { useAdminAccess } from "@/hooks/useAdminAccess";
 
 interface AdminData {
   schools: any[];
@@ -54,7 +56,11 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  
+  // Admin access control
+  const { adminLevel, accessibleSchoolIds, hasAccess, schoolNames } = useAdminAccess();
+  const isSuperAdmin = adminLevel === 'super_admin';
+  const isSchoolAdmin = adminLevel === 'school_admin';
   
   // Modal states
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -97,70 +103,28 @@ const AdminDashboard = () => {
     totalParents: 0,
   });
 
+  // Auto-select school for school admins
   useEffect(() => {
-    // Listen for auth changes and verify admin role
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        checkAdminAndLoad();
-      } else {
-        setHasAdminAccess(false);
-        setLoading(false);
-      }
-    });
+    if (isSchoolAdmin && accessibleSchoolIds.length === 1 && !selectedSchoolId) {
+      setSelectedSchoolId(accessibleSchoolIds[0]);
+    }
+  }, [isSchoolAdmin, accessibleSchoolIds, selectedSchoolId]);
 
-    // Also check current session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        checkAdminAndLoad();
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Refetch data when selected school changes
+  // Refetch data when selected school changes or admin access is established
   useEffect(() => {
-    if (hasAdminAccess) {
+    if (hasAccess && accessibleSchoolIds.length > 0) {
       fetchAdminData();
     }
-  }, [selectedSchoolId]);
-
-  async function checkAdminAndLoad() {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase.rpc('is_admin');
-      if (error) throw error;
-      if (data === true) {
-        setHasAdminAccess(true);
-        await fetchAdminData();
-      } else {
-        setHasAdminAccess(false);
-        toast({
-          title: "Unauthorized",
-          description: "You must be an admin to access this dashboard.",
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      console.error('Error checking admin access:', err);
-      toast({
-        title: "Error",
-        description: "Failed to verify admin access.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [selectedSchoolId, hasAccess, accessibleSchoolIds]);
 
   const fetchAdminData = async () => {
     try {
-      // Build queries based on selected school
-      let schoolFilter = selectedSchoolId ? { school_id: selectedSchoolId } : {};
+      setLoading(true);
+      
+      // Build school filter based on admin level
+      const schoolIdsToQuery = selectedSchoolId 
+        ? [selectedSchoolId]
+        : (isSuperAdmin ? [] : accessibleSchoolIds);
       
       const [
         schoolsData,
@@ -174,44 +138,64 @@ const AdminDashboard = () => {
         teacherProfilesData,
         parentProfilesData
       ] = await Promise.all([
-        supabase.from('schools').select('*').eq('active', true),
+        // Filter schools based on admin access
+        supabase.from('schools').select('*').eq('active', true).then(result => ({
+          ...result,
+          data: isSuperAdmin ? result.data : result.data?.filter(s => accessibleSchoolIds.includes(s.id))
+        })),
         supabase.from('campuses').select('*').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(c => c.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0 
+            ? result.data?.filter(c => c.school_id && schoolIdsToQuery.includes(c.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(c => c.school_id && accessibleSchoolIds.includes(c.school_id)))
         })),
         supabase.from('academic_years').select('*').order('created_at', { ascending: false }).then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(ay => ay.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(ay => ay.school_id && schoolIdsToQuery.includes(ay.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(ay => ay.school_id && accessibleSchoolIds.includes(ay.school_id)))
         })),
         supabase.from('class_sections').select('*').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(cs => cs.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(cs => cs.school_id && schoolIdsToQuery.includes(cs.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(cs => cs.school_id && accessibleSchoolIds.includes(cs.school_id)))
         })),
         supabase.from('subjects').select('*').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(s => !s.school_id || s.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(s => !s.school_id || (s.school_id && schoolIdsToQuery.includes(s.school_id)))
+            : (isSuperAdmin ? result.data : result.data?.filter(s => !s.school_id || (s.school_id && accessibleSchoolIds.includes(s.school_id))))
         })),
         // Fetch all profiles first
         supabase.from('profiles').select('*'),
         // Then get student profiles to link students to schools
         supabase.from('student_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(sp => sp.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(sp => sp.school_id && schoolIdsToQuery.includes(sp.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(sp => sp.school_id && accessibleSchoolIds.includes(sp.school_id)))
         })),
         // And get student temp credentials to include pending students (only unused ones)
         supabase.from('student_temp_credentials').select('*').eq('is_used', false).then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(stc => stc.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(stc => stc.school_id && schoolIdsToQuery.includes(stc.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(stc => stc.school_id && accessibleSchoolIds.includes(stc.school_id)))
         })),
         // And teacher profiles to link teachers to schools
         supabase.from('teacher_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(tp => tp.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(tp => tp.school_id && schoolIdsToQuery.includes(tp.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(tp => tp.school_id && accessibleSchoolIds.includes(tp.school_id)))
         })),
         // And parent profiles to link parents to schools
         supabase.from('parent_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
-          data: selectedSchoolId ? result.data?.filter(pp => pp.school_id === selectedSchoolId) : result.data
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(pp => pp.school_id && schoolIdsToQuery.includes(pp.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(pp => pp.school_id && accessibleSchoolIds.includes(pp.school_id)))
         }))
       ]);
 
@@ -337,7 +321,7 @@ const AdminDashboard = () => {
   };
 
 
-  if (!hasAdminAccess) {
+  if (!hasAccess) {
     return <AdminLogin onSuccess={() => {}} />;
   }
 
@@ -368,7 +352,13 @@ const AdminDashboard = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-white">Admin Dashboard</h1>
+                <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                  Admin Dashboard
+                  <Badge variant={isSuperAdmin ? "default" : "secondary"} className="flex items-center gap-1">
+                    <Shield className="w-3 h-3" />
+                    {isSuperAdmin ? "Super Admin" : `School Admin${accessibleSchoolIds.length === 1 ? `: ${schoolNames[accessibleSchoolIds[0]]}` : ""}`}
+                  </Badge>
+                </h1>
                 <p className="text-sm text-slate-300">School Management System</p>
               </div>
             </div>
@@ -388,6 +378,9 @@ const AdminDashboard = () => {
             selectedSchoolId={selectedSchoolId}
             onSchoolSelect={setSelectedSchoolId}
             onRefresh={fetchAdminData}
+            adminLevel={adminLevel}
+            accessibleSchoolIds={accessibleSchoolIds}
+            schoolNames={schoolNames}
           />
         </div>
         {/* Quick Stats */}
@@ -477,12 +470,14 @@ const AdminDashboard = () => {
                     <p className="text-xs text-slate-400">+{adminData.schools.length - 3} more</p>
                   )}
                 </div>
-              <Button 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setCreateSchoolModalOpen(true)}
-              >
-                Create New School
-              </Button>
+              {isSuperAdmin && (
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => setCreateSchoolModalOpen(true)}
+                >
+                  Create New School
+                </Button>
+              )}
             </CardContent>
           </Card>
 
