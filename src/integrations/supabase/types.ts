@@ -1490,8 +1490,10 @@ export type Database = {
           assigned_at: string | null
           assigned_by: string | null
           created_at: string | null
+          created_by: string | null
           id: string
           role: string
+          school_id: string | null
           updated_at: string | null
           user_id: string
         }
@@ -1500,8 +1502,10 @@ export type Database = {
           assigned_at?: string | null
           assigned_by?: string | null
           created_at?: string | null
+          created_by?: string | null
           id?: string
           role: string
+          school_id?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -1510,12 +1514,22 @@ export type Database = {
           assigned_at?: string | null
           assigned_by?: string | null
           created_at?: string | null
+          created_by?: string | null
           id?: string
           role?: string
+          school_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1604,6 +1618,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_user_admin_schools: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          school_id: string
+        }[]
+      }
+      has_role: {
+        Args: { _role: string; _school_id?: string; _user_id: string }
+        Returns: boolean
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1612,12 +1636,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      is_school_admin: {
+        Args: { _school_id?: string }
+        Returns: boolean
+      }
       is_student: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
       is_study_group_creator: {
         Args: { group_id: string; user_id: string }
+        Returns: boolean
+      }
+      is_super_admin: {
+        Args: Record<PropertyKey, never>
         Returns: boolean
       }
       is_teacher: {
@@ -1642,6 +1674,12 @@ export type Database = {
       }
     }
     Enums: {
+      app_role:
+        | "super_admin"
+        | "school_admin"
+        | "teacher"
+        | "student"
+        | "parent"
       user_role: "parent" | "teacher" | "student" | "admin"
     }
     CompositeTypes: {
@@ -1770,6 +1808,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["super_admin", "school_admin", "teacher", "student", "parent"],
       user_role: ["parent", "teacher", "student", "admin"],
     },
   },
