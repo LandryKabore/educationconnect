@@ -37,6 +37,7 @@ import { SchoolSelector } from "@/components/SchoolSelector";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { LogoutButton } from "@/components/LogoutButton";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
+import { SchoolAdminManagementModal } from "@/components/SchoolAdminManagementModal";
 
 interface AdminData {
   schools: any[];
@@ -49,6 +50,7 @@ interface AdminData {
   totalStudents: number;
   totalTeachers: number;
   totalParents: number;
+  totalSchoolAdmins: number;
 }
 
 const AdminDashboard = () => {
@@ -80,6 +82,7 @@ const AdminDashboard = () => {
   const [createTeacherModalOpen, setCreateTeacherModalOpen] = useState(false);
   const [createStudentModalOpen, setCreateStudentModalOpen] = useState(false);
   const [importStudentsModalOpen, setImportStudentsModalOpen] = useState(false);
+  const [schoolAdminModalOpen, setSchoolAdminModalOpen] = useState(false);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -101,6 +104,7 @@ const AdminDashboard = () => {
     totalStudents: 0,
     totalTeachers: 0,
     totalParents: 0,
+    totalSchoolAdmins: 0,
   });
 
   // Auto-select school for school admins
@@ -125,6 +129,17 @@ const AdminDashboard = () => {
       const schoolIdsToQuery = selectedSchoolId 
         ? [selectedSchoolId]
         : (isSuperAdmin ? [] : accessibleSchoolIds);
+      
+      // Fetch school admin count (only for super admins)
+      let schoolAdminsCount = 0;
+      if (isSuperAdmin) {
+        const { count: adminCount } = await supabase
+          .from('user_roles')
+          .select('*', { count: 'exact', head: true })
+          .eq('role', 'school_admin')
+          .eq('active', true);
+        schoolAdminsCount = adminCount || 0;
+      }
       
       const [
         schoolsData,
@@ -246,6 +261,7 @@ const AdminDashboard = () => {
         totalStudents: students,
         totalTeachers: teachers,
         totalParents: parents,
+        totalSchoolAdmins: schoolAdminsCount,
       });
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -436,6 +452,22 @@ const AdminDashboard = () => {
               <div className="text-2xl font-bold text-white">{adminData.schools.length}</div>
             </CardContent>
           </Card>
+
+          {/* School Admins Card - Only for Super Admins */}
+          {isSuperAdmin && (
+            <Card 
+              className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+              onClick={() => setSchoolAdminModalOpen(true)}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-200">School Admins</CardTitle>
+                <Shield className="w-4 h-4 text-orange-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-white">{adminData.totalSchoolAdmins}</div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Management Sections */}
@@ -831,6 +863,13 @@ const AdminDashboard = () => {
         onSuccess={fetchAdminData}
         selectedSchoolId={selectedSchoolId || undefined}
       />
+
+      {isSuperAdmin && (
+        <SchoolAdminManagementModal
+          isOpen={schoolAdminModalOpen}
+          onClose={() => setSchoolAdminModalOpen(false)}
+        />
+      )}
 
       <AlertDialog open={!!deletingClassSection} onOpenChange={(open) => !open && setDeletingClassSection(null)}>
         <AlertDialogContent>
