@@ -117,20 +117,24 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
   };
 
   const generateSubjectCode = (name: string): string => {
-    // Generate a code from the subject name
+    // Generate a code from the subject name (e.g., "Computer Science" -> "CS101")
     const words = name.trim().split(/\s+/);
     
+    let prefix = '';
     if (words.length === 1) {
-      // Single word: take first 4 letters
-      return words[0].substring(0, 4).toUpperCase();
+      // Single word: take first 2-4 letters
+      prefix = words[0].substring(0, 4).toUpperCase();
     } else {
-      // Multiple words: take first 2-3 letters of each word
-      return words
+      // Multiple words: take first 2 letters of first 2 words
+      prefix = words
+        .slice(0, 2)
         .map(word => word.substring(0, 2))
         .join('')
-        .toUpperCase()
-        .substring(0, 6);
+        .toUpperCase();
     }
+    
+    // Add default course number "101"
+    return `${prefix}101`;
   };
 
   const parseSubjectNames = (input: string) => {
