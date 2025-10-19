@@ -105,6 +105,13 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "announcements_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
@@ -172,6 +179,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "assignments_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       attendance: {
@@ -221,6 +235,13 @@ export type Database = {
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "attendance_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -415,6 +436,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "classes_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       enhanced_attendance: {
@@ -473,10 +501,24 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
+            foreignKeyName: "enhanced_attendance_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "enhanced_attendance_taken_by_fkey"
             columns: ["taken_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "enhanced_attendance_taken_by_fkey"
+            columns: ["taken_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -531,10 +573,24 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
+            foreignKeyName: "enhanced_grades_graded_by_fkey"
+            columns: ["graded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "enhanced_grades_student_user_id_fkey"
             columns: ["student_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "enhanced_grades_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -592,6 +648,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "enrollments_student_user_id_fkey"
+            columns: ["student_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       exams: {
@@ -647,6 +710,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "exams_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
           {
@@ -769,10 +839,24 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
           {
+            foreignKeyName: "messages_recipient_user_id_fkey"
+            columns: ["recipient_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "messages_sender_user_id_fkey"
             columns: ["sender_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -808,6 +892,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "parent_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -849,6 +940,13 @@ export type Database = {
             columns: ["parent_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "parent_student_links_parent_user_id_fkey"
+            columns: ["parent_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -954,6 +1052,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "resources_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       schools: {
@@ -1042,6 +1147,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "student_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -1151,6 +1263,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "study_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       study_groups: {
@@ -1197,6 +1316,13 @@ export type Database = {
             columns: ["moderated_by_teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "study_groups_moderated_by_teacher_id_fkey"
+            columns: ["moderated_by_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
           {
@@ -1311,6 +1437,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "teacher_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
           },
         ]
@@ -1482,6 +1615,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
+          {
+            foreignKeyName: "teaching_assignments_teacher_user_id_fkey"
+            columns: ["teacher_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles_with_roles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_roles: {
@@ -1569,6 +1709,23 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_profiles_with_roles: {
+        Row: {
+          created_at: string | null
+          current_role: string | null
+          email: string | null
+          first_name: string | null
+          last_name: string | null
+          legacy_role: Database["public"]["Enums"]["user_role"] | null
+          phone: string | null
+          role_active: boolean | null
+          school_name: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
       }
     }
     Functions: {
