@@ -69,6 +69,43 @@ const StudentDashboard = () => {
     );
   }
 
+  // Check if user has student data
+  const hasStudentData = studentInfo?.student || studentInfo?.enrollment;
+  
+  if (!loading && !hasStudentData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 max-w-md w-full">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <User className="w-5 h-5" />
+              No Student Profile Found
+            </CardTitle>
+            <CardDescription className="text-slate-300">
+              You don't have a student profile or enrollment in the system.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-slate-300 text-sm">
+              This could mean:
+            </p>
+            <ul className="list-disc list-inside text-slate-300 text-sm space-y-1">
+              <li>You're not registered as a student</li>
+              <li>You're logged in with a different role (teacher, admin, parent)</li>
+              <li>Your student profile hasn't been created yet</li>
+            </ul>
+            <Button 
+              onClick={() => navigate("/")}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+            >
+              Go to Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
       {/* Floating Interactive Elements */}
@@ -115,8 +152,10 @@ const StudentDashboard = () => {
               <div>
                 <h1 className="text-xl font-bold text-white">{t('studentDashboard')}</h1>
                 <p className="text-sm text-slate-300">
-                  {studentInfo?.profile ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` : t('student')} - 
-                  {studentInfo?.enrollment?.class_sections?.name || "Unknown Class"}
+                  {studentInfo?.profile?.first_name && studentInfo?.profile?.last_name 
+                    ? `${studentInfo.profile.first_name} ${studentInfo.profile.last_name}` 
+                    : t('student')} - 
+                  {studentInfo?.enrollment?.class_sections?.name || "Not Enrolled"}
                 </p>
               </div>
             </div>
