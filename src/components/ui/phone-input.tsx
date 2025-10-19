@@ -91,6 +91,7 @@ interface PhoneInputProps {
   label?: string;
   className?: string;
   required?: boolean;
+  onCountryChange?: (country: string) => void;
 }
 
 export function PhoneInput({
@@ -101,6 +102,7 @@ export function PhoneInput({
   label,
   className = "",
   required = false,
+  onCountryChange,
 }: PhoneInputProps) {
   // Parse existing value to extract country code and number
   const parsePhoneNumber = (phone: string) => {
@@ -124,6 +126,12 @@ export function PhoneInput({
   const handleCountryCodeChange = (code: string) => {
     setCountryCode(code);
     onChange(`${code} ${phoneNumber}`.trim());
+    
+    // Find the country name and call the callback
+    const selectedCountry = COUNTRY_CODES.find(c => c.code === code);
+    if (selectedCountry && onCountryChange) {
+      onCountryChange(selectedCountry.country);
+    }
   };
 
   const handlePhoneNumberChange = (num: string) => {

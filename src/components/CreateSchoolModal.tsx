@@ -108,25 +108,24 @@ export function CreateSchoolModal({ isOpen, onClose, onSuccess }: CreateSchoolMo
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <PhoneInput
-              id="phone"
-              value={formData.phone}
-              onChange={(value) => setFormData({ ...formData, phone: value })}
-              placeholder="Optional"
+          <PhoneInput
+            id="phone"
+            value={formData.phone}
+            onChange={(value) => setFormData({ ...formData, phone: value })}
+            onCountryChange={(country) => setFormData({ ...formData, country })}
+            placeholder="Optional"
+            className="bg-slate-800 border-slate-600 text-white"
+          />
+
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-slate-200">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="bg-slate-800 border-slate-600 text-white"
             />
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-200">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="bg-slate-800 border-slate-600 text-white"
-              />
-            </div>
           </div>
 
           <div className="space-y-2">
