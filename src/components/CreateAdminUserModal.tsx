@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,11 +44,11 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
   });
 
   // Fetch schools when modal opens
-  useState(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchSchools();
     }
-  });
+  }, [isOpen]);
 
   const fetchSchools = async () => {
     try {
