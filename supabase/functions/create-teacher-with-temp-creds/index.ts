@@ -16,8 +16,6 @@ interface CreateTeacherRequest {
   phone?: string;
   staffNo?: string;
   qualifications?: string[];
-  classSectionIds?: string[];
-  subjectIds?: string[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -31,7 +29,7 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, middleInitial, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications, classSectionIds, subjectIds }: CreateTeacherRequest = await req.json();
+    const { firstName, middleInitial, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications }: CreateTeacherRequest = await req.json();
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 
@@ -98,10 +96,7 @@ const handler = async (req: Request): Promise<Response> => {
         school_id: schoolId,
         phone: phone,
         staff_no: staffNo,
-        qualifications: qualifications,
-        // Store intended assignments for later creation
-        intended_class_section_ids: classSectionIds || [],
-        intended_subject_ids: subjectIds || []
+        qualifications: qualifications
       });
 
     if (credsError) {
@@ -109,14 +104,14 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to create temp credentials: ${credsError.message}`);
     }
 
-    console.log('Teacher temp credentials created successfully with intended assignments stored');
+    console.log('Teacher temp credentials created successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         teacherId: tempUserId,
         username: finalUsername,
-        message: 'Teacher created successfully with intended assignments stored'
+        message: 'Teacher created successfully'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

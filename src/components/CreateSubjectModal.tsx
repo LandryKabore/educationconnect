@@ -29,6 +29,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [classSections, setClassSections] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     names: "",
     class_section_id: ""
@@ -39,7 +40,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     coefficient: number,
     schedule_days: string[],
     schedule_time_start: string,
-    schedule_time_end: string
+    schedule_time_end: string,
+    teacher_user_id: string | null
   }>>([]);
 
   useEffect(() => {
@@ -47,6 +49,14 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       fetchClassSections();
     }
   }, [isOpen, selectedSchoolId]);
+
+  useEffect(() => {
+    if (formData.class_section_id) {
+      fetchTeachers();
+    } else {
+      setTeachers([]);
+    }
+  }, [formData.class_section_id]);
 
   const fetchClassSections = async () => {
     try {
@@ -68,6 +78,28 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       toast({
         title: "Error",
         description: "Failed to load class sections",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const fetchTeachers = async () => {
+    try {
+      const classSection = classSections.find(cs => cs.id === formData.class_section_id);
+      if (!classSection) return;
+
+      const { data, error } = await supabase
+        .from('teacher_profiles')
+        .select('user_id, profiles(first_name, last_name)')
+        .eq('school_id', classSection.school_id);
+
+      if (error) throw error;
+      setTeachers(data || []);
+    } catch (error) {
+      console.error('Error fetching teachers:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load teachers",
         variant: "destructive"
       });
     }
@@ -143,6 +175,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       const classSectionSubjects = parsedSubjects.map((subject, idx) => ({
         class_section_id: formData.class_section_id,
         subject_id: subjectIds[idx],
+        teacher_user_id: subject.teacher_user_id || null,
         schedule_days: subject.schedule_days.length > 0 ? subject.schedule_days : null,
         schedule_time_start: subject.schedule_time_start || null,
         schedule_time_end: subject.schedule_time_end || null
@@ -211,7 +244,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       coefficient: 1.0,
       schedule_days: [],
       schedule_time_start: "",
-      schedule_time_end: ""
+      schedule_time_end: "",
+      teacher_user_id: null
     }));
     setParsedSubjects(subjects);
   };
@@ -246,6 +280,12 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
   const updateScheduleTime = (index: number, field: 'schedule_time_start' | 'schedule_time_end', value: string) => {
     setParsedSubjects(prev => prev.map((subject, idx) => 
       idx === index ? { ...subject, [field]: value } : subject
+    ));
+  };
+
+  const updateTeacher = (index: number, teacherId: string) => {
+    setParsedSubjects(prev => prev.map((subject, idx) => 
+      idx === index ? { ...subject, teacher_user_id: teacherId || null } : subject
     ));
   };
 
@@ -358,6 +398,26 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                               Conflicts with "{conflict.subjectName}" on {conflict.days.join(', ')} ({conflict.startTime} - {conflict.endTime})
                             </div>
                           )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor={`teacher-${idx}`} className="text-xs">Assign Teacher</Label>
+                          <Select
+                            value={subject.teacher_user_id || ""}
+                            onValueChange={(value) => updateTeacher(idx, value)}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="Select teacher (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">None</SelectItem>
+                              {teachers.map((teacher) => (
+                                <SelectItem key={teacher.user_id} value={teacher.user_id}>
+                                  {teacher.profiles?.first_name} {teacher.profiles?.last_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                        
                          <div className="grid grid-cols-2 gap-3">
