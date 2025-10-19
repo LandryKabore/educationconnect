@@ -42,6 +42,8 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
   const [searchTerm, setSearchTerm] = useState("");
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [adminToRemove, setAdminToRemove] = useState<SchoolAdmin | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [adminToDelete, setAdminToDelete] = useState<SchoolAdmin | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
@@ -169,6 +171,39 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
     setRemoveDialogOpen(true);
   };
 
+  const handleDeleteAdmin = async () => {
+    if (!adminToDelete) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: adminToDelete.user_id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "User Deleted",
+        description: `${adminToDelete.first_name} ${adminToDelete.last_name} has been permanently deleted from the system.`,
+      });
+
+      fetchSchoolAdmins();
+      setDeleteDialogOpen(false);
+      setAdminToDelete(null);
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: "Failed to Delete",
+        description: error.message || "Failed to delete user from the system.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmDelete = (admin: SchoolAdmin) => {
+    setAdminToDelete(admin);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -246,14 +281,24 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
                             </div>
                           </div>
                         </div>
-                        <Button 
-                          size="sm" 
-                          variant="destructive"
-                          onClick={() => confirmRemove(admin)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Remove
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => confirmRemove(admin)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Revoke Access
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => confirmDelete(admin)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete User
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -307,6 +352,33 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
         onClose={() => setAssignModalOpen(false)}
         onSuccess={fetchSchoolAdmins}
       />
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete User?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to <strong>permanently delete</strong>{' '}
+              <span className="font-semibold">{adminToDelete?.first_name} {adminToDelete?.last_name}</span>
+              {' '}from the system?
+              <br /><br />
+              <strong className="text-destructive">This action cannot be undone!</strong> This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Delete their user account completely</li>
+                <li>Remove all their data and roles</li>
+                <li>Allow the email to be reused for a new account</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAdmin} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
