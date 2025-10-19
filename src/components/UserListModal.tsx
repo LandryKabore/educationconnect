@@ -272,18 +272,59 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         setUsers(allStudents);
         setFilteredUsers(allStudents);
       } else if (selectedSchoolId && userType === 'teacher') {
-        // For teachers, filter by school through their profile tables
-        const { data, error } = await supabase
-          .from('teacher_profiles')
-          .select('*, profiles!inner(*)')
-          .eq('school_id', selectedSchoolId)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        const profilesData = data?.map(item => item.profiles) || [];
-        setUsers(profilesData);
-        setFilteredUsers(profilesData);
+        console.log('Fetching teacher data (both completed and temp credentials)');
+        // For teachers, get both completed profiles and temp credentials
+        const [completedData, tempCredsData] = await Promise.all([
+          // Get completed teacher profiles
+          supabase
+            .from('teacher_profiles')
+            .select('*, profiles!inner(*)')
+            .eq('school_id', selectedSchoolId)
+            .order('created_at', { ascending: false }),
+          // Get temp credentials (pending teachers) - only those not yet used
+          supabase
+            .from('teacher_temp_credentials')
+            .select('*')
+            .eq('is_used', false)
+            .eq('school_id', selectedSchoolId)
+            .order('created_at', { ascending: false })
+        ]);
+
+        console.log('Completed teachers:', completedData);
+        console.log('Temp teacher credentials:', tempCredsData);
+
+        const completedTeachers = completedData.data?.map(item => ({
+          ...item.profiles,
+          user_id: item.profiles.user_id,
+          isVerified: true
+        })) || [];
+
+        const pendingTeachers = tempCredsData.data?.map(item => ({
+          id: item.id,
+          user_id: item.teacher_user_id,
+          email: `${item.username}@teacher.local`,
+          first_name: item.first_name || '',
+          last_name: item.last_name || '',
+          role: 'teacher',
+          created_at: item.created_at,
+          status: 'pending',
+          username: item.username,
+          tempPassword: '••••', // Don't show actual password
+          isVerified: item.is_used || false,
+          tempPasswordExpires: item.expires_at,
+          phone: item.phone,
+          prefix: item.prefix,
+          gender: item.gender
+        })) || [];
+
+        const allTeachers = [...completedTeachers, ...pendingTeachers];
+        console.log('Found teachers:', { 
+          completed: completedTeachers.length, 
+          pending: pendingTeachers.length, 
+          total: allTeachers.length
+        });
+        setUsers(allTeachers);
+        setFilteredUsers(allTeachers);
       } else if (selectedSchoolId && userType === 'parent') {
         // For parents, filter by school through their profile tables
         const { data, error } = await supabase
