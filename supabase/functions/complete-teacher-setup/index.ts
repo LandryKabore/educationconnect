@@ -143,7 +143,8 @@ const handler = async (req: Request): Promise<Response> => {
         email: systemEmail,
         first_name: tempCreds.first_name,
         last_name: tempCreds.last_name,
-        role: 'teacher'
+        role: 'teacher',
+        phone: tempCreds.phone
       }, {
         onConflict: 'user_id'
       });
@@ -192,6 +193,24 @@ const handler = async (req: Request): Promise<Response> => {
           status: 500,
         }
       );
+    }
+
+    // Upsert user role
+    console.log('5b. Upserting user role...');
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .upsert({
+        user_id: authUserId,
+        role: 'teacher',
+        school_id: tempCreds.school_id,
+        active: true,
+        assigned_by: authUserId
+      }, {
+        onConflict: 'user_id,role,school_id'
+      });
+
+    if (roleError) {
+      console.error('User role upsert error:', roleError);
     }
 
     // Mark temp credentials as used

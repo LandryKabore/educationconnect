@@ -112,6 +112,63 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Teacher temp credentials created successfully');
 
+    // Create profile immediately (even before first login)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        user_id: tempUserId,
+        email: `${finalUsername}@temp.local`, // Temporary email, will be updated on first login
+        first_name: firstName,
+        last_name: lastName,
+        role: 'teacher',
+        phone: phone
+      });
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // Don't fail the whole operation, just log it
+    }
+
+    // Create teacher profile immediately
+    const { error: teacherProfileError } = await supabase
+      .from('teacher_profiles')
+      .insert({
+        user_id: tempUserId,
+        school_id: schoolId,
+        staff_no: staffNo,
+        qualifications: qualifications,
+        phone: phone,
+        hire_date: new Date().toISOString().split('T')[0],
+        username: finalUsername,
+        prefix: prefix,
+        gender: gender,
+        dob: dob,
+        first_login_completed: false
+      });
+
+    if (teacherProfileError) {
+      console.error('Teacher profile creation error:', teacherProfileError);
+      // Don't fail the whole operation, just log it
+    }
+
+    // Create user role immediately
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .insert({
+        user_id: tempUserId,
+        role: 'teacher',
+        school_id: schoolId,
+        active: true,
+        assigned_by: user.id
+      });
+
+    if (roleError) {
+      console.error('User role creation error:', roleError);
+      // Don't fail the whole operation, just log it
+    }
+
+    console.log('Teacher profiles created successfully');
+
     return new Response(
       JSON.stringify({ 
         success: true, 
