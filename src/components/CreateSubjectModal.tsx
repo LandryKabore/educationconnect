@@ -30,7 +30,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     names: "",
     school_id: selectedSchoolId || ""
   });
-  const [parsedSubjects, setParsedSubjects] = useState<Array<{name: string, coefficient: number}>>([]);
+  const [parsedSubjects, setParsedSubjects] = useState<Array<{name: string, code: string, coefficient: number}>>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -77,6 +77,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     try {
       const subjectsToInsert = parsedSubjects.map(subject => ({
         name: subject.name,
+        code: subject.code,
         school_id: formData.school_id,
         coefficient: subject.coefficient
       }));
@@ -115,10 +116,28 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     onClose();
   };
 
+  const generateSubjectCode = (name: string): string => {
+    // Generate a code from the subject name
+    const words = name.trim().split(/\s+/);
+    
+    if (words.length === 1) {
+      // Single word: take first 4 letters
+      return words[0].substring(0, 4).toUpperCase();
+    } else {
+      // Multiple words: take first 2-3 letters of each word
+      return words
+        .map(word => word.substring(0, 2))
+        .join('')
+        .toUpperCase()
+        .substring(0, 6);
+    }
+  };
+
   const parseSubjectNames = (input: string) => {
     const names = input.split(',').map(name => name.trim()).filter(name => name.length > 0);
     const subjects = names.map(name => ({
       name,
+      code: generateSubjectCode(name),
       coefficient: 1.0
     }));
     setParsedSubjects(subjects);
@@ -132,6 +151,12 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
   const updateSubjectCoefficient = (index: number, coefficient: number) => {
     setParsedSubjects(prev => prev.map((subject, idx) => 
       idx === index ? { ...subject, coefficient } : subject
+    ));
+  };
+
+  const updateSubjectCode = (index: number, code: string) => {
+    setParsedSubjects(prev => prev.map((subject, idx) => 
+      idx === index ? { ...subject, code: code.toUpperCase() } : subject
     ));
   };
 
@@ -173,9 +198,22 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                 </Label>
                 <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto bg-muted/30">
                   {parsedSubjects.map((subject, idx) => (
-                    <div key={idx} className="flex items-center gap-3 py-1">
-                      <div className="flex-1">
+                    <div key={idx} className="flex items-center gap-3 py-2 border-b last:border-b-0">
+                      <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{subject.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`code-${idx}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                          Code:
+                        </Label>
+                        <Input
+                          id={`code-${idx}`}
+                          type="text"
+                          value={subject.code}
+                          onChange={(e) => updateSubjectCode(idx, e.target.value)}
+                          className="w-20 h-8 text-sm uppercase"
+                          maxLength={10}
+                        />
                       </div>
                       <div className="flex items-center gap-2">
                         <Label htmlFor={`coefficient-${idx}`} className="text-xs text-muted-foreground whitespace-nowrap">
