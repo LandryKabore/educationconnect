@@ -86,11 +86,16 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     }
 
     // Check for time conflicts
-    const hasConflicts = parsedSubjects.some((subject, idx) => hasTimeConflict(subject, idx));
-    if (hasConflicts) {
+    const conflictInfo = parsedSubjects.map((subject, idx) => ({
+      subject,
+      conflict: getTimeConflict(subject, idx)
+    })).find(item => item.conflict !== null);
+
+    if (conflictInfo) {
+      const conflict = conflictInfo.conflict!;
       toast({
         title: "Schedule Conflict",
-        description: "Two subjects cannot be scheduled at the same time on the same days",
+        description: `"${conflictInfo.subject.name}" conflicts with "${conflict.subjectName}" on ${conflict.days.join(', ')} (${conflict.startTime} - ${conflict.endTime})`,
         variant: "destructive"
       });
       return;
@@ -244,20 +249,22 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     ));
   };
 
-  const hasTimeConflict = (subject: typeof parsedSubjects[0], currentIndex: number) => {
+  const getTimeConflict = (subject: typeof parsedSubjects[0], currentIndex: number) => {
     if (!subject.schedule_time_start || !subject.schedule_time_end || subject.schedule_days.length === 0) {
-      return false;
+      return null;
     }
 
-    return parsedSubjects.some((otherSubject, idx) => {
-      if (idx === currentIndex) return false;
+    for (let idx = 0; idx < parsedSubjects.length; idx++) {
+      if (idx === currentIndex) continue;
+      
+      const otherSubject = parsedSubjects[idx];
       if (!otherSubject.schedule_time_start || !otherSubject.schedule_time_end || otherSubject.schedule_days.length === 0) {
-        return false;
+        continue;
       }
 
       // Check if they share any days
-      const sharedDays = subject.schedule_days.some(day => otherSubject.schedule_days.includes(day));
-      if (!sharedDays) return false;
+      const sharedDays = subject.schedule_days.filter(day => otherSubject.schedule_days.includes(day));
+      if (sharedDays.length === 0) continue;
 
       // Check if times overlap
       const start1 = subject.schedule_time_start;
@@ -266,8 +273,17 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       const end2 = otherSubject.schedule_time_end;
 
       // Times overlap if: start1 < end2 AND start2 < end1
-      return start1 < end2 && start2 < end1;
-    });
+      if (start1 < end2 && start2 < end1) {
+        return {
+          subjectName: otherSubject.name,
+          days: sharedDays,
+          startTime: otherSubject.schedule_time_start,
+          endTime: otherSubject.schedule_time_end
+        };
+      }
+    }
+
+    return null;
   };
 
   return (
@@ -326,16 +342,23 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                   Subjects to Create ({parsedSubjects.length})
                 </Label>
                 <div className="border rounded-md p-3 space-y-4 max-h-96 overflow-y-auto bg-muted/30">
-                   {parsedSubjects.map((subject, idx) => {
-                     const hasConflict = hasTimeConflict(subject, idx);
-                     return (
-                       <div key={idx} className={`p-3 border rounded-md bg-background space-y-3 ${hasConflict ? 'border-destructive' : ''}`}>
-                         <div className="flex items-center justify-between">
-                           <div className="font-medium">{subject.name}</div>
-                           {hasConflict && (
-                             <span className="text-xs text-destructive">Schedule conflict!</span>
-                           )}
-                         </div>
+                  {parsedSubjects.map((subject, idx) => {
+                    const conflict = getTimeConflict(subject, idx);
+                    return (
+                      <div key={idx} className={`p-3 border rounded-md bg-background space-y-3 ${conflict ? 'border-destructive' : ''}`}>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{subject.name}</div>
+                            {conflict && (
+                              <span className="text-xs text-destructive font-semibold">Conflict!</span>
+                            )}
+                          </div>
+                          {conflict && (
+                            <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                              Conflicts with "{conflict.subjectName}" on {conflict.days.join(', ')} ({conflict.startTime} - {conflict.endTime})
+                            </div>
+                          )}
+                        </div>
                        
                          <div className="grid grid-cols-2 gap-3">
                            <div className="space-y-1">
