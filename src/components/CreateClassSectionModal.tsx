@@ -8,12 +8,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Loader2, BookOpen } from "lucide-react";
+import { Users, Loader2, BookOpen, List } from "lucide-react";
 
 interface CreateClassSectionModalProps {
   isOpen: boolean;
@@ -30,14 +31,14 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
   const [academicYears, setAcademicYears] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    name: "",
-    grade_level: "",
+    names: "", // Changed to support comma-separated input
     capacity: "30",
     school_id: selectedSchoolId || "",
     campus_id: "",
     academic_year_id: "",
     selected_subjects: [] as string[]
   });
+  const [parsedSections, setParsedSections] = useState<Array<{name: string, gradeLevel: string}>>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -121,7 +122,8 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.grade_level || !formData.school_id || !formData.campus_id || !formData.academic_year_id) {
+    
+    if (parsedSections.length === 0 || !formData.school_id || !formData.campus_id || !formData.academic_year_id) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -130,30 +132,44 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
       return;
     }
 
+    // Check if any section is missing a grade level
+    const invalidSections = parsedSections.filter(s => !s.gradeLevel);
+    if (invalidSections.length > 0) {
+      toast({
+        title: "Error",
+        description: "Some class names couldn't be parsed. Please use format like 'Grade 6A'",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // First create the class section
+      // Create all class sections
+      const sectionsToInsert = parsedSections.map(section => ({
+        name: section.name,
+        grade_level: section.gradeLevel,
+        capacity: parseInt(formData.capacity),
+        school_id: formData.school_id,
+        campus_id: formData.campus_id,
+        academic_year_id: formData.academic_year_id
+      }));
+
       const { data: classSectionData, error: classSectionError } = await supabase
         .from('class_sections')
-        .insert([{
-          name: formData.name,
-          grade_level: formData.grade_level,
-          capacity: parseInt(formData.capacity),
-          school_id: formData.school_id,
-          campus_id: formData.campus_id,
-          academic_year_id: formData.academic_year_id
-        }])
-        .select()
-        .single();
+        .insert(sectionsToInsert)
+        .select();
 
       if (classSectionError) throw classSectionError;
 
-      // Then link the selected subjects to the class section
-      if (formData.selected_subjects.length > 0) {
-        const subjectLinks = formData.selected_subjects.map(subjectId => ({
-          class_section_id: classSectionData.id,
-          subject_id: subjectId
-        }));
+      // Then link the selected subjects to all class sections
+      if (formData.selected_subjects.length > 0 && classSectionData) {
+        const subjectLinks = classSectionData.flatMap(section => 
+          formData.selected_subjects.map(subjectId => ({
+            class_section_id: section.id,
+            subject_id: subjectId
+          }))
+        );
 
         const { error: linkError } = await supabase
           .from('class_section_subjects')
@@ -164,16 +180,16 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
 
       toast({
         title: "Success",
-        description: "Class section created successfully"
+        description: `${parsedSections.length} class section${parsedSections.length > 1 ? 's' : ''} created successfully`
       });
       
       handleClose();
       onSuccess();
     } catch (error) {
-      console.error('Error creating class section:', error);
+      console.error('Error creating class sections:', error);
       toast({
         title: "Error",
-        description: "Failed to create class section",
+        description: "Failed to create class sections",
         variant: "destructive"
       });
     } finally {
@@ -183,14 +199,14 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
 
   const handleClose = () => {
     setFormData({
-      name: "",
-      grade_level: "",
+      names: "",
       capacity: "30",
       school_id: selectedSchoolId || "",
       campus_id: "",
       academic_year_id: "",
       selected_subjects: []
     });
+    setParsedSections([]);
     onClose();
   };
 
@@ -201,6 +217,15 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
         ? prev.selected_subjects.filter(id => id !== subjectId)
         : [...prev.selected_subjects, subjectId]
     }));
+  };
+
+  const extractGradeLevel = (className: string): string => {
+    // Extract "Grade X" from inputs like "Grade 6A", "Grade 10B", etc.
+    const match = className.match(/^Grade\s*(\d+)/i);
+    if (match) {
+      return `Grade ${match[1]}`;
+    }
+    return "";
   };
 
   const formatClassName = (value: string): string => {
@@ -219,6 +244,22 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     return cleaned.replace(/^grade\s*/i, 'Grade ');
   };
 
+  const parseClassNames = (input: string) => {
+    // Split by comma and process each class name
+    const names = input.split(',').map(name => name.trim()).filter(name => name.length > 0);
+    const sections = names.map(name => {
+      const formatted = formatClassName(name);
+      const gradeLevel = extractGradeLevel(formatted);
+      return { name: formatted, gradeLevel };
+    });
+    setParsedSections(sections);
+  };
+
+  const handleNamesChange = (value: string) => {
+    setFormData({ ...formData, names: value });
+    parseClassNames(value);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -228,7 +269,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
             Create Class Section
           </DialogTitle>
           <DialogDescription>
-            Create a new class section for the selected school.
+            Create one or more class sections. Separate multiple sections with commas.
           </DialogDescription>
         </DialogHeader>
 
@@ -236,26 +277,36 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Class Section Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: formatClassName(e.target.value) })}
-                  placeholder="e.g., Grade 7A"
+                <Label htmlFor="names">Class Section Names *</Label>
+                <Textarea
+                  id="names"
+                  value={formData.names}
+                  onChange={(e) => handleNamesChange(e.target.value)}
+                  placeholder="e.g., Grade 6A, Grade 6B, Grade 7A"
+                  className="min-h-[80px]"
                   required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Separate multiple sections with commas. Grade levels will be auto-detected.
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="grade_level">Grade Level *</Label>
-                <Input
-                  id="grade_level"
-                  value={formData.grade_level}
-                  onChange={(e) => setFormData({ ...formData, grade_level: e.target.value })}
-                  placeholder="e.g., Grade 7"
-                  required
-                />
-              </div>
+              {parsedSections.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <List className="w-4 h-4" />
+                    Sections to Create ({parsedSections.length})
+                  </Label>
+                  <div className="border rounded-md p-3 space-y-1 max-h-32 overflow-y-auto bg-muted/30">
+                    {parsedSections.map((section, idx) => (
+                      <div key={idx} className="text-sm flex justify-between items-center py-1">
+                        <span className="font-medium">{section.name}</span>
+                        <span className="text-muted-foreground text-xs">{section.gradeLevel || '⚠️ Invalid'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="school">School *</Label>
