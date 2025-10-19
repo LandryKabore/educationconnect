@@ -182,6 +182,7 @@ serve(async (req) => {
     );
 
     // Send invitation email
+    let emailSent = false;
     const { error: emailError } = await resend.emails.send({
       from: 'School Management <onboarding@resend.dev>',
       to: [email],
@@ -191,16 +192,21 @@ serve(async (req) => {
 
     if (emailError) {
       console.error('Error sending email:', emailError);
-      throw new Error('Failed to send invitation email');
+      console.log('Admin user created but email could not be sent. This is normal in testing mode.');
+    } else {
+      console.log('Invitation email sent successfully');
+      emailSent = true;
     }
-
-    console.log('Invitation email sent successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
-        message: 'Admin user created and invitation sent',
+        email_sent: emailSent,
+        message: emailSent 
+          ? 'Admin user created and invitation sent' 
+          : 'Admin user created (email not sent - verify domain at resend.com/domains)',
+        setup_link: resetData.properties.action_link,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

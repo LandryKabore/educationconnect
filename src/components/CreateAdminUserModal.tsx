@@ -90,9 +90,13 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
 
       if (error) throw error;
 
+      const message = data?.email_sent 
+        ? `An email has been sent to ${formData.email} with instructions to set up their account.`
+        : `Admin user created successfully. Setup link: ${data?.setup_link || 'Check edge function logs'}`;
+
       toast({
-        title: "Invitation Sent!",
-        description: `An email has been sent to ${formData.email} with instructions to set up their account.`,
+        title: data?.email_sent ? "Invitation Sent!" : "Admin Created",
+        description: message,
       });
 
       // Reset form
