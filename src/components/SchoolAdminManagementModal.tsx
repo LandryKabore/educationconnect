@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Mail, User, Shield, Building2, Trash2, UserPlus } from "lucide-react";
 import { AssignSchoolAdminModal } from "./AssignSchoolAdminModal";
+import { CreateAdminUserModal } from "./CreateAdminUserModal";
 
 interface SchoolAdmin {
   id: string;
@@ -42,6 +43,7 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [adminToRemove, setAdminToRemove] = useState<SchoolAdmin | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -193,9 +195,13 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
                   className="pl-10"
                 />
               </div>
-              <Button onClick={() => setAssignModalOpen(true)}>
+              <Button variant="outline" onClick={() => setAssignModalOpen(true)}>
                 <UserPlus className="w-4 h-4 mr-2" />
-                Assign School Admin
+                Assign Existing User
+              </Button>
+              <Button onClick={() => setCreateAdminModalOpen(true)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create New Admin
               </Button>
             </div>
 
@@ -287,6 +293,13 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Admin Modal */}
+      <CreateAdminUserModal 
+        isOpen={createAdminModalOpen}
+        onClose={() => setCreateAdminModalOpen(false)}
+        onSuccess={fetchSchoolAdmins}
+      />
 
       {/* Assign Admin Modal */}
       <AssignSchoolAdminModal 
