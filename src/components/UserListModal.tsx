@@ -153,7 +153,43 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const fetchUsers = async () => {
     setLoading(true);
     console.log('Fetching users for:', { userType, selectedSchoolId });
+    
     try {
+      // Security check: Verify admin access before fetching
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Access Denied",
+          description: "You must be logged in to view users.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if user is super admin
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .eq('active', true)
+        .maybeSingle();
+
+      const isSuperAdmin = !!roleData;
+
+      // CRITICAL SECURITY: School admins MUST have a selectedSchoolId
+      if (!isSuperAdmin && !selectedSchoolId) {
+        console.error('SECURITY: School admin attempted to fetch users without school filter');
+        toast({
+          title: "Access Denied",
+          description: "School selection required to view users.",
+          variant: "destructive",
+        });
+        setUsers([]);
+        setFilteredUsers([]);
+        return;
+      }
+      
       if (userType === 'student') {
         console.log('Fetching student data (both completed and temp credentials)');
         // For students, get both completed profiles and temp credentials
@@ -248,8 +284,49 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const profilesData = data?.map(item => item.profiles) || [];
         setUsers(profilesData);
         setFilteredUsers(profilesData);
+      } else if (selectedSchoolId && userType === 'parent') {
+        // For parents, filter by school through their profile tables
+        const { data, error } = await supabase
+          .from('parent_profiles')
+          .select('*, profiles!inner(*)')
+          .eq('school_id', selectedSchoolId)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const profilesData = data?.map(item => item.profiles) || [];
+        setUsers(profilesData);
+        setFilteredUsers(profilesData);
+      } else if (selectedSchoolId && userType === 'all') {
+        // For "all users", combine data from all role-specific profile tables for the selected school
+        const [studentsData, teachersData, parentsData] = await Promise.all([
+          // Get students from student_profiles
+          supabase
+            .from('student_profiles')
+            .select('*, profiles!inner(*)')
+            .eq('school_id', selectedSchoolId),
+          // Get teachers from teacher_profiles
+          supabase
+            .from('teacher_profiles')
+            .select('*, profiles!inner(*)')
+            .eq('school_id', selectedSchoolId),
+          // Get parents from parent_profiles
+          supabase
+            .from('parent_profiles')
+            .select('*, profiles!inner(*)')
+            .eq('school_id', selectedSchoolId)
+        ]);
+
+        const allUsers = [
+          ...(studentsData.data?.map(item => item.profiles) || []),
+          ...(teachersData.data?.map(item => item.profiles) || []),
+          ...(parentsData.data?.map(item => item.profiles) || [])
+        ];
+
+        setUsers(allUsers);
+        setFilteredUsers(allUsers);
       } else {
-        // Default behavior - fetch all profiles
+        // No school filter - should only happen for super admin viewing all users
         let query = supabase.from('profiles').select('*');
         
         if (userType !== 'all') {
