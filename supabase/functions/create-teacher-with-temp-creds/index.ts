@@ -10,6 +10,9 @@ interface CreateTeacherRequest {
   firstName: string;
   middleInitial?: string;
   lastName: string;
+  prefix: string;
+  gender: string;
+  dob: string;
   username: string;
   tempPassword: string;
   schoolId: string;
@@ -29,7 +32,7 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, middleInitial, lastName, username, tempPassword, schoolId, phone, staffNo, qualifications }: CreateTeacherRequest = await req.json();
+    const { firstName, middleInitial, lastName, prefix, gender, dob, username, tempPassword, schoolId, phone, staffNo, qualifications }: CreateTeacherRequest = await req.json();
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 
@@ -93,6 +96,9 @@ const handler = async (req: Request): Promise<Response> => {
         first_name: firstName,
         middle_initial: middleInitial,
         last_name: lastName,
+        prefix: prefix,
+        gender: gender,
+        dob: dob,
         school_id: schoolId,
         phone: phone,
         staff_no: staffNo,

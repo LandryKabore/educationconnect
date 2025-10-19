@@ -6,9 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, RefreshCw, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface CreateTeacherModalProps {
   isOpen: boolean;
@@ -27,6 +31,9 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
   const [firstName, setFirstName] = useState("");
   const [middleInitial, setMiddleInitial] = useState("");
   const [lastName, setLastName] = useState("");
+  const [prefix, setPrefix] = useState("");
+  const [gender, setGender] = useState("");
+  const [dob, setDob] = useState<Date>();
   const [username, setUsername] = useState("");
   const [tempPassword, setTempPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -110,10 +117,10 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !lastName || !username || !tempPassword || !schoolId) {
+    if (!firstName || !lastName || !username || !tempPassword || !schoolId || !prefix || !gender || !dob) {
       toast({
         title: "Missing fields",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields (including prefix, gender, and date of birth)",
         variant: "destructive"
       });
       return;
@@ -127,6 +134,9 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
           firstName,
           middleInitial: middleInitial || null,
           lastName,
+          prefix,
+          gender,
+          dob: dob ? format(dob, 'yyyy-MM-dd') : null,
           username,
           tempPassword,
           schoolId,
@@ -148,6 +158,9 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       setFirstName("");
       setMiddleInitial("");
       setLastName("");
+      setPrefix("");
+      setGender("");
+      setDob(undefined);
       setUsername("");
       setTempPassword("");
       setPhone("");
@@ -177,6 +190,37 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="prefix">Prefix *</Label>
+              <Select value={prefix} onValueChange={setPrefix} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select prefix" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Mr">Mr</SelectItem>
+                  <SelectItem value="Mrs">Mrs</SelectItem>
+                  <SelectItem value="Ms">Ms</SelectItem>
+                  <SelectItem value="Dr">Dr</SelectItem>
+                  <SelectItem value="Prof">Prof</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gender">Gender *</Label>
+              <Select value={gender} onValueChange={setGender} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
@@ -206,6 +250,36 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Date of Birth *</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dob && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dob ? format(dob, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dob}
+                  onSelect={setDob}
+                  disabled={(date) =>
+                    date > new Date() || date < new Date("1940-01-01")
+                  }
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">

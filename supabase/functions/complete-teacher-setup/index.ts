@@ -172,6 +172,9 @@ const handler = async (req: Request): Promise<Response> => {
         phone: tempCreds.phone,
         staff_no: tempCreds.staff_no,
         qualifications: tempCreds.qualifications,
+        prefix: tempCreds.prefix,
+        gender: tempCreds.gender,
+        dob: tempCreds.dob,
         first_login_completed: true,
         hire_date: new Date().toISOString().split('T')[0]
       }, {

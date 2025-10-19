@@ -1375,13 +1375,16 @@ export type Database = {
       teacher_profiles: {
         Row: {
           created_at: string
+          dob: string | null
           first_login_completed: boolean | null
+          gender: string | null
           hire_date: string | null
           id: string
           last_magic_link_sent: string | null
           phone: string | null
           pin_hash: string | null
           pin_set_at: string | null
+          prefix: string | null
           qualifications: string[] | null
           school_id: string
           staff_no: string | null
@@ -1392,13 +1395,16 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          dob?: string | null
           first_login_completed?: boolean | null
+          gender?: string | null
           hire_date?: string | null
           id?: string
           last_magic_link_sent?: string | null
           phone?: string | null
           pin_hash?: string | null
           pin_set_at?: string | null
+          prefix?: string | null
           qualifications?: string[] | null
           school_id: string
           staff_no?: string | null
@@ -1409,13 +1415,16 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          dob?: string | null
           first_login_completed?: boolean | null
+          gender?: string | null
           hire_date?: string | null
           id?: string
           last_magic_link_sent?: string | null
           phone?: string | null
           pin_hash?: string | null
           pin_set_at?: string | null
+          prefix?: string | null
           qualifications?: string[] | null
           school_id?: string
           staff_no?: string | null
@@ -1491,8 +1500,10 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          dob: string | null
           expires_at: string | null
           first_name: string | null
+          gender: string | null
           id: string
           intended_class_section_ids: string[] | null
           intended_subject_ids: string[] | null
@@ -1500,6 +1511,7 @@ export type Database = {
           last_name: string | null
           middle_initial: string | null
           phone: string | null
+          prefix: string | null
           qualifications: string[] | null
           school_id: string | null
           staff_no: string | null
@@ -1511,8 +1523,10 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          dob?: string | null
           expires_at?: string | null
           first_name?: string | null
+          gender?: string | null
           id?: string
           intended_class_section_ids?: string[] | null
           intended_subject_ids?: string[] | null
@@ -1520,6 +1534,7 @@ export type Database = {
           last_name?: string | null
           middle_initial?: string | null
           phone?: string | null
+          prefix?: string | null
           qualifications?: string[] | null
           school_id?: string | null
           staff_no?: string | null
@@ -1531,8 +1546,10 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          dob?: string | null
           expires_at?: string | null
           first_name?: string | null
+          gender?: string | null
           id?: string
           intended_class_section_ids?: string[] | null
           intended_subject_ids?: string[] | null
@@ -1540,6 +1557,7 @@ export type Database = {
           last_name?: string | null
           middle_initial?: string | null
           phone?: string | null
+          prefix?: string | null
           qualifications?: string[] | null
           school_id?: string | null
           staff_no?: string | null
