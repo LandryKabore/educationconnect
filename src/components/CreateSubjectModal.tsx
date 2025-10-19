@@ -43,6 +43,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     schedule_time_end: string,
     teacher_user_id: string | null
   }>>([]);
+  const [teacherConflicts, setTeacherConflicts] = useState<{[key: number]: any}>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -57,6 +58,24 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       setTeachers([]);
     }
   }, [formData.class_section_id]);
+
+  // Check for teacher conflicts when subjects change
+  useEffect(() => {
+    const checkAllTeacherConflicts = async () => {
+      const conflicts: {[key: number]: any} = {};
+      for (let idx = 0; idx < parsedSubjects.length; idx++) {
+        const conflict = await getTeacherConflict(parsedSubjects[idx]);
+        if (conflict) {
+          conflicts[idx] = conflict;
+        }
+      }
+      setTeacherConflicts(conflicts);
+    };
+    
+    if (parsedSubjects.length > 0 && formData.class_section_id) {
+      checkAllTeacherConflicts();
+    }
+  }, [parsedSubjects.map(s => `${s.teacher_user_id}-${s.schedule_time_start}-${s.schedule_time_end}-${s.schedule_days.join(',')}`).join('|'), formData.class_section_id]);
 
   const fetchClassSections = async () => {
     try {
@@ -312,6 +331,56 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     ));
   };
 
+  const getTeacherConflict = async (subject: typeof parsedSubjects[0]) => {
+    if (!subject.teacher_user_id || !subject.schedule_time_start || !subject.schedule_time_end || subject.schedule_days.length === 0) {
+      return null;
+    }
+
+    try {
+      // Query existing class_section_subjects to find teacher's other assignments
+      const { data: existingAssignments, error } = await supabase
+        .from('class_section_subjects')
+        .select('*, class_sections(name), subjects(name)')
+        .eq('teacher_user_id', subject.teacher_user_id)
+        .neq('class_section_id', formData.class_section_id); // Exclude current class
+
+      if (error) throw error;
+
+      // Check for time/day conflicts
+      for (const assignment of existingAssignments || []) {
+        if (!assignment.schedule_time_start || !assignment.schedule_time_end || !assignment.schedule_days) {
+          continue;
+        }
+
+        // Check if they share any days
+        const sharedDays = subject.schedule_days.filter(day => assignment.schedule_days.includes(day));
+        if (sharedDays.length === 0) continue;
+
+        // Check if times overlap
+        const start1 = subject.schedule_time_start;
+        const end1 = subject.schedule_time_end;
+        const start2 = assignment.schedule_time_start;
+        const end2 = assignment.schedule_time_end;
+
+        // Times overlap if: start1 < end2 AND start2 < end1
+        if (start1 < end2 && start2 < end1) {
+          return {
+            className: assignment.class_sections?.name || 'Another class',
+            subjectName: assignment.subjects?.name || 'Another subject',
+            days: sharedDays,
+            startTime: assignment.schedule_time_start,
+            endTime: assignment.schedule_time_end
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error checking teacher conflict:', error);
+      return null;
+    }
+  };
+
   const getTimeConflict = (subject: typeof parsedSubjects[0], currentIndex: number) => {
     if (!subject.schedule_time_start || !subject.schedule_time_end || subject.schedule_days.length === 0) {
       return null;
@@ -405,23 +474,30 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                   Subjects to Create ({parsedSubjects.length})
                 </Label>
                 <div className="border rounded-md p-3 space-y-4 max-h-96 overflow-y-auto bg-muted/30">
-                  {parsedSubjects.map((subject, idx) => {
-                    const conflict = getTimeConflict(subject, idx);
-                    return (
-                      <div key={idx} className={`p-3 border rounded-md bg-background space-y-3 ${conflict ? 'border-destructive' : ''}`}>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium">{subject.name}</div>
-                            {conflict && (
-                              <span className="text-xs text-destructive font-semibold">Conflict!</span>
-                            )}
-                          </div>
-                          {conflict && (
-                            <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
-                              Conflicts with "{conflict.subjectName}" on {conflict.days.join(', ')} ({conflict.startTime} - {conflict.endTime})
-                            </div>
-                          )}
-                        </div>
+                   {parsedSubjects.map((subject, idx) => {
+                     const conflict = getTimeConflict(subject, idx);
+                     const teacherConflict = teacherConflicts[idx];
+
+                     return (
+                       <div key={idx} className={`p-3 border rounded-md bg-background space-y-3 ${conflict || teacherConflict ? 'border-destructive' : ''}`}>
+                         <div className="space-y-1">
+                           <div className="flex items-center justify-between">
+                             <div className="font-medium">{subject.name}</div>
+                             {(conflict || teacherConflict) && (
+                               <span className="text-xs text-destructive font-semibold">Conflict!</span>
+                             )}
+                           </div>
+                           {conflict && (
+                             <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                               Conflicts with "{conflict.subjectName}" on {conflict.days.join(', ')} ({conflict.startTime} - {conflict.endTime})
+                             </div>
+                           )}
+                           {teacherConflict && (
+                             <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-2 rounded border border-amber-200 dark:border-amber-900">
+                               Teacher already teaching in <strong>{teacherConflict.className}</strong> ({teacherConflict.subjectName}) on {teacherConflict.days.join(', ')} from {teacherConflict.startTime} to {teacherConflict.endTime}
+                             </div>
+                           )}
+                         </div>
 
                         <div className="space-y-1">
                           <Label htmlFor={`teacher-${idx}`} className="text-xs">Assign Teacher</Label>
