@@ -1,0 +1,179 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Eye, EyeOff } from "lucide-react";
+
+interface AdminFirstLoginProps {
+  adminInfo: any;
+  onComplete: () => void;
+}
+
+export function AdminFirstLogin({ adminInfo, onComplete }: AdminFirstLoginProps) {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (password !== confirmPassword) {
+      toast({
+        title: "Password mismatch",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Update password using Supabase auth
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (updateError) throw updateError;
+
+      // Update user metadata to remove needs_password_change flag
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          needs_password_change: false,
+        }
+      });
+
+      if (metadataError) throw metadataError;
+
+      toast({
+        title: "Password updated",
+        description: "Your password has been successfully changed",
+      });
+
+      // Sign out and redirect to login
+      await supabase.auth.signOut();
+      navigate("/auth", { replace: true });
+      
+    } catch (error: any) {
+      console.error('Error updating password:', error);
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update password",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-elevated">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Welcome to EduConnect</CardTitle>
+          <p className="text-muted-foreground">
+            Please change your password
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium mb-2">Your Information</h3>
+            <p className="text-sm text-muted-foreground">
+              <strong>Name:</strong> {adminInfo.first_name} {adminInfo.last_name}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <strong>Email:</strong> {adminInfo.email}
+            </p>
+          </div>
+
+          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+              For security reasons, you must change your temporary password before accessing the system.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">New Password *</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a secure password"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password *</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your password"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Updating Password..." : "Update Password"}
+            </Button>
+          </form>
+
+          <div className="mt-4 text-center">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                supabase.auth.signOut();
+                navigate("/auth", { replace: true });
+              }}
+            >
+              Sign out and return to login
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

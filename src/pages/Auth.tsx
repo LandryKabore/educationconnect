@@ -11,7 +11,7 @@ import { Users, GraduationCap, BookOpen } from "lucide-react";
 const title = "Auth | EduConnect";
 const description = "Sign in or create an account to access your EduConnect dashboard.";
 
-type UserRole = "parent" | "teacher" | "student";
+type UserRole = "parent" | "teacher" | "student" | "admin";
 type AuthStep = "role-selection" | "auth-form";
 
 export default function Auth() {
@@ -114,6 +114,13 @@ export default function Auth() {
         description: `This ${expectedRole} login cannot be used for a ${userRole} account. Please use the correct role.`,
         variant: "destructive"
       });
+      return;
+    }
+
+    // Check if admin needs to change password
+    const { data: { user } } = await supabase.auth.getUser();
+    if (userRole === "admin" && user?.user_metadata?.needs_password_change) {
+      navigate("/admin-first-login", { replace: true });
       return;
     }
 

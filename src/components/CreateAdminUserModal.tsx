@@ -36,12 +36,12 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
-  const [setupLink, setSetupLink] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     firstName: "",
     lastName: "",
     schoolId: "",
+    password: "",
   });
 
   // Fetch schools when modal opens
@@ -68,7 +68,7 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
 
   const handleCreate = async () => {
     // Validation
-    if (!formData.email || !formData.firstName || !formData.lastName || !formData.schoolId) {
+    if (!formData.email || !formData.firstName || !formData.lastName || !formData.schoolId || !formData.password) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields",
@@ -77,47 +77,46 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
       return;
     }
 
+    if (formData.password.length < 6) {
+      toast({
+        title: "Password Too Short",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // Call edge function to create admin user and send invitation
+      // Call edge function to create admin user
       const { data, error } = await supabase.functions.invoke('create-admin-user', {
         body: {
           email: formData.email,
           firstName: formData.firstName,
           lastName: formData.lastName,
           schoolId: formData.schoolId,
+          password: formData.password,
         },
       });
 
       if (error) throw error;
 
-      if (data?.email_sent) {
-        toast({
-          title: "Invitation Sent!",
-          description: `An email has been sent to ${formData.email} with instructions to set up their account.`,
-        });
+      toast({
+        title: "Admin Created!",
+        description: `${formData.firstName} ${formData.lastName} has been created. They will be asked to change their password on first login.`,
+      });
 
-        // Reset form
-        setFormData({
-          email: "",
-          firstName: "",
-          lastName: "",
-          schoolId: "",
-        });
+      // Reset form
+      setFormData({
+        email: "",
+        firstName: "",
+        lastName: "",
+        schoolId: "",
+        password: "",
+      });
 
-        onSuccess();
-        onClose();
-      } else {
-        // Store the setup link to display in modal
-        setSetupLink(data?.setup_link || null);
-        
-        toast({
-          title: "Admin Created",
-          description: "Email could not be sent. Please copy the setup link below.",
-        });
-
-        onSuccess();
-      }
+      onSuccess();
+      onClose();
     } catch (error: any) {
       console.error('Error creating admin user:', error);
       toast({
@@ -136,19 +135,9 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
       firstName: "",
       lastName: "",
       schoolId: "",
+      password: "",
     });
-    setSetupLink(null);
     onClose();
-  };
-
-  const handleCopyLink = async () => {
-    if (setupLink) {
-      await navigator.clipboard.writeText(setupLink);
-      toast({
-        title: "Copied!",
-        description: "Setup link copied to clipboard",
-      });
-    }
   };
 
   return (
@@ -160,31 +149,11 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
             Create New Admin User
           </DialogTitle>
           <DialogDescription>
-            Send a secure invitation email to create a school administrator account
+            Create a school administrator account with temporary password
           </DialogDescription>
         </DialogHeader>
 
-        {setupLink ? (
-          <div className="space-y-4 py-4">
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 space-y-3">
-              <p className="font-medium text-sm">⚠️ Email could not be sent</p>
-              <p className="text-sm text-muted-foreground">
-                Please copy this setup link and send it to <strong>{formData.email}</strong> manually:
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={setupLink}
-                  readOnly
-                  className="font-mono text-xs"
-                />
-                <Button onClick={handleCopyLink} size="sm">
-                  Copy Link
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
@@ -236,40 +205,44 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="password">Temporary Password *</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Enter temporary password"
+            />
+            <p className="text-xs text-muted-foreground">
+              Admin will be required to change this password on first login
+            </p>
+          </div>
+
           <div className="bg-muted p-3 rounded-lg text-sm">
             <p className="font-medium mb-1">What happens next:</p>
             <ul className="text-muted-foreground space-y-1 text-xs">
-              <li>✉️ An invitation email is sent to the admin</li>
-              <li>🔐 They set their own secure password</li>
+              <li>🔐 Admin uses email and temporary password to login</li>
+              <li>🔄 They must create a new password on first login</li>
               <li>✅ They gain access to manage their school</li>
-              <li>🔒 You never see their password (secure!)</li>
             </ul>
           </div>
         </div>
-        )}
 
         <DialogFooter>
-          {setupLink ? (
-            <Button onClick={handleClose}>
-              Done
-            </Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={handleClose} disabled={loading}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreate} disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending Invitation...
-                  </>
-                ) : (
-                  "Send Invitation"
-                )}
-              </Button>
-            </>
-          )}
+          <Button variant="outline" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={handleCreate} disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating Admin...
+              </>
+            ) : (
+              "Create Admin"
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

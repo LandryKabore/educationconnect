@@ -57,39 +57,30 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, firstName, lastName, schoolId } = await req.json();
+    const { email, firstName, lastName, schoolId, password } = await req.json();
 
     console.log('Creating admin user:', { email, firstName, lastName, schoolId });
 
     // Validate inputs
-    if (!email || !firstName || !lastName || !schoolId) {
+    if (!email || !firstName || !lastName || !schoolId || !password) {
       throw new Error('Missing required fields');
     }
 
-    // Get school name for email
-    const { data: school, error: schoolError } = await supabaseAdmin
-      .from('schools')
-      .select('name')
-      .eq('id', schoolId)
-      .single();
-
-    if (schoolError || !school) {
-      throw new Error('School not found');
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters');
     }
 
-    // Generate a secure random password (user will reset it)
-    const tempPassword = crypto.randomUUID();
-
-    // Create the auth user
+    // Create the auth user with the provided password
     const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: password,
       email_confirm: true,
       user_metadata: {
         first_name: firstName,
         last_name: lastName,
         role: 'school_admin',
         school_id: schoolId,
+        needs_password_change: true,
       },
     });
 
@@ -159,54 +150,13 @@ serve(async (req) => {
         });
     }
 
-    // Generate password reset link
-    const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email: email,
-    });
-
-    if (resetError) {
-      console.error('Error generating reset link:', resetError);
-      throw resetError;
-    }
-
-    console.log('Password reset link generated');
-
-    // Render email template
-    const emailHtml = await renderAsync(
-      React.createElement(AdminInvitationEmail, {
-        adminName: `${firstName} ${lastName}`,
-        schoolName: school.name,
-        setupLink: resetData.properties.action_link,
-      })
-    );
-
-    // Send invitation email
-    let emailSent = false;
-    const { error: emailError } = await resend.emails.send({
-      from: 'School Management <onboarding@resend.dev>',
-      to: [email],
-      subject: `Welcome as School Administrator for ${school.name}`,
-      html: emailHtml,
-    });
-
-    if (emailError) {
-      console.error('Error sending email:', emailError);
-      console.log('Admin user created but email could not be sent. This is normal in testing mode.');
-    } else {
-      console.log('Invitation email sent successfully');
-      emailSent = true;
-    }
+    console.log('Admin user created successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
-        email_sent: emailSent,
-        message: emailSent 
-          ? 'Admin user created and invitation sent' 
-          : 'Admin user created (email not sent - verify domain at resend.com/domains)',
-        setup_link: resetData.properties.action_link,
+        message: 'Admin user created successfully. They will be required to change their password on first login.',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

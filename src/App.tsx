@@ -12,6 +12,7 @@ import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherFirstLogin from "./pages/TeacherFirstLogin";
 import StudentFirstLogin from "./pages/StudentFirstLogin";
+import AdminFirstLogin from "./pages/AdminFirstLogin";
 import StudentClassSelection from "./pages/StudentClassSelection";
 import UsernameLogin from "./pages/UsernameLogin";
 import CompleteStudentSetup from "./pages/CompleteStudentSetup";
@@ -33,6 +34,7 @@ const App = () => (
         <Route path="/teacher-assignment" element={<RequireAuth requiredRole="teacher"><TeacherAssignment /></RequireAuth>} />
         <Route path="/teacher-first-login" element={<TeacherFirstLogin />} />
         <Route path="/student-first-login" element={<StudentFirstLogin />} />
+        <Route path="/admin-first-login" element={<AdminFirstLogin />} />
         <Route path="/username-login" element={<UsernameLogin />} />
         <Route path="/complete-student-setup" element={<CompleteStudentSetup />} />
         <Route path="/student-class-selection" element={<StudentClassSelection />} />
