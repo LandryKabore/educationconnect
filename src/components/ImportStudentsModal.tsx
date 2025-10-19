@@ -45,8 +45,47 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   }, [isOpen]);
 
   const fetchSchools = async () => {
-    const { data } = await supabase.from('schools').select('*').eq('active', true);
-    if (data) setSchools(data);
+    try {
+      // Check if user is super admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: isSuperAdmin } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .eq('active', true)
+        .maybeSingle();
+
+      let query = supabase
+        .from('schools')
+        .select('*')
+        .eq('active', true);
+
+      // If not super admin, filter by schools this admin manages
+      if (!isSuperAdmin) {
+        const { data: adminSchools } = await supabase
+          .from('user_roles')
+          .select('school_id')
+          .eq('user_id', user.id)
+          .eq('role', 'school_admin')
+          .eq('active', true);
+
+        const schoolIds = adminSchools?.map(r => r.school_id).filter(Boolean) || [];
+        if (schoolIds.length > 0) {
+          query = query.in('id', schoolIds);
+        } else {
+          setSchools([]);
+          return;
+        }
+      }
+
+      const { data } = await query;
+      if (data) setSchools(data);
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+    }
   };
 
   const generateUsername = (firstName: string, middleName: string, lastName: string) => {

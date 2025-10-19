@@ -39,11 +39,43 @@ export function CreateCampusModal({ isOpen, onClose, onSuccess }: CreateCampusMo
 
   const fetchSchools = async () => {
     try {
-      const { data, error } = await supabase
+      // Check if user is super admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: isSuperAdmin } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'super_admin')
+        .eq('active', true)
+        .maybeSingle();
+
+      let query = supabase
         .from('schools')
         .select('id, name')
         .eq('active', true);
+
+      // If not super admin, filter by schools this admin manages
+      if (!isSuperAdmin) {
+        const { data: adminSchools } = await supabase
+          .from('user_roles')
+          .select('school_id')
+          .eq('user_id', user.id)
+          .eq('role', 'school_admin')
+          .eq('active', true);
+
+        const schoolIds = adminSchools?.map(r => r.school_id).filter(Boolean) || [];
+        if (schoolIds.length > 0) {
+          query = query.in('id', schoolIds);
+        } else {
+          // No schools accessible
+          setSchools([]);
+          return;
+        }
+      }
       
+      const { data, error } = await query;
       if (error) throw error;
       setSchools(data || []);
     } catch (error) {
