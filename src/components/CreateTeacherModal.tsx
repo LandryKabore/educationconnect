@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
@@ -268,15 +269,12 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
+            <PhoneInput
+              id="phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="Optional"
+            />
             <div className="space-y-2">
               <Label htmlFor="staffNo">Staff Number</Label>
               <Input

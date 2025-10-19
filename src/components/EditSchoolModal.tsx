@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -127,15 +128,13 @@ export function EditSchoolModal({ isOpen, onClose, school, onSuccess }: EditScho
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-slate-200">Phone</Label>
-            <Input
-              id="phone"
-              value={formData.phone}
-              onChange={(e) => handleInputChange("phone", e.target.value)}
-              className="bg-slate-800 border-slate-600 text-white"
-            />
-          </div>
+          <PhoneInput
+            id="phone"
+            value={formData.phone}
+            onChange={(value) => handleInputChange("phone", value)}
+            placeholder="Optional"
+            className="bg-slate-800 border-slate-600 text-white"
+          />
 
           <div className="space-y-2">
             <Label htmlFor="email" className="text-slate-200">Email</Label>
