@@ -85,6 +85,17 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       return;
     }
 
+    // Check for time conflicts
+    const hasConflicts = parsedSubjects.some((subject, idx) => hasTimeConflict(subject, idx));
+    if (hasConflicts) {
+      toast({
+        title: "Schedule Conflict",
+        description: "Two subjects cannot be scheduled at the same time on the same days",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Get school_id from selected class section
@@ -233,6 +244,32 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
     ));
   };
 
+  const hasTimeConflict = (subject: typeof parsedSubjects[0], currentIndex: number) => {
+    if (!subject.schedule_time_start || !subject.schedule_time_end || subject.schedule_days.length === 0) {
+      return false;
+    }
+
+    return parsedSubjects.some((otherSubject, idx) => {
+      if (idx === currentIndex) return false;
+      if (!otherSubject.schedule_time_start || !otherSubject.schedule_time_end || otherSubject.schedule_days.length === 0) {
+        return false;
+      }
+
+      // Check if they share any days
+      const sharedDays = subject.schedule_days.some(day => otherSubject.schedule_days.includes(day));
+      if (!sharedDays) return false;
+
+      // Check if times overlap
+      const start1 = subject.schedule_time_start;
+      const end1 = subject.schedule_time_end;
+      const start2 = otherSubject.schedule_time_start;
+      const end2 = otherSubject.schedule_time_end;
+
+      // Times overlap if: start1 < end2 AND start2 < end1
+      return start1 < end2 && start2 < end1;
+    });
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -289,82 +326,90 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                   Subjects to Create ({parsedSubjects.length})
                 </Label>
                 <div className="border rounded-md p-3 space-y-4 max-h-96 overflow-y-auto bg-muted/30">
-                  {parsedSubjects.map((subject, idx) => (
-                    <div key={idx} className="p-3 border rounded-md bg-background space-y-3">
-                      <div className="font-medium">{subject.name}</div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor={`code-${idx}`} className="text-xs">Subject Code</Label>
-                          <Input
-                            id={`code-${idx}`}
-                            type="text"
-                            value={subject.code}
-                            onChange={(e) => updateSubjectCode(idx, e.target.value)}
-                            className="h-8 text-sm uppercase"
-                            maxLength={10}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`coefficient-${idx}`} className="text-xs">Coefficient</Label>
-                          <Input
-                            id={`coefficient-${idx}`}
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            max="10.0"
-                            value={subject.coefficient}
-                            onChange={(e) => updateSubjectCoefficient(idx, parseFloat(e.target.value) || 1.0)}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                      </div>
+                   {parsedSubjects.map((subject, idx) => {
+                     const hasConflict = hasTimeConflict(subject, idx);
+                     return (
+                       <div key={idx} className={`p-3 border rounded-md bg-background space-y-3 ${hasConflict ? 'border-destructive' : ''}`}>
+                         <div className="flex items-center justify-between">
+                           <div className="font-medium">{subject.name}</div>
+                           {hasConflict && (
+                             <span className="text-xs text-destructive">Schedule conflict!</span>
+                           )}
+                         </div>
+                       
+                         <div className="grid grid-cols-2 gap-3">
+                           <div className="space-y-1">
+                             <Label htmlFor={`code-${idx}`} className="text-xs">Subject Code</Label>
+                             <Input
+                               id={`code-${idx}`}
+                               type="text"
+                               value={subject.code}
+                               onChange={(e) => updateSubjectCode(idx, e.target.value)}
+                               className="h-8 text-sm uppercase"
+                               maxLength={10}
+                             />
+                           </div>
+                           <div className="space-y-1">
+                             <Label htmlFor={`coefficient-${idx}`} className="text-xs">Coefficient</Label>
+                             <Input
+                               id={`coefficient-${idx}`}
+                               type="number"
+                               step="0.1"
+                               min="0.1"
+                               max="10.0"
+                               value={subject.coefficient}
+                               onChange={(e) => updateSubjectCoefficient(idx, parseFloat(e.target.value) || 1.0)}
+                               className="h-8 text-sm"
+                             />
+                           </div>
+                         </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-xs flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Schedule Days
-                        </Label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {DAYS.map(day => (
-                            <div key={day} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`${idx}-${day}`}
-                                checked={subject.schedule_days.includes(day)}
-                                onCheckedChange={(checked) => updateScheduleDays(idx, day, checked as boolean)}
-                              />
-                              <Label htmlFor={`${idx}-${day}`} className="text-xs cursor-pointer">
-                                {day.substring(0, 3)}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                         <div className="space-y-2">
+                           <Label className="text-xs flex items-center gap-1">
+                             <Clock className="w-3 h-3" />
+                             Schedule Days
+                           </Label>
+                           <div className="grid grid-cols-4 gap-2">
+                             {DAYS.map(day => (
+                               <div key={day} className="flex items-center space-x-2">
+                                 <Checkbox
+                                   id={`${idx}-${day}`}
+                                   checked={subject.schedule_days.includes(day)}
+                                   onCheckedChange={(checked) => updateScheduleDays(idx, day, checked as boolean)}
+                                 />
+                                 <Label htmlFor={`${idx}-${day}`} className="text-xs cursor-pointer">
+                                   {day.substring(0, 3)}
+                                 </Label>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor={`start-${idx}`} className="text-xs">Start Time</Label>
-                          <Input
-                            id={`start-${idx}`}
-                            type="time"
-                            value={subject.schedule_time_start}
-                            onChange={(e) => updateScheduleTime(idx, 'schedule_time_start', e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`end-${idx}`} className="text-xs">End Time</Label>
-                          <Input
-                            id={`end-${idx}`}
-                            type="time"
-                            value={subject.schedule_time_end}
-                            onChange={(e) => updateScheduleTime(idx, 'schedule_time_end', e.target.value)}
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                         <div className="grid grid-cols-2 gap-3">
+                           <div className="space-y-1">
+                             <Label htmlFor={`start-${idx}`} className="text-xs">Start Time</Label>
+                             <Input
+                               id={`start-${idx}`}
+                               type="time"
+                               value={subject.schedule_time_start}
+                               onChange={(e) => updateScheduleTime(idx, 'schedule_time_start', e.target.value)}
+                               className="h-8 text-sm"
+                             />
+                           </div>
+                           <div className="space-y-1">
+                             <Label htmlFor={`end-${idx}`} className="text-xs">End Time</Label>
+                             <Input
+                               id={`end-${idx}`}
+                               type="time"
+                               value={subject.schedule_time_end}
+                               onChange={(e) => updateScheduleTime(idx, 'schedule_time_end', e.target.value)}
+                               className="h-8 text-sm"
+                             />
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })}
                 </div>
               </div>
             )}
