@@ -88,13 +88,36 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       const classSection = classSections.find(cs => cs.id === formData.class_section_id);
       if (!classSection) return;
 
-      const { data, error } = await supabase
-        .from('teacher_profiles')
-        .select('user_id, profiles(first_name, last_name)')
-        .eq('school_id', classSection.school_id);
+      // Fetch both completed and pending teachers
+      const [completedTeachers, pendingTeachers] = await Promise.all([
+        // Get completed teacher profiles
+        supabase
+          .from('teacher_profiles')
+          .select('user_id, profiles(first_name, last_name)')
+          .eq('school_id', classSection.school_id),
+        // Get pending teachers from temp credentials
+        supabase
+          .from('teacher_temp_credentials')
+          .select('teacher_user_id, first_name, last_name')
+          .eq('is_used', false)
+          .eq('school_id', classSection.school_id)
+      ]);
 
-      if (error) throw error;
-      setTeachers(data || []);
+      if (completedTeachers.error) throw completedTeachers.error;
+
+      // Combine both lists
+      const allTeachers = [
+        ...(completedTeachers.data || []),
+        ...(pendingTeachers.data?.map(t => ({
+          user_id: t.teacher_user_id,
+          profiles: {
+            first_name: t.first_name,
+            last_name: t.last_name
+          }
+        })) || [])
+      ];
+
+      setTeachers(allTeachers);
     } catch (error) {
       console.error('Error fetching teachers:', error);
       toast({
