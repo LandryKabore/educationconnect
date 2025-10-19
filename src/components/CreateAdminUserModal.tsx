@@ -36,6 +36,7 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
+  const [setupLink, setSetupLink] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     firstName: "",
@@ -90,25 +91,33 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
 
       if (error) throw error;
 
-      const message = data?.email_sent 
-        ? `An email has been sent to ${formData.email} with instructions to set up their account.`
-        : `Admin user created successfully. Setup link: ${data?.setup_link || 'Check edge function logs'}`;
+      if (data?.email_sent) {
+        toast({
+          title: "Invitation Sent!",
+          description: `An email has been sent to ${formData.email} with instructions to set up their account.`,
+        });
 
-      toast({
-        title: data?.email_sent ? "Invitation Sent!" : "Admin Created",
-        description: message,
-      });
+        // Reset form
+        setFormData({
+          email: "",
+          firstName: "",
+          lastName: "",
+          schoolId: "",
+        });
 
-      // Reset form
-      setFormData({
-        email: "",
-        firstName: "",
-        lastName: "",
-        schoolId: "",
-      });
+        onSuccess();
+        onClose();
+      } else {
+        // Store the setup link to display in modal
+        setSetupLink(data?.setup_link || null);
+        
+        toast({
+          title: "Admin Created",
+          description: "Email could not be sent. Please copy the setup link below.",
+        });
 
-      onSuccess();
-      onClose();
+        onSuccess();
+      }
     } catch (error: any) {
       console.error('Error creating admin user:', error);
       toast({
@@ -128,7 +137,18 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
       lastName: "",
       schoolId: "",
     });
+    setSetupLink(null);
     onClose();
+  };
+
+  const handleCopyLink = async () => {
+    if (setupLink) {
+      await navigator.clipboard.writeText(setupLink);
+      toast({
+        title: "Copied!",
+        description: "Setup link copied to clipboard",
+      });
+    }
   };
 
   return (
@@ -144,7 +164,27 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        {setupLink ? (
+          <div className="space-y-4 py-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 space-y-3">
+              <p className="font-medium text-sm">⚠️ Email could not be sent</p>
+              <p className="text-sm text-muted-foreground">
+                Please copy this setup link and send it to <strong>{formData.email}</strong> manually:
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={setupLink}
+                  readOnly
+                  className="font-mono text-xs"
+                />
+                <Button onClick={handleCopyLink} size="sm">
+                  Copy Link
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
@@ -206,21 +246,30 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
             </ul>
           </div>
         </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate} disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Sending Invitation...
-              </>
-            ) : (
-              "Send Invitation"
-            )}
-          </Button>
+          {setupLink ? (
+            <Button onClick={handleClose}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose} disabled={loading}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreate} disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending Invitation...
+                  </>
+                ) : (
+                  "Send Invitation"
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
