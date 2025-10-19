@@ -133,8 +133,18 @@ export default function Auth() {
       } else {
         navigate("/teacher-dashboard", { replace: true });
       }
-    } else {
+    } else if (userRole === "student") {
       navigate("/student-dashboard", { replace: true });
+    } else if (userRole === "admin") {
+      navigate("/admin-dashboard", { replace: true });
+    } else {
+      // Unknown role - redirect to home
+      navigate("/", { replace: true });
+      toast({
+        title: "Unknown Role",
+        description: "Your account role is not recognized. Please contact support.",
+        variant: "destructive"
+      });
     }
   };
 
