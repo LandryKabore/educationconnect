@@ -28,15 +28,15 @@ const App = () => (
         <Route path="/" element={<Index />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/parent-dashboard" element={<RequireAuth><ParentDashboard /></RequireAuth>} />
-        <Route path="/teacher-dashboard" element={<RequireAuth><TeacherDashboard /></RequireAuth>} />
-        <Route path="/teacher-assignment" element={<RequireAuth><TeacherAssignment /></RequireAuth>} />
+        <Route path="/parent-dashboard" element={<RequireAuth requiredRole="parent"><ParentDashboard /></RequireAuth>} />
+        <Route path="/teacher-dashboard" element={<RequireAuth requiredRole="teacher"><TeacherDashboard /></RequireAuth>} />
+        <Route path="/teacher-assignment" element={<RequireAuth requiredRole="teacher"><TeacherAssignment /></RequireAuth>} />
         <Route path="/teacher-first-login" element={<TeacherFirstLogin />} />
         <Route path="/student-first-login" element={<StudentFirstLogin />} />
         <Route path="/username-login" element={<UsernameLogin />} />
         <Route path="/complete-student-setup" element={<CompleteStudentSetup />} />
         <Route path="/student-class-selection" element={<StudentClassSelection />} />
-        <Route path="/student-dashboard" element={<RequireAuth><StudentDashboard /></RequireAuth>} />
+        <Route path="/student-dashboard" element={<RequireAuth requiredRole="student"><StudentDashboard /></RequireAuth>} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
