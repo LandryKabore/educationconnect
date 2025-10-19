@@ -12,15 +12,15 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3 pointer-events-auto", className)}
-      captionLayout="dropdown-buttons"
+      captionLayout="dropdown"
       fromYear={1900}
       toYear={new Date().getFullYear()}
       classNames={{
-        caption_dropdowns: "flex gap-2",
-        dropdown: "px-2 py-1 rounded-md bg-background border border-input text-sm",
-        dropdown_month: "px-2 py-1 rounded-md bg-background border border-input",
-        dropdown_year: "px-2 py-1 rounded-md bg-background border border-input",
-        vhidden: "hidden",
+        caption_dropdowns: "flex gap-2 justify-center",
+        dropdown: "px-3 py-1.5 rounded-md bg-background border border-input text-sm font-medium hover:bg-accent cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring",
+        dropdown_month: "flex-1",
+        dropdown_year: "flex-1",
+        vhidden: "sr-only",
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
