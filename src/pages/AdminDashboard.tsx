@@ -151,6 +151,7 @@ const AdminDashboard = () => {
         studentProfilesData,
         studentTempCredsData,
         teacherProfilesData,
+        teacherTempCredsData,
         parentProfilesData
       ] = await Promise.all([
         // Filter schools based on admin access
@@ -205,6 +206,13 @@ const AdminDashboard = () => {
             ? result.data?.filter(tp => tp.school_id && schoolIdsToQuery.includes(tp.school_id))
             : (isSuperAdmin ? result.data : result.data?.filter(tp => tp.school_id && accessibleSchoolIds.includes(tp.school_id)))
         })),
+        // And get teacher temp credentials to include pending teachers (only unused ones)
+        supabase.from('teacher_temp_credentials').select('*').eq('is_used', false).then(result => ({
+          ...result,
+          data: schoolIdsToQuery.length > 0
+            ? result.data?.filter(ttc => ttc.school_id && schoolIdsToQuery.includes(ttc.school_id))
+            : (isSuperAdmin ? result.data : result.data?.filter(ttc => ttc.school_id && accessibleSchoolIds.includes(ttc.school_id)))
+        })),
         // And parent profiles to link parents to schools
         supabase.from('parent_profiles').select('*, profiles!inner(*)').then(result => ({
           ...result,
@@ -233,8 +241,10 @@ const AdminDashboard = () => {
         const completedStudents = studentProfilesData.data?.length || 0;
         const pendingStudents = studentTempCredsData.data?.length || 0;
         students = completedStudents + pendingStudents;
-        // Count teachers linked to this school
-        teachers = teacherProfilesData.data?.length || 0;
+        // Count teachers linked to this school (both completed profiles and temp credentials)
+        const completedTeachers = teacherProfilesData.data?.length || 0;
+        const pendingTeachers = teacherTempCredsData.data?.length || 0;
+        teachers = completedTeachers + pendingTeachers;
         // Count parents linked to this school
         parents = parentProfilesData.data?.length || 0;
       } else {
@@ -242,7 +252,9 @@ const AdminDashboard = () => {
         const completedStudents = profilesData.data?.filter(p => p.role === 'student').length || 0;
         const pendingStudents = studentTempCredsData.data?.length || 0;
         students = completedStudents + pendingStudents;
-        teachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
+        const completedTeachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
+        const pendingTeachers = teacherTempCredsData.data?.length || 0;
+        teachers = completedTeachers + pendingTeachers;
         parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
       }
 
