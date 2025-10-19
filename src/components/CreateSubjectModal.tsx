@@ -285,7 +285,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
   const updateTeacher = (index: number, teacherId: string) => {
     setParsedSubjects(prev => prev.map((subject, idx) => 
-      idx === index ? { ...subject, teacher_user_id: teacherId || null } : subject
+      idx === index ? { ...subject, teacher_user_id: teacherId === "none" ? null : teacherId } : subject
     ));
   };
 
@@ -403,14 +403,14 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                         <div className="space-y-1">
                           <Label htmlFor={`teacher-${idx}`} className="text-xs">Assign Teacher</Label>
                           <Select
-                            value={subject.teacher_user_id || ""}
+                            value={subject.teacher_user_id || "none"}
                             onValueChange={(value) => updateTeacher(idx, value)}
                           >
                             <SelectTrigger className="h-8 text-sm">
                               <SelectValue placeholder="Select teacher (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="none">None</SelectItem>
                               {teachers.map((teacher) => (
                                 <SelectItem key={teacher.user_id} value={teacher.user_id}>
                                   {teacher.profiles?.first_name} {teacher.profiles?.last_name}
