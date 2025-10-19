@@ -46,14 +46,33 @@ export function AssignSchoolAdminModal({ isOpen, onClose, onSuccess }: AssignSch
   }, [isOpen]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      // Fetch all users (excluding current school admins)
+      // Fetch all active users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, email, first_name, last_name')
+        .eq('status', 'active')
         .order('first_name');
 
       if (profilesError) throw profilesError;
+
+      // Fetch user roles to filter out students, teachers, and parents
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .eq('active', true)
+        .in('role', ['student', 'teacher', 'parent']);
+
+      if (rolesError) throw rolesError;
+
+      // Create a Set of user IDs who are students, teachers, or parents
+      const operationalRoleUserIds = new Set(rolesData?.map(r => r.user_id) || []);
+
+      // Filter out users who have operational roles (student, teacher, parent)
+      const filteredUsers = (profilesData || []).filter(
+        user => !operationalRoleUserIds.has(user.user_id)
+      );
 
       // Fetch all active schools
       const { data: schoolsData, error: schoolsError } = await supabase
@@ -64,15 +83,17 @@ export function AssignSchoolAdminModal({ isOpen, onClose, onSuccess }: AssignSch
 
       if (schoolsError) throw schoolsError;
 
-      setUsers(profilesData || []);
+      setUsers(filteredUsers);
       setSchools(schoolsData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Failed to load users and schools",
+        description: "Failed to load data",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
