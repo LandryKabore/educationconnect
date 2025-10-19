@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, Loader2, List } from "lucide-react";
 
 interface CreateSubjectModalProps {
   isOpen: boolean;
@@ -27,12 +27,10 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    name: "",
-    code: "",
-    description: "",
-    school_id: selectedSchoolId || "",
-    coefficient: "1.0"
+    names: "",
+    school_id: selectedSchoolId || ""
   });
+  const [parsedSubjects, setParsedSubjects] = useState<Array<{name: string, coefficient: number}>>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -65,7 +63,8 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.school_id || !formData.coefficient) {
+    
+    if (parsedSubjects.length === 0 || !formData.school_id) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -76,30 +75,30 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
     setLoading(true);
     try {
+      const subjectsToInsert = parsedSubjects.map(subject => ({
+        name: subject.name,
+        school_id: formData.school_id,
+        coefficient: subject.coefficient
+      }));
+
       const { error } = await supabase
         .from('subjects')
-        .insert([{
-          name: formData.name,
-          code: formData.code || null,
-          description: formData.description || null,
-          school_id: formData.school_id,
-          coefficient: parseFloat(formData.coefficient)
-        }]);
+        .insert(subjectsToInsert);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Subject created successfully"
+        description: `${parsedSubjects.length} subject${parsedSubjects.length > 1 ? 's' : ''} created successfully`
       });
       
       handleClose();
       onSuccess();
     } catch (error) {
-      console.error('Error creating subject:', error);
+      console.error('Error creating subjects:', error);
       toast({
         title: "Error",
-        description: "Failed to create subject",
+        description: "Failed to create subjects",
         variant: "destructive"
       });
     } finally {
@@ -109,13 +108,31 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
 
   const handleClose = () => {
     setFormData({
-      name: "",
-      code: "",
-      description: "",
-      school_id: selectedSchoolId || "",
-      coefficient: "1.0"
+      names: "",
+      school_id: selectedSchoolId || ""
     });
+    setParsedSubjects([]);
     onClose();
+  };
+
+  const parseSubjectNames = (input: string) => {
+    const names = input.split(',').map(name => name.trim()).filter(name => name.length > 0);
+    const subjects = names.map(name => ({
+      name,
+      coefficient: 1.0
+    }));
+    setParsedSubjects(subjects);
+  };
+
+  const handleNamesChange = (value: string) => {
+    setFormData({ ...formData, names: value });
+    parseSubjectNames(value);
+  };
+
+  const updateSubjectCoefficient = (index: number, coefficient: number) => {
+    setParsedSubjects(prev => prev.map((subject, idx) => 
+      idx === index ? { ...subject, coefficient } : subject
+    ));
   };
 
   return (
@@ -127,83 +144,77 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
             Create Subject
           </DialogTitle>
           <DialogDescription>
-            Create a new subject for the selected school.
+            Create one or more subjects. Separate multiple subjects with commas.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Subject Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Mathematics"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="code">Subject Code</Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  placeholder="e.g., MATH101"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="school">School *</Label>
-                <Select
-                  value={formData.school_id}
-                  onValueChange={(value) => setFormData({ ...formData, school_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a school" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schools.map((school) => (
-                      <SelectItem key={school.id} value={school.id}>
-                        {school.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="names">Subject Names *</Label>
+              <Textarea
+                id="names"
+                value={formData.names}
+                onChange={(e) => handleNamesChange(e.target.value)}
+                placeholder="e.g., Mathematics, Physics, Chemistry, English"
+                className="min-h-[80px]"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple subjects with commas. Each will have a default coefficient of 1.0.
+              </p>
             </div>
 
-            <div className="space-y-4">
+            {parsedSubjects.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="coefficient">Subject Coefficient (Credit Hours) *</Label>
-                <Input
-                  id="coefficient"
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  max="10.0"
-                  value={formData.coefficient}
-                  onChange={(e) => setFormData({ ...formData, coefficient: e.target.value })}
-                  placeholder="e.g., 1.0"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Used for calculating weighted GPA. Higher values have more impact on GPA.
-                </p>
+                <Label className="flex items-center gap-2">
+                  <List className="w-4 h-4" />
+                  Subjects to Create ({parsedSubjects.length})
+                </Label>
+                <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto bg-muted/30">
+                  {parsedSubjects.map((subject, idx) => (
+                    <div key={idx} className="flex items-center gap-3 py-1">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">{subject.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`coefficient-${idx}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                          Coefficient:
+                        </Label>
+                        <Input
+                          id={`coefficient-${idx}`}
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="10.0"
+                          value={subject.coefficient}
+                          onChange={(e) => updateSubjectCoefficient(idx, parseFloat(e.target.value) || 1.0)}
+                          className="w-20 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Brief description of the subject"
-                  rows={3}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="school">School *</Label>
+              <Select
+                value={formData.school_id}
+                onValueChange={(value) => setFormData({ ...formData, school_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a school" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schools.map((school) => (
+                    <SelectItem key={school.id} value={school.id}>
+                      {school.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
