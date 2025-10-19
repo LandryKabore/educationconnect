@@ -583,6 +583,15 @@ export default function Auth() {
           <h1>EduConnect - Select Your Role</h1>
         </header>
         <main className="container mx-auto max-w-4xl px-4 py-10">
+          <div className="flex justify-center mb-6">
+            <Button 
+              variant="ghost" 
+              onClick={() => navigate("/")}
+              className="gap-2"
+            >
+              ← Back to Home
+            </Button>
+          </div>
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold mb-4">Welcome to EduConnect</h1>
             <p className="text-muted-foreground text-lg">Please select your role to continue</p>
@@ -621,6 +630,15 @@ export default function Auth() {
         <h1>EduConnect Authentication</h1>
       </header>
       <main className="container mx-auto max-w-md px-4 py-10">
+        <div className="flex justify-center mb-6">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate("/")}
+            className="gap-2"
+          >
+            ← Back to Home
+          </Button>
+        </div>
         <Card className="shadow-elevated">
           <CardHeader>
             <div className="flex items-center gap-3 mb-4">
