@@ -62,33 +62,62 @@ export function SchoolAdminManagementModal({ isOpen, onClose }: SchoolAdminManag
   const fetchSchoolAdmins = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get user_roles for school_admin
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
-        .select(`
-          id,
-          user_id,
-          school_id,
-          assigned_at,
-          role,
-          profiles!inner(email, first_name, last_name),
-          schools!inner(name)
-        `)
+        .select('id, user_id, school_id, assigned_at, role')
         .eq('role', 'school_admin')
         .eq('active', true);
 
-      if (error) throw error;
+      if (rolesError) throw rolesError;
 
-      const adminsData = data?.map(item => ({
-        id: item.id,
-        user_id: item.user_id,
-        email: (item.profiles as any).email,
-        first_name: (item.profiles as any).first_name,
-        last_name: (item.profiles as any).last_name,
-        school_id: item.school_id!,
-        school_name: (item.schools as any).name,
-        assigned_at: item.assigned_at,
-        role: item.role,
-      })) || [];
+      if (!rolesData || rolesData.length === 0) {
+        setAdmins([]);
+        setFilteredAdmins([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get user IDs
+      const userIds = rolesData.map(r => r.user_id);
+      const schoolIds = [...new Set(rolesData.map(r => r.school_id).filter(Boolean))];
+
+      // Fetch profiles
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, email, first_name, last_name')
+        .in('user_id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Fetch schools
+      const { data: schoolsData, error: schoolsError } = await supabase
+        .from('schools')
+        .select('id, name')
+        .in('id', schoolIds);
+
+      if (schoolsError) throw schoolsError;
+
+      // Combine data
+      const profilesMap = new Map(profilesData?.map(p => [p.user_id, p]) || []);
+      const schoolsMap = new Map(schoolsData?.map(s => [s.id, s]) || []);
+
+      const adminsData = rolesData.map(role => {
+        const profile = profilesMap.get(role.user_id);
+        const school = schoolsMap.get(role.school_id!);
+        
+        return {
+          id: role.id,
+          user_id: role.user_id,
+          email: profile?.email || '',
+          first_name: profile?.first_name || '',
+          last_name: profile?.last_name || '',
+          school_id: role.school_id!,
+          school_name: school?.name || '',
+          assigned_at: role.assigned_at,
+          role: role.role,
+        };
+      });
 
       setAdmins(adminsData);
       setFilteredAdmins(adminsData);
