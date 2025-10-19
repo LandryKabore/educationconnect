@@ -1,10 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "npm:resend@4.0.0";
+import React from "npm:react@18.3.1";
+import { renderAsync } from "npm:@react-email/components@0.0.22";
+import { AdminInvitationEmail } from "./_templates/admin-invitation.tsx";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -51,23 +57,33 @@ serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, firstName, lastName, schoolId } = await req.json();
+    const { email, firstName, lastName, schoolId } = await req.json();
 
     console.log('Creating admin user:', { email, firstName, lastName, schoolId });
 
     // Validate inputs
-    if (!email || !password || !firstName || !lastName || !schoolId) {
+    if (!email || !firstName || !lastName || !schoolId) {
       throw new Error('Missing required fields');
     }
 
-    if (password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+    // Get school name for email
+    const { data: school, error: schoolError } = await supabaseAdmin
+      .from('schools')
+      .select('name')
+      .eq('id', schoolId)
+      .single();
+
+    if (schoolError || !school) {
+      throw new Error('School not found');
     }
+
+    // Generate a secure random password (user will reset it)
+    const tempPassword = crypto.randomUUID();
 
     // Create the auth user
     const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password,
+      password: tempPassword,
       email_confirm: true,
       user_metadata: {
         first_name: firstName,
@@ -84,19 +100,18 @@ serve(async (req) => {
 
     console.log('Auth user created:', newUser.user.id);
 
-    // The handle_new_user trigger will create the profile and user_role
-    // But we need to ensure the profile exists before proceeding
+    // Wait for profile creation
     let retries = 5;
     let profileExists = false;
     
     while (retries > 0 && !profileExists) {
-      const { data: profile, error: profileError } = await supabaseAdmin
+      const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('user_id')
         .eq('user_id', newUser.user.id)
         .single();
       
-      if (!profileError && profile) {
+      if (profile) {
         profileExists = true;
         console.log('Profile confirmed');
       } else {
@@ -109,8 +124,7 @@ serve(async (req) => {
     if (!profileExists) {
       console.error('Profile was not created by trigger, creating manually');
       
-      // Manually create profile if trigger failed
-      const { error: manualProfileError } = await supabaseAdmin
+      await supabaseAdmin
         .from('profiles')
         .insert({
           user_id: newUser.user.id,
@@ -120,15 +134,10 @@ serve(async (req) => {
           role: 'admin',
           status: 'active',
         });
-
-      if (manualProfileError) {
-        console.error('Error creating profile manually:', manualProfileError);
-        throw manualProfileError;
-      }
     }
 
     // Verify user_role was created
-    const { data: userRole, error: roleError } = await supabaseAdmin
+    const { data: userRole } = await supabaseAdmin
       .from('user_roles')
       .select('id')
       .eq('user_id', newUser.user.id)
@@ -136,11 +145,10 @@ serve(async (req) => {
       .eq('school_id', schoolId)
       .single();
 
-    if (roleError || !userRole) {
+    if (!userRole) {
       console.log('User role not created by trigger, creating manually');
       
-      // Manually create user role if trigger failed
-      const { error: manualRoleError } = await supabaseAdmin
+      await supabaseAdmin
         .from('user_roles')
         .insert({
           user_id: newUser.user.id,
@@ -149,20 +157,50 @@ serve(async (req) => {
           active: true,
           assigned_by: user.id,
         });
-
-      if (manualRoleError) {
-        console.error('Error creating user role manually:', manualRoleError);
-        throw manualRoleError;
-      }
     }
 
-    console.log('Admin user created successfully');
+    // Generate password reset link
+    const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: email,
+    });
+
+    if (resetError) {
+      console.error('Error generating reset link:', resetError);
+      throw resetError;
+    }
+
+    console.log('Password reset link generated');
+
+    // Render email template
+    const emailHtml = await renderAsync(
+      React.createElement(AdminInvitationEmail, {
+        adminName: `${firstName} ${lastName}`,
+        schoolName: school.name,
+        setupLink: resetData.properties.action_link,
+      })
+    );
+
+    // Send invitation email
+    const { error: emailError } = await resend.emails.send({
+      from: 'School Management <onboarding@resend.dev>',
+      to: [email],
+      subject: `Welcome as School Administrator for ${school.name}`,
+      html: emailHtml,
+    });
+
+    if (emailError) {
+      console.error('Error sending email:', emailError);
+      throw new Error('Failed to send invitation email');
+    }
+
+    console.log('Invitation email sent successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         user_id: newUser.user.id,
-        message: 'Admin user created successfully',
+        message: 'Admin user created and invitation sent',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

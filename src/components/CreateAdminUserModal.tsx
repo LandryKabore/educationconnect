@@ -38,7 +38,6 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
   const [schools, setSchools] = useState<School[]>([]);
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
     firstName: "",
     lastName: "",
     schoolId: "",
@@ -68,7 +67,7 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
 
   const handleCreate = async () => {
     // Validation
-    if (!formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.schoolId) {
+    if (!formData.email || !formData.firstName || !formData.lastName || !formData.schoolId) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields",
@@ -77,22 +76,12 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
       return;
     }
 
-    if (formData.password.length < 8) {
-      toast({
-        title: "Weak Password",
-        description: "Password must be at least 8 characters long",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(true);
     try {
-      // Call edge function to create admin user
+      // Call edge function to create admin user and send invitation
       const { data, error } = await supabase.functions.invoke('create-admin-user', {
         body: {
           email: formData.email,
-          password: formData.password,
           firstName: formData.firstName,
           lastName: formData.lastName,
           schoolId: formData.schoolId,
@@ -102,14 +91,13 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
       if (error) throw error;
 
       toast({
-        title: "Admin User Created",
-        description: `${formData.firstName} ${formData.lastName} has been created as a school administrator.`,
+        title: "Invitation Sent!",
+        description: `An email has been sent to ${formData.email} with instructions to set up their account.`,
       });
 
       // Reset form
       setFormData({
         email: "",
-        password: "",
         firstName: "",
         lastName: "",
         schoolId: "",
@@ -132,7 +120,6 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
   const handleClose = () => {
     setFormData({
       email: "",
-      password: "",
       firstName: "",
       lastName: "",
       schoolId: "",
@@ -149,7 +136,7 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
             Create New Admin User
           </DialogTitle>
           <DialogDescription>
-            Create a dedicated administrator account for a school
+            Send a secure invitation email to create a school administrator account
           </DialogDescription>
         </DialogHeader>
 
@@ -187,20 +174,6 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password *</Label>
-            <Input
-              id="password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="Minimum 8 characters"
-            />
-            <p className="text-xs text-muted-foreground">
-              The admin will be able to change this password after first login
-            </p>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="school">Assign to School *</Label>
             <Select
               value={formData.schoolId}
@@ -220,12 +193,12 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
           </div>
 
           <div className="bg-muted p-3 rounded-lg text-sm">
-            <p className="font-medium mb-1">About School Admins:</p>
+            <p className="font-medium mb-1">What happens next:</p>
             <ul className="text-muted-foreground space-y-1 text-xs">
-              <li>• Can manage their assigned school only</li>
-              <li>• Can create teachers, students, and classes</li>
-              <li>• Cannot access other schools' data</li>
-              <li>• Cannot delete the school</li>
+              <li>✉️ An invitation email is sent to the admin</li>
+              <li>🔐 They set their own secure password</li>
+              <li>✅ They gain access to manage their school</li>
+              <li>🔒 You never see their password (secure!)</li>
             </ul>
           </div>
         </div>
@@ -238,10 +211,10 @@ export function CreateAdminUserModal({ isOpen, onClose, onSuccess }: CreateAdmin
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating...
+                Sending Invitation...
               </>
             ) : (
-              "Create Admin User"
+              "Send Invitation"
             )}
           </Button>
         </DialogFooter>
