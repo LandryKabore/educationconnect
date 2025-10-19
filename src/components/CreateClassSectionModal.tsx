@@ -32,13 +32,12 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
   const [subjects, setSubjects] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     names: "", // Changed to support comma-separated input
-    capacity: "30",
     school_id: selectedSchoolId || "",
     campus_id: "",
     academic_year_id: "",
     selected_subjects: [] as string[]
   });
-  const [parsedSections, setParsedSections] = useState<Array<{name: string, gradeLevel: string}>>([]);
+  const [parsedSections, setParsedSections] = useState<Array<{name: string, gradeLevel: string, capacity: number}>>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -149,7 +148,7 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
       const sectionsToInsert = parsedSections.map(section => ({
         name: section.name,
         grade_level: section.gradeLevel,
-        capacity: parseInt(formData.capacity),
+        capacity: section.capacity,
         school_id: formData.school_id,
         campus_id: formData.campus_id,
         academic_year_id: formData.academic_year_id
@@ -200,7 +199,6 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
   const handleClose = () => {
     setFormData({
       names: "",
-      capacity: "30",
       school_id: selectedSchoolId || "",
       campus_id: "",
       academic_year_id: "",
@@ -250,9 +248,15 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
     const sections = names.map(name => {
       const formatted = formatClassName(name);
       const gradeLevel = extractGradeLevel(formatted);
-      return { name: formatted, gradeLevel };
+      return { name: formatted, gradeLevel, capacity: 30 };
     });
     setParsedSections(sections);
+  };
+
+  const updateSectionCapacity = (index: number, capacity: number) => {
+    setParsedSections(prev => prev.map((section, idx) => 
+      idx === index ? { ...section, capacity } : section
+    ));
   };
 
   const handleNamesChange = (value: string) => {
@@ -297,11 +301,27 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
                     <List className="w-4 h-4" />
                     Sections to Create ({parsedSections.length})
                   </Label>
-                  <div className="border rounded-md p-3 space-y-1 max-h-32 overflow-y-auto bg-muted/30">
+                  <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto bg-muted/30">
                     {parsedSections.map((section, idx) => (
-                      <div key={idx} className="text-sm flex justify-between items-center py-1">
-                        <span className="font-medium">{section.name}</span>
-                        <span className="text-muted-foreground text-xs">{section.gradeLevel || '⚠️ Invalid'}</span>
+                      <div key={idx} className="flex items-center gap-3 py-1">
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">{section.name}</span>
+                          <span className="text-muted-foreground text-xs ml-2">({section.gradeLevel || '⚠️ Invalid'})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`capacity-${idx}`} className="text-xs text-muted-foreground whitespace-nowrap">
+                            Capacity:
+                          </Label>
+                          <Input
+                            id={`capacity-${idx}`}
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={section.capacity}
+                            onChange={(e) => updateSectionCapacity(idx, parseInt(e.target.value) || 30)}
+                            className="w-20 h-8 text-sm"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -369,17 +389,6 @@ export function CreateClassSectionModal({ isOpen, onClose, onSuccess, selectedSc
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="capacity">Capacity</Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                  min="1"
-                  max="100"
-                />
-              </div>
             </div>
           </div>
 
