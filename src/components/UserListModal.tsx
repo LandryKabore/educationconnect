@@ -395,7 +395,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           created_at: item.created_at,
           status: 'pending',
           username: item.username,
-          tempPassword: '••••', // Don't show actual password
+          tempPassword: item.temp_password_plain,
           isVerified: item.is_used || false,
           tempPasswordExpires: item.expires_at,
           phone: item.phone,
