@@ -151,7 +151,8 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
           username,
           tempPassword,
           schoolId,
-          classId,
+          classSectionId: classId,
+          gradeLevel: classes.find(c => c.id === classId)?.grade_level || null,
           studentNo: studentNo || null
         }
       });

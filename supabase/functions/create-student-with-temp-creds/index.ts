@@ -12,6 +12,7 @@ interface CreateStudentRequest {
   studentNo?: string | null;
   username: string;
   tempPassword: string;
+  classSectionId?: string | null;
 }
 
 async function handler(req: Request): Promise<Response> {
@@ -58,7 +59,8 @@ async function handler(req: Request): Promise<Response> {
       gradeLevel,
       studentNo, 
       username, 
-      tempPassword 
+      tempPassword,
+      classSectionId 
     } = body;
 
     if (!firstName || !lastName || !schoolId || !username || !tempPassword) {
@@ -149,6 +151,7 @@ async function handler(req: Request): Promise<Response> {
         school_id: schoolId,
         grade_level: gradeLevel || null,
         student_no: studentNo || null,
+        class_section_id: classSectionId || null,
         created_by: user.id,
       })
       .select()
@@ -166,6 +169,94 @@ async function handler(req: Request): Promise<Response> {
     }
 
     console.log('Student created successfully:', studentData);
+
+    // Create profile immediately (so student shows up in database)
+    console.log('Creating student profile immediately...');
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        user_id: studentUserId,
+        email: `${username}@student.local`,
+        first_name: firstName,
+        last_name: lastName,
+        role: 'student'
+      });
+
+    if (profileError) {
+      console.error('Error creating profile:', profileError);
+      // Continue anyway, will be created on verification
+    } else {
+      console.log('Profile created successfully');
+    }
+
+    // Create student profile immediately
+    const { error: studentProfileError } = await supabase
+      .from('student_profiles')
+      .insert({
+        user_id: studentUserId,
+        school_id: schoolId,
+        student_no: studentNo,
+      });
+
+    if (studentProfileError) {
+      console.error('Error creating student profile:', studentProfileError);
+      // Continue anyway, will be created on verification
+    } else {
+      console.log('Student profile created successfully');
+    }
+
+    // Create user role immediately
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .insert({
+        user_id: studentUserId,
+        role: 'student',
+        school_id: schoolId,
+        active: true,
+        assigned_by: user.id
+      });
+
+    if (roleError) {
+      console.error('Error creating user role:', roleError);
+      // Continue anyway
+    } else {
+      console.log('User role created successfully');
+    }
+
+    // Auto-enroll student in their class if class_section_id is provided
+    if (classSectionId) {
+      console.log('Auto-enrolling student in class section:', classSectionId);
+      
+      const { data: section, error: sectionError } = await supabase
+        .from('class_sections')
+        .select('id, academic_year_id')
+        .eq('id', classSectionId)
+        .maybeSingle();
+      
+      if (sectionError) {
+        console.error('Error finding class section:', sectionError);
+      } else if (section) {
+        console.log('Found class section:', section);
+        
+        // Enroll the student
+        const { error: enrollmentError } = await supabase
+          .from('enrollments')
+          .insert({
+            student_user_id: studentUserId,
+            class_section_id: section.id,
+            academic_year_id: section.academic_year_id,
+            status: 'active'
+          });
+
+        if (enrollmentError) {
+          console.error('Error enrolling student:', enrollmentError);
+        } else {
+          console.log('Student successfully enrolled in class');
+        }
+      } else {
+        console.log('Class section not found');
+      }
+    }
 
     // Generate parent verification code (6-digit numeric code)
     const parentVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
