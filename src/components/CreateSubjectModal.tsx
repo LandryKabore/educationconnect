@@ -107,16 +107,35 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
       const classSection = classSections.find(cs => cs.id === formData.class_section_id);
       if (!classSection) return;
 
-      // Only fetch verified teachers (those with completed profiles)
-      // Unverified teachers don't have real user accounts yet and can't be assigned
-      const { data: completedTeachers, error } = await supabase
-        .from('teacher_profiles')
-        .select('user_id, subjects_taught, profiles(first_name, last_name)')
-        .eq('school_id', classSection.school_id);
+      // Fetch both verified and unverified teachers
+      // Unverified teachers can be assigned before school starts
+      const [completedTeachers, pendingTeachers] = await Promise.all([
+        supabase
+          .from('teacher_profiles')
+          .select('user_id, subjects_taught, profiles(first_name, last_name)')
+          .eq('school_id', classSection.school_id),
+        supabase
+          .from('teacher_temp_credentials')
+          .select('teacher_user_id, first_name, last_name, subjects_taught')
+          .eq('is_used', false)
+          .eq('school_id', classSection.school_id)
+      ]);
 
-      if (error) throw error;
+      if (completedTeachers.error) throw completedTeachers.error;
 
-      setTeachers(completedTeachers || []);
+      const allTeachers = [
+        ...(completedTeachers.data || []),
+        ...(pendingTeachers.data?.map(t => ({
+          user_id: t.teacher_user_id,
+          subjects_taught: t.subjects_taught,
+          profiles: {
+            first_name: t.first_name,
+            last_name: t.last_name
+          }
+        })) || [])
+      ];
+
+      setTeachers(allTeachers);
     } catch (error) {
       console.error('Error fetching teachers:', error);
       toast({
