@@ -235,7 +235,12 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
             }
           });
 
-          if (error) throw error;
+          // Extract detailed error message from response
+          if (error) {
+            // Try to get detailed error from the response body
+            const errorMessage = data?.error || error.message || 'Unknown error occurred';
+            throw new Error(errorMessage);
+          }
           
           // Check if response has error
           if (data && data.error) {
