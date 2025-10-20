@@ -89,6 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
       .insert({
         username: finalUsername,
         temp_password_hash: tempPasswordHash,
+        temp_password_plain: tempPassword,
         teacher_user_id: tempUserId,
         created_by: user.id,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),

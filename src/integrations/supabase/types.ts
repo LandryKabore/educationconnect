@@ -1517,6 +1517,7 @@ export type Database = {
           staff_no: string | null
           teacher_user_id: string
           temp_password_hash: string
+          temp_password_plain: string | null
           used_at: string | null
           username: string
         }
@@ -1540,6 +1541,7 @@ export type Database = {
           staff_no?: string | null
           teacher_user_id: string
           temp_password_hash: string
+          temp_password_plain?: string | null
           used_at?: string | null
           username: string
         }
@@ -1563,6 +1565,7 @@ export type Database = {
           staff_no?: string | null
           teacher_user_id?: string
           temp_password_hash?: string
+          temp_password_plain?: string | null
           used_at?: string | null
           username?: string
         }
