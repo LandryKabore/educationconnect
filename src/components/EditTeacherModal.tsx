@@ -36,6 +36,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
   const [staffNo, setStaffNo] = useState("");
   const [qualifications, setQualifications] = useState("");
   const [subjectsTaught, setSubjectsTaught] = useState("");
+  const [schoolId, setSchoolId] = useState<string>("");
 
   useEffect(() => {
     if (isOpen && teacherId) {
@@ -72,6 +73,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
         setStaffNo(teacherData.staff_no || "");
         setQualifications(teacherData.qualifications?.join(", ") || "");
         setSubjectsTaught(teacherData.subjects_taught || "");
+        setSchoolId(teacherData.school_id || "");
       } else {
         // Unverified teacher - fetch from teacher_temp_credentials
         const { data: tempData, error: tempError } = await supabase
@@ -93,6 +95,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
         setStaffNo(tempData.staff_no || "");
         setQualifications(tempData.qualifications?.join(", ") || "");
         setSubjectsTaught(""); // Temp credentials don't have subjects_taught yet
+        setSchoolId(tempData.school_id || "");
       }
     } catch (error) {
       console.error('Error fetching teacher data:', error);
@@ -138,20 +141,47 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
 
         if (profileError) throw profileError;
 
-        const { error: teacherError } = await supabase
+        // Check if teacher_profiles entry exists
+        const { data: existingTeacherProfile } = await supabase
           .from('teacher_profiles')
-          .update({
-            prefix,
-            gender,
-            dob: dob ? format(dob, 'yyyy-MM-dd') : null,
-            phone: phone || null,
-            staff_no: staffNo || null,
-            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
-            subjects_taught: subjectsTaught || null
-          })
-          .eq('user_id', teacherId);
+          .select('user_id')
+          .eq('user_id', teacherId)
+          .maybeSingle();
 
-        if (teacherError) throw teacherError;
+        if (existingTeacherProfile) {
+          // Update existing teacher_profiles
+          const { error: teacherError } = await supabase
+            .from('teacher_profiles')
+            .update({
+              prefix,
+              gender,
+              dob: dob ? format(dob, 'yyyy-MM-dd') : null,
+              phone: phone || null,
+              staff_no: staffNo || null,
+              qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+              subjects_taught: subjectsTaught || null
+            })
+            .eq('user_id', teacherId);
+
+          if (teacherError) throw teacherError;
+        } else {
+          // Create new teacher_profiles entry
+          const { error: teacherError } = await supabase
+            .from('teacher_profiles')
+            .insert({
+              user_id: teacherId,
+              school_id: schoolId,
+              prefix,
+              gender,
+              dob: dob ? format(dob, 'yyyy-MM-dd') : null,
+              phone: phone || null,
+              staff_no: staffNo || null,
+              qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+              subjects_taught: subjectsTaught || null
+            });
+
+          if (teacherError) throw teacherError;
+        }
       } else {
         // Unverified teacher - update teacher_temp_credentials
         const { error: tempError } = await supabase
