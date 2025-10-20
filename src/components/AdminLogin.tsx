@@ -116,6 +116,14 @@ export function AdminLogin({ onSuccess }: AdminLoginProps) {
           });
           return;
         }
+        
+        // Check if admin needs to change password
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.user_metadata?.needs_password_change) {
+          window.location.href = '/admin-first-login';
+          return;
+        }
+        
         toast({ title: "Welcome", description: "Admin access granted." });
         onSuccess();
       }
