@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2, Clock, Shield } from "lucide-react";
+import { ArrowLeft, User, Settings, School, Users, Calendar, BookOpen, MapPin, GraduationCap, Loader2, Trash2, Clock, Shield, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { LogoutButton } from "@/components/LogoutButton";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { SchoolAdminManagementModal } from "@/components/SchoolAdminManagementModal";
+import { AdminGuideModal } from "@/components/AdminGuideModal";
 
 interface AdminData {
   schools: any[];
@@ -83,6 +84,7 @@ const AdminDashboard = () => {
   const [createStudentModalOpen, setCreateStudentModalOpen] = useState(false);
   const [importStudentsModalOpen, setImportStudentsModalOpen] = useState(false);
   const [schoolAdminModalOpen, setSchoolAdminModalOpen] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -391,6 +393,15 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setGuideModalOpen(true)}
+                className="border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <HelpCircle className="w-4 h-4 mr-2" />
+                How This Works
+              </Button>
               <LanguageToggle />
               <LogoutButton />
             </div>
@@ -882,6 +893,11 @@ const AdminDashboard = () => {
           onClose={() => setSchoolAdminModalOpen(false)}
         />
       )}
+
+      <AdminGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+      />
 
       <AlertDialog open={!!deletingClassSection} onOpenChange={(open) => !open && setDeletingClassSection(null)}>
         <AlertDialogContent>
