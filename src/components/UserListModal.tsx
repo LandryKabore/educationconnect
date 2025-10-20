@@ -221,24 +221,6 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     }
   }, [isOpen, userType, selectedSchoolId]);
 
-  // Add effect to refetch when modal is already open and external data might have changed
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    if (isOpen) {
-      // Poll for updates every 2 seconds when modal is open
-      intervalId = setInterval(() => {
-        fetchUsers();
-      }, 2000);
-    }
-    
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [isOpen]);
-
   useEffect(() => {
     const filtered = users.filter(user => 
       user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
