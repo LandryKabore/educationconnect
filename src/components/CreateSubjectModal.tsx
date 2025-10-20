@@ -117,7 +117,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
         // Get pending teachers from temp credentials
         supabase
           .from('teacher_temp_credentials')
-          .select('teacher_user_id, first_name, last_name')
+          .select('teacher_user_id, first_name, last_name, subjects_taught')
           .eq('is_used', false)
           .eq('school_id', classSection.school_id)
       ]);
@@ -129,7 +129,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
         ...(completedTeachers.data || []),
         ...(pendingTeachers.data?.map(t => ({
           user_id: t.teacher_user_id,
-          subjects_taught: null,
+          subjects_taught: t.subjects_taught,
           profiles: {
             first_name: t.first_name,
             last_name: t.last_name

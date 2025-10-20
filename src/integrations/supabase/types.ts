@@ -1518,6 +1518,7 @@ export type Database = {
           qualifications: string[] | null
           school_id: string | null
           staff_no: string | null
+          subjects_taught: string | null
           teacher_user_id: string
           temp_password_hash: string
           temp_password_plain: string | null
@@ -1542,6 +1543,7 @@ export type Database = {
           qualifications?: string[] | null
           school_id?: string | null
           staff_no?: string | null
+          subjects_taught?: string | null
           teacher_user_id: string
           temp_password_hash: string
           temp_password_plain?: string | null
@@ -1566,6 +1568,7 @@ export type Database = {
           qualifications?: string[] | null
           school_id?: string | null
           staff_no?: string | null
+          subjects_taught?: string | null
           teacher_user_id?: string
           temp_password_hash?: string
           temp_password_plain?: string | null

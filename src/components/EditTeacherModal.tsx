@@ -94,7 +94,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
         setPhone(tempData.phone || "");
         setStaffNo(tempData.staff_no || "");
         setQualifications(tempData.qualifications?.join(", ") || "");
-        setSubjectsTaught(""); // Temp credentials don't have subjects_taught yet
+        setSubjectsTaught(tempData.subjects_taught || "");
         setSchoolId(tempData.school_id || "");
       }
     } catch (error) {
@@ -194,8 +194,8 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
             dob: dob ? format(dob, 'yyyy-MM-dd') : null,
             phone: phone || null,
             staff_no: staffNo || null,
-            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : []
-            // Note: subjects_taught is not in temp_credentials schema
+            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+            subjects_taught: subjectsTaught || null
           })
           .eq('teacher_user_id', teacherId);
 
