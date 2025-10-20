@@ -305,6 +305,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         const pendingStudents = tempCredsData.data?.map(item => {
           const student = {
             id: item.id,
+            user_id: item.student_user_id, // Add this for deletion
             email: `${item.username}@student.local`,
             first_name: item.first_name || '',
             last_name: item.last_name || '',
