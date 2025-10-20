@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { EditTeacherModal } from "@/components/EditTeacherModal";
+import { TeacherProfileModal } from "@/components/TeacherProfileModal";
 
 interface UserProfile {
   id: string;
@@ -59,6 +60,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [isDeleting, setIsDeleting] = useState(false);
   const [editTeacherModalOpen, setEditTeacherModalOpen] = useState(false);
   const [teacherToEdit, setTeacherToEdit] = useState<string | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [teacherToView, setTeacherToView] = useState<string | null>(null);
 
   const togglePasswordVisibility = (userId: string) => {
     setShowPasswords(prev => ({
@@ -149,6 +152,13 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     if (user.role === 'teacher' && user.user_id) {
       setTeacherToEdit(user.user_id);
       setEditTeacherModalOpen(true);
+    }
+  };
+
+  const handleViewProfile = (user: UserProfile) => {
+    if (user.role === 'teacher' && user.user_id) {
+      setTeacherToView(user.user_id);
+      setProfileModalOpen(true);
     }
   };
 
@@ -718,6 +728,15 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="bg-slate-800 border-slate-700">
+                            {user.role === 'teacher' && user.user_id && (
+                              <DropdownMenuItem 
+                                className="text-slate-200 hover:bg-slate-700"
+                                onClick={() => handleViewProfile(user)}
+                              >
+                                <User className="w-4 h-4 mr-2" />
+                                View Profile
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               className="text-slate-200 hover:bg-slate-700"
                               onClick={() => handleEditUser(user)}
@@ -856,6 +875,18 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             }}
             teacherId={teacherToEdit}
           />
+
+          {/* Teacher Profile Modal */}
+          {teacherToView && (
+            <TeacherProfileModal
+              isOpen={profileModalOpen}
+              onClose={() => {
+                setProfileModalOpen(false);
+                setTeacherToView(null);
+              }}
+              teacherId={teacherToView}
+            />
+          )}
         </DialogContent>
       </Dialog>
     );
