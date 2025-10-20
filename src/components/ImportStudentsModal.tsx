@@ -8,6 +8,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Upload, Download, Loader2, RefreshCw } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import * as XLSX from 'xlsx';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface ImportStudentsModalProps {
   isOpen: boolean;
@@ -35,6 +44,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   const [studentsData, setStudentsData] = useState<StudentData[]>([]);
   const [autoGenerate, setAutoGenerate] = useState(true);
   const [showAllStudents, setShowAllStudents] = useState(false);
+  const [importErrors, setImportErrors] = useState<Array<{student: string, reason: string}>>([]);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch schools when modal opens
@@ -204,9 +215,10 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
     }
 
     setLoading(true);
+    const failedImports: Array<{student: string, reason: string}> = [];
+    
     try {
-      const results = [];
-      const errors = [];
+      let successCount = 0;
 
       for (const student of studentsData) {
         try {
@@ -224,32 +236,40 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           });
 
           if (error) throw error;
-          results.push({ ...student, success: true });
+          
+          // Check if response has error
+          if (data && data.error) {
+            throw new Error(data.error);
+          }
+          
+          successCount++;
         } catch (error: any) {
           console.error(`Error creating student ${student.username}:`, error);
-          errors.push(`${student.firstName} ${student.lastName}: ${error.message}`);
-          results.push({ ...student, success: false, error: error.message });
+          const studentName = `${student.firstName}${student.middleName ? ' ' + student.middleName : ''} ${student.lastName}`;
+          const errorReason = error.message || 'Unknown error';
+          failedImports.push({
+            student: `${studentName} (${student.username})`,
+            reason: errorReason
+          });
         }
       }
-
-      const successCount = results.filter(r => r.success).length;
-      const errorCount = errors.length;
 
       if (successCount > 0) {
         toast({
           title: "Import completed",
-          description: `${successCount} students created successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}`,
+          description: `${successCount} students created successfully${failedImports.length > 0 ? `, ${failedImports.length} failed` : ''}`,
         });
       }
 
-      if (errorCount > 0) {
-        console.log('Import errors:', errors);
+      if (failedImports.length > 0) {
+        setImportErrors(failedImports);
+        setShowErrorDialog(true);
+      } else {
+        // Only reset and close if no errors
+        setStudentsData([]);
+        onSuccess();
+        onClose();
       }
-
-      // Reset
-      setStudentsData([]);
-      onSuccess();
-      onClose();
 
     } catch (error: any) {
       console.error('Bulk import error:', error);
@@ -272,11 +292,50 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Import Students from Excel</DialogTitle>
-        </DialogHeader>
+    <>
+      {/* Error Dialog */}
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Import Failed for {importErrors.length} Student{importErrors.length > 1 ? 's' : ''}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>The following students could not be imported. Please review the errors below:</p>
+              <div className="max-h-[400px] overflow-y-auto space-y-3 rounded-md border p-4">
+                {importErrors.map((error, index) => (
+                  <div key={index} className="border-b pb-3 last:border-b-0">
+                    <p className="font-semibold text-foreground">{error.student}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      <span className="font-medium">Reason:</span> {error.reason}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm">
+                Common issues:
+              </p>
+              <ul className="text-sm list-disc list-inside space-y-1">
+                <li>Duplicate usernames in your file</li>
+                <li>Student already exists in the system</li>
+                <li>Missing required information</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => {
+              setShowErrorDialog(false);
+              setImportErrors([]);
+            }}>
+              I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Students from Excel</DialogTitle>
+          </DialogHeader>
         
         <div className="space-y-6">
           {/* School Selection */}
@@ -441,5 +500,6 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
