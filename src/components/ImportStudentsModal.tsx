@@ -11,12 +11,14 @@ import * as XLSX from 'xlsx';
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
 interface ImportStudentsModalProps {
   isOpen: boolean;
@@ -35,6 +37,12 @@ interface StudentData {
   tempPassword: string;
 }
 
+interface DuplicateStudent extends StudentData {
+  originalUsername: string;
+  suggestedUsername: string;
+  rowIndex: number;
+}
+
 export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchoolId }: ImportStudentsModalProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -46,6 +54,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   const [showAllStudents, setShowAllStudents] = useState(false);
   const [importErrors, setImportErrors] = useState<Array<{student: string, reason: string}>>([]);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [duplicateStudents, setDuplicateStudents] = useState<DuplicateStudent[]>([]);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch schools when modal opens
@@ -99,16 +109,37 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
     }
   };
 
-  const generateUsername = (firstName: string, middleName: string, lastName: string) => {
+  const generateUsername = (firstName: string, middleName: string, lastName: string, suffix?: number) => {
     const lastNameFormatted = lastName.toLowerCase().replace(/[^a-z]/g, '');
     const firstNameFormatted = firstName.toLowerCase().replace(/[^a-z]/g, '');
     const middleNameFormatted = middleName ? middleName.toLowerCase().replace(/[^a-z]/g, '') : '';
     
+    let baseUsername = '';
     if (middleNameFormatted) {
-      return `${lastNameFormatted}.${middleNameFormatted}.${firstNameFormatted}`;
+      baseUsername = `${lastNameFormatted}.${middleNameFormatted}.${firstNameFormatted}`;
     } else {
-      return `${lastNameFormatted}.${firstNameFormatted}`;
+      baseUsername = `${lastNameFormatted}.${firstNameFormatted}`;
     }
+    
+    return suffix ? `${baseUsername}${suffix}` : baseUsername;
+  };
+
+  const generateAlternativeUsername = (student: StudentData, existingUsernames: Set<string>): string => {
+    // Try with middle name first if not already used
+    if (student.middleName && !student.username.includes(student.middleName.toLowerCase())) {
+      const withMiddle = generateUsername(student.firstName, student.middleName, student.lastName);
+      if (!existingUsernames.has(withMiddle)) return withMiddle;
+    }
+    
+    // Try adding numbers
+    let suffix = 1;
+    let newUsername = generateUsername(student.firstName, student.middleName || '', student.lastName, suffix);
+    while (existingUsernames.has(newUsername)) {
+      suffix++;
+      newUsername = generateUsername(student.firstName, student.middleName || '', student.lastName, suffix);
+    }
+    
+    return newUsername;
   };
 
   const generateTempPassword = () => {
@@ -184,7 +215,37 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         };
       });
 
-      setStudentsData(processedStudents);
+      // Detect duplicates
+      const usernameCount = new Map<string, number>();
+      const duplicates: DuplicateStudent[] = [];
+      const validStudents: StudentData[] = [];
+      
+      processedStudents.forEach((student, index) => {
+        const count = usernameCount.get(student.username) || 0;
+        usernameCount.set(student.username, count + 1);
+        
+        if (count > 0) {
+          // This is a duplicate
+          const existingUsernames = new Set(processedStudents.map(s => s.username));
+          const suggested = generateAlternativeUsername(student, existingUsernames);
+          duplicates.push({
+            ...student,
+            originalUsername: student.username,
+            suggestedUsername: suggested,
+            rowIndex: index + 2
+          });
+        } else {
+          validStudents.push(student);
+        }
+      });
+
+      if (duplicates.length > 0) {
+        setDuplicateStudents(duplicates);
+        setStudentsData(validStudents);
+        setShowDuplicateDialog(true);
+      } else {
+        setStudentsData(processedStudents);
+      }
       toast({
         title: "File processed successfully",
         description: `Found ${processedStudents.length} students to import`,
@@ -204,8 +265,10 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
     }
   };
 
-  const handleBulkImport = async () => {
-    if (!schoolId || studentsData.length === 0) {
+  const handleBulkImport = async (studentsToImport?: StudentData[]) => {
+    const students = studentsToImport || studentsData;
+    
+    if (!schoolId || students.length === 0) {
       toast({
         title: "Missing data",
         description: "Please select a school and upload student data",
@@ -220,7 +283,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
     try {
       let successCount = 0;
 
-      for (const student of studentsData) {
+      for (const student of students) {
         try {
           const { data, error } = await supabase.functions.invoke('create-student-with-temp-creds', {
             body: {
@@ -272,6 +335,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
       } else {
         // Only reset and close if no errors
         setStudentsData([]);
+        setDuplicateStudents([]);
         onSuccess();
         onClose();
       }
@@ -288,6 +352,36 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
     }
   };
 
+  const handleApproveDuplicates = async () => {
+    // Add approved duplicates to studentsData
+    const approvedStudents = duplicateStudents.map(dup => ({
+      firstName: dup.firstName,
+      middleName: dup.middleName,
+      lastName: dup.lastName,
+      gradeLevel: dup.gradeLevel,
+      studentNo: dup.studentNo,
+      username: dup.suggestedUsername,
+      tempPassword: dup.tempPassword
+    }));
+    
+    setShowDuplicateDialog(false);
+    setStudentsData(prev => [...prev, ...approvedStudents]);
+    setDuplicateStudents([]);
+    
+    toast({
+      title: "Duplicates resolved",
+      description: `${approvedStudents.length} students added with new usernames`,
+    });
+  };
+
+  const updateDuplicateUsername = (index: number, newUsername: string) => {
+    setDuplicateStudents(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], suggestedUsername: newUsername };
+      return updated;
+    });
+  };
+
   const regenerateCredentials = () => {
     setStudentsData(prev => prev.map(student => ({
       ...student,
@@ -298,6 +392,63 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
 
   return (
     <>
+      {/* Duplicate Username Dialog */}
+      <AlertDialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Usernames Detected</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>
+                The following students have duplicate usernames. We've suggested alternative usernames.
+                You can edit them if needed, then approve to add them to the import list.
+              </p>
+              <div className="space-y-4 rounded-md border p-4">
+                {duplicateStudents.map((dup, index) => (
+                  <div key={index} className="border-b pb-4 last:border-b-0 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {dup.firstName} {dup.middleName} {dup.lastName}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Row {dup.rowIndex}</p>
+                        {dup.gradeLevel && (
+                          <p className="text-sm text-muted-foreground">{dup.gradeLevel}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">Original:</span>
+                        <span className="font-mono text-destructive line-through">{dup.originalUsername}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">New:</span>
+                        <Input
+                          value={dup.suggestedUsername}
+                          onChange={(e) => updateDuplicateUsername(index, e.target.value)}
+                          className="font-mono flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowDuplicateDialog(false);
+              setDuplicateStudents([]);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleApproveDuplicates}>
+              Approve & Add to Import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Error Dialog */}
       <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <AlertDialogContent className="max-w-2xl">
@@ -489,7 +640,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
               Cancel
             </Button>
             <Button 
-              onClick={handleBulkImport} 
+              onClick={() => handleBulkImport()} 
               disabled={loading || studentsData.length === 0 || !schoolId}
             >
               {loading ? (
