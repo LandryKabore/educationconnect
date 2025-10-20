@@ -48,34 +48,52 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
     
     setLoadingTeacher(true);
     try {
-      // Fetch profile data
-      const { data: profileData, error: profileError } = await supabase
+      // Try to fetch from profiles and teacher_profiles first (verified teachers)
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('first_name, last_name')
         .eq('user_id', teacherId)
-        .single();
+        .maybeSingle();
 
-      if (profileError) throw profileError;
-
-      // Fetch teacher profile data
-      const { data: teacherData, error: teacherError } = await supabase
+      const { data: teacherData } = await supabase
         .from('teacher_profiles')
         .select('*')
         .eq('user_id', teacherId)
-        .single();
+        .maybeSingle();
 
-      if (teacherError) throw teacherError;
+      if (profileData && teacherData) {
+        // Verified teacher - populate from profiles and teacher_profiles
+        setFirstName(profileData.first_name || "");
+        setLastName(profileData.last_name || "");
+        setPrefix(teacherData.prefix || "");
+        setGender(teacherData.gender || "");
+        setDob(teacherData.dob ? new Date(teacherData.dob) : undefined);
+        setPhone(teacherData.phone || "");
+        setStaffNo(teacherData.staff_no || "");
+        setQualifications(teacherData.qualifications?.join(", ") || "");
+        setSubjectsTaught(teacherData.subjects_taught || "");
+      } else {
+        // Unverified teacher - fetch from teacher_temp_credentials
+        const { data: tempData, error: tempError } = await supabase
+          .from('teacher_temp_credentials')
+          .select('*')
+          .eq('teacher_user_id', teacherId)
+          .maybeSingle();
 
-      // Populate form
-      setFirstName(profileData.first_name || "");
-      setLastName(profileData.last_name || "");
-      setPrefix(teacherData.prefix || "");
-      setGender(teacherData.gender || "");
-      setDob(teacherData.dob ? new Date(teacherData.dob) : undefined);
-      setPhone(teacherData.phone || "");
-      setStaffNo(teacherData.staff_no || "");
-      setQualifications(teacherData.qualifications?.join(", ") || "");
-      setSubjectsTaught(teacherData.subjects_taught || "");
+        if (tempError) throw tempError;
+        if (!tempData) throw new Error("Teacher not found");
+
+        // Populate form from temp credentials
+        setFirstName(tempData.first_name || "");
+        setLastName(tempData.last_name || "");
+        setPrefix(tempData.prefix || "");
+        setGender(tempData.gender || "");
+        setDob(tempData.dob ? new Date(tempData.dob) : undefined);
+        setPhone(tempData.phone || "");
+        setStaffNo(tempData.staff_no || "");
+        setQualifications(tempData.qualifications?.join(", ") || "");
+        setSubjectsTaught(""); // Temp credentials don't have subjects_taught yet
+      }
     } catch (error) {
       console.error('Error fetching teacher data:', error);
       toast({
@@ -101,32 +119,58 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
 
     setLoading(true);
     try {
-      // Update profile
-      const { error: profileError } = await supabase
+      // Check if teacher is verified (has profile entry)
+      const { data: profileData } = await supabase
         .from('profiles')
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-        })
-        .eq('user_id', teacherId);
+        .select('user_id')
+        .eq('user_id', teacherId)
+        .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (profileData) {
+        // Verified teacher - update profiles and teacher_profiles
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            first_name: firstName,
+            last_name: lastName,
+          })
+          .eq('user_id', teacherId);
 
-      // Update teacher profile
-      const { error: teacherError } = await supabase
-        .from('teacher_profiles')
-        .update({
-          prefix,
-          gender,
-          dob: dob ? format(dob, 'yyyy-MM-dd') : null,
-          phone: phone || null,
-          staff_no: staffNo || null,
-          qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
-          subjects_taught: subjectsTaught || null
-        })
-        .eq('user_id', teacherId);
+        if (profileError) throw profileError;
 
-      if (teacherError) throw teacherError;
+        const { error: teacherError } = await supabase
+          .from('teacher_profiles')
+          .update({
+            prefix,
+            gender,
+            dob: dob ? format(dob, 'yyyy-MM-dd') : null,
+            phone: phone || null,
+            staff_no: staffNo || null,
+            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+            subjects_taught: subjectsTaught || null
+          })
+          .eq('user_id', teacherId);
+
+        if (teacherError) throw teacherError;
+      } else {
+        // Unverified teacher - update teacher_temp_credentials
+        const { error: tempError } = await supabase
+          .from('teacher_temp_credentials')
+          .update({
+            first_name: firstName,
+            last_name: lastName,
+            prefix,
+            gender,
+            dob: dob ? format(dob, 'yyyy-MM-dd') : null,
+            phone: phone || null,
+            staff_no: staffNo || null,
+            qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : []
+            // Note: subjects_taught is not in temp_credentials schema
+          })
+          .eq('teacher_user_id', teacherId);
+
+        if (tempError) throw tempError;
+      }
 
       toast({
         title: "Success",
