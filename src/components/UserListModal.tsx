@@ -83,6 +83,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('Using user_id:', userId);
     console.log('User role:', userToDelete.role);
 
+    setIsDeleting(true);
+    
     try {
       // Call edge function to delete user with proper service role permissions
       const { data, error } = await supabase.functions.invoke('delete-user', {
@@ -126,6 +128,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         description: error.message || "Failed to delete user. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -736,7 +740,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         </div>
 
         {/* Delete Confirmation Dialog */}
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => !isDeleting && setDeleteDialogOpen(open)}>
           <AlertDialogContent className="bg-slate-900 border-slate-700">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-white">
@@ -749,14 +753,25 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-slate-600 text-slate-200 hover:bg-slate-700">
+              <AlertDialogCancel 
+                disabled={isDeleting}
+                className="border-slate-600 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleDeleteUser}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
               >
-                Delete {userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  `Delete ${userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}`
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
