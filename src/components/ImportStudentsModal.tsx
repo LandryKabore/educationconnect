@@ -327,17 +327,17 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           title: "Import completed",
           description: `${successCount} students created successfully${failedImports.length > 0 ? `, ${failedImports.length} failed` : ''}`,
         });
-        // Refresh the data whenever we have successful imports
-        onSuccess();
       }
 
       if (failedImports.length > 0) {
         setImportErrors(failedImports);
         setShowErrorDialog(true);
+        // Don't refresh yet - wait for user to acknowledge errors
       } else {
-        // Only reset and close if no errors
+        // All imports succeeded - refresh immediately
         setStudentsData([]);
         setDuplicateStudents([]);
+        onSuccess();
         onClose();
       }
 
@@ -481,6 +481,12 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
             <AlertDialogAction onClick={() => {
               setShowErrorDialog(false);
               setImportErrors([]);
+              // Refresh the page after user acknowledges errors
+              onSuccess();
+              // Reset state and close modal
+              setStudentsData([]);
+              setDuplicateStudents([]);
+              onClose();
             }}>
               I Understand
             </AlertDialogAction>
