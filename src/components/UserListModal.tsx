@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { EditTeacherModal } from "@/components/EditTeacherModal";
 
 interface UserProfile {
   id: string;
@@ -56,6 +57,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [deletionProgress, setDeletionProgress] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editTeacherModalOpen, setEditTeacherModalOpen] = useState(false);
+  const [teacherToEdit, setTeacherToEdit] = useState<string | null>(null);
 
   const togglePasswordVisibility = (userId: string) => {
     setShowPasswords(prev => ({
@@ -140,6 +143,13 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('User role:', user.role);
     setUserToDelete(user);
     setDeleteDialogOpen(true);
+  };
+
+  const handleEditUser = (user: UserProfile) => {
+    if (user.role === 'teacher' && user.user_id) {
+      setTeacherToEdit(user.user_id);
+      setEditTeacherModalOpen(true);
+    }
   };
 
   const toggleUserSelection = (userId: string) => {
@@ -708,7 +718,11 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="bg-slate-800 border-slate-700">
-                            <DropdownMenuItem className="text-slate-200 hover:bg-slate-700">
+                            <DropdownMenuItem 
+                              className="text-slate-200 hover:bg-slate-700"
+                              onClick={() => handleEditUser(user)}
+                              disabled={user.role !== 'teacher' || !user.user_id}
+                            >
                               <Edit className="w-4 h-4 mr-2" />
                               Edit User
                             </DropdownMenuItem>
@@ -824,9 +838,25 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DialogContent>
-    </Dialog>
-  );
-}
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Edit Teacher Modal */}
+          <EditTeacherModal
+            isOpen={editTeacherModalOpen}
+            onClose={() => {
+              setEditTeacherModalOpen(false);
+              setTeacherToEdit(null);
+            }}
+            onSuccess={() => {
+              fetchUsers();
+              if (onUserDeleted) {
+                onUserDeleted();
+              }
+            }}
+            teacherId={teacherToEdit}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
