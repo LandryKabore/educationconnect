@@ -514,11 +514,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                               {teachers.map((teacher) => (
                                 <SelectItem key={teacher.user_id} value={teacher.user_id}>
                                   {teacher.profiles?.first_name} {teacher.profiles?.last_name}
-                                  {teacher.subjects_taught && (
-                                    <span className="text-muted-foreground text-xs ml-2">
-                                      ({teacher.subjects_taught})
-                                    </span>
-                                  )}
+                                  {teacher.subjects_taught && ` (${teacher.subjects_taught})`}
                                 </SelectItem>
                               ))}
                             </SelectContent>
