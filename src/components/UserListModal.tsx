@@ -209,6 +209,24 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     }
   }, [isOpen, userType, selectedSchoolId]);
 
+  // Add effect to refetch when modal is already open and external data might have changed
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    if (isOpen) {
+      // Poll for updates every 2 seconds when modal is open
+      intervalId = setInterval(() => {
+        fetchUsers();
+      }, 2000);
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     const filtered = users.filter(user => 
       user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -410,17 +428,30 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         setFilteredUsers(profilesData);
       } else if (selectedSchoolId && userType === 'all') {
         // For "all users", combine data from all role-specific profile tables for the selected school
-        const [studentsData, teachersData, parentsData] = await Promise.all([
-          // Get students from student_profiles
+        // PLUS pending temp credentials
+        const [studentsData, tempStudentsData, teachersData, tempTeachersData, parentsData] = await Promise.all([
+          // Get completed students from student_profiles
           supabase
             .from('student_profiles')
             .select('*, profiles!inner(*)')
             .eq('school_id', selectedSchoolId),
-          // Get teachers from teacher_profiles
+          // Get pending students from temp credentials
+          supabase
+            .from('student_temp_credentials')
+            .select('*')
+            .eq('school_id', selectedSchoolId)
+            .eq('is_used', false),
+          // Get completed teachers from teacher_profiles
           supabase
             .from('teacher_profiles')
             .select('*, profiles!inner(*)')
             .eq('school_id', selectedSchoolId),
+          // Get pending teachers from temp credentials
+          supabase
+            .from('teacher_temp_credentials')
+            .select('*')
+            .eq('school_id', selectedSchoolId)
+            .eq('is_used', false),
           // Get parents from parent_profiles
           supabase
             .from('parent_profiles')
@@ -428,11 +459,52 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             .eq('school_id', selectedSchoolId)
         ]);
 
+        // Process pending students
+        const pendingStudents = tempStudentsData.data?.map(item => ({
+          id: item.id,
+          user_id: item.student_user_id,
+          email: `${item.username}@student.local`,
+          first_name: item.first_name || '',
+          last_name: item.last_name || '',
+          role: 'student',
+          created_at: item.created_at,
+          status: 'pending',
+          username: item.username,
+          tempPassword: '••••',
+          isVerified: false
+        })) || [];
+
+        // Process pending teachers
+        const pendingTeachers = tempTeachersData.data?.map(item => ({
+          id: item.id,
+          user_id: item.teacher_user_id,
+          email: `${item.username}@teacher.local`,
+          first_name: item.first_name || '',
+          last_name: item.last_name || '',
+          role: 'teacher',
+          created_at: item.created_at,
+          status: 'pending',
+          username: item.username,
+          tempPassword: '••••',
+          isVerified: false
+        })) || [];
+
         const allUsers = [
           ...(studentsData.data?.map(item => item.profiles) || []),
+          ...pendingStudents,
           ...(teachersData.data?.map(item => item.profiles) || []),
+          ...pendingTeachers,
           ...(parentsData.data?.map(item => item.profiles) || [])
         ];
+
+        console.log('All users for school:', {
+          completedStudents: studentsData.data?.length || 0,
+          pendingStudents: pendingStudents.length,
+          completedTeachers: teachersData.data?.length || 0,
+          pendingTeachers: pendingTeachers.length,
+          parents: parentsData.data?.length || 0,
+          total: allUsers.length
+        });
 
         setUsers(allUsers);
         setFilteredUsers(allUsers);
