@@ -14,7 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, Edit, Trash2 } from "lucide-react";
+import { Search, Mail, User, Phone, Calendar, Copy, Eye, EyeOff, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface UserProfile {
   id: string;
@@ -53,6 +54,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [deletionProgress, setDeletionProgress] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const togglePasswordVisibility = (userId: string) => {
     setShowPasswords(prev => ({
@@ -162,10 +165,13 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('=== STARTING BULK DELETE ===');
     console.log('Deleting users:', usersToDelete.length);
 
+    setIsDeleting(true);
+    setDeletionProgress(0);
     let successCount = 0;
     let failCount = 0;
 
-    for (const user of usersToDelete) {
+    for (let i = 0; i < usersToDelete.length; i++) {
+      const user = usersToDelete[i];
       try {
         const userId = user.user_id || user.id;
         const { data, error } = await supabase.functions.invoke('delete-user', {
@@ -182,6 +188,10 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         console.error(`Error deleting ${user.first_name} ${user.last_name}:`, error);
         failCount++;
       }
+      
+      // Update progress
+      const progress = Math.round(((i + 1) / usersToDelete.length) * 100);
+      setDeletionProgress(progress);
     }
 
     console.log('=== BULK DELETE COMPLETED ===');
@@ -193,6 +203,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       variant: failCount > 0 ? "destructive" : "default",
     });
 
+    setIsDeleting(false);
+    setDeletionProgress(0);
     setSelectedUsers(new Set());
     setBulkDeleteDialogOpen(false);
     fetchUsers();
@@ -769,7 +781,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         </AlertDialog>
 
         {/* Bulk Delete Confirmation Dialog */}
-        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={(open) => !isDeleting && setBulkDeleteDialogOpen(open)}>
           <AlertDialogContent className="bg-slate-900 border-slate-700">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-white flex items-center gap-2">
@@ -777,18 +789,42 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 Delete {selectedUsers.size} User(s)?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-slate-300">
-                This action cannot be undone. This will permanently delete {selectedUsers.size} user(s) and all their associated data from the system.
+                {isDeleting ? (
+                  <div className="space-y-3">
+                    <p>Deleting users, please wait...</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Progress</span>
+                        <span className="font-medium">{deletionProgress}%</span>
+                      </div>
+                      <Progress value={deletionProgress} className="h-2" />
+                    </div>
+                  </div>
+                ) : (
+                  `This action cannot be undone. This will permanently delete ${selectedUsers.size} user(s) and all their associated data from the system.`
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="bg-slate-800 text-white border-slate-600 hover:bg-slate-700">
+              <AlertDialogCancel 
+                disabled={isDeleting}
+                className="bg-slate-800 text-white border-slate-600 hover:bg-slate-700 disabled:opacity-50"
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleBulkDelete}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete {selectedUsers.size} User(s)
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  `Delete ${selectedUsers.size} User(s)`
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
