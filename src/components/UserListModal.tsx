@@ -51,6 +51,8 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
   const [showPasswords, setShowPasswords] = useState<{[key: string]: boolean}>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
 
   const togglePasswordVisibility = (userId: string) => {
     setShowPasswords(prev => ({
@@ -131,6 +133,73 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
     console.log('User role:', user.role);
     setUserToDelete(user);
     setDeleteDialogOpen(true);
+  };
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedUsers.size === 0) return;
+
+    const usersToDelete = filteredUsers.filter(u => selectedUsers.has(u.id));
+    console.log('=== STARTING BULK DELETE ===');
+    console.log('Deleting users:', usersToDelete.length);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of usersToDelete) {
+      try {
+        const userId = user.user_id || user.id;
+        const { data, error } = await supabase.functions.invoke('delete-user', {
+          body: { userId }
+        });
+
+        if (error || !data?.success) {
+          console.error(`Failed to delete ${user.first_name} ${user.last_name}:`, error || data?.error);
+          failCount++;
+        } else {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error deleting ${user.first_name} ${user.last_name}:`, error);
+        failCount++;
+      }
+    }
+
+    console.log('=== BULK DELETE COMPLETED ===');
+    console.log(`Success: ${successCount}, Failed: ${failCount}`);
+
+    toast({
+      title: successCount > 0 ? "Users Deleted" : "Deletion Failed",
+      description: `Successfully deleted ${successCount} user(s). ${failCount > 0 ? `Failed to delete ${failCount} user(s).` : ''}`,
+      variant: failCount > 0 ? "destructive" : "default",
+    });
+
+    setSelectedUsers(new Set());
+    setBulkDeleteDialogOpen(false);
+    fetchUsers();
+    
+    if (onUserDeleted) {
+      onUserDeleted();
+    }
   };
 
   useEffect(() => {
@@ -417,15 +486,46 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-slate-800 border-slate-600 text-white"
-            />
+          {/* Search and Bulk Actions */}
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-slate-800 border-slate-600 text-white"
+              />
+            </div>
+            
+            {filteredUsers.length > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  {selectedUsers.size === filteredUsers.length ? 'Deselect All' : 'Select All'}
+                </Button>
+                
+                {selectedUsers.size > 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-400">
+                      {selectedUsers.size} selected
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setBulkDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Selected
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* User List */}
@@ -439,6 +539,14 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 <Card key={user.id} className="bg-slate-800 border-slate-700">
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.has(user.id)}
+                          onChange={() => toggleUserSelection(user.id)}
+                          className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
                       <div className="flex items-start gap-4 flex-1 min-w-0">
                         <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center flex-shrink-0">
                           <User className="w-6 h-6 text-slate-300" />
@@ -582,6 +690,32 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 Delete {userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+          <AlertDialogContent className="bg-slate-900 border-slate-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-500" />
+                Delete {selectedUsers.size} User(s)?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-300">
+                This action cannot be undone. This will permanently delete {selectedUsers.size} user(s) and all their associated data from the system.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-slate-800 text-white border-slate-600 hover:bg-slate-700">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete {selectedUsers.size} User(s)
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
