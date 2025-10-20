@@ -59,13 +59,47 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Delete the user from auth.users (this will cascade to profiles and related tables)
+    // First, try to delete from auth.users (for completed users)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
-      console.error('Error deleting user:', deleteError);
+      // If user doesn't exist in auth, check if they're a pending user in temp credentials
+      console.log('User not found in auth.users, checking temp credentials...');
+      
+      // Try deleting from student_temp_credentials
+      const { data: studentTemp, error: studentTempError } = await supabaseAdmin
+        .from('student_temp_credentials')
+        .delete()
+        .eq('student_user_id', userId)
+        .select();
+
+      if (studentTemp && studentTemp.length > 0) {
+        console.log('Deleted pending student from temp credentials');
+        return new Response(
+          JSON.stringify({ success: true, message: 'Pending student deleted successfully' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Try deleting from teacher_temp_credentials
+      const { data: teacherTemp, error: teacherTempError } = await supabaseAdmin
+        .from('teacher_temp_credentials')
+        .delete()
+        .eq('teacher_user_id', userId)
+        .select();
+
+      if (teacherTemp && teacherTemp.length > 0) {
+        console.log('Deleted pending teacher from temp credentials');
+        return new Response(
+          JSON.stringify({ success: true, message: 'Pending teacher deleted successfully' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // If not found anywhere, return error
+      console.error('User not found in auth or temp credentials:', deleteError);
       return new Response(
-        JSON.stringify({ error: deleteError.message }),
+        JSON.stringify({ error: 'User not found' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
