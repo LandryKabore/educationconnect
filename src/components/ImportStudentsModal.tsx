@@ -327,6 +327,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           title: "Import completed",
           description: `${successCount} students created successfully${failedImports.length > 0 ? `, ${failedImports.length} failed` : ''}`,
         });
+        // Refresh the data whenever we have successful imports
+        onSuccess();
       }
 
       if (failedImports.length > 0) {
@@ -336,7 +338,6 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         // Only reset and close if no errors
         setStudentsData([]);
         setDuplicateStudents([]);
-        onSuccess();
         onClose();
       }
 
