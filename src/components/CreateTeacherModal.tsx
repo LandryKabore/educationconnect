@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -40,6 +41,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
   const [staffNo, setStaffNo] = useState("");
   const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
   const [qualifications, setQualifications] = useState("");
+  const [subjectsTaught, setSubjectsTaught] = useState("");
   
   // Data
   const [schools, setSchools] = useState<any[]>([]);
@@ -142,7 +144,8 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
           schoolId,
           phone: phone || null,
           staffNo: staffNo || null,
-          qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : []
+          qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
+          subjectsTaught: subjectsTaught || null
         }
       });
 
@@ -166,6 +169,7 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       setPhone("");
       setStaffNo("");
       setQualifications("");
+      setSubjectsTaught("");
       if (autoGenerate) generateTempPassword();
       
       onTeacherCreated();
@@ -377,6 +381,17 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
               value={qualifications}
               onChange={(e) => setQualifications(e.target.value)}
               placeholder="Comma-separated (e.g., BSc Education, MEd Mathematics)"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="subjectsTaught">Subjects Taught</Label>
+            <Textarea
+              id="subjectsTaught"
+              value={subjectsTaught}
+              onChange={(e) => setSubjectsTaught(e.target.value)}
+              placeholder="Comma-separated (e.g., Mathematics, Physics, Chemistry)"
+              className="min-h-[60px]"
             />
           </div>
 

@@ -19,6 +19,7 @@ interface CreateTeacherRequest {
   phone?: string;
   staffNo?: string;
   qualifications?: string[];
+  subjectsTaught?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -32,7 +33,7 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, middleInitial, lastName, prefix, gender, dob, username, tempPassword, schoolId, phone, staffNo, qualifications }: CreateTeacherRequest = await req.json();
+    const { firstName, middleInitial, lastName, prefix, gender, dob, username, tempPassword, schoolId, phone, staffNo, qualifications, subjectsTaught }: CreateTeacherRequest = await req.json();
 
     console.log('Creating teacher with temp credentials:', { username, schoolId });
 
@@ -138,6 +139,7 @@ const handler = async (req: Request): Promise<Response> => {
         school_id: schoolId,
         staff_no: staffNo,
         qualifications: qualifications,
+        subjects_taught: subjectsTaught,
         phone: phone,
         hire_date: new Date().toISOString().split('T')[0],
         username: finalUsername,

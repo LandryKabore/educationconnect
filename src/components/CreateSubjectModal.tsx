@@ -112,7 +112,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
         // Get completed teacher profiles
         supabase
           .from('teacher_profiles')
-          .select('user_id, profiles(first_name, last_name)')
+          .select('user_id, subjects_taught, profiles(first_name, last_name)')
           .eq('school_id', classSection.school_id),
         // Get pending teachers from temp credentials
         supabase
@@ -129,6 +129,7 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
         ...(completedTeachers.data || []),
         ...(pendingTeachers.data?.map(t => ({
           user_id: t.teacher_user_id,
+          subjects_taught: null,
           profiles: {
             first_name: t.first_name,
             last_name: t.last_name
@@ -513,6 +514,11 @@ export function CreateSubjectModal({ isOpen, onClose, onSuccess, selectedSchoolI
                               {teachers.map((teacher) => (
                                 <SelectItem key={teacher.user_id} value={teacher.user_id}>
                                   {teacher.profiles?.first_name} {teacher.profiles?.last_name}
+                                  {teacher.subjects_taught && (
+                                    <span className="text-muted-foreground text-xs ml-2">
+                                      ({teacher.subjects_taught})
+                                    </span>
+                                  )}
                                 </SelectItem>
                               ))}
                             </SelectContent>
