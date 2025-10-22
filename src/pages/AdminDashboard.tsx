@@ -39,6 +39,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { SchoolAdminManagementModal } from "@/components/SchoolAdminManagementModal";
 import { AdminGuideModal } from "@/components/AdminGuideModal";
+import { ClassSectionDetailsModal } from "@/components/ClassSectionDetailsModal";
 
 interface AdminData {
   schools: any[];
@@ -85,6 +86,8 @@ const AdminDashboard = () => {
   const [importStudentsModalOpen, setImportStudentsModalOpen] = useState(false);
   const [schoolAdminModalOpen, setSchoolAdminModalOpen] = useState(false);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [classSectionDetailsOpen, setClassSectionDetailsOpen] = useState(false);
+  const [viewingClassSection, setViewingClassSection] = useState<any>(null);
   
   // State for items being edited
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -315,6 +318,11 @@ const AdminDashboard = () => {
   const handleEditClassSection = (classSection: any) => {
     setEditingClassSection(classSection);
     setEditClassSectionModalOpen(true);
+  };
+
+  const handleViewClassSection = (classSection: any) => {
+    setViewingClassSection(classSection);
+    setClassSectionDetailsOpen(true);
   };
 
   const handleEditSubject = (subject: any) => {
@@ -628,9 +636,13 @@ const AdminDashboard = () => {
             <CardContent className="space-y-3">
                 <div className="space-y-2">
                   {(showAllClassSections ? adminData.classSections : adminData.classSections.slice(0, 3)).map((section) => (
-                    <div key={section.id} className="flex items-center justify-between gap-2 bg-slate-700/30 p-2 rounded">
+                    <div 
+                      key={section.id} 
+                      className="flex items-center justify-between gap-2 bg-slate-700/30 p-2 rounded hover:bg-slate-700/50 transition-colors cursor-pointer"
+                      onClick={() => handleViewClassSection(section)}
+                    >
                       <span className="text-slate-200 text-sm flex-1">{section.name} - {section.grade_level}</span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         <Button 
                           size="sm" 
                           variant="outline" 
@@ -897,6 +909,15 @@ const AdminDashboard = () => {
       <AdminGuideModal
         isOpen={guideModalOpen}
         onClose={() => setGuideModalOpen(false)}
+      />
+
+      <ClassSectionDetailsModal
+        isOpen={classSectionDetailsOpen}
+        onClose={() => {
+          setClassSectionDetailsOpen(false);
+          setViewingClassSection(null);
+        }}
+        classSection={viewingClassSection}
       />
 
       <AlertDialog open={!!deletingClassSection} onOpenChange={(open) => !open && setDeletingClassSection(null)}>
