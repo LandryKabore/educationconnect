@@ -161,30 +161,39 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
       const { data: enrollmentsData, error: enrollmentsError } = await supabase
         .from('enrollments')
         .select(`
-          student_user_id,
-          profiles!inner (
-            first_name,
-            last_name,
-            email
-          ),
-          student_profiles (
-            student_no
-          )
+          student_user_id
         `)
         .eq('class_section_id', classSection.id)
         .eq('status', 'active');
 
       if (enrollmentsError) throw enrollmentsError;
 
-      const verifiedStudents: StudentInfo[] = enrollmentsData?.map(e => ({
-        id: e.student_user_id,
-        first_name: e.profiles?.first_name || '',
-        last_name: e.profiles?.last_name || '',
-        student_no: Array.isArray(e.student_profiles) && e.student_profiles.length > 0 
-          ? e.student_profiles[0]?.student_no || null 
-          : null,
-        email: e.profiles?.email || '',
-      })) || [];
+      // Fetch verified student details
+      const verifiedStudentIds = enrollmentsData?.map(e => e.student_user_id) || [];
+      let verifiedStudents: StudentInfo[] = [];
+
+      if (verifiedStudentIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('user_id, first_name, last_name, email')
+          .in('user_id', verifiedStudentIds);
+
+        const { data: studentProfilesData } = await supabase
+          .from('student_profiles')
+          .select('user_id, student_no')
+          .in('user_id', verifiedStudentIds);
+
+        verifiedStudents = profilesData?.map(p => {
+          const studentProfile = studentProfilesData?.find(sp => sp.user_id === p.user_id);
+          return {
+            id: p.user_id,
+            first_name: p.first_name || '',
+            last_name: p.last_name || '',
+            student_no: studentProfile?.student_no || null,
+            email: p.email || '',
+          };
+        }) || [];
+      }
 
       // Fetch unverified students from temp credentials
       const { data: tempStudentsData } = await supabase
