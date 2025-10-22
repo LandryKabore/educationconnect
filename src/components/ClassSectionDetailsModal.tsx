@@ -157,7 +157,7 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
 
       setSubjects(formattedSubjects);
 
-      // Fetch enrolled students
+      // Fetch enrolled students (verified)
       const { data: enrollmentsData, error: enrollmentsError } = await supabase
         .from('enrollments')
         .select(`
@@ -176,7 +176,7 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
 
       if (enrollmentsError) throw enrollmentsError;
 
-      const formattedStudents: StudentInfo[] = enrollmentsData?.map(e => ({
+      const verifiedStudents: StudentInfo[] = enrollmentsData?.map(e => ({
         id: e.student_user_id,
         first_name: e.profiles?.first_name || '',
         last_name: e.profiles?.last_name || '',
@@ -186,7 +186,23 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
         email: e.profiles?.email || '',
       })) || [];
 
-      setStudents(formattedStudents);
+      // Fetch unverified students from temp credentials
+      const { data: tempStudentsData } = await supabase
+        .from('student_temp_credentials')
+        .select('student_user_id, first_name, last_name, student_no, username')
+        .eq('class_section_id', classSection.id)
+        .eq('is_used', false);
+
+      const unverifiedStudents: StudentInfo[] = tempStudentsData?.map(ts => ({
+        id: ts.student_user_id,
+        first_name: ts.first_name || '',
+        last_name: ts.last_name || '',
+        student_no: ts.student_no || null,
+        email: ts.username || 'Not registered yet',
+      })) || [];
+
+      // Combine both verified and unverified students
+      setStudents([...verifiedStudents, ...unverifiedStudents]);
 
       // Fetch teachers assigned to this class with their subjects
       const { data: teachingAssignmentsData, error: teachingError } = await supabase
@@ -202,14 +218,39 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
 
       if (teachingError) throw teachingError;
 
-      // Group by teacher
+      // Also fetch teachers assigned directly to subjects in class_section_subjects
+      const { data: subjectTeachersData } = await supabase
+        .from('class_section_subjects')
+        .select(`
+          teacher_user_id,
+          subject_id,
+          subjects (
+            name
+          )
+        `)
+        .eq('class_section_id', classSection.id)
+        .not('teacher_user_id', 'is', null);
+
+      // Group by teacher from both sources
       const teacherMap: Record<string, { subjects: string[] }> = {};
+      
       teachingAssignmentsData?.forEach(ta => {
         if (!teacherMap[ta.teacher_user_id]) {
           teacherMap[ta.teacher_user_id] = { subjects: [] };
         }
-        if (ta.subjects?.name) {
+        if (ta.subjects?.name && !teacherMap[ta.teacher_user_id].subjects.includes(ta.subjects.name)) {
           teacherMap[ta.teacher_user_id].subjects.push(ta.subjects.name);
+        }
+      });
+
+      subjectTeachersData?.forEach(st => {
+        if (st.teacher_user_id) {
+          if (!teacherMap[st.teacher_user_id]) {
+            teacherMap[st.teacher_user_id] = { subjects: [] };
+          }
+          if (st.subjects?.name && !teacherMap[st.teacher_user_id].subjects.includes(st.subjects.name)) {
+            teacherMap[st.teacher_user_id].subjects.push(st.subjects.name);
+          }
         }
       });
 
@@ -223,13 +264,13 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
           .from('profiles')
           .select('first_name, last_name')
           .eq('user_id', teacherId)
-          .single();
+          .maybeSingle();
 
         const { data: teacherProfileData } = await supabase
           .from('teacher_profiles')
           .select('prefix, staff_no')
           .eq('user_id', teacherId)
-          .single();
+          .maybeSingle();
 
         if (profileData) {
           formattedTeachers.push({
@@ -246,7 +287,7 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
             .from('teacher_temp_credentials')
             .select('first_name, last_name, prefix, staff_no')
             .eq('teacher_user_id', teacherId)
-            .single();
+            .maybeSingle();
 
           if (tempData) {
             formattedTeachers.push({
