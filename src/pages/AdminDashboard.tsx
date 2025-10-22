@@ -152,6 +152,7 @@ const AdminDashboard = () => {
         academicYearsData,
         classSectionsData,
         subjectsData,
+        classSectionSubjectsData,
         profilesData,
         studentProfilesData,
         studentTempCredsData,
@@ -188,6 +189,8 @@ const AdminDashboard = () => {
             ? result.data?.filter(s => !s.school_id || (s.school_id && schoolIdsToQuery.includes(s.school_id)))
             : (isSuperAdmin ? result.data : result.data?.filter(s => !s.school_id || (s.school_id && accessibleSchoolIds.includes(s.school_id))))
         })),
+        // Fetch class section subjects to see which classes each subject is assigned to
+        supabase.from('class_section_subjects').select('subject_id, class_section_id'),
         // Fetch all profiles first
         supabase.from('profiles').select('*'),
         // Then get student profiles to link students to schools
@@ -267,12 +270,28 @@ const AdminDashboard = () => {
       console.log('Teacher count:', teachers);
       console.log('Parent count:', parents);
 
+      // Enrich subjects with their assigned classes
+      const enrichedSubjects = subjectsData.data?.map(subject => {
+        const assignedClassIds = classSectionSubjectsData.data
+          ?.filter(css => css.subject_id === subject.id)
+          .map(css => css.class_section_id) || [];
+        
+        const assignedClasses = classSectionsData.data
+          ?.filter(cs => assignedClassIds.includes(cs.id))
+          .map(cs => cs.name) || [];
+
+        return {
+          ...subject,
+          assignedClasses
+        };
+      }) || [];
+
       setAdminData({
         schools: schoolsData.data || [],
         campuses: campusesData.data || [],
         academicYears: academicYearsData.data || [],
         classSections: classSectionsData.data || [],
-        subjects: subjectsData.data || [],
+        subjects: enrichedSubjects,
         users: profilesData.data || [],
         studentTempCredentials: studentTempCredsData.data || [],
         totalStudents: students,
@@ -694,12 +713,26 @@ const AdminDashboard = () => {
             <CardContent className="space-y-3">
                 <div className="space-y-2">
                   {adminData.subjects.slice(0, 3).map((subject) => (
-                    <div key={subject.id} className="flex items-center justify-between bg-slate-700/30 p-2 rounded">
-                      <span className="text-slate-200 text-sm">{subject.name}</span>
+                    <div key={subject.id} className="flex items-start justify-between bg-slate-700/30 p-3 rounded">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-slate-200 text-sm font-medium block">{subject.name}</span>
+                        {subject.assignedClasses && subject.assignedClasses.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {subject.assignedClasses.map((className: string, idx: number) => (
+                              <Badge key={idx} variant="secondary" className="text-xs">
+                                {className}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        {(!subject.assignedClasses || subject.assignedClasses.length === 0) && (
+                          <span className="text-xs text-slate-400">Not assigned to any class</span>
+                        )}
+                      </div>
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        className="border-slate-600 text-slate-200 hover:bg-slate-700"
+                        className="border-slate-600 text-slate-200 hover:bg-slate-700 ml-2"
                         onClick={() => handleEditSubject(subject)}
                       >
                         Edit
