@@ -225,14 +225,55 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         const username = generateUsername(firstName, middleName, lastName);
         const tempPassword = autoGenerate ? generateTempPassword() : '';
 
-        // Match class name to class_section_id
+        // Match class name to class_section_id with flexible matching
         let classSectionId: string | undefined = undefined;
         if (gradeLevel) {
-          const matchedSection = classSections.find(cs => 
-            cs.name.toLowerCase() === gradeLevel.toLowerCase() ||
-            `${cs.grade_level} ${cs.name}`.toLowerCase() === gradeLevel.toLowerCase()
-          );
+          const gradeLevelLower = gradeLevel.toLowerCase().trim();
+          const matchedSection = classSections.find(cs => {
+            const csNameLower = cs.name.toLowerCase().trim();
+            const csGradeLower = cs.grade_level?.toLowerCase().trim() || '';
+            const csFullName = `${csGradeLower} ${csNameLower}`.trim();
+            
+            // Try exact matches first
+            if (csNameLower === gradeLevelLower || csFullName === gradeLevelLower) {
+              return true;
+            }
+            
+            // Try matching just the grade level (e.g., "5" matches grade_level "5")
+            if (csGradeLower === gradeLevelLower) {
+              return true;
+            }
+            
+            // Try matching grade + section (e.g., "10 A" matches grade "10" + name "A")
+            const parts = gradeLevelLower.split(/\s+/);
+            if (parts.length === 2) {
+              const [grade, section] = parts;
+              if (csGradeLower === grade && csNameLower === section) {
+                return true;
+              }
+            }
+            
+            // Try partial matches for cases like "5A" -> grade "5" + name "A"
+            const gradeMatch = gradeLevelLower.match(/^(\d+)([a-z]?)$/i);
+            if (gradeMatch) {
+              const [, grade, section] = gradeMatch;
+              if (section) {
+                return csGradeLower === grade && csNameLower === section.toLowerCase();
+              } else {
+                return csGradeLower === grade;
+              }
+            }
+            
+            return false;
+          });
           classSectionId = matchedSection?.id;
+          
+          // Log for debugging
+          if (!matchedSection && gradeLevel) {
+            console.log(`No class match for grade "${gradeLevel}". Available classes:`, 
+              classSections.map(cs => ({ name: cs.name, grade: cs.grade_level }))
+            );
+          }
         }
 
         return {
