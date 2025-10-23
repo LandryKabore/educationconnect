@@ -35,6 +35,7 @@ interface StudentData {
   studentNo?: string;
   username: string;
   tempPassword: string;
+  classSectionId?: string;
 }
 
 interface DuplicateStudent extends StudentData {
@@ -56,14 +57,34 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [duplicateStudents, setDuplicateStudents] = useState<DuplicateStudent[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [classSections, setClassSections] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch schools when modal opens
+  // Fetch schools and class sections when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchSchools();
+      if (schoolId) {
+        fetchClassSections();
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, schoolId]);
+
+  const fetchClassSections = async () => {
+    if (!schoolId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('class_sections')
+        .select('id, name, grade_level')
+        .eq('school_id', schoolId);
+      
+      if (error) throw error;
+      setClassSections(data || []);
+    } catch (error) {
+      console.error('Error fetching class sections:', error);
+    }
+  };
 
   const fetchSchools = async () => {
     try {
@@ -204,6 +225,16 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         const username = generateUsername(firstName, middleName, lastName);
         const tempPassword = autoGenerate ? generateTempPassword() : '';
 
+        // Match class name to class_section_id
+        let classSectionId: string | undefined = undefined;
+        if (gradeLevel) {
+          const matchedSection = classSections.find(cs => 
+            cs.name.toLowerCase() === gradeLevel.toLowerCase() ||
+            `${cs.grade_level} ${cs.name}`.toLowerCase() === gradeLevel.toLowerCase()
+          );
+          classSectionId = matchedSection?.id;
+        }
+
         return {
           firstName,
           middleName: middleName || undefined,
@@ -211,7 +242,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           gradeLevel: gradeLevel || undefined,
           studentNo: studentNo || undefined,
           username,
-          tempPassword
+          tempPassword,
+          classSectionId
         };
       });
 
@@ -294,7 +326,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
               gradeLevel: student.gradeLevel || null,
               studentNo: student.studentNo || null,
               username: student.username,
-              tempPassword: student.tempPassword
+              tempPassword: student.tempPassword,
+              classSectionId: student.classSectionId || null
             }
           });
 
