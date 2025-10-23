@@ -1803,7 +1803,7 @@ export type Database = {
         }[]
       }
       get_user_admin_schools: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           school_id: string
         }[]
@@ -1812,34 +1812,16 @@ export type Database = {
         Args: { _role: string; _school_id?: string; _user_id: string }
         Returns: boolean
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_parent: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_school_admin: {
-        Args: { _school_id?: string }
-        Returns: boolean
-      }
-      is_student: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
+      is_parent: { Args: never; Returns: boolean }
+      is_school_admin: { Args: { _school_id?: string }; Returns: boolean }
+      is_student: { Args: never; Returns: boolean }
       is_study_group_creator: {
         Args: { group_id: string; user_id: string }
         Returns: boolean
       }
-      is_super_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_teacher: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_super_admin: { Args: never; Returns: boolean }
+      is_teacher: { Args: never; Returns: boolean }
       shares_class_with: {
         Args: { target_student_id: string }
         Returns: boolean
