@@ -128,18 +128,7 @@ export default function Auth() {
     if (userRole === "parent") {
       navigate("/parent-dashboard", { replace: true });
     } else if (userRole === "teacher") {
-      // Check if teacher has teaching assignments
-      const { data: assignments } = await supabase
-        .from("teaching_assignments")
-        .select("id")
-        .eq("teacher_user_id", userId)
-        .limit(1);
-      
-      if (!assignments || assignments.length === 0) {
-        navigate("/teacher-assignment", { replace: true });
-      } else {
-        navigate("/teacher-dashboard", { replace: true });
-      }
+      navigate("/teacher-dashboard", { replace: true });
     } else if (userRole === "student") {
       navigate("/student-dashboard", { replace: true });
     } else if (userRole === "admin") {

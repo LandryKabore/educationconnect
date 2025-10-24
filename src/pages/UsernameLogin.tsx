@@ -55,11 +55,11 @@ const UsernameLogin = () => {
             } 
           });
         } else if (data.success) {
-          // Set session and redirect to assignment page
+          // Set session and redirect to teacher dashboard
           if (data.session) {
             await supabase.auth.setSession(data.session);
           }
-          navigate('/teacher-assignment');
+          navigate('/teacher-dashboard');
         }
       } else {
         // Handle student login

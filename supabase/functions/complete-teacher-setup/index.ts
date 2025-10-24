@@ -227,49 +227,53 @@ const handler = async (req: Request): Promise<Response> => {
       console.error('Temp credentials update error:', credsUpdateError);
     }
 
-    // Create teaching assignments from stored intentions in temp credentials
-    console.log('7. Creating teaching assignments from stored intentions...');
+    // Create teaching assignments automatically based on class_section_subjects
+    console.log('7. Creating teaching assignments from class_section_subjects...');
     
-    const { intended_class_section_ids, intended_subject_ids } = tempCreds;
-    
-    if (intended_class_section_ids && intended_subject_ids && 
-        intended_class_section_ids.length > 0 && intended_subject_ids.length > 0) {
-      
-      // Get the active academic year for this school
-      const { data: academicYear } = await supabase
-        .from('academic_years')
-        .select('id')
-        .eq('school_id', tempCreds.school_id)
-        .eq('active', true)
-        .maybeSingle();
+    // Get the active academic year for this school
+    const { data: academicYear } = await supabase
+      .from('academic_years')
+      .select('id')
+      .eq('school_id', tempCreds.school_id)
+      .eq('active', true)
+      .maybeSingle();
 
-      if (academicYear) {
-        console.log('Creating assignments for academic year:', academicYear.id);
+    if (academicYear) {
+      console.log('Active academic year found:', academicYear.id);
+      
+      // Find all class_section_subjects where this teacher is assigned
+      const { data: classSubjects, error: classSubjectsError } = await supabase
+        .from('class_section_subjects')
+        .select('class_section_id, subject_id')
+        .eq('teacher_user_id', authUserId);
+
+      if (classSubjectsError) {
+        console.error('Error fetching class subjects:', classSubjectsError);
+      } else if (classSubjects && classSubjects.length > 0) {
+        console.log(`Found ${classSubjects.length} class-subject assignments`);
         
         // Create teaching assignments for each class-subject combination
-        for (const classSectionId of intended_class_section_ids) {
-          for (const subjectId of intended_subject_ids) {
-            const { error: assignmentError } = await supabase
-              .from('teaching_assignments')
-              .insert({
-                teacher_user_id: authUserId,
-                class_section_id: classSectionId,
-                subject_id: subjectId,
-                academic_year_id: academicYear.id
-              });
+        for (const cs of classSubjects) {
+          const { error: assignmentError } = await supabase
+            .from('teaching_assignments')
+            .insert({
+              teacher_user_id: authUserId,
+              class_section_id: cs.class_section_id,
+              subject_id: cs.subject_id,
+              academic_year_id: academicYear.id
+            });
 
-            if (assignmentError) {
-              console.error('Teaching assignment creation error:', assignmentError);
-            } else {
-              console.log('Created assignment:', { classSectionId, subjectId });
-            }
+          if (assignmentError) {
+            console.error('Teaching assignment creation error:', assignmentError);
+          } else {
+            console.log('Created assignment:', { class_section_id: cs.class_section_id, subject_id: cs.subject_id });
           }
         }
       } else {
-        console.log('No active academic year found');
+        console.log('No class-subject assignments found for this teacher');
       }
     } else {
-      console.log('No intended assignments stored in temp credentials');
+      console.log('No active academic year found');
     }
 
     console.log('=== TEACHER SETUP COMPLETED SUCCESSFULLY ===');

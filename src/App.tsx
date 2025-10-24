@@ -7,7 +7,6 @@ import Login from "./pages/Login";
 import Auth from "./pages/Auth";
 import ParentDashboard from "./pages/ParentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
-import TeacherAssignment from "./pages/TeacherAssignment";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherFirstLogin from "./pages/TeacherFirstLogin";
@@ -31,7 +30,6 @@ const App = () => (
         <Route path="/auth" element={<Auth />} />
         <Route path="/parent-dashboard" element={<RequireAuth requiredRole="parent"><ParentDashboard /></RequireAuth>} />
         <Route path="/teacher-dashboard" element={<RequireAuth requiredRole="teacher"><TeacherDashboard /></RequireAuth>} />
-        <Route path="/teacher-assignment" element={<RequireAuth requiredRole="teacher"><TeacherAssignment /></RequireAuth>} />
         <Route path="/teacher-first-login" element={<TeacherFirstLogin />} />
         <Route path="/student-first-login" element={<StudentFirstLogin />} />
         <Route path="/admin-first-login" element={<AdminFirstLogin />} />
