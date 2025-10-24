@@ -42,9 +42,13 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
   const [schoolId, setSchoolId] = useState(selectedSchoolId || "");
   const [qualifications, setQualifications] = useState("");
   const [subjectsTaught, setSubjectsTaught] = useState("");
+  const [selectedClassSections, setSelectedClassSections] = useState<string[]>([]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   
   // Data
   const [schools, setSchools] = useState<any[]>([]);
+  const [classSections, setClassSections] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -54,6 +58,17 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       }
     }
   }, [isOpen, autoGenerate]);
+
+  useEffect(() => {
+    if (schoolId) {
+      fetchClassSectionsAndSubjects(schoolId);
+    } else {
+      setClassSections([]);
+      setSubjects([]);
+      setSelectedClassSections([]);
+      setSelectedSubjects([]);
+    }
+  }, [schoolId]);
 
 
   useEffect(() => {
@@ -108,6 +123,42 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
     }
   };
 
+  const fetchClassSectionsAndSubjects = async (selectedSchoolId: string) => {
+    try {
+      // Get active academic year for this school
+      const { data: academicYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', selectedSchoolId)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (academicYear) {
+        // Fetch class sections for active academic year
+        const { data: sections } = await supabase
+          .from('class_sections')
+          .select('*')
+          .eq('school_id', selectedSchoolId)
+          .eq('academic_year_id', academicYear.id)
+          .order('grade_level', { ascending: true })
+          .order('name', { ascending: true });
+
+        setClassSections(sections || []);
+      }
+
+      // Fetch subjects for this school
+      const { data: subjectsData } = await supabase
+        .from('subjects')
+        .select('*')
+        .eq('school_id', selectedSchoolId)
+        .order('name', { ascending: true });
+
+      setSubjects(subjectsData || []);
+    } catch (error) {
+      console.error('Error fetching class sections and subjects:', error);
+    }
+  };
+
 
   const generateTempPassword = () => {
     let result = '';
@@ -123,6 +174,15 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       toast({
         title: "Missing fields",
         description: "Please fill in all required fields (including prefix, gender, and date of birth)",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (selectedClassSections.length === 0 || selectedSubjects.length === 0) {
+      toast({
+        title: "Missing assignments",
+        description: "Please select at least one class section and one subject for this teacher",
         variant: "destructive"
       });
       return;
@@ -145,7 +205,9 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
           phone: phone || null,
           staffNo: staffNo || null,
           qualifications: qualifications ? qualifications.split(',').map(q => q.trim()) : [],
-          subjectsTaught: subjectsTaught || null
+          subjectsTaught: subjectsTaught || null,
+          intendedClassSectionIds: selectedClassSections,
+          intendedSubjectIds: selectedSubjects
         }
       });
 
@@ -170,6 +232,8 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
       setStaffNo("");
       setQualifications("");
       setSubjectsTaught("");
+      setSelectedClassSections([]);
+      setSelectedSubjects([]);
       if (autoGenerate) generateTempPassword();
       
       onTeacherCreated();
@@ -393,6 +457,68 @@ export function CreateTeacherModal({ isOpen, onClose, onTeacherCreated, selected
               placeholder="Comma-separated (e.g., Mathematics, Physics, Chemistry)"
               className="min-h-[60px]"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Class Sections * (Select the classes this teacher will teach)</Label>
+            <div className="border rounded-lg p-3 max-h-[200px] overflow-y-auto space-y-2">
+              {classSections.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {schoolId ? "No class sections available for this school" : "Select a school first"}
+                </p>
+              ) : (
+                classSections.map((section) => (
+                  <label key={section.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedClassSections.includes(section.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedClassSections([...selectedClassSections, section.id]);
+                        } else {
+                          setSelectedClassSections(selectedClassSections.filter(id => id !== section.id));
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm">
+                      Grade {section.grade_level} - Section {section.name}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Subjects * (Select the subjects this teacher will teach)</Label>
+            <div className="border rounded-lg p-3 max-h-[200px] overflow-y-auto space-y-2">
+              {subjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {schoolId ? "No subjects available for this school" : "Select a school first"}
+                </p>
+              ) : (
+                subjects.map((subject) => (
+                  <label key={subject.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedSubjects.includes(subject.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSubjects([...selectedSubjects, subject.id]);
+                        } else {
+                          setSelectedSubjects(selectedSubjects.filter(id => id !== subject.id));
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm">
+                      {subject.name} {subject.code && `(${subject.code})`}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">

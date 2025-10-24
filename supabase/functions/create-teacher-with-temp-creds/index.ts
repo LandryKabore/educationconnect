@@ -20,6 +20,8 @@ interface CreateTeacherRequest {
   staffNo?: string;
   qualifications?: string[];
   subjectsTaught?: string;
+  intendedClassSectionIds?: string[];
+  intendedSubjectIds?: string[];
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -33,9 +35,9 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { firstName, middleInitial, lastName, prefix, gender, dob, username, tempPassword, schoolId, phone, staffNo, qualifications, subjectsTaught }: CreateTeacherRequest = await req.json();
+    const { firstName, middleInitial, lastName, prefix, gender, dob, username, tempPassword, schoolId, phone, staffNo, qualifications, subjectsTaught, intendedClassSectionIds, intendedSubjectIds }: CreateTeacherRequest = await req.json();
 
-    console.log('Creating teacher with temp credentials:', { username, schoolId });
+    console.log('Creating teacher with temp credentials:', { username, schoolId, intendedClasses: intendedClassSectionIds?.length, intendedSubjects: intendedSubjectIds?.length });
 
     // Check if username already exists and make it unique if needed
     let finalUsername = username;
@@ -104,7 +106,10 @@ const handler = async (req: Request): Promise<Response> => {
         school_id: schoolId,
         phone: phone,
         staff_no: staffNo,
-        qualifications: qualifications
+        qualifications: qualifications,
+        // Store intended teaching assignments
+        intended_class_section_ids: intendedClassSectionIds || [],
+        intended_subject_ids: intendedSubjectIds || []
       });
 
     if (credsError) {
