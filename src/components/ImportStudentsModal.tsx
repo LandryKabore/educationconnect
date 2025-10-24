@@ -228,24 +228,27 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
         // Match class name to class_section_id with flexible matching
         let classSectionId: string | undefined = undefined;
         if (gradeLevel) {
-          const gradeLevelLower = gradeLevel.toLowerCase().trim();
+          // Strip common prefixes like "Grade ", "Class ", etc.
+          let normalizedGrade = gradeLevel.toLowerCase().trim();
+          normalizedGrade = normalizedGrade.replace(/^(grade|class)\s+/i, '');
+          
           const matchedSection = classSections.find(cs => {
             const csNameLower = cs.name.toLowerCase().trim();
             const csGradeLower = cs.grade_level?.toLowerCase().trim() || '';
             const csFullName = `${csGradeLower} ${csNameLower}`.trim();
             
             // Try exact matches first
-            if (csNameLower === gradeLevelLower || csFullName === gradeLevelLower) {
+            if (csNameLower === normalizedGrade || csFullName === normalizedGrade) {
               return true;
             }
             
             // Try matching just the grade level (e.g., "5" matches grade_level "5")
-            if (csGradeLower === gradeLevelLower) {
+            if (csGradeLower === normalizedGrade) {
               return true;
             }
             
             // Try matching grade + section (e.g., "10 A" matches grade "10" + name "A")
-            const parts = gradeLevelLower.split(/\s+/);
+            const parts = normalizedGrade.split(/\s+/);
             if (parts.length === 2) {
               const [grade, section] = parts;
               if (csGradeLower === grade && csNameLower === section) {
@@ -253,8 +256,8 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
               }
             }
             
-            // Try partial matches for cases like "5A" -> grade "5" + name "A"
-            const gradeMatch = gradeLevelLower.match(/^(\d+)([a-z]?)$/i);
+            // Try partial matches for cases like "5A" or "10A" -> grade + name
+            const gradeMatch = normalizedGrade.match(/^(\d+)([a-z]?)$/i);
             if (gradeMatch) {
               const [, grade, section] = gradeMatch;
               if (section) {
@@ -270,7 +273,7 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           
           // Log for debugging
           if (!matchedSection && gradeLevel) {
-            console.log(`No class match for grade "${gradeLevel}". Available classes:`, 
+            console.log(`No class match for "${gradeLevel}" (normalized: "${normalizedGrade}"). Available:`, 
               classSections.map(cs => ({ name: cs.name, grade: cs.grade_level }))
             );
           }
