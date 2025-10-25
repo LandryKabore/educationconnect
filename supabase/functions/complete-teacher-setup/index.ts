@@ -195,8 +195,19 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Update class_section_subjects to use the new auth user ID
+    console.log('5b. Updating class_section_subjects with new auth user ID...');
+    const { error: updateClassSubjectsError } = await supabase
+      .from('class_section_subjects')
+      .update({ teacher_user_id: authUserId })
+      .eq('teacher_user_id', teacherId);
+
+    if (updateClassSubjectsError) {
+      console.error('Class section subjects update error:', updateClassSubjectsError);
+    }
+
     // Upsert user role
-    console.log('5b. Upserting user role...');
+    console.log('5c. Upserting user role...');
     const { error: roleError } = await supabase
       .from('user_roles')
       .upsert({
