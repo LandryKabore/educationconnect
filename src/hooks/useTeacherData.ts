@@ -11,7 +11,11 @@ export interface TeacherClass {
   schedule_time?: string;
   room?: string;
   subject?: string;
+  subject_id?: string;
   attendanceTaken?: boolean;
+  schedule_days?: string[];
+  schedule_time_start?: string;
+  schedule_time_end?: string;
 }
 
 export interface TeacherTask {
@@ -139,11 +143,13 @@ export const useTeacherData = () => {
       setTeacherInfo({ profile, teacher });
 
       if (teacher) {
-        // Fetch teacher's teaching assignments with class details
+        // Fetch teacher's teaching assignments with class details and schedule
         const { data: teachingAssignments } = await supabase
           .from("teaching_assignments")
           .select(`
             id,
+            class_section_id,
+            subject_id,
             class_sections(
               id,
               name,
@@ -182,12 +188,20 @@ export const useTeacherData = () => {
           formattedSubjects = Array.from(subjectMap.values());
           setSubjects(formattedSubjects);
           
-          // Fetch actual student counts for each class
+          // Fetch actual student counts and schedule for each class
           for (const assignment of teachingAssignments) {
             const classSection = assignment.class_sections;
             const subject = assignment.subjects;
             
             if (classSection && !classMap.has(classSection.id)) {
+              // Fetch schedule information from class_section_subjects
+              const { data: scheduleData } = await supabase
+                .from("class_section_subjects")
+                .select("schedule_days, schedule_time_start, schedule_time_end")
+                .eq("class_section_id", classSection.id)
+                .eq("subject_id", assignment.subject_id)
+                .maybeSingle();
+              
               // Get actual student count for this class (both verified and unverified)
               const { data: enrollments } = await supabase
                 .from("enrollments")
@@ -218,6 +232,12 @@ export const useTeacherData = () => {
                 .eq("date", today)
                 .limit(1);
               
+              // Format schedule time
+              let scheduleTime = "Not scheduled";
+              if (scheduleData?.schedule_time_start && scheduleData?.schedule_time_end) {
+                scheduleTime = `${scheduleData.schedule_time_start} - ${scheduleData.schedule_time_end}`;
+              }
+              
               classMap.set(classSection.id, {
                 id: classSection.id,
                 name: classSection.name,
@@ -225,6 +245,11 @@ export const useTeacherData = () => {
                 student_count: studentCount,
                 room: `Room ${Math.floor(Math.random() * 300) + 100}`, // Mock room for now
                 subject: subject?.name || "Subject",
+                subject_id: subject?.id,
+                schedule_time: scheduleTime,
+                schedule_days: scheduleData?.schedule_days || [],
+                schedule_time_start: scheduleData?.schedule_time_start,
+                schedule_time_end: scheduleData?.schedule_time_end,
                 attendanceTaken: todayAttendance && todayAttendance.length > 0
               });
             }

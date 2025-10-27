@@ -17,6 +17,8 @@ import { CreateTaskModal } from "@/components/CreateTaskModal";
 import { TasksModal } from "@/components/TasksModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { AllAssignmentsModal } from "@/components/AllAssignmentsModal";
+import { TeacherScheduleModal } from "@/components/TeacherScheduleModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
 
@@ -31,6 +33,8 @@ const TeacherDashboard = () => {
   const [parentSelectorOpen, setParentSelectorOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [allAssignmentsOpen, setAllAssignmentsOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead, refetch } = useTeacherData();
 
@@ -139,11 +143,29 @@ const TeacherDashboard = () => {
                 </div>
               </div>
               {classes.length > 0 && (
-                <div className="flex items-center gap-2 border-l border-slate-600 pl-4">
-                  <div className="text-sm">
-                    <div className="text-slate-200 font-medium">{classes[0].name}</div>
-                    <div className="text-xs text-slate-400">{classes[0].subject}</div>
-                  </div>
+                <div className="flex items-center gap-3 border-l border-slate-600 pl-4">
+                  <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                    <SelectTrigger className="w-[200px] bg-slate-700/50 border-slate-600 text-white">
+                      <SelectValue placeholder="Select class" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="all" className="text-white">All Classes</SelectItem>
+                      {classes.map((cls) => (
+                        <SelectItem key={cls.id} value={cls.id} className="text-white">
+                          {cls.name} - {cls.subject}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setScheduleModalOpen(true)}
+                    className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-orange-400 hover:text-white"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Full Schedule
+                  </Button>
                 </div>
               )}
             </div>
@@ -226,7 +248,9 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {classes.length > 0 ? classes.map((classInfo) => (
+                {classes.length > 0 ? classes
+                  .filter(cls => selectedClassId === "all" || cls.id === selectedClassId)
+                  .map((classInfo) => (
                   <div key={classInfo.id} className="p-4 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
@@ -521,6 +545,21 @@ const TeacherDashboard = () => {
         open={allAssignmentsOpen}
         onOpenChange={setAllAssignmentsOpen}
         assignments={assignments}
+      />
+      
+      <TeacherScheduleModal
+        isOpen={scheduleModalOpen}
+        onClose={() => setScheduleModalOpen(false)}
+        scheduleClasses={classes.map(cls => ({
+          id: cls.id,
+          name: cls.name,
+          subject: cls.subject || "Subject",
+          grade_level: cls.grade_level,
+          days: cls.schedule_days || [],
+          time_start: cls.schedule_time_start || "TBD",
+          time_end: cls.schedule_time_end || "TBD",
+          student_count: cls.student_count
+        }))}
       />
     </div>
   );
