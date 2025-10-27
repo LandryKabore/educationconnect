@@ -71,12 +71,12 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
 
       const allStudents: Student[] = [];
 
-      // For each class, get the enrolled students with their profiles
+      // For each class, get both enrolled and unverified students
       for (const assignment of assignments) {
         if (assignment.class_sections) {
           console.log("Fetching students for class:", assignment.class_sections.id);
           
-          // Get enrollments with student profiles using a different approach
+          // Get verified students from enrollments
           const { data: enrollments, error: enrollmentsError } = await supabase
             .from("enrollments")
             .select("student_user_id")
@@ -88,52 +88,50 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
             continue;
           }
 
+          // Get unverified students from temp credentials
+          const { data: tempStudents, error: tempError } = await supabase
+            .from("student_temp_credentials")
+            .select("student_user_id, first_name, last_name")
+            .eq("class_section_id", assignment.class_sections.id)
+            .eq("is_used", false);
+
+          if (tempError) {
+            console.error("Error fetching temp students:", tempError);
+          }
+
+          // Process verified students
           if (enrollments && enrollments.length > 0) {
-            // Since teacher RLS might be restricting access to profiles, 
-            // let's check if we can access them differently by using a service call
-            // or try accessing through a specific teacher context
             const studentIds = enrollments.map(e => e.student_user_id);
             
-            // Let's try using the current user as a teacher context
-            const { data: { user } } = await supabase.auth.getUser();
-            console.log("Current teacher user:", user?.id);
-            
-            // Try a raw query approach that respects teacher RLS
-            const { data: studentNames, error: namesError } = await supabase
-              .rpc('get_student_names_for_teacher' as any, {
-                student_ids: studentIds,
-                teacher_id: user?.id
-              });
+            // Fetch profiles for verified students
+            const { data: profiles, error: profilesError } = await supabase
+              .from("profiles")
+              .select("user_id, first_name, last_name")
+              .in("user_id", studentIds);
 
-            console.log("Student names from RPC:", studentNames);
-            
-            if (namesError) {
-              console.error("Error calling RPC:", namesError);
-              // Fallback: use student IDs
-              for (const enrollment of enrollments) {
+            if (!profilesError && profiles) {
+              for (const profile of profiles) {
+                const studentName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
                 allStudents.push({
-                  id: enrollment.student_user_id,
-                  name: `Student ${enrollment.student_user_id.slice(0, 8)}`,
+                  id: profile.user_id,
+                  name: studentName || 'Unknown Student',
                   className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
                 });
               }
-            } else if (Array.isArray(studentNames)) {
-              // Use the names from RPC
-              const nameMap = new Map();
-              studentNames.forEach((item: any) => {
-                nameMap.set(item.user_id, item);
-              });
-              
-              for (const enrollment of enrollments) {
-                const nameData = nameMap.get(enrollment.student_user_id);
-                const studentName = nameData 
-                  ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
-                  : `Student ${enrollment.student_user_id.slice(0, 8)}`;
+            }
+          }
 
+          // Process unverified students from temp credentials
+          if (tempStudents && tempStudents.length > 0) {
+            for (const tempStudent of tempStudents) {
+              // Only add if not already in the list (avoid duplicates)
+              const exists = allStudents.some(s => s.id === tempStudent.student_user_id);
+              if (!exists) {
+                const studentName = `${tempStudent.first_name || ''} ${tempStudent.last_name || ''}`.trim();
                 allStudents.push({
-                  id: enrollment.student_user_id,
-                  name: studentName || 'Unknown Student',
-                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level}`
+                  id: tempStudent.student_user_id,
+                  name: studentName || 'Unverified Student',
+                  className: `${assignment.class_sections.name} - ${assignment.class_sections.grade_level} (Unverified)`
                 });
               }
             }
