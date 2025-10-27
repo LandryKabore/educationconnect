@@ -188,14 +188,25 @@ export const useTeacherData = () => {
             const subject = assignment.subjects;
             
             if (classSection && !classMap.has(classSection.id)) {
-              // Get actual student count for this class
+              // Get actual student count for this class (both verified and unverified)
               const { data: enrollments } = await supabase
                 .from("enrollments")
                 .select("id")
                 .eq("class_section_id", classSection.id)
                 .eq("status", "active");
               
-              const studentCount = enrollments?.length || 0;
+              // Also count unverified students from student_temp_credentials
+              const { data: tempStudents } = await supabase
+                .from("student_temp_credentials")
+                .select("student_user_id")
+                .eq("class_section_id", classSection.id);
+              
+              // Get unique student IDs from both sources
+              const enrolledIds = new Set(enrollments?.map(e => e.id) || []);
+              const tempIds = tempStudents?.map(s => s.student_user_id) || [];
+              
+              // Count unique students
+              const studentCount = (enrollments?.length || 0) + tempIds.length;
               
               // Check if attendance was taken today for this class
               const today = new Date().toISOString().split('T')[0];
