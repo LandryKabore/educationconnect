@@ -125,8 +125,35 @@ async function handler(req: Request): Promise<Response> {
 
     console.log('User authenticated:', user.id);
 
-    // Generate student user ID and hash password
-    const studentUserId = crypto.randomUUID();
+    // Create actual auth user immediately
+    console.log('Creating auth user for student...');
+    const { data: authData, error: authCreateError } = await supabase.auth.admin.createUser({
+      email: `${username}@student.local`,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+        role: 'student',
+        school_id: schoolId
+      }
+    });
+
+    if (authCreateError || !authData.user) {
+      console.error('Error creating auth user:', authCreateError);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to create student account',
+        details: authCreateError?.message 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const studentUserId = authData.user.id;
+    console.log('Auth user created successfully:', studentUserId);
+
+    // Hash password for temp credentials table
     const tempPasswordHash = await crypto.subtle.digest(
       'SHA-256',
       new TextEncoder().encode(tempPassword)
@@ -134,8 +161,6 @@ async function handler(req: Request): Promise<Response> {
     const tempPasswordHashHex = Array.from(new Uint8Array(tempPasswordHash))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-
-    console.log('Generated student user ID:', studentUserId);
 
     // Insert student temporary credentials
     const { data: studentData, error: insertError } = await supabase
@@ -168,60 +193,10 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    console.log('Student created successfully:', studentData);
+    console.log('Student temp credentials created successfully:', studentData);
 
-    // Create profile immediately (so student shows up in database)
-    console.log('Creating student profile immediately...');
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: studentUserId,
-        email: `${username}@student.local`,
-        first_name: firstName,
-        last_name: lastName,
-        role: 'student'
-      });
-
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      // Continue anyway, will be created on verification
-    } else {
-      console.log('Profile created successfully');
-    }
-
-    // Create student profile immediately
-    const { error: studentProfileError } = await supabase
-      .from('student_profiles')
-      .insert({
-        user_id: studentUserId,
-        school_id: schoolId,
-        student_no: studentNo,
-      });
-
-    if (studentProfileError) {
-      console.error('Error creating student profile:', studentProfileError);
-      // Continue anyway, will be created on verification
-    } else {
-      console.log('Student profile created successfully');
-    }
-
-    // Create user role immediately
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .insert({
-        user_id: studentUserId,
-        role: 'student',
-        school_id: schoolId,
-        active: true,
-        assigned_by: user.id
-      });
-
-    if (roleError) {
-      console.error('Error creating user role:', roleError);
-      // Continue anyway
-    } else {
-      console.log('User role created successfully');
-    }
+    // Note: profile, student_profile, and user_role are created automatically via the handle_new_user trigger
+    console.log('Waiting for automatic profile creation via trigger...');
 
     // Auto-enroll student in their class if class_section_id is provided
     if (classSectionId) {

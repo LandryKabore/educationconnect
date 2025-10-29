@@ -62,10 +62,29 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    // Generate a placeholder user ID for the teacher profile
-    const tempUserId = crypto.randomUUID();
+    // Create actual auth user immediately
+    console.log('Creating auth user for teacher...');
+    const { data: authData, error: authCreateError } = await supabase.auth.admin.createUser({
+      email: `${finalUsername}@teacher.local`,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+        role: 'teacher',
+        school_id: schoolId
+      }
+    });
 
-    // Hash the temporary password (simple hash for demo)
+    if (authCreateError || !authData.user) {
+      console.error('Error creating auth user:', authCreateError);
+      throw new Error(`Failed to create teacher account: ${authCreateError?.message}`);
+    }
+
+    const tempUserId = authData.user.id;
+    console.log('Auth user created successfully:', tempUserId);
+
+    // Hash the temporary password for storage
     const encoder = new TextEncoder();
     const data = encoder.encode(tempPassword);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -114,63 +133,23 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Teacher temp credentials created successfully');
 
-    // Create profile immediately (even before first login)
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: tempUserId,
-        email: `${finalUsername}@temp.local`, // Temporary email, will be updated on first login
-        first_name: firstName,
-        last_name: lastName,
-        role: 'teacher',
-        phone: phone
-      });
-
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-      // Don't fail the whole operation, just log it
-    }
-
-    // Create teacher profile immediately
-    const { error: teacherProfileError } = await supabase
+    // Update teacher profile with additional details (profile created by trigger)
+    await supabase
       .from('teacher_profiles')
-      .insert({
-        user_id: tempUserId,
-        school_id: schoolId,
+      .update({
         staff_no: staffNo,
         qualifications: qualifications,
         subjects_taught: subjectsTaught,
         phone: phone,
-        hire_date: new Date().toISOString().split('T')[0],
         username: finalUsername,
         prefix: prefix,
         gender: gender,
         dob: dob,
         first_login_completed: false
-      });
+      })
+      .eq('user_id', tempUserId);
 
-    if (teacherProfileError) {
-      console.error('Teacher profile creation error:', teacherProfileError);
-      // Don't fail the whole operation, just log it
-    }
-
-    // Create user role immediately
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .insert({
-        user_id: tempUserId,
-        role: 'teacher',
-        school_id: schoolId,
-        active: true,
-        assigned_by: user.id
-      });
-
-    if (roleError) {
-      console.error('User role creation error:', roleError);
-      // Don't fail the whole operation, just log it
-    }
-
-    console.log('Teacher profiles created successfully');
+    console.log('Teacher profile updated with details');
 
     return new Response(
       JSON.stringify({ 
