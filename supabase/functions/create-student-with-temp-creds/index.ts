@@ -72,30 +72,35 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Check for existing username
-    const { data: existingStudent, error: checkError } = await supabase
-      .from('student_temp_credentials')
-      .select('username')
-      .eq('username', username)
-      .maybeSingle();
+    // Check for existing username and make it unique if needed
+    let finalUsername = username;
+    let counter = 1;
+    
+    while (true) {
+      const { data: existingStudent } = await supabase
+        .from('student_temp_credentials')
+        .select('username')
+        .eq('username', finalUsername)
+        .maybeSingle();
 
-    if (checkError) {
-      console.error('Error checking existing username:', checkError);
-      return new Response(JSON.stringify({ error: 'Database error' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (!existingStudent) {
+        break; // Username is available
+      }
+      
+      // Try with a number suffix
+      finalUsername = `${username}${counter}`;
+      counter++;
+      
+      // Prevent infinite loop
+      if (counter > 100) {
+        return new Response(JSON.stringify({ error: 'Unable to generate unique username' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    if (existingStudent) {
-      console.log('Username already exists:', username);
-      return new Response(JSON.stringify({ error: 'Username already exists' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log('Username is available');
+    console.log('Final username:', finalUsername);
 
     // Get admin authorization header
     const authHeader = req.headers.get('Authorization');
@@ -128,7 +133,7 @@ async function handler(req: Request): Promise<Response> {
     // Create actual auth user immediately
     console.log('Creating auth user for student...');
     const { data: authData, error: authCreateError } = await supabase.auth.admin.createUser({
-      email: `${username}@student.local`,
+      email: `${finalUsername}@student.local`,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
@@ -167,7 +172,7 @@ async function handler(req: Request): Promise<Response> {
       .from('student_temp_credentials')
       .insert({
         student_user_id: studentUserId,
-        username: username,
+        username: finalUsername,
         temp_password_hash: tempPasswordHashHex,
         temp_password_plain: tempPassword, // Store plain text for admin access
         first_name: firstName,
@@ -260,7 +265,7 @@ async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ 
       success: true,
       student_id: studentUserId,
-      username: username,
+      username: finalUsername,
       parent_verification_code: parentVerificationCode,
       message: 'Student created successfully with temporary credentials and parent verification code'
     }), {
