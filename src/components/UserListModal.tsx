@@ -362,7 +362,9 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           };
         }) || [];
 
-        const pendingStudents = tempCredsData.data?.map(item => {
+        // Only include pending students who DON'T already have a profile
+        const completedStudentIds = new Set(completedStudents.map(s => s.user_id));
+        const pendingStudents = tempCredsData.data?.filter(item => !completedStudentIds.has(item.student_user_id)).map(item => {
           const student = {
             id: item.id,
             user_id: item.student_user_id, // Add this for deletion
@@ -430,7 +432,9 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           isVerified: true
         })) || [];
 
-        const pendingTeachers = tempCredsData.data?.map(item => ({
+        // Only include pending teachers who DON'T already have a profile
+        const completedTeacherIds = new Set(completedTeachers.map(t => t.user_id));
+        const pendingTeachers = tempCredsData.data?.filter(item => !completedTeacherIds.has(item.teacher_user_id)).map(item => ({
           id: item.id,
           user_id: item.teacher_user_id,
           email: `${item.username}@teacher.local`,

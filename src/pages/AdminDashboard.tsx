@@ -247,21 +247,38 @@ const AdminDashboard = () => {
       if (selectedSchoolId) {
         // Count students linked to this school (both completed profiles and temp credentials)
         const completedStudents = studentProfilesData.data?.length || 0;
-        const pendingStudents = studentTempCredsData.data?.length || 0;
+        // Only count temp credentials for students who DON'T have profiles yet
+        const existingStudentIds = new Set(studentProfilesData.data?.map(sp => sp.user_id) || []);
+        const pendingStudents = studentTempCredsData.data?.filter(stc => !existingStudentIds.has(stc.student_user_id)).length || 0;
         students = completedStudents + pendingStudents;
+        
+        console.log('Found students:', {
+          completed: completedStudents,
+          pending: pendingStudents,
+          total: students,
+          pendingWithPasswords: studentTempCredsData.data?.filter(stc => stc.temp_password_plain).length || 0
+        });
+        
         // Count teachers linked to this school (both completed profiles and temp credentials)
         const completedTeachers = teacherProfilesData.data?.length || 0;
-        const pendingTeachers = teacherTempCredsData.data?.length || 0;
+        // Only count temp credentials for teachers who DON'T have profiles yet
+        const existingTeacherIds = new Set(teacherProfilesData.data?.map(tp => tp.user_id) || []);
+        const pendingTeachers = teacherTempCredsData.data?.filter(ttc => !existingTeacherIds.has(ttc.teacher_user_id)).length || 0;
         teachers = completedTeachers + pendingTeachers;
         // Count parents linked to this school
         parents = parentProfilesData.data?.length || 0;
       } else {
         // Count all users (completed profiles and temp credentials)
         const completedStudents = profilesData.data?.filter(p => p.role === 'student').length || 0;
-        const pendingStudents = studentTempCredsData.data?.length || 0;
+        // Only count temp credentials for students who DON'T have profiles yet
+        const existingStudentIds = new Set(profilesData.data?.filter(p => p.role === 'student').map(p => p.user_id) || []);
+        const pendingStudents = studentTempCredsData.data?.filter(stc => !existingStudentIds.has(stc.student_user_id)).length || 0;
         students = completedStudents + pendingStudents;
+        
         const completedTeachers = profilesData.data?.filter(p => p.role === 'teacher').length || 0;
-        const pendingTeachers = teacherTempCredsData.data?.length || 0;
+        // Only count temp credentials for teachers who DON'T have profiles yet
+        const existingTeacherIds = new Set(profilesData.data?.filter(p => p.role === 'teacher').map(p => p.user_id) || []);
+        const pendingTeachers = teacherTempCredsData.data?.filter(ttc => !existingTeacherIds.has(ttc.teacher_user_id)).length || 0;
         teachers = completedTeachers + pendingTeachers;
         parents = profilesData.data?.filter(p => p.role === 'parent').length || 0;
       }
