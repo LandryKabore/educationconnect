@@ -81,7 +81,10 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
 
   const fetchStudents = async () => {
     try {
-      // First get enrollments
+      const allStudents: Student[] = [];
+      const initialAttendance: Record<string, string> = {};
+
+      // 1. Fetch enrolled students (those who completed first login)
       const { data: enrollments, error: enrollmentsError } = await supabase
         .from("enrollments")
         .select("student_user_id")
@@ -91,63 +94,68 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       if (enrollmentsError) throw enrollmentsError;
 
       if (enrollments && enrollments.length > 0) {
-        // Get current teacher user
         const { data: { user } } = await supabase.auth.getUser();
         const studentIds = enrollments.map(e => e.student_user_id);
         
-        // Use our RPC function to get student names
+        // Get student names using RPC function
         const { data: studentNames, error: namesError } = await supabase
           .rpc('get_student_names_for_teacher' as any, {
             student_ids: studentIds,
             teacher_id: user?.id
           });
 
-        console.log("Student names for attendance:", studentNames);
-
-        if (namesError) {
-          console.error("Error fetching student names:", namesError);
-          // Fallback: use student IDs
-          const fallbackStudents = enrollments.map(enrollment => ({
-            id: enrollment.student_user_id,
-            name: `Student ${enrollment.student_user_id.slice(0, 8)}`,
-            user_id: enrollment.student_user_id
-          }));
-          setStudents(fallbackStudents);
-        } else if (Array.isArray(studentNames)) {
-          // Create map for quick lookup
+        if (!namesError && Array.isArray(studentNames)) {
           const nameMap = new Map();
           studentNames.forEach((item: any) => {
             nameMap.set(item.user_id, item);
           });
 
-          const formattedStudents = enrollments.map(enrollment => {
+          enrollments.forEach(enrollment => {
             const nameData = nameMap.get(enrollment.student_user_id);
             const studentName = nameData 
               ? `${nameData.first_name || ''} ${nameData.last_name || ''}`.trim()
               : `Student ${enrollment.student_user_id.slice(0, 8)}`;
 
-            return {
+            allStudents.push({
               id: enrollment.student_user_id,
               name: studentName || 'Unknown Student',
               user_id: enrollment.student_user_id
-            };
+            });
+            initialAttendance[enrollment.student_user_id] = "present";
           });
-
-          setStudents(formattedStudents);
         }
-
-        // Initialize attendance as present for all students
-        const initialAttendance: Record<string, string> = {};
-        enrollments.forEach(enrollment => {
-          initialAttendance[enrollment.student_user_id] = "present";
-        });
-        setAttendance(initialAttendance);
-      } else {
-        setStudents([]);
-        setAttendance({});
       }
+
+      // 2. Fetch unverified students from temp credentials
+      const { data: tempStudents, error: tempError } = await supabase
+        .from("student_temp_credentials")
+        .select("student_user_id, first_name, last_name, username")
+        .eq("class_section_id", selectedClass);
+
+      if (!tempError && tempStudents && tempStudents.length > 0) {
+        tempStudents.forEach(tempStudent => {
+          // Check if student is already in the list (enrolled)
+          if (!allStudents.find(s => s.user_id === tempStudent.student_user_id)) {
+            const studentName = tempStudent.first_name && tempStudent.last_name
+              ? `${tempStudent.first_name} ${tempStudent.last_name}`.trim()
+              : tempStudent.username || `Student ${tempStudent.student_user_id.slice(0, 8)}`;
+
+            allStudents.push({
+              id: tempStudent.student_user_id,
+              name: studentName,
+              user_id: tempStudent.student_user_id
+            });
+            initialAttendance[tempStudent.student_user_id] = "present";
+          }
+        });
+      }
+
+      setStudents(allStudents);
+      setAttendance(initialAttendance);
     } catch (error) {
       console.error("Error fetching students:", error);
+      setStudents([]);
+      setAttendance({});
     }
   };
 
