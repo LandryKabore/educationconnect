@@ -104,6 +104,21 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Auth user deleted successfully - now clean up any orphaned temp credentials
+    console.log('User deleted from auth, cleaning up temp credentials...');
+    
+    // Delete any student temp credentials
+    await supabaseAdmin
+      .from('student_temp_credentials')
+      .delete()
+      .eq('student_user_id', userId);
+    
+    // Delete any teacher temp credentials
+    await supabaseAdmin
+      .from('teacher_temp_credentials')
+      .delete()
+      .eq('teacher_user_id', userId);
+
     return new Response(
       JSON.stringify({ success: true, message: 'User deleted successfully' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
