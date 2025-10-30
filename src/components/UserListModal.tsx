@@ -299,7 +299,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
       if (userType === 'student') {
         console.log('Fetching student data (both completed and temp credentials)');
         // For students, get both completed profiles and temp credentials
-        const [completedData, tempCredsData, parentLinksData, enrollmentsData, classSectionsData] = await Promise.all([
+        const [completedData, tempCredsData, allTempCredsData, parentLinksData, enrollmentsData, classSectionsData] = await Promise.all([
           // Get completed student profiles
           supabase
             .from('student_profiles')
@@ -313,6 +313,14 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
             .from('student_temp_credentials')
             .select('*')
             .eq('is_used', false)  // Only get unused temp credentials
+            .then(result => selectedSchoolId ? 
+              { ...result, data: result.data?.filter(stc => stc.school_id === selectedSchoolId) } : 
+              result
+            ),
+          // Get ALL temp credentials (including used ones) to get usernames for completed students
+          supabase
+            .from('student_temp_credentials')
+            .select('*')
             .then(result => selectedSchoolId ? 
               { ...result, data: result.data?.filter(stc => stc.school_id === selectedSchoolId) } : 
               result
@@ -335,6 +343,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
 
         console.log('Completed students data:', completedData);
         console.log('Temp credentials data:', tempCredsData);
+        console.log('All temp credentials data:', allTempCredsData);
         console.log('Parent links data:', parentLinksData);
 
         const parentVerificationCodes = new Map();
@@ -352,11 +361,19 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           classNameMap.set(cs.id, cs.name);
         });
 
+        // Create a map of user_id to username from all temp credentials
+        const usernameMap = new Map();
+        allTempCredsData.data?.forEach(cred => {
+          usernameMap.set(cred.student_user_id, cred.username);
+        });
+
         const completedStudents = completedData.data?.map(item => {
           const classId = enrollmentMap.get(item.profiles.user_id);
+          const username = usernameMap.get(item.profiles.user_id);
           return {
             ...item.profiles,
             isVerified: true,
+            username: username, // Add username from temp credentials
             parentVerificationCode: parentVerificationCodes.get(item.profiles.user_id),
             className: classId ? classNameMap.get(classId) : undefined
           };
