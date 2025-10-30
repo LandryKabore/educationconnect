@@ -234,7 +234,11 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
           
           const matchedSection = classSections.find(cs => {
             const csNameLower = cs.name.toLowerCase().trim();
-            const csGradeLower = cs.grade_level?.toLowerCase().trim() || '';
+            let csGradeLower = cs.grade_level?.toLowerCase().trim() || '';
+            
+            // Normalize class section grade level (remove "grade" prefix)
+            csGradeLower = csGradeLower.replace(/^(grade|class)\s+/i, '');
+            
             const csFullName = `${csGradeLower} ${csNameLower}`.trim();
             
             // Try exact matches first
@@ -261,6 +265,11 @@ export function ImportStudentsModal({ isOpen, onClose, onSuccess, selectedSchool
             if (gradeMatch) {
               const [, grade, section] = gradeMatch;
               if (section) {
+                // Match both "Grade 10A" and separate grade "10" + name "A"
+                const csNameNormalized = cs.name.toLowerCase().replace(/^(grade|class)\s+/i, '');
+                if (csNameNormalized === `${grade}${section}`) {
+                  return true;
+                }
                 return csGradeLower === grade && csNameLower === section.toLowerCase();
               } else {
                 return csGradeLower === grade;
