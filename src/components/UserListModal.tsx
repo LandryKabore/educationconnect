@@ -828,8 +828,11 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
               >
                 Cancel
               </AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleDeleteUser}
+              <Button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteUser();
+                }}
                 disabled={isDeleting}
                 className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
               >
@@ -841,7 +844,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 ) : (
                   `Delete ${userToDelete?.role === 'teacher' ? 'Teacher' : userToDelete?.role === 'student' ? 'Student' : userToDelete?.role === 'parent' ? 'Parent' : 'User'}`
                 )}
-              </AlertDialogAction>
+              </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -878,8 +881,11 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
               >
                 Cancel
               </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleBulkDelete}
+              <Button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleBulkDelete();
+                }}
                 disabled={isDeleting}
                 className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -891,7 +897,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
                 ) : (
                   `Delete ${selectedUsers.size} User(s)`
                 )}
-              </AlertDialogAction>
+              </Button>
             </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
