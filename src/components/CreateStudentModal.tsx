@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { StudentCredentialsModal } from "./StudentCredentialsModal";
 
 interface CreateStudentModalProps {
   isOpen: boolean;
@@ -23,6 +24,14 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   const [autoGenerate, setAutoGenerate] = useState(true);
   const [schools, setSchools] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    firstName: string;
+    lastName: string;
+    username: string;
+    tempPassword: string;
+    parentCode?: string;
+  } | null>(null);
 
   // Form fields
   const [firstName, setFirstName] = useState("");
@@ -161,11 +170,15 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
 
       const parentCode = data?.parent_verification_code;
       
-      toast({
-        title: "Student created successfully",
-        description: `Username: ${username}, Temp Password: ${tempPassword}${parentCode ? `, Parent Code: ${parentCode}` : ''}`,
-        duration: 10000, // Show longer so admin can copy the codes
+      // Show credentials modal
+      setCreatedCredentials({
+        firstName,
+        lastName,
+        username,
+        tempPassword,
+        parentCode
       });
+      setShowCredentials(true);
 
       // Reset form
       setFirstName("");
@@ -192,11 +205,12 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create Student Account</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Student Account</DialogTitle>
+          </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
@@ -336,5 +350,12 @@ export const CreateStudentModal = ({ isOpen, onClose, onSuccess, selectedSchoolI
         </form>
       </DialogContent>
     </Dialog>
+
+    <StudentCredentialsModal
+      isOpen={showCredentials}
+      onClose={() => setShowCredentials(false)}
+      credentials={createdCredentials}
+    />
+    </>
   );
 };
