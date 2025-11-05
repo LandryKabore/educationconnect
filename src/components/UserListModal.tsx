@@ -317,7 +317,7 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
               { ...result, data: result.data?.filter(stc => stc.school_id === selectedSchoolId) } : 
               result
             ),
-          // Get ALL temp credentials (including used ones) to get usernames for completed students
+          // Get ALL temp credentials (including used ones) to show credentials for all students
           supabase
             .from('student_temp_credentials')
             .select('*')
@@ -361,19 +361,23 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
           classNameMap.set(cs.id, cs.name);
         });
 
-        // Create a map of user_id to username from all temp credentials
+        // Create maps from all temp credentials to show credentials for all students
         const usernameMap = new Map();
+        const tempPasswordMap = new Map();
         allTempCredsData.data?.forEach(cred => {
           usernameMap.set(cred.student_user_id, cred.username);
+          tempPasswordMap.set(cred.student_user_id, cred.temp_password_plain);
         });
 
         const completedStudents = completedData.data?.map(item => {
           const classId = enrollmentMap.get(item.profiles.user_id);
           const username = usernameMap.get(item.profiles.user_id);
+          const tempPassword = tempPasswordMap.get(item.profiles.user_id);
           return {
             ...item.profiles,
             isVerified: true,
             username: username, // Add username from temp credentials
+            tempPassword: tempPassword, // Add temp password for all students
             parentVerificationCode: parentVerificationCodes.get(item.profiles.user_id),
             className: classId ? classNameMap.get(classId) : undefined
           };
