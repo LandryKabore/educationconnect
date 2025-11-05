@@ -195,20 +195,24 @@ export function ClassSectionDetailsModal({ isOpen, onClose, classSection }: Clas
         }) || [];
       }
 
-      // Fetch unverified students from temp credentials
+      // Fetch unverified students from temp credentials (excluding those already in enrollments)
       const { data: tempStudentsData } = await supabase
         .from('student_temp_credentials')
         .select('student_user_id, first_name, last_name, student_no, username')
         .eq('class_section_id', classSection.id)
         .eq('is_used', false);
 
-      const unverifiedStudents: StudentInfo[] = tempStudentsData?.map(ts => ({
-        id: ts.student_user_id,
-        first_name: ts.first_name || '',
-        last_name: ts.last_name || '',
-        student_no: ts.student_no || null,
-        email: ts.username || 'Not registered yet',
-      })) || [];
+      // Filter out students who are already verified to avoid duplicates
+      const verifiedStudentIdSet = new Set(verifiedStudentIds);
+      const unverifiedStudents: StudentInfo[] = tempStudentsData
+        ?.filter(ts => !verifiedStudentIdSet.has(ts.student_user_id))
+        .map(ts => ({
+          id: ts.student_user_id,
+          first_name: ts.first_name || '',
+          last_name: ts.last_name || '',
+          student_no: ts.student_no || null,
+          email: ts.username || 'Not registered yet',
+        })) || [];
 
       // Combine both verified and unverified students
       setStudents([...verifiedStudents, ...unverifiedStudents]);
