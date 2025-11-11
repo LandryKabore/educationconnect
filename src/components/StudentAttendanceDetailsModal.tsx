@@ -114,9 +114,6 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const fetchStudentAttendance = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       // Fetch all attendance records for the student (last 90 days)
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -129,18 +126,9 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
         .eq("student_user_id", selectedStudent)
         .gte("date", startDate);
 
-      // Filter by selected class if specified
+      // Filter by selected class if specified (simpler approach)
       if (selectedClassId && selectedClassId !== "all") {
-        // Get class sections for the selected class
-        const { data: assignments } = await supabase
-          .from("teaching_assignments")
-          .select("class_section_id")
-          .eq("teacher_user_id", user.id)
-          .eq("class_section_id", selectedClassId);
-
-        if (assignments?.length) {
-          query = query.eq("class_section_id", selectedClassId);
-        }
+        query = query.eq("class_section_id", selectedClassId);
       }
 
       const { data: attendanceData, error } = await query.order("date", { ascending: false });
