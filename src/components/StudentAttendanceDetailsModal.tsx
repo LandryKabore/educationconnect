@@ -178,12 +178,18 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
     );
   };
 
+  // Parse date string as local date to avoid timezone issues
+  const parseLocalDate = (dateString: string) => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Prepare chart data (last 30 days)
   const chartData = attendanceRecords
     .slice(0, 30)
     .reverse()
     .map(record => ({
-      date: format(new Date(record.date), "MMM dd"),
+      date: format(parseLocalDate(record.date), "MMM dd"),
       value: record.status === "present" ? 1 : 0
     }));
 
@@ -344,10 +350,10 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
                           attendanceRecords.map((record, index) => (
                             <TableRow key={index}>
                               <TableCell className="font-medium">
-                                {format(new Date(record.date), "MMM dd, yyyy")}
+                                {format(parseLocalDate(record.date), "MMM dd, yyyy")}
                               </TableCell>
                               <TableCell className="text-muted-foreground">
-                                {format(new Date(record.date), "EEEE")}
+                                {format(parseLocalDate(record.date), "EEEE")}
                               </TableCell>
                               <TableCell>{getStatusBadge(record.status)}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">
