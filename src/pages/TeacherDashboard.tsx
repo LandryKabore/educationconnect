@@ -25,6 +25,7 @@ import { TasksModal } from "@/components/TasksModal";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { AllAssignmentsModal } from "@/components/AllAssignmentsModal";
 import { TeacherScheduleModal } from "@/components/TeacherScheduleModal";
+import { TeacherProfileModal } from "@/components/TeacherProfileModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
@@ -43,6 +44,7 @@ const TeacherDashboard = () => {
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [allAssignmentsOpen, setAllAssignmentsOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [currentTime, setCurrentTime] = useState(new Date());
   const { loading, teacherInfo, classes, subjects, assignments, tasks, messages, stats, markTaskComplete, markMessageRead, refetch } = useTeacherData();
@@ -276,7 +278,10 @@ const TeacherDashboard = () => {
                     </div>
                   </div>
                   <DropdownMenuSeparator className="bg-slate-700" />
-                  <DropdownMenuItem className="text-white hover:bg-slate-700 cursor-pointer">
+                  <DropdownMenuItem 
+                    className="text-white hover:bg-slate-700 cursor-pointer"
+                    onClick={() => setShowProfileModal(true)}
+                  >
                     <User className="w-4 h-4 mr-2" />
                     View Profile
                   </DropdownMenuItem>
@@ -657,6 +662,12 @@ const TeacherDashboard = () => {
           time_end: cls.schedule_time_end || "TBD",
           student_count: cls.student_count
         }))}
+      />
+
+      <TeacherProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        teacherId={teacherInfo?.profile?.id || ''}
       />
     </div>
   );
