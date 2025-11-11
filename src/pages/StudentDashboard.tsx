@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown, MessageCircle } from "lucide-react";
+import { ArrowLeft, User, BookOpen, Calendar, Users, TrendingUp, Award, Clock, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, GraduationCap, ChevronDown, MessageCircle, LogOut, Settings } from "lucide-react";
 import { useStudentData } from "@/hooks/useStudentData";
 import { StatCardModal } from "@/components/StatCardModal";
 import { StudentGradesModal } from "@/components/StudentGradesModal";
@@ -18,6 +18,8 @@ import { StudyCalendarModal } from "@/components/StudyCalendarModal";
 import { StudyGroupsModal } from "@/components/StudyGroupsModal";
 import { LiveClock } from "@/components/LiveClock";
 import { AttendanceBadges } from "@/components/AttendanceBadges";
+import { EditSelfProfileModal } from "@/components/EditSelfProfileModal";
+import { supabase } from "@/integrations/supabase/client";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -31,6 +33,7 @@ const StudentDashboard = () => {
   const [teachersModalOpen, setTeachersModalOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [studyGroupsModalOpen, setStudyGroupsModalOpen] = useState(false);
+  const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
 
   useEffect(() => {
@@ -200,9 +203,34 @@ const StudentDashboard = () => {
               >
                 <MessageCircle className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
-                <User className="w-4 h-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+                    <User className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-slate-800 border-slate-600 z-50">
+                  <DropdownMenuLabel className="text-slate-200">My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-slate-600" />
+                  <DropdownMenuItem 
+                    onClick={() => setEditProfileModalOpen(true)}
+                    className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Edit Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      navigate("/");
+                    }}
+                    className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -540,6 +568,14 @@ const StudentDashboard = () => {
           subjects={studentInfo.subjects || []}
         />
       )}
+
+      <EditSelfProfileModal
+        open={editProfileModalOpen}
+        onOpenChange={setEditProfileModalOpen}
+        onSuccess={() => {
+          // Optionally refetch student data to show updated name
+        }}
+      />
     </div>
   );
 };

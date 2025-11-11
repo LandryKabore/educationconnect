@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { AvatarUpload } from "@/components/AvatarUpload";
 
 interface EditTeacherModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
   const [qualifications, setQualifications] = useState("");
   const [subjectsTaught, setSubjectsTaught] = useState("");
   const [schoolId, setSchoolId] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
 
   useEffect(() => {
     if (isOpen && teacherId) {
@@ -52,7 +54,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
       // Try to fetch from profiles and teacher_profiles first (verified teachers)
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('first_name, last_name')
+        .select('first_name, last_name, avatar_url')
         .eq('user_id', teacherId)
         .maybeSingle();
 
@@ -66,6 +68,7 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
         // Verified teacher - populate from profiles and teacher_profiles
         setFirstName(profileData.first_name || "");
         setLastName(profileData.last_name || "");
+        setAvatarUrl(profileData.avatar_url || "");
         setPrefix(teacherData.prefix || "");
         setGender(teacherData.gender || "");
         setDob(teacherData.dob ? new Date(teacherData.dob) : undefined);
@@ -234,6 +237,15 @@ export function EditTeacherModal({ isOpen, onClose, onSuccess, teacherId }: Edit
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {teacherId && (
+              <AvatarUpload
+                currentAvatarUrl={avatarUrl}
+                userId={teacherId}
+                userName={`${firstName} ${lastName}`}
+                onAvatarUpdate={(newUrl) => setAvatarUrl(newUrl)}
+              />
+            )}
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="prefix">Prefix *</Label>

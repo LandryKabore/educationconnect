@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { TrendingUp, Search } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Assignment {
   id: string;
@@ -21,6 +22,7 @@ interface Student {
   name: string;
   user_id: string;
   student_no?: string;
+  avatar_url?: string;
 }
 
 interface ClassSection {
@@ -125,12 +127,12 @@ export function GradeStudentModal({ onGradeSubmitted, selectedClassId }: GradeSt
     if (!selectedClass) return;
     
     try {
-      // First get enrollments with profile data
+      // First get enrollments with profile data including avatar
       const { data: enrollmentsData, error: enrollmentsError } = await supabase
         .from("enrollments")
         .select(`
           student_user_id,
-          profiles!enrollments_student_user_id_fkey(first_name, last_name)
+          profiles!enrollments_student_user_id_fkey(first_name, last_name, avatar_url)
         `)
         .eq("class_section_id", selectedClass);
 
@@ -156,7 +158,8 @@ export function GradeStudentModal({ onGradeSubmitted, selectedClassId }: GradeSt
         id: enrollment.student_user_id,
         name: `${enrollment.profiles?.first_name || ''} ${enrollment.profiles?.last_name || ''}`.trim(),
         user_id: enrollment.student_user_id,
-        student_no: studentNoMap.get(enrollment.student_user_id)
+        student_no: studentNoMap.get(enrollment.student_user_id),
+        avatar_url: enrollment.profiles?.avatar_url
       }));
 
       setStudents(formattedStudents);
@@ -334,13 +337,24 @@ export function GradeStudentModal({ onGradeSubmitted, selectedClassId }: GradeSt
                         <div className="py-6 text-center text-sm text-muted-foreground">
                           {searchQuery ? "No students found" : "No students in this class"}
                         </div>
-                      ) : (
-                        filteredStudents.map((student) => (
-                          <SelectItem key={student.id} value={student.user_id}>
-                            {student.name} {student.student_no ? `(${student.student_no})` : ''}
-                          </SelectItem>
-                        ))
-                      )}
+                    ) : (
+                      filteredStudents.map((student) => (
+                        <SelectItem key={student.id} value={student.user_id}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage 
+                                src={student.avatar_url || undefined} 
+                                alt={student.name}
+                              />
+                              <AvatarFallback className="text-xs">
+                                {student.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{student.name} {student.student_no ? `(${student.student_no})` : ''}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                     </div>
                   </SelectContent>
                 </Select>

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2 } from "lucide-react";
+import { ArrowLeft, User, GraduationCap, Calendar, MessageCircle, Bell, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, LogOut, Settings, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useParentData } from "@/hooks/useParentData";
 import { useMessages } from "@/hooks/useMessages";
@@ -13,6 +14,8 @@ import { MessagesModal } from "@/components/MessagesModal";
 import { ParentGradesModal } from "@/components/ParentGradesModal";
 import { ParentCalendarModal } from "@/components/ParentCalendarModal";
 import { LiveClock } from "@/components/LiveClock";
+import { EditSelfProfileModal } from "@/components/EditSelfProfileModal";
+import { supabase } from "@/integrations/supabase/client";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -20,6 +23,7 @@ const ParentDashboard = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [gradesModalOpen, setGradesModalOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
@@ -123,14 +127,45 @@ const ParentDashboard = () => {
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <Bell className="w-4 h-4" />
               </Button>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={() => setProfileModalOpen(true)}
-                className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
-              >
-                <User className="w-4 h-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+                  >
+                    <User className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-slate-800 border-slate-600 z-50">
+                  <DropdownMenuLabel className="text-slate-200">My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-slate-600" />
+                  <DropdownMenuItem 
+                    onClick={() => setProfileModalOpen(true)}
+                    className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => setEditProfileModalOpen(true)}
+                    className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Edit Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      navigate("/");
+                    }}
+                    className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -383,6 +418,14 @@ const ParentDashboard = () => {
         onOpenChange={setCalendarModalOpen}
         tasks={exams}
         studentName={currentChild?.name || "Student"}
+      />
+
+      <EditSelfProfileModal
+        open={editProfileModalOpen}
+        onOpenChange={setEditProfileModalOpen}
+        onSuccess={() => {
+          // Optionally refetch parent data
+        }}
       />
     </div>
   );
