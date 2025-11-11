@@ -164,15 +164,17 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "destructive" | "secondary" | "outline"> = {
-      present: "default",
-      absent: "destructive",
-      late: "secondary",
-      excused: "outline"
+    const statusConfig: Record<string, { variant: "default" | "destructive" | "secondary" | "outline", className?: string }> = {
+      present: { variant: "outline", className: "bg-green-500 text-white border-green-500" },
+      absent: { variant: "destructive" },
+      late: { variant: "outline", className: "bg-yellow-500 text-black border-yellow-500" },
+      excused: { variant: "outline" }
     };
     
+    const config = statusConfig[status] || { variant: "outline" };
+    
     return (
-      <Badge variant={variants[status] || "outline"} className="capitalize">
+      <Badge variant={config.variant} className={`capitalize ${config.className || ""}`}>
         {status}
       </Badge>
     );
