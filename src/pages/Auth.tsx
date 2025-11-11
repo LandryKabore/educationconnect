@@ -809,7 +809,7 @@ export default function Auth() {
                     id="firsttime-username" 
                     value={username} 
                     onChange={(e) => setUsername(e.target.value)} 
-                    placeholder="Enter your temporary username"
+                    placeholder="Enter your username"
                     required 
                   />
                 </div>
@@ -873,37 +873,21 @@ export default function Auth() {
                   </div>
                 )}
                 
-                {(selectedRole === "teacher" || selectedRole === "student") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Username (if first time)</Label>
-                    <Input 
-                      id="username" 
-                      value={username} 
-                      onChange={(e) => setUsername(e.target.value)} 
-                      placeholder="Leave empty if you have an account"
-                    />
-                  </div>
-                )}
-                
                 <div className="space-y-2">
                   <Label htmlFor="email">
-                    {(selectedRole === "teacher" || selectedRole === "student") && username ? "Temporary Password" : 
-                     (selectedRole === "teacher" || selectedRole === "student") ? "Username or Email" : "Email"}
+                    {(selectedRole === "teacher" || selectedRole === "student") ? "Username or Email" : "Email"}
                   </Label>
                   <Input 
                     id="email" 
-                    type={(selectedRole === "teacher" || selectedRole === "student") && username ? "password" : 
-                          (selectedRole === "teacher" || selectedRole === "student") ? "text" : "email"} 
-                    value={(selectedRole === "teacher" || selectedRole === "student") && username ? password : email} 
-                    onChange={(e) => (selectedRole === "teacher" || selectedRole === "student") && username ? setPassword(e.target.value) : setEmail(e.target.value)} 
-                    placeholder={(selectedRole === "teacher" || selectedRole === "student") && username ? "Enter temp password" : 
-                               (selectedRole === "teacher" || selectedRole === "student") ? "Enter username or email" : "Enter your email"}
+                    type={(selectedRole === "teacher" || selectedRole === "student") ? "text" : "email"} 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    placeholder={(selectedRole === "teacher" || selectedRole === "student") ? "Enter username or email" : "Enter your email"}
                     required 
                   />
                 </div>
                 
-                {(!username || (selectedRole !== "teacher" && selectedRole !== "student")) && 
-                 !(selectedRole === "parent" && parentLinkMode === "code") && (
+                {!(selectedRole === "parent" && parentLinkMode === "code") && (
                   <div className="space-y-2">
                     <Label htmlFor="password">Password</Label>
                     <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
