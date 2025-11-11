@@ -466,7 +466,10 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                <AttendanceModal onAttendanceSubmitted={refetch} />
+      <AttendanceModal 
+        onAttendanceSubmitted={refetch} 
+        selectedClassId={selectedClassId}
+      />
                 <GradeStudentModal onGradeSubmitted={refetch} />
                 <CreateAssignmentModal 
                   classes={classes.map(c => ({ id: c.id, name: c.name }))} 

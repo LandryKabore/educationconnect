@@ -22,9 +22,10 @@ interface Class {
 
 interface AttendanceModalProps {
   onAttendanceSubmitted: () => void;
+  selectedClassId?: string;
 }
 
-export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps) {
+export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: AttendanceModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState<Class[]>([]);
@@ -38,6 +39,17 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
       fetchClasses();
     }
   }, [open]);
+
+  // Auto-select class when selectedClassId is provided and not "all"
+  useEffect(() => {
+    if (open && selectedClassId && selectedClassId !== "all" && classes.length > 0) {
+      // Extract the actual class section ID from the formatted class names
+      const matchingClass = classes.find(cls => cls.id.includes(selectedClassId));
+      if (matchingClass) {
+        setSelectedClass(matchingClass.id);
+      }
+    }
+  }, [open, selectedClassId, classes]);
 
   useEffect(() => {
     if (selectedClass) {
@@ -262,21 +274,30 @@ export function AttendanceModal({ onAttendanceSubmitted }: AttendanceModalProps)
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="class">Class</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {(!selectedClassId || selectedClassId === "all") ? (
+              <div className="space-y-2">
+                <Label htmlFor="class">Class</Label>
+                <Select value={selectedClass} onValueChange={setSelectedClass}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((cls) => (
+                      <SelectItem key={cls.id} value={cls.id}>
+                        {cls.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="class">Class</Label>
+                <div className="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm items-center">
+                  {classes.find(cls => cls.id === selectedClass)?.name || "Loading..."}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
