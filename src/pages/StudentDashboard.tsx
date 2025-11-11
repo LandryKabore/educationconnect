@@ -34,7 +34,17 @@ const StudentDashboard = () => {
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [studyGroupsModalOpen, setStudyGroupsModalOpen] = useState(false);
   const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const { loading, studentInfo, grades, assignments, gpa, attendanceRate } = useStudentData();
+
+  // Filter data based on selected subject
+  const filteredGrades = selectedSubject 
+    ? grades.filter(g => g.subject === selectedSubject)
+    : grades;
+  
+  const filteredAssignments = selectedSubject
+    ? assignments.filter(a => a.subject === selectedSubject)
+    : assignments;
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -172,21 +182,35 @@ const StudentDashboard = () => {
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                       <BookOpen className="w-4 h-4 mr-2" />
-                      {t('subjects') || 'My Subjects'}
+                      {selectedSubject || (t('subjects') || 'All Subjects')}
                       <ChevronDown className="w-4 h-4 ml-2" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-slate-800 border-slate-600 z-50">
-                    <DropdownMenuLabel className="text-slate-200">{t('activeSubjects') || 'Active Subjects'}</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-slate-200">{t('filterBySubject') || 'Filter by Subject'}</DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-slate-600" />
+                    <DropdownMenuItem 
+                      onClick={() => setSelectedSubject(null)}
+                      className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">All Subjects</span>
+                        {!selectedSubject && <span className="text-xs text-green-400">✓</span>}
+                      </div>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-slate-600" />
                     {studentInfo.subjects.map((subject) => (
                       <DropdownMenuItem 
-                        key={subject.id} 
-                        className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white"
+                        key={subject.id}
+                        onClick={() => setSelectedSubject(subject.name)}
+                        className="text-slate-300 hover:bg-slate-700 hover:text-white focus:bg-slate-700 focus:text-white cursor-pointer"
                       >
-                        <div className="flex flex-col">
-                          <span className="font-medium">{subject.name}</span>
-                          {subject.code && <span className="text-xs text-slate-400">{subject.code}</span>}
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{subject.name}</span>
+                            {subject.code && <span className="text-xs text-slate-400">{subject.code}</span>}
+                          </div>
+                          {selectedSubject === subject.name && <span className="text-xs text-green-400 ml-2">✓</span>}
                         </div>
                       </DropdownMenuItem>
                     ))}
@@ -273,11 +297,11 @@ const StudentDashboard = () => {
               <div className="text-sm text-slate-300">{t('activeSubjectsCount')}</div>
             </CardContent>
           </Card>
-          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
+              <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500">
             <CardContent className="p-6 text-center">
               <Users className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-red-400">{assignments.length}</div>
-              <div className="text-sm text-slate-300">{t('upcomingAssignments')}</div>
+              <div className="text-2xl font-bold text-red-400">{filteredAssignments.length}</div>
+              <div className="text-sm text-slate-300">{selectedSubject ? `${selectedSubject} Assignments` : t('upcomingAssignments')}</div>
             </CardContent>
           </Card>
         </div>
@@ -334,12 +358,12 @@ const StudentDashboard = () => {
                   )
                 }
               </div>
-              {studentInfo?.teachers && studentInfo.teachers.length > 3 && (
+              {studentInfo?.teachers && studentInfo.teachers.length > 0 && (
                 <Button 
                   onClick={() => setTeachersModalOpen(true)}
                   className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
                 >
-                  View All Teachers ({studentInfo.teachers.length})
+                  {studentInfo.teachers.length > 3 ? `View All Teachers (${studentInfo.teachers.length})` : 'View All Teachers'}
                 </Button>
               )}
             </CardContent>
@@ -356,7 +380,7 @@ const StudentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {grades.length > 0 ? grades.slice(0, 4).map((grade) => (
+                {filteredGrades.length > 0 ? filteredGrades.slice(0, 4).map((grade) => (
                   <div key={grade.id} className="p-3 bg-slate-700/50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
@@ -369,7 +393,7 @@ const StudentDashboard = () => {
                   </div>
                 )) : (
                   <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
-                    No grades available yet
+                    {selectedSubject ? `No grades for ${selectedSubject}` : 'No grades available yet'}
                   </div>
                 )}
               </div>
@@ -393,7 +417,7 @@ const StudentDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => {
+                {filteredAssignments.length > 0 ? filteredAssignments.slice(0, 3).map((assignment) => {
                   const dueDate = new Date(assignment.due_date);
                   const countdown = getCountdown(dueDate);
                   
@@ -421,7 +445,7 @@ const StudentDashboard = () => {
                   );
                 }) : (
                   <div className="p-3 bg-slate-700/50 rounded-lg text-center text-slate-300">
-                    No upcoming tasks
+                    {selectedSubject ? `No tasks for ${selectedSubject}` : 'No upcoming tasks'}
                   </div>
                 )}
               </div>
