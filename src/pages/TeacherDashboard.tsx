@@ -20,6 +20,7 @@ import { AttendanceModal } from "@/components/AttendanceModal";
 import { AttendanceReportModal } from "@/components/AttendanceReportModal";
 import { StudentAttendanceDetailsModal } from "@/components/StudentAttendanceDetailsModal";
 import { AttendanceRiskAnalysisModal } from "@/components/AttendanceRiskAnalysisModal";
+import { AttendanceStatusLegend } from "@/components/AttendanceStatusLegend";
 import { StatCardModal } from "@/components/StatCardModal";
 import { MessagesModal } from "@/components/MessagesModal";
 import { ParentSelectorModal } from "@/components/ParentSelectorModal";
@@ -472,18 +473,41 @@ const TeacherDashboard = () => {
             </CardContent>
           </Card>
 
+          {/* Attendance Management */}
+          <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-white">Attendance Management</CardTitle>
+                  <CardDescription className="text-slate-300">Track and analyze student attendance</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <AttendanceModal 
+                  onAttendanceSubmitted={refetch} 
+                  selectedClassId={selectedClassId}
+                />
+                <AttendanceReportModal />
+                <StudentAttendanceDetailsModal />
+                <AttendanceRiskAnalysisModal />
+              </div>
+              
+              <div className="pt-3 border-t border-slate-700">
+                <AttendanceStatusLegend />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Quick Actions */}
           <Card className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <CardHeader>
               <CardTitle className="text-white">Quick Actions</CardTitle>
-              <CardDescription className="text-slate-300">Common tasks and tools</CardDescription>
+              <CardDescription className="text-slate-300">Common grading and assignment tasks</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-      <AttendanceModal 
-        onAttendanceSubmitted={refetch} 
-        selectedClassId={selectedClassId}
-      />
                 <GradeStudentModal 
                   onGradeSubmitted={refetch}
                   selectedClassId={selectedClassId}
@@ -494,9 +518,6 @@ const TeacherDashboard = () => {
                   onAssignmentCreated={refetch} 
                 />
                 <AllGradesModal />
-                <AttendanceReportModal />
-                <StudentAttendanceDetailsModal />
-                <AttendanceRiskAnalysisModal />
               </div>
             </CardContent>
           </Card>
