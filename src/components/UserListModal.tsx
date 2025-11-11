@@ -364,18 +364,21 @@ export function UserListModal({ isOpen, onClose, userType, title, selectedSchool
         // Create maps from all temp credentials to show credentials for all students
         const usernameMap = new Map();
         const tempPasswordMap = new Map();
+        const isUsedMap = new Map();
         allTempCredsData.data?.forEach(cred => {
           usernameMap.set(cred.student_user_id, cred.username);
           tempPasswordMap.set(cred.student_user_id, cred.temp_password_plain);
+          isUsedMap.set(cred.student_user_id, cred.is_used);
         });
 
         const completedStudents = completedData.data?.map(item => {
           const classId = enrollmentMap.get(item.profiles.user_id);
           const username = usernameMap.get(item.profiles.user_id);
           const tempPassword = tempPasswordMap.get(item.profiles.user_id);
+          const hasCompletedFirstLogin = isUsedMap.get(item.profiles.user_id) === true;
           return {
             ...item.profiles,
-            isVerified: true,
+            isVerified: hasCompletedFirstLogin, // Only verified if they've completed first login
             username: username, // Add username from temp credentials
             tempPassword: tempPassword, // Add temp password for all students
             parentVerificationCode: parentVerificationCodes.get(item.profiles.user_id),
