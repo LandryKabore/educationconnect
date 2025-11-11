@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import Cropper from "react-easy-crop";
+import type { Area, Point } from "react-easy-crop";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -16,32 +19,110 @@ interface AvatarUploadProps {
 export function AvatarUpload({ currentAvatarUrl, userId, userName, onAvatarUpdate }: AvatarUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentAvatarUrl || null);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+
+    const file = event.target.files[0];
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "File size must be less than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Error",
+        description: "File must be an image",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Create preview URL for cropping
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageToCrop(reader.result as string);
+      setOriginalFile(file);
+      setCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const createCroppedImage = async (): Promise<Blob> => {
+    if (!imageToCrop || !croppedAreaPixels) {
+      throw new Error("No image to crop");
+    }
+
+    const image = new Image();
+    image.src = imageToCrop;
+    
+    await new Promise((resolve) => {
+      image.onload = resolve;
+    });
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    
+    if (!ctx) {
+      throw new Error("Could not get canvas context");
+    }
+
+    // Set canvas size to the cropped area
+    canvas.width = croppedAreaPixels.width;
+    canvas.height = croppedAreaPixels.height;
+
+    // Draw the cropped image
+    ctx.drawImage(
+      image,
+      croppedAreaPixels.x,
+      croppedAreaPixels.y,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height,
+      0,
+      0,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        }
+      }, "image/jpeg", 0.95);
+    });
+  };
+
+  const uploadCroppedAvatar = async () => {
     try {
       setUploading(true);
 
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('You must select an image to upload.');
-      }
-
-      const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
+      const croppedBlob = await createCroppedImage();
+      const fileExt = originalFile?.name.split('.').pop() || 'jpg';
       const filePath = `${userId}/${Date.now()}.${fileExt}`;
-
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('File size must be less than 5MB');
-      }
-
-      // Check file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('File must be an image');
-      }
 
       // Delete old avatar if exists
       if (currentAvatarUrl) {
@@ -49,10 +130,10 @@ export function AvatarUpload({ currentAvatarUrl, userId, userName, onAvatarUpdat
         await supabase.storage.from('avatars').remove([oldPath]);
       }
 
-      // Upload new avatar
+      // Upload cropped avatar
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, croppedBlob, { upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -71,6 +152,8 @@ export function AvatarUpload({ currentAvatarUrl, userId, userName, onAvatarUpdat
 
       setPreviewUrl(publicUrl);
       onAvatarUpdate(publicUrl);
+      setCropDialogOpen(false);
+      setImageToCrop(null);
 
       toast({
         title: "Success",
@@ -122,64 +205,123 @@ export function AvatarUpload({ currentAvatarUrl, userId, userName, onAvatarUpdat
   };
 
   return (
-    <div className="space-y-4">
-      <Label>Profile Picture</Label>
-      <div className="flex items-center gap-4">
-        <Avatar className="h-20 w-20">
-          <AvatarImage src={previewUrl || undefined} alt={userName} />
-          <AvatarFallback className="text-lg">
-            {getInitials(userName)}
-          </AvatarFallback>
-        </Avatar>
-        
-        <div className="flex flex-col gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={uploading}
-            onClick={() => document.getElementById(`avatar-upload-${userId}`)?.click()}
-          >
-            {uploading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Photo
-              </>
-            )}
-          </Button>
+    <>
+      <div className="space-y-4">
+        <Label>Profile Picture</Label>
+        <div className="flex items-center gap-4">
+          <Avatar className="h-20 w-20 rounded-lg">
+            <AvatarImage src={previewUrl || undefined} alt={userName} className="rounded-lg" />
+            <AvatarFallback className="text-lg rounded-lg">
+              {getInitials(userName)}
+            </AvatarFallback>
+          </Avatar>
           
-          {previewUrl && (
+          <div className="flex flex-col gap-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={uploading}
-              onClick={removeAvatar}
+              onClick={() => document.getElementById(`avatar-upload-${userId}`)?.click()}
             >
-              <X className="w-4 h-4 mr-2" />
-              Remove
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Photo
+                </>
+              )}
             </Button>
-          )}
-          
-          <input
-            id={`avatar-upload-${userId}`}
-            type="file"
-            accept="image/*"
-            onChange={uploadAvatar}
-            disabled={uploading}
-            className="hidden"
-          />
-          
-          <p className="text-xs text-muted-foreground">
-            JPG, PNG or GIF (max 5MB)
-          </p>
+            
+            {previewUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={uploading}
+                onClick={removeAvatar}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Remove
+              </Button>
+            )}
+            
+            <input
+              id={`avatar-upload-${userId}`}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              disabled={uploading}
+              className="hidden"
+            />
+            
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG or GIF (max 5MB)
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+
+      <Dialog open={cropDialogOpen} onOpenChange={setCropDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Crop Your Photo</DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-[400px] bg-muted">
+            {imageToCrop && (
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+                cropShape="rect"
+                showGrid={false}
+              />
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Zoom</Label>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.1}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-full"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCropDialogOpen(false);
+                setImageToCrop(null);
+              }}
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            <Button onClick={uploadCroppedAvatar} disabled={uploading}>
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                "Save Photo"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
