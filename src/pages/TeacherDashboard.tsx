@@ -17,6 +17,7 @@ import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
 import { AllGradesModal } from "@/components/AllGradesModal";
 import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
+import { AttendanceReportModal } from "@/components/AttendanceReportModal";
 import { StatCardModal } from "@/components/StatCardModal";
 import { MessagesModal } from "@/components/MessagesModal";
 import { ParentSelectorModal } from "@/components/ParentSelectorModal";
@@ -491,6 +492,7 @@ const TeacherDashboard = () => {
                   onAssignmentCreated={refetch} 
                 />
                 <AllGradesModal />
+                <AttendanceReportModal />
               </div>
             </CardContent>
           </Card>

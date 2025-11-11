@@ -417,7 +417,41 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
 
           {students.length > 0 && (
             <div className="space-y-2">
-              <Label>Students</Label>
+              <div className="flex items-center justify-between">
+                <Label>Students</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const allPresent: Record<string, string> = {};
+                      students.forEach(student => {
+                        allPresent[student.user_id] = "present";
+                      });
+                      setAttendance(allPresent);
+                    }}
+                    className="text-xs"
+                  >
+                    Mark All Present
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const allAbsent: Record<string, string> = {};
+                      students.forEach(student => {
+                        allAbsent[student.user_id] = "absent";
+                      });
+                      setAttendance(allAbsent);
+                    }}
+                    className="text-xs"
+                  >
+                    Mark All Absent
+                  </Button>
+                </div>
+              </div>
               <div className="space-y-3 max-h-60 overflow-y-auto border rounded-md p-3">
                 {students.map((student) => (
                   <div key={student.id} className="flex items-center justify-between p-2 bg-muted/20 rounded">
