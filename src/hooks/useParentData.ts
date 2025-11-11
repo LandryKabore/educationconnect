@@ -274,8 +274,12 @@ export const useParentData = () => {
       if (enrollmentsData && enrollmentsData.length > 0) {
         const classSectionIds = enrollmentsData.map(e => e.class_section_id);
         
+        // Use local date for consistent timezone handling
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
         console.log("Parent - Class section IDs for exams:", classSectionIds);
-        console.log("Parent - Looking for exams >= ", new Date().toISOString().split('T')[0]);
+        console.log("Parent - Looking for exams >= ", today);
         
         // Fetch upcoming exams
         const { data: examsData, error: examsError } = await supabase
@@ -285,7 +289,7 @@ export const useParentData = () => {
             subjects(name)
           `)
           .in("class_section_id", classSectionIds)
-          .gte("exam_date", new Date().toISOString().split('T')[0])
+          .gte("exam_date", today)
           .order("exam_date", { ascending: true })
           .limit(10);
 

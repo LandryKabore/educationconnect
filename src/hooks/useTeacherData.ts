@@ -226,7 +226,9 @@ export const useTeacherData = () => {
               const studentCount = uniqueStudentIds.size;
               
               // Check if attendance was taken today for this class
-              const today = new Date().toISOString().split('T')[0];
+              // Use local date instead of UTC to avoid timezone issues
+              const now = new Date();
+              const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
               const { data: todayAttendance } = await supabase
                 .from("enhanced_attendance")
                 .select("id")

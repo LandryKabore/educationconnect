@@ -31,7 +31,10 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Use local date instead of UTC to avoid timezone issues
+  const now = new Date();
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const [selectedDate, setSelectedDate] = useState(localDate);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
 
   useEffect(() => {

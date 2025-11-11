@@ -181,6 +181,10 @@ export const useStudentData = () => {
           .order("due_date", { ascending: true })
           .limit(10);
 
+        // Use local date for consistent timezone handling
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
         // Fetch upcoming exams
         const { data: examsData } = await supabase
           .from("exams")
@@ -189,7 +193,7 @@ export const useStudentData = () => {
             subjects(name)
           `)
           .in("class_section_id", classSectionIds)
-          .gte("exam_date", new Date().toISOString().split('T')[0])
+          .gte("exam_date", today)
           .order("exam_date", { ascending: true })
           .limit(10);
 
