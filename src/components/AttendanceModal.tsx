@@ -302,6 +302,9 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
         });
       }
 
+      // Refresh attendance dates to update calendar indicators
+      await fetchAttendanceDates();
+      
       setOpen(false);
       onAttendanceSubmitted();
     } catch (error) {
