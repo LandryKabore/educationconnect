@@ -21,6 +21,8 @@ interface Student {
 interface Class {
   id: string;
   name: string;
+  subject_id: string;
+  subject_name: string;
 }
 
 interface AttendanceModalProps {
@@ -34,6 +36,8 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
+  const [selectedClassName, setSelectedClassName] = useState("");
   // Use local date instead of UTC to avoid timezone issues
   const now = new Date();
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -55,22 +59,24 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const matchingClass = classes.find(cls => cls.id.includes(selectedClassId));
       if (matchingClass) {
         setSelectedClass(matchingClass.id);
+        setSelectedSubjectId(matchingClass.subject_id);
+        setSelectedClassName(matchingClass.name);
       }
     }
   }, [open, selectedClassId, classes]);
 
   useEffect(() => {
-    if (selectedClass) {
+    if (selectedClass && selectedSubjectId) {
       fetchStudents();
       fetchAttendanceDates();
     }
-  }, [selectedClass]);
+  }, [selectedClass, selectedSubjectId]);
 
   useEffect(() => {
-    if (selectedClass && selectedDate) {
+    if (selectedClass && selectedSubjectId && selectedDate) {
       loadExistingAttendance();
     }
-  }, [selectedClass, selectedDate]);
+  }, [selectedClass, selectedSubjectId, selectedDate]);
 
   const fetchClasses = async () => {
     try {
@@ -87,6 +93,7 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
             grade_level
           ),
           subjects(
+            id,
             name
           )
         `)
@@ -94,10 +101,12 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
 
       if (error) throw error;
       
-      // Format the data to match the expected Class interface
+      // Format the data to match the expected Class interface with subject_id
       const formattedClasses = data?.map(assignment => ({
         id: assignment.class_sections?.id || '',
-        name: `${assignment.class_sections?.name} - ${assignment.subjects?.name}`
+        name: `${assignment.class_sections?.name} - ${assignment.subjects?.name}`,
+        subject_id: (assignment.subjects as any)?.id || '',
+        subject_name: assignment.subjects?.name || ''
       })) || [];
       
       setClasses(formattedClasses);
@@ -189,11 +198,12 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch dates where THIS teacher took attendance for this class
+      // Fetch dates where THIS teacher took attendance for this class and subject
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("date")
         .eq("class_section_id", selectedClass)
+        .eq("subject_id", selectedSubjectId)
         .eq("taken_by", user.id);
 
       if (error) throw error;
@@ -210,11 +220,12 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Load attendance records taken by THIS teacher only
+      // Load attendance records taken by THIS teacher for THIS subject only
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("student_user_id, status")
         .eq("class_section_id", selectedClass)
+        .eq("subject_id", selectedSubjectId)
         .eq("date", selectedDate)
         .eq("taken_by", user.id);
 
@@ -254,20 +265,22 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Prepare attendance records for the enhanced_attendance table
+      // Prepare attendance records for the enhanced_attendance table with subject_id
       const attendanceRecords = Object.entries(attendance).map(([studentId, status]) => ({
         student_user_id: studentId,
         class_section_id: selectedClass,
+        subject_id: selectedSubjectId,
         date: selectedDate,
         status,
         taken_by: user.id
       }));
 
-      // Check if attendance already exists for this date and class
+      // Check if attendance already exists for this date, class, and subject
       const { data: existingAttendance } = await supabase
         .from("enhanced_attendance")
         .select("id, student_user_id")
         .eq("class_section_id", selectedClass)
+        .eq("subject_id", selectedSubjectId)
         .eq("date", selectedDate);
 
       if (existingAttendance && existingAttendance.length > 0) {
@@ -348,6 +361,11 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
           </DialogTitle>
           <DialogDescription>
             Record attendance for your class on {format(datePickerDate, 'MMMM d, yyyy')}.
+            {selectedClassName && (
+              <span className="block mt-1 text-primary font-medium">
+                Recording for: {selectedClassName}
+              </span>
+            )}
             {attendanceDates.has(selectedDate) && (
               <span className="text-orange-400 ml-2">• Editing existing attendance</span>
             )}
@@ -358,13 +376,23 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
             {(!selectedClassId || selectedClassId === "all") ? (
               <div className="space-y-2">
                 <Label htmlFor="class">Class</Label>
-                <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <Select 
+                  value={selectedClass} 
+                  onValueChange={(value) => {
+                    setSelectedClass(value);
+                    const classObj = classes.find(cls => cls.id === value);
+                    if (classObj) {
+                      setSelectedSubjectId(classObj.subject_id);
+                      setSelectedClassName(classObj.name);
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
                     {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
+                      <SelectItem key={`${cls.id}-${cls.subject_id}`} value={cls.id}>
                         {cls.name}
                       </SelectItem>
                     ))}
@@ -375,7 +403,7 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
               <div className="space-y-2">
                 <Label htmlFor="class">Class</Label>
                 <div className="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm items-center">
-                  {classes.find(cls => cls.id === selectedClass)?.name || "Loading..."}
+                  {selectedClassName || classes.find(cls => cls.id === selectedClass)?.name || "Loading..."}
                 </div>
               </div>
             )}

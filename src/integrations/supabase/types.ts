@@ -455,6 +455,7 @@ export type Database = {
           notes: string | null
           status: string
           student_user_id: string
+          subject_id: string | null
           synced: boolean | null
           taken_by: string
           updated_at: string
@@ -468,6 +469,7 @@ export type Database = {
           notes?: string | null
           status?: string
           student_user_id: string
+          subject_id?: string | null
           synced?: boolean | null
           taken_by: string
           updated_at?: string
@@ -481,6 +483,7 @@ export type Database = {
           notes?: string | null
           status?: string
           student_user_id?: string
+          subject_id?: string | null
           synced?: boolean | null
           taken_by?: string
           updated_at?: string
@@ -506,6 +509,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_profiles_with_roles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "enhanced_attendance_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "enhanced_attendance_taken_by_fkey"

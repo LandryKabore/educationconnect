@@ -137,21 +137,42 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const fetchStudentAttendance = async () => {
     setLoading(true);
     try {
-      // Fetch all attendance records for the student (last 90 days)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get the teacher's subject assignment for this class
+      let teacherSubjectId = null;
+      if (selectedClassId && selectedClassId !== "all") {
+        const { data: assignment } = await supabase
+          .from("teaching_assignments")
+          .select("subject_id")
+          .eq("teacher_user_id", user.id)
+          .eq("class_section_id", selectedClassId)
+          .single();
+        
+        teacherSubjectId = assignment?.subject_id;
+      }
+
+      // Fetch attendance records for the student (last 90 days)
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
-      // Build query
+      // Build query - filter by student, date, class, and subject
       let query = supabase
         .from("enhanced_attendance")
-        .select("date, status, notes, class_section_id")
+        .select("date, status, notes, class_section_id, subject_id")
         .eq("student_user_id", selectedStudent)
         .gte("date", startDate);
 
-      // Filter by selected class if specified (simpler approach)
+      // Filter by selected class if specified
       if (selectedClassId && selectedClassId !== "all") {
         query = query.eq("class_section_id", selectedClassId);
+        
+        // Also filter by teacher's subject in this class
+        if (teacherSubjectId) {
+          query = query.eq("subject_id", teacherSubjectId);
+        }
       }
 
       const { data: attendanceData, error } = await query.order("date", { ascending: false });
