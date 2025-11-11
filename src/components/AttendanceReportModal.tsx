@@ -5,7 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { BarChart3, Calendar, Users, TrendingUp } from "lucide-react";
+import { BarChart3, Calendar, Users, TrendingUp, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { utils, write } from "xlsx";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 
 interface Class {
@@ -51,6 +55,7 @@ export function AttendanceReportModal() {
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [dailyData, setDailyData] = useState<DailyAttendance[]>([]);
   const [studentData, setStudentData] = useState<StudentAttendance[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
@@ -226,6 +231,156 @@ export function AttendanceReportModal() {
     }
   };
 
+  const exportToExcel = () => {
+    if (!stats || !dailyData.length) {
+      toast({
+        title: "No data to export",
+        description: "Please select a class and ensure there is attendance data available.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedClassName = classes.find(c => c.id === selectedClass)?.name || "Class";
+    
+    // Summary sheet
+    const summaryData = [
+      ["Attendance Report Summary"],
+      ["Class", selectedClassName],
+      ["Time Range", timeRange],
+      [""],
+      ["Metric", "Value"],
+      ["Overall Attendance Rate", `${stats.attendanceRate.toFixed(1)}%`],
+      ["Total Days", stats.totalDays],
+      ["Present Count", stats.presentCount],
+      ["Absent Count", stats.absentCount],
+      ["Late Count", stats.lateCount],
+      ["Excused Count", stats.excusedCount]
+    ];
+
+    // Daily data sheet
+    const dailyHeaders = [["Date", "Present", "Absent", "Late", "Excused", "Total", "Rate (%)"]];
+    const dailyRows = dailyData.map(d => [d.date, d.present, d.absent, d.late, d.excused, d.total, d.rate.toFixed(1)]);
+
+    // Student data sheet
+    const studentHeaders = [["Student Name", "Present", "Absent", "Late", "Attendance Rate (%)"]];
+    const studentRows = studentData.map(s => [s.studentName, s.present, s.absent, s.late, s.rate.toFixed(1)]);
+
+    const wb = utils.book_new();
+    const wsSummary = utils.aoa_to_sheet(summaryData);
+    const wsDaily = utils.aoa_to_sheet([...dailyHeaders, ...dailyRows]);
+    const wsStudent = utils.aoa_to_sheet([...studentHeaders, ...studentRows]);
+
+    utils.book_append_sheet(wb, wsSummary, "Summary");
+    utils.book_append_sheet(wb, wsDaily, "Daily Attendance");
+    utils.book_append_sheet(wb, wsStudent, "Student Breakdown");
+
+    const excelBuffer = write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `attendance_report_${selectedClassName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+
+    toast({
+      title: "Excel exported successfully",
+      description: "Your attendance report has been downloaded."
+    });
+  };
+
+  const exportToPDF = () => {
+    if (!stats || !dailyData.length) {
+      toast({
+        title: "No data to export",
+        description: "Please select a class and ensure there is attendance data available.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedClassName = classes.find(c => c.id === selectedClass)?.name || "Class";
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.text("Attendance Report", 14, 20);
+    
+    doc.setFontSize(12);
+    doc.text(`Class: ${selectedClassName}`, 14, 30);
+    doc.text(`Time Range: ${timeRange}`, 14, 37);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 44);
+
+    // Summary Statistics
+    doc.setFontSize(14);
+    doc.text("Summary Statistics", 14, 56);
+    
+    (doc as any).autoTable({
+      startY: 60,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Overall Attendance Rate", `${stats.attendanceRate.toFixed(1)}%`],
+        ["Total Days Recorded", stats.totalDays],
+        ["Present Count", stats.presentCount],
+        ["Absent Count", stats.absentCount],
+        ["Late Count", stats.lateCount],
+        ["Excused Count", stats.excusedCount]
+      ],
+      theme: "grid",
+      styles: { fontSize: 10 }
+    });
+
+    // Daily Attendance
+    const dailyStartY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFontSize(14);
+    doc.text("Daily Attendance", 14, dailyStartY);
+    
+    (doc as any).autoTable({
+      startY: dailyStartY + 4,
+      head: [["Date", "Present", "Absent", "Late", "Excused", "Total", "Rate (%)"]],
+      body: dailyData.map(d => [
+        d.date,
+        d.present,
+        d.absent,
+        d.late,
+        d.excused,
+        d.total,
+        d.rate.toFixed(1)
+      ]),
+      theme: "grid",
+      styles: { fontSize: 9 }
+    });
+
+    // Student Breakdown
+    if (studentData.length > 0) {
+      const studentStartY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFontSize(14);
+      doc.text("Student Attendance (Top 10)", 14, studentStartY);
+      
+      (doc as any).autoTable({
+        startY: studentStartY + 4,
+        head: [["Student Name", "Present", "Absent", "Late", "Rate (%)"]],
+        body: studentData.map(s => [
+          s.studentName,
+          s.present,
+          s.absent,
+          s.late,
+          s.rate.toFixed(1)
+        ]),
+        theme: "grid",
+        styles: { fontSize: 9 }
+      });
+    }
+
+    doc.save(`attendance_report_${selectedClassName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`);
+
+    toast({
+      title: "PDF exported successfully",
+      description: "Your attendance report has been downloaded."
+    });
+  };
+
   const pieChartData = stats ? [
     { name: "Present", value: stats.presentCount, color: COLORS[0] },
     { name: "Absent", value: stats.absentCount, color: COLORS[1] },
@@ -250,8 +405,9 @@ export function AttendanceReportModal() {
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Filters */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Filters and Export */}
+          <div className="flex items-end justify-between gap-4">
+            <div className="grid grid-cols-2 gap-4 flex-1">
             <div className="space-y-2">
               <label className="text-sm font-medium">Class</label>
               <Select value={selectedClass} onValueChange={setSelectedClass}>
@@ -282,6 +438,21 @@ export function AttendanceReportModal() {
                 </SelectContent>
               </Select>
             </div>
+            </div>
+
+            {/* Export Buttons */}
+            {selectedClass && stats && (
+              <div className="flex gap-2">
+                <Button onClick={exportToExcel} variant="outline" size="sm">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Export Excel
+                </Button>
+                <Button onClick={exportToPDF} variant="outline" size="sm">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Export PDF
+                </Button>
+              </div>
+            )}
           </div>
 
           {loading ? (
