@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
 import { LiveClock } from "@/components/LiveClock";
+import { LogoutButton } from "@/components/LogoutButton";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -174,6 +175,7 @@ const TeacherDashboard = () => {
                   </Button>
                 </div>
               )}
+              <LogoutButton />
             </div>
 
             {/* Right Section */}
@@ -230,6 +232,10 @@ const TeacherDashboard = () => {
                       </DropdownMenuItem>
                     </>
                   )}
+                  <DropdownMenuSeparator className="bg-slate-700" />
+                  <div className="p-2">
+                    <LogoutButton />
+                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
 

@@ -70,12 +70,5 @@ export function RequireAuth({ children, requiredRole }: RequireAuthProps) {
 
   if (!session) return null;
 
-  return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-50">
-        <LogoutButton />
-      </div>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
