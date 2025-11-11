@@ -41,9 +41,11 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const [selectedStudent, setSelectedStudent] = useState("");
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<AttendanceStats | null>(null);
+  const [className, setClassName] = useState<string>("");
 
   useEffect(() => {
     if (open) {
+      fetchClassName();
       fetchStudents();
       // Refetch attendance data when modal reopens
       if (selectedStudent) {
@@ -51,6 +53,27 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       }
     }
   }, [open, selectedClassId]);
+
+  const fetchClassName = async () => {
+    if (!selectedClassId || selectedClassId === "all") {
+      setClassName("");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("class_sections")
+        .select("name, grade_level")
+        .eq("id", selectedClassId)
+        .single();
+
+      if (error) throw error;
+      setClassName(data ? `${data.grade_level} - ${data.name}` : "");
+    } catch (error) {
+      console.error("Error fetching class name:", error);
+      setClassName("");
+    }
+  };
 
   useEffect(() => {
     if (selectedStudent) {
@@ -60,34 +83,52 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
 
   const fetchStudents = async () => {
     try {
-      // Require a specific class to be selected
-      if (!selectedClassId || selectedClassId === "all") {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get class sections the teacher is assigned to
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select("class_section_id")
+        .eq("teacher_user_id", user.id);
+
+      if (!assignments?.length) return;
+
+      let classSectionIds = assignments.map(a => a.class_section_id);
+
+      // Filter by selected class if specified
+      if (selectedClassId && selectedClassId !== "all") {
+        classSectionIds = classSectionIds.filter(id => id === selectedClassId);
+      }
+
+      if (classSectionIds.length === 0) {
         setStudents([]);
         return;
       }
 
-      // Get students enrolled in the selected class only
+      // Get students enrolled in the filtered classes
       const { data: enrollments, error } = await supabase
         .from("enrollments")
         .select(`
           student_user_id,
           profiles!enrollments_student_user_id_fkey(first_name, last_name)
         `)
-        .eq("class_section_id", selectedClassId)
-        .eq("status", "active");
+        .in("class_section_id", classSectionIds);
 
       if (error) throw error;
 
-      // Format students
-      const formattedStudents = enrollments
-        ?.filter(e => e.profiles)
-        .map(enrollment => ({
-          id: enrollment.student_user_id,
-          name: `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)) || [];
+      // Remove duplicates and format
+      const uniqueStudents = new Map<string, Student>();
+      enrollments?.forEach(enrollment => {
+        if (enrollment.profiles && !uniqueStudents.has(enrollment.student_user_id)) {
+          uniqueStudents.set(enrollment.student_user_id, {
+            id: enrollment.student_user_id,
+            name: `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
+          });
+        }
+      });
 
-      setStudents(formattedStudents);
+      setStudents(Array.from(uniqueStudents.values()).sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Error fetching students:", error);
     }
@@ -96,26 +137,24 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const fetchStudentAttendance = async () => {
     setLoading(true);
     try {
-      // Require a specific class to be selected
-      if (!selectedClassId || selectedClassId === "all") {
-        setAttendanceRecords([]);
-        setStats(null);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch attendance records for the student in the selected class only (last 90 days)
+      // Fetch all attendance records for the student (last 90 days)
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
-      const { data: attendanceData, error } = await supabase
+      // Build query
+      let query = supabase
         .from("enhanced_attendance")
         .select("date, status, notes, class_section_id")
         .eq("student_user_id", selectedStudent)
-        .eq("class_section_id", selectedClassId)
-        .gte("date", startDate)
-        .order("date", { ascending: false });
+        .gte("date", startDate);
+
+      // Filter by selected class if specified (simpler approach)
+      if (selectedClassId && selectedClassId !== "all") {
+        query = query.eq("class_section_id", selectedClassId);
+      }
+
+      const { data: attendanceData, error } = await query.order("date", { ascending: false });
 
       if (error) throw error;
 
@@ -191,22 +230,18 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
-            Student Attendance History
+            <div className="flex flex-col">
+              <span>Student Attendance History</span>
+              {className && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  Class: {className}
+                </span>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Warning if no specific class selected */}
-          {(!selectedClassId || selectedClassId === "all") ? (
-            <div className="text-center py-12">
-              <User className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-lg font-medium text-muted-foreground mb-2">Select a Specific Class</p>
-              <p className="text-sm text-muted-foreground">
-                Please select a specific class from the class filter above to view student attendance details.
-              </p>
-            </div>
-          ) : (
-            <>
           {/* Student Selector with Refresh Button */}
           <div className="flex gap-2">
             <div className="flex-1 space-y-2">
@@ -367,8 +402,6 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
             </>
           ) : (
             <div className="text-center py-8 text-muted-foreground">No attendance data available</div>
-          )}
-          </>
           )}
         </div>
       </DialogContent>
