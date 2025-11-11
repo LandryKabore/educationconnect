@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText, Menu } from "lucide-react";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { TeacherSidebar } from "@/components/TeacherSidebar";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -99,13 +101,38 @@ const TeacherDashboard = () => {
     );
   }
 
+  const handleNavigation = (section: string) => {
+    // Scroll to or open modals based on section
+    switch (section) {
+      case "messages":
+        setMessagesModalOpen(true);
+        break;
+      case "schedule":
+        setScheduleModalOpen(true);
+        break;
+      case "profile":
+        setShowProfileModal(true);
+        break;
+      case "assignments":
+        setAllAssignmentsOpen(true);
+        break;
+      // For other sections, could scroll to relevant card or open modal
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-      {/* Floating Interactive Elements */}
-      {floatingIcons.map((item, index) => {
-        const IconComponent = item.icon;
-        const moveX = mousePosition.x * (8 + index * 1.5);
-        const moveY = mousePosition.y * (6 + index * 1);
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <TeacherSidebar selectedClassId={selectedClassId} onNavigate={handleNavigation} />
+        
+        <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
+          {/* Floating Interactive Elements */}
+          {floatingIcons.map((item, index) => {
+            const IconComponent = item.icon;
+            const moveX = mousePosition.x * (8 + index * 1.5);
+            const moveY = mousePosition.y * (6 + index * 1);
         
         return (
           <div
@@ -721,7 +748,9 @@ const TeacherDashboard = () => {
         onClose={() => setShowProfileModal(false)}
         teacherId={teacherInfo?.profile?.user_id || ''}
       />
-    </div>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
