@@ -2,8 +2,15 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText } from "lucide-react";
+import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { useTranslation } from "react-i18next";
 import { useTeacherData } from "@/hooks/useTeacherData";
 import { CreateAssignmentModal } from "@/components/CreateAssignmentModal";
@@ -118,27 +125,27 @@ const TeacherDashboard = () => {
       {/* Header */}
       <header className="bg-slate-800/50 border-b border-slate-700/50 shadow-xl backdrop-blur-sm relative z-10">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-          <div className="flex items-center justify-between gap-2 min-h-[64px] py-2">
+          <div className="flex items-center justify-between gap-2 h-16">
             {/* Left Section */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
               <Button 
                 variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
               >
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-white truncate">{t('teacher.dashboard')}</h1>
-                <p className="text-xs sm:text-sm text-slate-300 truncate hidden sm:block">
+                <h1 className="text-sm sm:text-xl font-bold text-white truncate">{t('teacher.dashboard')}</h1>
+                <p className="text-xs sm:text-sm text-slate-300 truncate">
                   {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : t('teacher')}
                 </p>
               </div>
             </div>
 
-            {/* Middle Section - Hidden on mobile */}
-            <div className="hidden lg:flex items-center gap-3 text-slate-300">
+            {/* Desktop Middle Section */}
+            <div className="hidden lg:flex items-center gap-4 text-slate-300">
               <LanguageToggle />
               <LiveClock />
               {classes.length > 0 && (
@@ -170,57 +177,82 @@ const TeacherDashboard = () => {
             </div>
 
             {/* Right Section */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Schedule button for mobile/tablet */}
-              {classes.length > 0 && (
-                <Button 
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setScheduleModalOpen(true)}
-                  className="lg:hidden border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-orange-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
-                >
-                  <Calendar className="w-4 h-4" />
-                </Button>
-              )}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Mobile Menu Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    className="lg:hidden border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+                  >
+                    <Menu className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 bg-slate-800 border-slate-700 z-50" align="end">
+                  <div className="p-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-slate-400">Language</span>
+                      <LanguageToggle />
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator className="bg-slate-700" />
+                  <div className="p-2">
+                    <div className="text-xs text-slate-400 mb-1">Current Time</div>
+                    <LiveClock />
+                  </div>
+                  {classes.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator className="bg-slate-700" />
+                      <div className="p-2">
+                        <div className="text-xs text-slate-400 mb-2">Class Filter</div>
+                        <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                          <SelectTrigger className="w-full bg-slate-700/50 border-slate-600 text-white text-sm">
+                            <SelectValue placeholder="Select class" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 z-[100]">
+                            <SelectItem value="all" className="text-white">All Classes</SelectItem>
+                            {classes.map((cls) => (
+                              <SelectItem key={cls.id} value={cls.id} className="text-white">
+                                {cls.name} - {cls.subject}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <DropdownMenuSeparator className="bg-slate-700" />
+                      <DropdownMenuItem 
+                        className="text-white hover:bg-slate-700 cursor-pointer"
+                        onClick={() => setScheduleModalOpen(true)}
+                      >
+                        <Calendar className="w-4 h-4 mr-2" />
+                        Full Schedule
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <div className="relative">
                 <Button 
                   variant="outline" 
                   size="icon"
                   onClick={() => setMessagesModalOpen(true)}
-                  className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
+                  className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
                 >
-                  <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <MessageCircle className="w-4 h-4" />
                 </Button>
                 {messages.filter(msg => msg.unread).length > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-4 min-w-4 sm:h-5 sm:min-w-5 flex items-center justify-center p-0 px-0.5 sm:px-1 bg-red-500 hover:bg-red-500 text-white text-[10px] sm:text-xs">
+                  <Badge className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1 bg-red-500 hover:bg-red-500 text-white text-xs">
                     {messages.filter(msg => msg.unread).length}
                   </Badge>
                 )}
               </div>
-              <Button variant="outline" size="icon" className="hidden sm:flex border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10">
+              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <User className="w-4 h-4" />
               </Button>
             </div>
           </div>
-
-          {/* Mobile class selector - Below header on small screens */}
-          {classes.length > 0 && (
-            <div className="lg:hidden pb-3 pt-1 border-t border-slate-700/50">
-              <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-                <SelectTrigger className="w-full bg-slate-700/50 border-slate-600 text-white text-sm">
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all" className="text-white">All Classes</SelectItem>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id} className="text-white">
-                      {cls.name} - {cls.subject}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
       </header>
 
