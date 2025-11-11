@@ -205,7 +205,7 @@ export const useTeacherData = () => {
               // Get actual student count for this class (both verified and unverified)
               const { data: enrollments } = await supabase
                 .from("enrollments")
-                .select("id")
+                .select("student_user_id")
                 .eq("class_section_id", classSection.id)
                 .eq("status", "active");
               
@@ -215,12 +215,14 @@ export const useTeacherData = () => {
                 .select("student_user_id")
                 .eq("class_section_id", classSection.id);
               
-              // Get unique student IDs from both sources
-              const enrolledIds = new Set(enrollments?.map(e => e.id) || []);
-              const tempIds = tempStudents?.map(s => s.student_user_id) || [];
+              // Get unique student IDs from both sources to avoid double counting
+              const uniqueStudentIds = new Set([
+                ...(enrollments?.map(e => e.student_user_id) || []),
+                ...(tempStudents?.map(s => s.student_user_id) || [])
+              ]);
               
               // Count unique students
-              const studentCount = (enrollments?.length || 0) + tempIds.length;
+              const studentCount = uniqueStudentIds.size;
               
               // Check if attendance was taken today for this class
               const today = new Date().toISOString().split('T')[0];
