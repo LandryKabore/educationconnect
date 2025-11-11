@@ -254,9 +254,38 @@ const TeacherDashboard = () => {
                   </Badge>
                 )}
               </div>
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
-                <User className="w-4 h-4" />
-              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+                    <User className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-64 bg-slate-800 border-slate-700 z-50" align="end">
+                  <div className="p-3 border-b border-slate-700">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white font-semibold">
+                        {teacherInfo?.profile?.first_name?.[0]}{teacherInfo?.profile?.last_name?.[0]}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-white">
+                          {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : t('teacher')}
+                        </div>
+                        <div className="text-xs text-slate-400">Teacher</div>
+                      </div>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator className="bg-slate-700" />
+                  <DropdownMenuItem className="text-white hover:bg-slate-700 cursor-pointer">
+                    <User className="w-4 h-4 mr-2" />
+                    View Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-slate-700" />
+                  <div className="p-2">
+                    <LogoutButton />
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
