@@ -138,13 +138,14 @@ export function AttendanceReportModal() {
     try {
       const { startDate, endDate } = getDateRange();
 
-      // Fetch attendance records
+      // Fetch attendance records with enrollment verification
       const { data: attendanceData, error } = await supabase
         .from("enhanced_attendance")
         .select(`
           date,
           status,
           student_user_id,
+          class_section_id,
           profiles!enhanced_attendance_student_user_id_fkey(first_name, last_name)
         `)
         .eq("class_section_id", selectedClass)
@@ -154,18 +155,34 @@ export function AttendanceReportModal() {
 
       if (error) throw error;
 
-      // Calculate overall stats
-      const presentCount = attendanceData?.filter(a => a.status === "present").length || 0;
-      const absentCount = attendanceData?.filter(a => a.status === "absent").length || 0;
-      const lateCount = attendanceData?.filter(a => a.status === "late").length || 0;
-      const excusedCount = attendanceData?.filter(a => a.status === "excused").length || 0;
-      const totalRecords = attendanceData?.length || 0;
+      // Verify students are enrolled in the selected class
+      const { data: enrolledStudents, error: enrollmentError } = await supabase
+        .from("enrollments")
+        .select("student_user_id")
+        .eq("class_section_id", selectedClass)
+        .eq("status", "active");
+
+      if (enrollmentError) throw enrollmentError;
+
+      const enrolledStudentIds = new Set(enrolledStudents?.map(e => e.student_user_id) || []);
+      
+      // Filter attendance data to only include enrolled students
+      const filteredAttendanceData = attendanceData?.filter(record => 
+        enrolledStudentIds.has(record.student_user_id)
+      ) || [];
+
+      // Calculate overall stats using filtered data
+      const presentCount = filteredAttendanceData.filter(a => a.status === "present").length;
+      const absentCount = filteredAttendanceData.filter(a => a.status === "absent").length;
+      const lateCount = filteredAttendanceData.filter(a => a.status === "late").length;
+      const excusedCount = filteredAttendanceData.filter(a => a.status === "excused").length;
+      const totalRecords = filteredAttendanceData.length;
 
       // Calculate attendance rate: Present + Late + Excused count as attending
       const attendingCount = presentCount + lateCount + excusedCount;
       
       setStats({
-        totalDays: new Set(attendanceData?.map(a => a.date)).size,
+        totalDays: new Set(filteredAttendanceData.map(a => a.date)).size,
         presentCount,
         absentCount,
         lateCount,
@@ -176,7 +193,7 @@ export function AttendanceReportModal() {
       // Group by date for daily chart
       const dailyMap = new Map<string, { present: number; absent: number; late: number; excused: number; total: number }>();
       
-      attendanceData?.forEach(record => {
+      filteredAttendanceData.forEach(record => {
         if (!dailyMap.has(record.date)) {
           dailyMap.set(record.date, { present: 0, absent: 0, late: 0, excused: 0, total: 0 });
         }
@@ -201,7 +218,7 @@ export function AttendanceReportModal() {
       // Group by student for student attendance
       const studentMap = new Map<string, { present: number; absent: number; late: number; total: number }>();
       
-      attendanceData?.forEach(record => {
+      filteredAttendanceData.forEach(record => {
         const studentName = record.profiles 
           ? `${record.profiles.first_name || ''} ${record.profiles.last_name || ''}`.trim()
           : 'Unknown Student';
