@@ -305,7 +305,9 @@ const TeacherDashboard = () => {
             onClick={() => handleCardClick("classes")}
           >
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-orange-400">{classes.length}</div>
+              <div className="text-2xl font-bold text-orange-400">
+                {selectedClassId === "all" ? classes.length : 1}
+              </div>
               <div className="text-sm text-slate-300">Active Classes</div>
             </CardContent>
           </Card>
@@ -314,7 +316,12 @@ const TeacherDashboard = () => {
             onClick={() => handleCardClick("students")}
           >
             <CardContent className="p-6 text-center">
-              <div className="text-2xl font-bold text-blue-400">{stats.totalStudents}</div>
+              <div className="text-2xl font-bold text-blue-400">
+                {selectedClassId === "all" 
+                  ? stats.totalStudents 
+                  : classes.find(cls => cls.id === selectedClassId)?.student_count || 0
+                }
+              </div>
               <div className="text-sm text-slate-300">Total Students</div>
             </CardContent>
           </Card>
