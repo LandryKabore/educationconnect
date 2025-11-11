@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, User, Lock, GraduationCap, Users, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, User, Lock, GraduationCap, Users, Loader2, Key } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,13 +13,20 @@ const UsernameLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'signin' | 'firsttime'>('signin');
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
+  const [firstTimeData, setFirstTimeData] = useState({
+    username: "",
+    tempPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [userType, setUserType] = useState<'teacher' | 'student'>('student');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.username || !formData.password) {
@@ -34,7 +42,6 @@ const UsernameLogin = () => {
     
     try {
       if (userType === 'teacher') {
-        // Handle teacher login
         const { data, error } = await supabase.functions.invoke('verify-teacher-temp-login', {
           body: {
             username: formData.username,
@@ -45,24 +52,19 @@ const UsernameLogin = () => {
         if (error) throw error;
 
         if (data.temporary_login) {
-          // Redirect to teacher first login
-          navigate('/teacher-first-login', { 
-            state: { 
-              username: formData.username,
-              teacherId: data.teacher_id,
-              firstName: data.first_name,
-              lastName: data.last_name
-            } 
+          toast({
+            title: "First Time Login",
+            description: "Please use the 'First Time' tab to set your permanent password.",
+            variant: "destructive",
           });
-        } else if (data.success) {
-          // Set session and redirect to teacher dashboard
-          if (data.session) {
-            await supabase.auth.setSession(data.session);
-          }
+          return;
+        }
+
+        if (data.success && data.session) {
+          await supabase.auth.setSession(data.session);
           navigate('/teacher-dashboard');
         }
       } else {
-        // Handle student login
         const { data, error } = await supabase.functions.invoke('verify-student-login', {
           body: {
             username: formData.username,
@@ -73,22 +75,17 @@ const UsernameLogin = () => {
         if (error) throw error;
 
         if (data.temporary_login) {
-          // Redirect to student setup completion
-          navigate('/complete-student-setup', { 
-            state: { 
-              username: formData.username,
-              studentId: data.student_id,
-              firstName: data.first_name,
-              lastName: data.last_name
-            } 
+          toast({
+            title: "First Time Login",
+            description: "Please use the 'First Time' tab to set your permanent password.",
+            variant: "destructive",
           });
-        } else if (data.success) {
-          // Set session and check if student has enrolled in a class
-          if (data.session) {
-            await supabase.auth.setSession(data.session);
-          }
+          return;
+        }
+
+        if (data.success && data.session) {
+          await supabase.auth.setSession(data.session);
           
-          // Check if student is enrolled in any class
           const { data: enrollments, error: enrollmentError } = await supabase
             .from('enrollments')
             .select('*')
@@ -98,10 +95,8 @@ const UsernameLogin = () => {
           if (enrollmentError) throw enrollmentError;
 
           if (!enrollments || enrollments.length === 0) {
-            // No enrollment found, redirect to class selection
             navigate('/student-class-selection');
           } else {
-            // Already enrolled, go to dashboard
             navigate('/student-dashboard');
           }
         }
@@ -112,6 +107,105 @@ const UsernameLogin = () => {
       toast({
         title: "Login Failed",
         description: error.message || "Invalid username or password.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFirstTime = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!firstTimeData.username || !firstTimeData.tempPassword || !firstTimeData.newPassword || !firstTimeData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (firstTimeData.newPassword !== firstTimeData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (firstTimeData.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      if (userType === 'teacher') {
+        const { data, error } = await supabase.functions.invoke('verify-teacher-temp-login', {
+          body: {
+            username: firstTimeData.username,
+            tempPassword: firstTimeData.tempPassword
+          }
+        });
+
+        if (error) throw error;
+
+        if (data.temporary_login) {
+          navigate('/teacher-first-login', { 
+            state: { 
+              username: firstTimeData.username,
+              teacherId: data.teacher_id,
+              firstName: data.first_name,
+              lastName: data.last_name
+            } 
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Invalid temporary credentials or already used.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        const { data, error } = await supabase.functions.invoke('verify-student-login', {
+          body: {
+            username: firstTimeData.username,
+            password: firstTimeData.tempPassword
+          }
+        });
+
+        if (error) throw error;
+
+        if (data.temporary_login) {
+          navigate('/complete-student-setup', { 
+            state: { 
+              username: firstTimeData.username,
+              studentId: data.student_id,
+              firstName: data.first_name,
+              lastName: data.last_name
+            } 
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "Invalid temporary credentials or already used.",
+            variant: "destructive",
+          });
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('First time login error:', error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid temporary credentials.",
         variant: "destructive",
       });
     } finally {
@@ -150,9 +244,11 @@ const UsernameLogin = () => {
             <div className="mx-auto mb-4 p-3 bg-orange-500/10 rounded-full w-fit">
               <User className="w-8 h-8 text-orange-400" />
             </div>
-            <CardTitle className="text-2xl text-white">Sign In</CardTitle>
+            <CardTitle className="text-2xl text-white">
+              {userType === 'teacher' ? 'Teacher' : 'Student'} Login
+            </CardTitle>
             <CardDescription className="text-slate-300">
-              Enter your credentials to access your account
+              Sign in or complete your first time setup
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -187,48 +283,141 @@ const UsernameLogin = () => {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-slate-200">Username</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <Input
-                    id="username"
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    className="bg-slate-700 border-slate-600 text-white pl-10"
-                    placeholder="Enter your username"
-                    required
-                  />
-                </div>
-              </div>
+            {/* Tabs for Sign In / First Time */}
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'signin' | 'firsttime')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
+                <TabsTrigger value="signin" className="data-[state=active]:bg-blue-600">
+                  Sign In
+                </TabsTrigger>
+                <TabsTrigger value="firsttime" className="data-[state=active]:bg-green-600">
+                  First Time
+                </TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-200">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="bg-slate-700 border-slate-600 text-white pl-10"
-                    placeholder="Enter your password"
-                    required
-                  />
-                </div>
-              </div>
+              {/* Sign In Tab */}
+              <TabsContent value="signin" className="space-y-4 mt-4">
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-username" className="text-slate-200">Username</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="signin-username"
+                        type="text"
+                        value={formData.username}
+                        onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Enter your username"
+                        required
+                      />
+                    </div>
+                  </div>
 
-              <Button 
-                type="submit" 
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-              >
-                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Sign In
-              </Button>
-            </form>
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-password" className="text-slate-200">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Enter your password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Sign In
+                  </Button>
+                </form>
+              </TabsContent>
+
+              {/* First Time Tab */}
+              <TabsContent value="firsttime" className="space-y-4 mt-4">
+                <form onSubmit={handleFirstTime} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firsttime-username" className="text-slate-200">Username</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="firsttime-username"
+                        type="text"
+                        value={firstTimeData.username}
+                        onChange={(e) => setFirstTimeData(prev => ({ ...prev, username: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Enter your temporary username"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="firsttime-temp-password" className="text-slate-200">Temporary Password</Label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="firsttime-temp-password"
+                        type="password"
+                        value={firstTimeData.tempPassword}
+                        onChange={(e) => setFirstTimeData(prev => ({ ...prev, tempPassword: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Enter your temporary password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="firsttime-new-password" className="text-slate-200">New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="firsttime-new-password"
+                        type="password"
+                        value={firstTimeData.newPassword}
+                        onChange={(e) => setFirstTimeData(prev => ({ ...prev, newPassword: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Enter your new password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="firsttime-confirm-password" className="text-slate-200">Confirm New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <Input
+                        id="firsttime-confirm-password"
+                        type="password"
+                        value={firstTimeData.confirmPassword}
+                        onChange={(e) => setFirstTimeData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        className="bg-slate-700 border-slate-600 text-white pl-10"
+                        placeholder="Confirm your new password"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Complete First Time Setup
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
 
             <div className="text-center">
               <Button
