@@ -30,7 +30,11 @@ interface AttendanceStats {
   attendanceRate: number;
 }
 
-export function StudentAttendanceDetailsModal() {
+interface StudentAttendanceDetailsModalProps {
+  selectedClassId?: string;
+}
+
+export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttendanceDetailsModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
@@ -46,7 +50,7 @@ export function StudentAttendanceDetailsModal() {
         fetchStudentAttendance();
       }
     }
-  }, [open]);
+  }, [open, selectedClassId]);
 
   useEffect(() => {
     if (selectedStudent) {
@@ -59,7 +63,7 @@ export function StudentAttendanceDetailsModal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get all class sections the teacher is assigned to
+      // Get class sections the teacher is assigned to
       const { data: assignments } = await supabase
         .from("teaching_assignments")
         .select("class_section_id")
@@ -67,9 +71,19 @@ export function StudentAttendanceDetailsModal() {
 
       if (!assignments?.length) return;
 
-      const classSectionIds = assignments.map(a => a.class_section_id);
+      let classSectionIds = assignments.map(a => a.class_section_id);
 
-      // Get all students enrolled in these classes
+      // Filter by selected class if specified
+      if (selectedClassId && selectedClassId !== "all") {
+        classSectionIds = classSectionIds.filter(id => id === selectedClassId);
+      }
+
+      if (classSectionIds.length === 0) {
+        setStudents([]);
+        return;
+      }
+
+      // Get students enrolled in the filtered classes
       const { data: enrollments, error } = await supabase
         .from("enrollments")
         .select(`
@@ -100,17 +114,36 @@ export function StudentAttendanceDetailsModal() {
   const fetchStudentAttendance = async () => {
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       // Fetch all attendance records for the student (last 90 days)
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const startDate = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(ninetyDaysAgo.getDate()).padStart(2, '0')}`;
+      const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
-      const { data: attendanceData, error } = await supabase
+      // Build query
+      let query = supabase
         .from("enhanced_attendance")
-        .select("date, status, notes")
+        .select("date, status, notes, class_section_id")
         .eq("student_user_id", selectedStudent)
-        .gte("date", startDate)
-        .order("date", { ascending: false });
+        .gte("date", startDate);
+
+      // Filter by selected class if specified
+      if (selectedClassId && selectedClassId !== "all") {
+        // Get class sections for the selected class
+        const { data: assignments } = await supabase
+          .from("teaching_assignments")
+          .select("class_section_id")
+          .eq("teacher_user_id", user.id)
+          .eq("class_section_id", selectedClassId);
+
+        if (assignments?.length) {
+          query = query.eq("class_section_id", selectedClassId);
+        }
+      }
+
+      const { data: attendanceData, error } = await query.order("date", { ascending: false });
 
       if (error) throw error;
 

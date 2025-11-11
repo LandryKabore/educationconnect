@@ -518,7 +518,7 @@ const TeacherDashboard = () => {
                   selectedClassId={selectedClassId}
                 />
                 <AttendanceReportModal />
-                <StudentAttendanceDetailsModal />
+                <StudentAttendanceDetailsModal selectedClassId={selectedClassId} />
                 <AttendanceRiskAnalysisModal />
               </div>
               
