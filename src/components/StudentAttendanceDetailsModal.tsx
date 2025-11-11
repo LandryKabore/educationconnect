@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Calendar, TrendingUp, Clock } from "lucide-react";
+import { User, Calendar, TrendingUp, Clock, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -41,6 +41,10 @@ export function StudentAttendanceDetailsModal() {
   useEffect(() => {
     if (open) {
       fetchStudents();
+      // Refetch attendance data when modal reopens
+      if (selectedStudent) {
+        fetchStudentAttendance();
+      }
     }
   }, [open]);
 
@@ -179,21 +183,36 @@ export function StudentAttendanceDetailsModal() {
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Student Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Select Student</label>
-            <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a student" />
-              </SelectTrigger>
-              <SelectContent>
-                {students.map((student) => (
-                  <SelectItem key={student.id} value={student.id}>
-                    {student.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Student Selector with Refresh Button */}
+          <div className="flex gap-2">
+            <div className="flex-1 space-y-2">
+              <label className="text-sm font-medium">Select Student</label>
+              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a student" />
+                </SelectTrigger>
+                <SelectContent>
+                  {students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedStudent && (
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={fetchStudentAttendance}
+                  disabled={loading}
+                  title="Refresh attendance data"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+            )}
           </div>
 
           {loading ? (
