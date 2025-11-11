@@ -778,28 +778,6 @@ export default function Auth() {
               </div>
             )}
 
-            {selectedRole === "parent" && (
-              <div className="flex gap-2 mb-6 p-3 bg-secondary/20 rounded-lg">
-                {mode === "signin" ? (
-                  <Button 
-                    variant={parentLinkMode === "existing" ? "default" : "outline"} 
-                    size="sm"
-                    onClick={() => setParentLinkMode("existing")}
-                  >
-                    Existing Account
-                  </Button>
-                ) : (
-                  <Button 
-                    variant={parentLinkMode === "code" ? "default" : "outline"} 
-                    size="sm"
-                    onClick={() => setParentLinkMode("code")}
-                  >
-                    Link with Code
-                  </Button>
-                )}
-              </div>
-            )}
-
             {/* Teacher/Student First Time Setup Form */}
             {(selectedRole === "teacher" || selectedRole === "student") && activeTab === "firsttime" ? (
               <form onSubmit={handleFirstTimeSetup} className="space-y-4">
