@@ -117,24 +117,28 @@ const TeacherDashboard = () => {
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:64px_64px]" />
       {/* Header */}
       <header className="bg-slate-800/50 border-b border-slate-700/50 shadow-xl backdrop-blur-sm relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex items-center justify-between gap-2 min-h-[64px] py-2">
+            {/* Left Section */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
               <Button 
                 variant="outline" 
                 size="icon"
                 onClick={() => navigate("/")}
-                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+                className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
-            <div>
-              <h1 className="text-xl font-bold text-white">{t('teacher.dashboard')}</h1>
-              <p className="text-sm text-slate-300">
-                {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : t('teacher')}
-              </p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-white truncate">{t('teacher.dashboard')}</h1>
+                <p className="text-xs sm:text-sm text-slate-300 truncate hidden sm:block">
+                  {teacherInfo?.profile ? `${teacherInfo.profile.first_name} ${teacherInfo.profile.last_name}` : t('teacher')}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-slate-300">
+
+            {/* Middle Section - Hidden on mobile */}
+            <div className="hidden lg:flex items-center gap-3 text-slate-300">
               <LanguageToggle />
               <LiveClock />
               {classes.length > 0 && (
@@ -164,28 +168,59 @@ const TeacherDashboard = () => {
                 </div>
               )}
             </div>
-            </div>
-            <div className="flex items-center gap-3">
+
+            {/* Right Section */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Schedule button for mobile/tablet */}
+              {classes.length > 0 && (
+                <Button 
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setScheduleModalOpen(true)}
+                  className="lg:hidden border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-orange-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
+                >
+                  <Calendar className="w-4 h-4" />
+                </Button>
+              )}
               <div className="relative">
                 <Button 
                   variant="outline" 
                   size="icon"
                   onClick={() => setMessagesModalOpen(true)}
-                  className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white"
+                  className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10"
                 >
-                  <MessageCircle className="w-4 h-4" />
+                  <MessageCircle className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
                 {messages.filter(msg => msg.unread).length > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1 bg-red-500 hover:bg-red-500 text-white text-xs">
+                  <Badge className="absolute -top-1 -right-1 h-4 min-w-4 sm:h-5 sm:min-w-5 flex items-center justify-center p-0 px-0.5 sm:px-1 bg-red-500 hover:bg-red-500 text-white text-[10px] sm:text-xs">
                     {messages.filter(msg => msg.unread).length}
                   </Badge>
                 )}
               </div>
-              <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
+              <Button variant="outline" size="icon" className="hidden sm:flex border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white h-9 w-9 sm:h-10 sm:w-10">
                 <User className="w-4 h-4" />
               </Button>
             </div>
           </div>
+
+          {/* Mobile class selector - Below header on small screens */}
+          {classes.length > 0 && (
+            <div className="lg:hidden pb-3 pt-1 border-t border-slate-700/50">
+              <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                <SelectTrigger className="w-full bg-slate-700/50 border-slate-600 text-white text-sm">
+                  <SelectValue placeholder="Select class" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all" className="text-white">All Classes</SelectItem>
+                  {classes.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id} className="text-white">
+                      {cls.name} - {cls.subject}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       </header>
 
