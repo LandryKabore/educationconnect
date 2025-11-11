@@ -4,10 +4,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
-import { CheckSquare, Calendar } from "lucide-react";
+import { CheckSquare, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Student {
   id: string;
@@ -36,6 +39,8 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [selectedDate, setSelectedDate] = useState(localDate);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const [attendanceDates, setAttendanceDates] = useState<Set<string>>(new Set());
+  const [datePickerDate, setDatePickerDate] = useState<Date>(now);
 
   useEffect(() => {
     if (open) {
@@ -57,8 +62,15 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
   useEffect(() => {
     if (selectedClass) {
       fetchStudents();
+      fetchAttendanceDates();
     }
   }, [selectedClass]);
+
+  useEffect(() => {
+    if (selectedClass && selectedDate) {
+      loadExistingAttendance();
+    }
+  }, [selectedClass, selectedDate]);
 
   const fetchClasses = async () => {
     try {
@@ -136,7 +148,7 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
               name: studentName || 'Unknown Student',
               user_id: enrollment.student_user_id
             });
-            initialAttendance[enrollment.student_user_id] = "present";
+            // Don't set initial attendance here - load it based on selected date
           });
         }
       }
@@ -160,17 +172,71 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
               name: studentName,
               user_id: tempStudent.student_user_id
             });
-            initialAttendance[tempStudent.student_user_id] = "present";
           }
         });
       }
 
       setStudents(allStudents);
-      setAttendance(initialAttendance);
     } catch (error) {
       console.error("Error fetching students:", error);
       setStudents([]);
       setAttendance({});
+    }
+  };
+
+  const fetchAttendanceDates = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("enhanced_attendance")
+        .select("date")
+        .eq("class_section_id", selectedClass)
+        .eq("taken_by", user.id);
+
+      if (error) throw error;
+
+      const dates = new Set(data?.map(record => record.date) || []);
+      setAttendanceDates(dates);
+    } catch (error) {
+      console.error("Error fetching attendance dates:", error);
+    }
+  };
+
+  const loadExistingAttendance = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("enhanced_attendance")
+        .select("student_user_id, status")
+        .eq("class_section_id", selectedClass)
+        .eq("date", selectedDate);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const existingAttendance: Record<string, string> = {};
+        data.forEach(record => {
+          existingAttendance[record.student_user_id] = record.status;
+        });
+        
+        // Set existing attendance or default to present for students not in records
+        const fullAttendance: Record<string, string> = {};
+        students.forEach(student => {
+          fullAttendance[student.user_id] = existingAttendance[student.user_id] || "present";
+        });
+        
+        setAttendance(fullAttendance);
+      } else {
+        // No existing attendance, default all to present
+        const defaultAttendance: Record<string, string> = {};
+        students.forEach(student => {
+          defaultAttendance[student.user_id] = "present";
+        });
+        setAttendance(defaultAttendance);
+      }
+    } catch (error) {
+      console.error("Error loading existing attendance:", error);
     }
   };
 
@@ -268,11 +334,14 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
+            <CalendarIcon className="w-5 h-5" />
             Take Attendance - {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
           </DialogTitle>
           <DialogDescription>
             Record attendance for your class on {format(new Date(selectedDate), 'MMMM d, yyyy')}.
+            {attendanceDates.has(selectedDate) && (
+              <span className="text-orange-400 ml-2">• Editing existing attendance</span>
+            )}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -304,13 +373,45 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
 
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                required
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !datePickerDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(datePickerDate, "PPP")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={datePickerDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setDatePickerDate(date);
+                        const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                        setSelectedDate(formattedDate);
+                      }
+                    }}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                    modifiers={{
+                      hasAttendance: (date) => {
+                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                        return attendanceDates.has(dateStr);
+                      }
+                    }}
+                    modifiersClassNames={{
+                      hasAttendance: "relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:rounded-full after:bg-green-500"
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
