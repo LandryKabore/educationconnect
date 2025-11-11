@@ -244,7 +244,7 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
 
   const fetchTeacherStudentAttendance = async (teacherUserId: string) => {
     // Get all teaching assignments for this teacher
-    const { data: assignments, error: assignmentsError } = await supabase
+    let query = supabase
       .from("teaching_assignments")
       .select(`
         class_sections(
@@ -255,10 +255,25 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
       `)
       .eq("teacher_user_id", teacherUserId);
 
-    if (assignmentsError || !assignments || assignments.length === 0) {
-      return;
+    // Filter by selected class if specified
+    if (selectedClassId && selectedClassId !== "all") {
+      const { data: assignments, error: assignmentsError } = await query.eq("class_section_id", selectedClassId);
+      
+      if (assignmentsError || !assignments || assignments.length === 0) {
+        return;
+      }
+      await processAssignments(assignments, teacherUserId);
+    } else {
+      const { data: assignments, error: assignmentsError } = await query;
+      
+      if (assignmentsError || !assignments || assignments.length === 0) {
+        return;
+      }
+      await processAssignments(assignments, teacherUserId);
     }
+  };
 
+  const processAssignments = async (assignments: any[], teacherUserId: string) => {
     const allStudentsWithAttendance: Student[] = [];
 
     // For each class, get students and their attendance
@@ -319,10 +334,11 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
 
           let attendancePercentage = 0;
           if (studentAttendanceRecords.length > 0) {
-            const presentCount = studentAttendanceRecords.filter(
-              record => record.status === "present"
+            // Count present, late, and excused as attending
+            const attendingCount = studentAttendanceRecords.filter(
+              record => record.status === "present" || record.status === "late" || record.status === "excused"
             ).length;
-            attendancePercentage = Math.round((presentCount / studentAttendanceRecords.length) * 100);
+            attendancePercentage = Math.round((attendingCount / studentAttendanceRecords.length) * 100);
           } else {
             // Default to 95% if no records (new student)
             attendancePercentage = 95;
