@@ -119,13 +119,16 @@ export function StudentAttendanceDetailsModal() {
       const excused = attendanceData?.filter(a => a.status === "excused").length || 0;
       const total = attendanceData?.length || 0;
 
+      // Calculate attendance rate: Present + Late + Excused count as attending
+      const attending = present + late + excused;
+      
       setStats({
         totalDays: total,
         present,
         absent,
         late,
         excused,
-        attendanceRate: total > 0 ? (present / total) * 100 : 0
+        attendanceRate: total > 0 ? (attending / total) * 100 : 0
       });
 
     } catch (error) {

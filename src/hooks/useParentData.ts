@@ -367,8 +367,11 @@ export const useParentData = () => {
         .order("date", { ascending: false });
 
       if (attendanceData && attendanceData.length > 0) {
-        const presentDays = attendanceData.filter(att => att.status === "present").length;
-        const attendanceRate = `${Math.round((presentDays / attendanceData.length) * 100)}%`;
+        // Count present, late, and excused as attending (not absent)
+        const attendingDays = attendanceData.filter(att => 
+          att.status === "present" || att.status === "late" || att.status === "excused"
+        ).length;
+        const attendanceRate = `${Math.round((attendingDays / attendanceData.length) * 100)}%`;
         
         // Group attendance by class section
         const attendanceByClass = new Map<string, { 
@@ -388,7 +391,8 @@ export const useParentData = () => {
           
           const classData = attendanceByClass.get(classId)!;
           classData.total++;
-          if (att.status === "present") {
+          // Count present, late, and excused as attending
+          if (att.status === "present" || att.status === "late" || att.status === "excused") {
             classData.present++;
           } else {
             classData.missedDates.push({

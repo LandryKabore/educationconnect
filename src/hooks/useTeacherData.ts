@@ -397,8 +397,11 @@ export const useTeacherData = () => {
           .in("class_section_id", formattedClasses.map(cls => cls.id));
 
         if (attendanceData && attendanceData.length > 0) {
-          const presentCount = attendanceData.filter(att => att.status === "present").length;
-          const avgAttendance = `${Math.round((presentCount / attendanceData.length) * 100)}%`;
+          // Count present, late, and excused as attending (not absent)
+          const attendingCount = attendanceData.filter(att => 
+            att.status === "present" || att.status === "late" || att.status === "excused"
+          ).length;
+          const avgAttendance = `${Math.round((attendingCount / attendanceData.length) * 100)}%`;
           setStats(prev => ({ ...prev, avgAttendance }));
         } else {
           // If no attendance taken yet, show 0%

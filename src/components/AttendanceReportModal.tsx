@@ -161,13 +161,16 @@ export function AttendanceReportModal() {
       const excusedCount = attendanceData?.filter(a => a.status === "excused").length || 0;
       const totalRecords = attendanceData?.length || 0;
 
+      // Calculate attendance rate: Present + Late + Excused count as attending
+      const attendingCount = presentCount + lateCount + excusedCount;
+      
       setStats({
         totalDays: new Set(attendanceData?.map(a => a.date)).size,
         presentCount,
         absentCount,
         lateCount,
         excusedCount,
-        attendanceRate: totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0
+        attendanceRate: totalRecords > 0 ? (attendingCount / totalRecords) * 100 : 0
       });
 
       // Group by date for daily chart
@@ -189,7 +192,7 @@ export function AttendanceReportModal() {
         .map(([date, counts]) => ({
           date: format(new Date(date), "MMM dd"),
           ...counts,
-          rate: counts.total > 0 ? (counts.present / counts.total) * 100 : 0
+          rate: counts.total > 0 ? ((counts.present + counts.late + counts.excused) / counts.total) * 100 : 0
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -217,7 +220,8 @@ export function AttendanceReportModal() {
         .map(([studentName, counts]) => ({
           studentName,
           ...counts,
-          rate: counts.total > 0 ? (counts.present / counts.total) * 100 : 0
+          // Calculate rate: present + late count as attending (excused not tracked separately here but included in total-absent)
+          rate: counts.total > 0 ? ((counts.total - counts.absent) / counts.total) * 100 : 0
         }))
         .sort((a, b) => b.rate - a.rate)
         .slice(0, 10); // Top 10 students

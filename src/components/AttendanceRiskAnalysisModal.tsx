@@ -145,7 +145,8 @@ export function AttendanceRiskAnalysisModal() {
         const student = studentMap.get(record.student_user_id)!;
         student.totalDays++;
         
-        if (record.status === "present") {
+        // Present, Late, and Excused count as attending (not absent)
+        if (record.status === "present" || record.status === "late" || record.status === "excused") {
           student.presentDays++;
         } else if (record.status === "absent") {
           student.absentDays++;
@@ -157,7 +158,7 @@ export function AttendanceRiskAnalysisModal() {
         // Track recent attendance for trend analysis
         if (record.date >= recentStartDate) {
           student.recentTotalDays++;
-          if (record.status === "present") {
+          if (record.status === "present" || record.status === "late" || record.status === "excused") {
             student.recentPresentDays++;
           }
         }

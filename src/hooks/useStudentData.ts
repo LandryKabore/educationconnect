@@ -287,8 +287,11 @@ export const useStudentData = () => {
   const calculateAttendanceRate = (): string => {
     if (attendance.length === 0) return "0%";
     
-    const presentDays = attendance.filter(att => att.status === "present").length;
-    const rate = (presentDays / attendance.length) * 100;
+    // Count present, late, and excused as attending (not absent)
+    const attendingDays = attendance.filter(att => 
+      att.status === "present" || att.status === "late" || att.status === "excused"
+    ).length;
+    const rate = (attendingDays / attendance.length) * 100;
     return `${Math.round(rate)}%`;
   };
 
