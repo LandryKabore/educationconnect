@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText, Menu } from "lucide-react";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { ArrowLeft, User, Users, Calendar, Upload, MessageCircle, CheckSquare, BookOpen, TrendingUp, Calculator, Brain, Microscope, Code2, Lightbulb, Database, Loader2, Clock, FileText, Menu, PanelLeft } from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TeacherSidebar } from "@/components/TeacherSidebar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -162,6 +162,7 @@ const TeacherDashboard = () => {
           <div className="flex items-center justify-between gap-2 h-16">
             {/* Left Section */}
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
+              <SidebarTrigger className="shrink-0 border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white" />
               <Button 
                 variant="outline" 
                 size="icon"
