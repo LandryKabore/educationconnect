@@ -311,31 +311,37 @@ export function GradeStudentModal({ onGradeSubmitted, selectedClassId }: GradeSt
 
               <div className="space-y-2">
                 <Label htmlFor="student">Student</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    placeholder="Search students..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
                 <Select value={formData.student_id} onValueChange={(value) => setFormData(prev => ({ ...prev, student_id: value }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select student" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {filteredStudents.length === 0 ? (
-                      <div className="py-6 text-center text-sm text-muted-foreground">
-                        {searchQuery ? "No students found" : "No students in this class"}
+                  <SelectContent className="bg-popover">
+                    <div className="flex items-center gap-2 px-2 pb-2 border-b sticky top-0 bg-popover z-50">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          placeholder="Search students..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-8 h-8 bg-background"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
                       </div>
-                    ) : (
-                      filteredStudents.map((student) => (
-                        <SelectItem key={student.id} value={student.user_id}>
-                          {student.name} {student.student_no ? `(${student.student_no})` : ''}
-                        </SelectItem>
-                      ))
-                    )}
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {filteredStudents.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">
+                          {searchQuery ? "No students found" : "No students in this class"}
+                        </div>
+                      ) : (
+                        filteredStudents.map((student) => (
+                          <SelectItem key={student.id} value={student.user_id}>
+                            {student.name} {student.student_no ? `(${student.student_no})` : ''}
+                          </SelectItem>
+                        ))
+                      )}
+                    </div>
                   </SelectContent>
                 </Select>
               </div>
