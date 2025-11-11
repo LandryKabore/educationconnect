@@ -186,11 +186,15 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
 
   const fetchAttendanceDates = async () => {
     try {
-      // Fetch all dates with attendance for this class, regardless of who took it
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch dates where THIS teacher took attendance for this class
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("date")
-        .eq("class_section_id", selectedClass);
+        .eq("class_section_id", selectedClass)
+        .eq("taken_by", user.id);
 
       if (error) throw error;
 
@@ -203,11 +207,16 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
 
   const loadExistingAttendance = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Load attendance records taken by THIS teacher only
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("student_user_id, status")
         .eq("class_section_id", selectedClass)
-        .eq("date", selectedDate);
+        .eq("date", selectedDate)
+        .eq("taken_by", user.id);
 
       if (error) throw error;
 
