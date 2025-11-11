@@ -621,6 +621,7 @@ const TeacherDashboard = () => {
         type={modalType}
         data={modalType === "tasks" ? tasks : classes}
         stats={stats}
+        selectedClassId={selectedClassId}
       />
 
       <MessagesModal

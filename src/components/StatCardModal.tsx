@@ -21,9 +21,10 @@ interface StatCardModalProps {
   type: "classes" | "students" | "tasks" | "attendance";
   data: any[];
   stats: any;
+  selectedClassId?: string;
 }
 
-export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCardModalProps) {
+export function StatCardModal({ open, onOpenChange, type, data, stats, selectedClassId }: StatCardModalProps) {
   const { t } = useTranslation();
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -375,10 +376,28 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
         };
       
       case "students":
+        // Filter students if a specific class is selected
+        const filteredStudents = selectedClassId && selectedClassId !== "all"
+          ? students.filter(student => {
+              // Extract class name from className (format: "Grade 10A - Grade 10")
+              const selectedClass = data.find(c => c.id === selectedClassId);
+              return selectedClass && student.className.includes(selectedClass.name);
+            })
+          : students;
+        
+        const studentCount = selectedClassId && selectedClassId !== "all"
+          ? filteredStudents.length
+          : stats.totalStudents;
+        
+        const selectedClass = data.find(c => c.id === selectedClassId);
+        const descriptionText = selectedClassId && selectedClassId !== "all" && selectedClass
+          ? `${studentCount} students in ${selectedClass.name}`
+          : `You are teaching ${studentCount} students across all your classes`;
+        
         return {
           title: "Total Students",
           icon: <Users className="w-5 h-5" />,
-          description: `You are teaching ${stats.totalStudents} students across all your classes`,
+          description: descriptionText,
           content: loadingStudents ? (
             <div className="flex items-center justify-center p-8">
               <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
@@ -386,8 +405,8 @@ export function StatCardModal({ open, onOpenChange, type, data, stats }: StatCar
             </div>
           ) : (
             <div className="space-y-3">
-              {students.length > 0 ? (
-                students.map((student) => (
+              {filteredStudents.length > 0 ? (
+                filteredStudents.map((student) => (
                   <div key={student.id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
                     <div>
                       <div className="font-medium text-white">{student.name}</div>
