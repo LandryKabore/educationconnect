@@ -29,20 +29,10 @@ interface TeacherScheduleModalProps {
 const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: TeacherScheduleModalProps) => {
-  // Extract unique time slots and sort them
-  const timeSlots = Array.from(
-    new Set(scheduleClasses.map(cls => `${cls.time_start}-${cls.time_end}`))
-  ).sort();
-
-  // Create a map of time slot + day to classes
-  const scheduleGrid: Record<string, ScheduleClass | null> = {};
-  scheduleClasses.forEach(cls => {
-    const timeKey = `${cls.time_start}-${cls.time_end}`;
-    cls.days.forEach(day => {
-      const key = `${timeKey}-${day.toLowerCase()}`;
-      scheduleGrid[key] = cls;
-    });
-  });
+  // Sort classes by start time
+  const sortedClasses = [...scheduleClasses].sort((a, b) => 
+    a.time_start.localeCompare(b.time_start)
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -64,59 +54,58 @@ export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: Teach
             <Table className="border-collapse">
               <TableHeader>
                 <TableRow className="bg-slate-700/50 hover:bg-slate-700/50">
-                  <TableHead className="border border-slate-600 font-bold text-white text-center w-32">
-                    TIME
+                  <TableHead className="border border-slate-600 font-bold text-white w-48">
+                    CLASS / TIME
                   </TableHead>
                   {dayOrder.map(day => (
                     <TableHead key={day} className="border border-slate-600 font-bold text-white text-center capitalize">
-                      {day}
+                      {day.slice(0, 3)}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {timeSlots.map(timeSlot => {
-                  const [startTime, endTime] = timeSlot.split('-');
-                  return (
-                    <TableRow key={timeSlot} className="hover:bg-slate-700/30">
-                      <TableCell className="border border-slate-600 font-medium text-slate-300 text-center bg-slate-700/30 align-top py-3">
-                        <div className="text-sm">{startTime}</div>
-                        <div className="text-xs text-slate-400">to</div>
-                        <div className="text-sm">{endTime}</div>
-                      </TableCell>
-                      {dayOrder.map(day => {
-                        const key = `${timeSlot}-${day}`;
-                        const classData = scheduleGrid[key];
-                        
-                        return (
-                          <TableCell key={key} className="border border-slate-600 p-2 align-top">
-                            {classData ? (
-                              <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 rounded-md p-3 hover:border-orange-400/50 transition-colors">
-                                <div className="flex items-start gap-2 mb-1">
-                                  <BookOpen className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-semibold text-white text-sm truncate">
-                                      {classData.name}
-                                    </div>
-                                    <div className="text-xs text-slate-300 truncate">
-                                      {classData.subject}
-                                    </div>
-                                    <div className="text-xs text-slate-400 mt-1">
-                                      {classData.grade_level}
-                                    </div>
-                                    <div className="text-xs text-slate-400 mt-1">
-                                      {classData.student_count} students
-                                    </div>
-                                  </div>
-                                </div>
+                {sortedClasses.map((cls) => (
+                  <TableRow key={cls.id} className="hover:bg-slate-700/30">
+                    <TableCell className="border border-slate-600 bg-slate-700/30 align-middle py-4">
+                      <div className="flex items-start gap-2">
+                        <BookOpen className="w-4 h-4 text-orange-400 flex-shrink-0 mt-1" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-white text-sm">
+                            {cls.name}
+                          </div>
+                          <div className="text-xs text-slate-300">
+                            {cls.subject}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {cls.grade_level}
+                          </div>
+                          <div className="text-xs text-orange-400 mt-2 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {cls.time_start} - {cls.time_end}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1">
+                            {cls.student_count} students
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    {dayOrder.map(day => {
+                      const hasClass = cls.days.map(d => d.toLowerCase()).includes(day);
+                      return (
+                        <TableCell key={day} className="border border-slate-600 text-center align-middle">
+                          {hasClass ? (
+                            <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 rounded-md py-2 px-1">
+                              <div className="text-xs text-orange-400 font-semibold">
+                                {cls.time_start}
                               </div>
-                            ) : null}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
+                            </div>
+                          ) : null}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
