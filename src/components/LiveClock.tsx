@@ -31,11 +31,11 @@ export const LiveClock = () => {
   };
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-lg shadow-sm">
-      <Clock className="h-5 w-5 text-primary" />
+    <div className="flex items-center gap-2">
+      <Clock className="h-4 w-4 text-current" />
       <div className="flex flex-col">
-        <span className="text-sm font-semibold text-foreground">{formatTime(currentTime)}</span>
-        <span className="text-xs text-muted-foreground">{formatDate(currentTime)}</span>
+        <span className="text-sm font-semibold">{formatTime(currentTime)}</span>
+        <span className="text-xs opacity-80">{formatDate(currentTime)}</span>
       </div>
     </div>
   );
