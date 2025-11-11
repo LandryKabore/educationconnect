@@ -16,6 +16,7 @@ import { getCountdown } from "@/utils/countdownHelpers";
 import { AllTeachersModal } from "@/components/AllTeachersModal";
 import { StudyCalendarModal } from "@/components/StudyCalendarModal";
 import { StudyGroupsModal } from "@/components/StudyGroupsModal";
+import { LiveClock } from "@/components/LiveClock";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -160,6 +161,7 @@ const StudentDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <LiveClock />
               {/* Subject Dropdown */}
               {studentInfo?.subjects && studentInfo.subjects.length > 0 && (
                 <DropdownMenu>

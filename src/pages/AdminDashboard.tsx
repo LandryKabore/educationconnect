@@ -40,6 +40,7 @@ import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { SchoolAdminManagementModal } from "@/components/SchoolAdminManagementModal";
 import { AdminGuideModal } from "@/components/AdminGuideModal";
 import { ClassSectionDetailsModal } from "@/components/ClassSectionDetailsModal";
+import { LiveClock } from "@/components/LiveClock";
 
 interface AdminData {
   schools: any[];
@@ -437,6 +438,7 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <LiveClock />
               <Button
                 variant="outline"
                 size="sm"

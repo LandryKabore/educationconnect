@@ -21,6 +21,7 @@ import { TeacherScheduleModal } from "@/components/TeacherScheduleModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { getCountdown } from "@/utils/countdownHelpers";
+import { LiveClock } from "@/components/LiveClock";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -135,13 +136,7 @@ const TeacherDashboard = () => {
             </div>
             <div className="flex items-center gap-4 text-slate-300">
               <LanguageToggle />
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                <div className="text-sm">
-                  <div>{format(currentTime, 'EEEE, MMMM d, yyyy')}</div>
-                  <div className="text-xs text-slate-400">{format(currentTime, 'h:mm a')}</div>
-                </div>
-              </div>
+              <LiveClock />
               {classes.length > 0 && (
                 <div className="flex items-center gap-3 border-l border-slate-600 pl-4">
                   <Select value={selectedClassId} onValueChange={setSelectedClassId}>

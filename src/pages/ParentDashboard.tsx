@@ -12,6 +12,7 @@ import { ParentProfileModal } from "@/components/ParentProfileModal";
 import { MessagesModal } from "@/components/MessagesModal";
 import { ParentGradesModal } from "@/components/ParentGradesModal";
 import { ParentCalendarModal } from "@/components/ParentCalendarModal";
+import { LiveClock } from "@/components/LiveClock";
 
 const ParentDashboard = () => {
   const navigate = useNavigate();
@@ -117,6 +118,7 @@ const ParentDashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <LiveClock />
               <LanguageToggle />
               <Button variant="outline" size="icon" className="border-slate-600 text-slate-200 bg-slate-800/50 hover:bg-slate-700 hover:border-slate-400 hover:text-white">
                 <Bell className="w-4 h-4" />
