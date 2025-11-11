@@ -395,9 +395,9 @@ export function AttendanceReportModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-slate-600 text-white hover:bg-slate-700">
-          <BarChart3 className="w-4 h-4 mr-2" />
-          Attendance Report
+        <Button variant="outline" className="border-slate-600 text-white hover:bg-slate-700 text-xs h-auto py-2.5 px-3">
+          <BarChart3 className="w-4 h-4 mr-1.5 flex-shrink-0" />
+          <span className="whitespace-normal leading-tight">Attendance Report</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">

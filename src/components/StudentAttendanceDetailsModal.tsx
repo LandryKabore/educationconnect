@@ -165,9 +165,9 @@ export function StudentAttendanceDetailsModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-slate-600 text-white hover:bg-slate-700">
-          <User className="w-4 h-4 mr-2" />
-          Student Attendance Details
+        <Button variant="outline" className="border-slate-600 text-white hover:bg-slate-700 text-xs h-auto py-2.5 px-3">
+          <User className="w-4 h-4 mr-1.5 flex-shrink-0" />
+          <span className="whitespace-normal leading-tight">Student Attendance Details</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">

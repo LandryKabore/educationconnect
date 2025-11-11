@@ -26,36 +26,36 @@ export function AttendanceStatusLegend() {
             <h4 className="font-semibold text-white mb-2">Attendance Rate Calculation</h4>
             
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-green-500 hover:bg-green-500">Present</Badge>
-                  <span className="text-slate-300">Counts toward attendance</span>
+              <div className="flex items-start gap-3">
+                <Badge className="bg-green-500 hover:bg-green-500 flex-shrink-0">Present</Badge>
+                <div className="flex-1">
+                  <div className="text-slate-300">✅ Increases attendance rate</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Fully counted as attending</div>
                 </div>
-                <span className="text-green-400 font-medium">✓</span>
               </div>
               
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-yellow-500 hover:bg-yellow-500">Late</Badge>
-                  <span className="text-slate-300">Counts toward attendance</span>
+              <div className="flex items-start gap-3">
+                <Badge className="bg-yellow-500 hover:bg-yellow-500 flex-shrink-0">Late</Badge>
+                <div className="flex-1">
+                  <div className="text-slate-300">✅ Increases attendance rate</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Counted as attending (arrived late but present)</div>
                 </div>
-                <span className="text-green-400 font-medium">✓</span>
               </div>
               
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">Excused</Badge>
-                  <span className="text-slate-300">Counts toward attendance</span>
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="flex-shrink-0">Excused</Badge>
+                <div className="flex-1">
+                  <div className="text-slate-300">✅ Increases attendance rate</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Legitimate absence - does not penalize student</div>
                 </div>
-                <span className="text-green-400 font-medium">✓</span>
               </div>
               
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="destructive">Absent</Badge>
-                  <span className="text-slate-300">Does NOT count</span>
+              <div className="flex items-start gap-3">
+                <Badge variant="destructive" className="flex-shrink-0">Absent</Badge>
+                <div className="flex-1">
+                  <div className="text-slate-300">❌ Decreases attendance rate</div>
+                  <div className="text-xs text-slate-400 mt-0.5">Unexcused absence - counted as not attending</div>
                 </div>
-                <span className="text-red-400 font-medium">✗</span>
               </div>
             </div>
             

@@ -17,6 +17,7 @@ import { AllTeachersModal } from "@/components/AllTeachersModal";
 import { StudyCalendarModal } from "@/components/StudyCalendarModal";
 import { StudyGroupsModal } from "@/components/StudyGroupsModal";
 import { LiveClock } from "@/components/LiveClock";
+import { AttendanceBadges } from "@/components/AttendanceBadges";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -252,6 +253,16 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Attendance Achievements */}
+        {attendanceRate && (
+          <div className="mb-8">
+            <AttendanceBadges 
+              attendanceRate={parseFloat(attendanceRate.replace('%', ''))} 
+              totalDays={studentInfo?.totalDays}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Teachers Card */}

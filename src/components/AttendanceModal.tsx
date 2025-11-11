@@ -326,9 +326,9 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0">
-          <CheckSquare className="w-4 h-4 mr-2" />
-          Take Attendance
+        <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 text-xs h-auto py-2.5 px-3">
+          <CheckSquare className="w-4 h-4 mr-1.5 flex-shrink-0" />
+          <span className="whitespace-normal leading-tight">Take Attendance</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
