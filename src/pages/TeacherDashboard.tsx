@@ -667,7 +667,7 @@ const TeacherDashboard = () => {
       <TeacherProfileModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
-        teacherId={teacherInfo?.profile?.id || ''}
+        teacherId={teacherInfo?.profile?.user_id || ''}
       />
     </div>
   );
