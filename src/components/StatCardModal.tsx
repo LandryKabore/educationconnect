@@ -303,12 +303,11 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
           continue;
         }
 
-        // Get attendance data for these students - only records taken by this teacher
+        // Get attendance data for these students - for this class only
         const { data: attendanceRecords, error: attendanceError } = await supabase
           .from("enhanced_attendance")
           .select("student_user_id, status")
           .eq("class_section_id", assignment.class_sections.id)
-          .eq("taken_by", teacherUserId)
           .in("student_user_id", studentIds);
 
         if (attendanceError) {
@@ -339,10 +338,8 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
               record => record.status === "present" || record.status === "late" || record.status === "excused"
             ).length;
             attendancePercentage = Math.round((attendingCount / studentAttendanceRecords.length) * 100);
-          } else {
-            // Default to 95% if no records (new student)
-            attendancePercentage = 95;
           }
+          // Note: No default value - students with no records will show 0%
 
           allStudentsWithAttendance.push({
             id: enrollment.student_user_id,
