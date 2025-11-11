@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Users, GraduationCap, BookOpen } from "lucide-react";
 
@@ -22,11 +23,17 @@ export default function Auth() {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signin" | "firsttime">("signin");
 
   // Shared fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+
+  // First time setup fields
+  const [tempPassword, setTempPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Signup-only fields
   const [firstName, setFirstName] = useState("");
@@ -144,6 +151,90 @@ export default function Auth() {
     }
   };
 
+  const handleFirstTimeSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!username || !tempPassword || !newPassword || !confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      if (selectedRole === 'teacher') {
+        const { data, error } = await supabase.functions.invoke('verify-teacher-temp-login', {
+          body: { username, tempPassword }
+        });
+
+        if (error) throw error;
+
+        if (data.temporary_login) {
+          navigate('/teacher-first-login', { 
+            state: { 
+              username,
+              teacherId: data.teacher_id,
+              firstName: data.first_name,
+              lastName: data.last_name
+            } 
+          });
+        } else {
+          throw new Error("Invalid temporary credentials or already used.");
+        }
+      } else if (selectedRole === 'student') {
+        const { data, error } = await supabase.functions.invoke('verify-student-login', {
+          body: { username, password: tempPassword }
+        });
+
+        if (error) throw error;
+
+        if (data.temporary_login) {
+          navigate('/complete-student-setup', { 
+            state: { 
+              username,
+              studentId: data.student_id,
+              firstName: data.first_name,
+              lastName: data.last_name
+            } 
+          });
+        } else {
+          throw new Error("Invalid temporary credentials or already used.");
+        }
+      }
+      
+    } catch (err: any) {
+      toast({ 
+        title: "First time setup failed", 
+        description: err.message ?? "Invalid temporary credentials.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStudentTempLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -158,10 +249,15 @@ export default function Auth() {
       if (error) throw error;
 
       if (data.temporary_login) {
-        // Create a temporary session for first login flow
-        localStorage.setItem('student_first_login', JSON.stringify(data));
-        navigate('/student-first-login', { replace: true });
-      } else if (data.success) {
+        toast({
+          title: "First Time Login",
+          description: "Please use the 'First Time' tab to set your permanent password.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data.success) {
         // Set session and redirect to dashboard
         if (data.session) {
           await supabase.auth.setSession(data.session);
@@ -192,10 +288,18 @@ export default function Auth() {
 
       if (error) throw error;
 
-      if (data.success) {
-        // Create a temporary session for first login flow
-        localStorage.setItem('teacher_first_login', JSON.stringify(data.teacherInfo));
-        navigate('/teacher-first-login', { replace: true });
+      if (data.temporary_login) {
+        toast({
+          title: "First Time Login",
+          description: "Please use the 'First Time' tab to set your permanent password.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data.success && data.session) {
+        await supabase.auth.setSession(data.session);
+        navigate('/teacher-dashboard', { replace: true });
       }
     } catch (err: any) {
       toast({ 
@@ -655,14 +759,24 @@ export default function Auth() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2 mb-6">
-              <Button variant={mode === "signin" ? "default" : "outline"} onClick={() => setMode("signin")}>
-                Sign In
-              </Button>
-              <Button variant={mode === "signup" ? "default" : "outline"} onClick={() => setMode("signup")}>
-                Sign Up
-              </Button>
-            </div>
+            {/* Show tabs for teachers and students, toggle for parents */}
+            {(selectedRole === "teacher" || selectedRole === "student") ? (
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "signin" | "firsttime")} className="w-full mb-6">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="signin">Sign In</TabsTrigger>
+                  <TabsTrigger value="firsttime">First Time</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : (
+              <div className="flex gap-2 mb-6">
+                <Button variant={mode === "signin" ? "default" : "outline"} onClick={() => setMode("signin")}>
+                  Sign In
+                </Button>
+                <Button variant={mode === "signup" ? "default" : "outline"} onClick={() => setMode("signup")}>
+                  Sign Up
+                </Button>
+              </div>
+            )}
 
             {selectedRole === "parent" && (
               <div className="flex gap-2 mb-6 p-3 bg-secondary/20 rounded-lg">
@@ -686,7 +800,61 @@ export default function Auth() {
               </div>
             )}
 
-            {mode === "signin" ? (
+            {/* Teacher/Student First Time Setup Form */}
+            {(selectedRole === "teacher" || selectedRole === "student") && activeTab === "firsttime" ? (
+              <form onSubmit={handleFirstTimeSetup} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firsttime-username">Username</Label>
+                  <Input 
+                    id="firsttime-username" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)} 
+                    placeholder="Enter your temporary username"
+                    required 
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="firsttime-temp-password">Temporary Password</Label>
+                  <Input 
+                    id="firsttime-temp-password" 
+                    type="password"
+                    value={tempPassword} 
+                    onChange={(e) => setTempPassword(e.target.value)} 
+                    placeholder="Enter your temporary password"
+                    required 
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="firsttime-new-password">New Password</Label>
+                  <Input 
+                    id="firsttime-new-password" 
+                    type="password"
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    placeholder="Enter your new password"
+                    required 
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="firsttime-confirm-password">Confirm New Password</Label>
+                  <Input 
+                    id="firsttime-confirm-password" 
+                    type="password"
+                    value={confirmPassword} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    placeholder="Confirm your new password"
+                    required 
+                  />
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "Setting up..." : "Complete First Time Setup"}
+                </Button>
+              </form>
+            ) : mode === "signin" || activeTab === "signin" ? (
               <form onSubmit={handleSignIn} className="space-y-4">
                 {selectedRole === "parent" && parentLinkMode === "code" && (
                   <div className="space-y-2">
@@ -822,14 +990,17 @@ export default function Auth() {
               </form>
             )}
 
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              <button
-                className="underline underline-offset-4 hover:text-foreground"
-                onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
-              >
-                {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-              </button>
-            </div>
+            {/* Only show toggle for parents */}
+            {selectedRole === "parent" && (
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                <button
+                  className="underline underline-offset-4 hover:text-foreground"
+                  onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
+                >
+                  {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
