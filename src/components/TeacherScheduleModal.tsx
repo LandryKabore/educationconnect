@@ -64,9 +64,6 @@ export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: Teach
             <Table className="border-collapse">
               <TableHeader>
                 <TableRow className="bg-slate-700/50 hover:bg-slate-700/50">
-                  <TableHead className="border border-slate-600 font-bold text-white text-center w-32">
-                    TIME
-                  </TableHead>
                   {dayOrder.map(day => (
                     <TableHead key={day} className="border border-slate-600 font-bold text-white text-center capitalize">
                       {day}
@@ -76,14 +73,8 @@ export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: Teach
               </TableHeader>
               <TableBody>
                 {timeSlots.map(timeSlot => {
-                  const [startTime, endTime] = timeSlot.split('-');
                   return (
                     <TableRow key={timeSlot} className="hover:bg-slate-700/30">
-                      <TableCell className="border border-slate-600 font-medium text-slate-300 text-center bg-slate-700/30 align-top py-3">
-                        <div className="text-sm">{startTime}</div>
-                        <div className="text-xs text-slate-400">to</div>
-                        <div className="text-sm">{endTime}</div>
-                      </TableCell>
                       {dayOrder.map(day => {
                         const key = `${timeSlot}-${day}`;
                         const classData = scheduleGrid[key];
@@ -92,7 +83,7 @@ export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: Teach
                           <TableCell key={key} className="border border-slate-600 p-2 align-top">
                             {classData ? (
                               <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 rounded-md p-3 hover:border-orange-400/50 transition-colors">
-                                <div className="flex items-start gap-2 mb-1">
+                                <div className="flex items-start gap-2 mb-2">
                                   <BookOpen className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                                   <div className="flex-1 min-w-0">
                                     <div className="font-semibold text-white text-sm truncate">
@@ -108,6 +99,10 @@ export const TeacherScheduleModal = ({ isOpen, onClose, scheduleClasses }: Teach
                                       {classData.student_count} students
                                     </div>
                                   </div>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-orange-400 font-medium border-t border-orange-500/20 pt-2">
+                                  <Clock className="w-3 h-3" />
+                                  {classData.time_start} - {classData.time_end}
                                 </div>
                               </div>
                             ) : null}
