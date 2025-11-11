@@ -41,9 +41,11 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const [selectedStudent, setSelectedStudent] = useState("");
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<AttendanceStats | null>(null);
+  const [className, setClassName] = useState<string>("");
 
   useEffect(() => {
     if (open) {
+      fetchClassName();
       fetchStudents();
       // Refetch attendance data when modal reopens
       if (selectedStudent) {
@@ -51,6 +53,27 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       }
     }
   }, [open, selectedClassId]);
+
+  const fetchClassName = async () => {
+    if (!selectedClassId || selectedClassId === "all") {
+      setClassName("");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("class_sections")
+        .select("name, grade_level")
+        .eq("id", selectedClassId)
+        .single();
+
+      if (error) throw error;
+      setClassName(data ? `${data.grade_level} - ${data.name}` : "");
+    } catch (error) {
+      console.error("Error fetching class name:", error);
+      setClassName("");
+    }
+  };
 
   useEffect(() => {
     if (selectedStudent) {
@@ -207,7 +230,14 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
-            Student Attendance History
+            <div className="flex flex-col">
+              <span>Student Attendance History</span>
+              {className && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  Class: {className}
+                </span>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 
