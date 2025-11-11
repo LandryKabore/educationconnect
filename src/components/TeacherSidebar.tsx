@@ -328,6 +328,7 @@ export function TeacherSidebar({ selectedClassId, onNavigate }: TeacherSidebarPr
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-8 bg-slate-800 border-slate-600 text-white"
+                      autoComplete="off"
                     />
                   </div>
                   {filteredStudents.length > 0 && (
@@ -337,6 +338,7 @@ export function TeacherSidebar({ selectedClassId, onNavigate }: TeacherSidebarPr
                           <button
                             key={student.user_id}
                             onClick={() => handleStudentClick(student.user_id)}
+                            onMouseDown={(e) => e.preventDefault()}
                             className="w-full text-left px-3 py-2 rounded-md hover:bg-slate-700/50 transition-colors"
                           >
                             <div className="font-medium text-white text-sm">
