@@ -401,7 +401,12 @@ const TeacherDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-{assignments.length > 0 ? assignments.slice(0, 3).map((assignment) => {
+{(() => {
+  const filteredAssignments = selectedClassId === "all" 
+    ? assignments 
+    : assignments.filter(a => a.class_id === selectedClassId);
+  
+  return filteredAssignments.length > 0 ? filteredAssignments.slice(0, 3).map((assignment) => {
                   const dueDate = assignment.due_date ? new Date(assignment.due_date) : null;
                   const countdown = dueDate ? getCountdown(dueDate) : null;
                   
@@ -445,16 +450,22 @@ const TeacherDashboard = () => {
                   <div className="p-4 bg-slate-700/50 rounded-lg text-center text-slate-300">
                     No assignments created yet
                   </div>
-                )}
+                );
+              })()}
               </div>
-              {assignments.length > 3 && (
+              {(() => {
+                const filteredAssignments = selectedClassId === "all" 
+                  ? assignments 
+                  : assignments.filter(a => a.class_id === selectedClassId);
+                return filteredAssignments.length > 3 && (
                 <Button 
                   onClick={() => setAllAssignmentsOpen(true)}
                   className="w-full mt-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0"
                 >
-                  View All Assignments ({assignments.length})
+                  View All Assignments ({filteredAssignments.length})
                 </Button>
-              )}
+              );
+              })()}
             </CardContent>
           </Card>
 
@@ -470,7 +481,10 @@ const TeacherDashboard = () => {
         onAttendanceSubmitted={refetch} 
         selectedClassId={selectedClassId}
       />
-                <GradeStudentModal onGradeSubmitted={refetch} />
+                <GradeStudentModal 
+                  onGradeSubmitted={refetch}
+                  selectedClassId={selectedClassId}
+                />
                 <CreateAssignmentModal 
                   classes={classes.map(c => ({ id: c.id, name: c.name }))} 
                   subjects={subjects} 

@@ -52,6 +52,7 @@ export interface TeacherAssignment {
   max_points?: number;
   class_name: string;
   subject_name: string;
+  class_id: string;
   created_at: Date;
   formattedDueDate?: string;
   formattedCreatedDate: string;
@@ -275,6 +276,7 @@ export const useTeacherData = () => {
             due_date,
             max_points,
             created_at,
+            class_id,
             class_sections!assignments_class_id_fkey(name),
             subjects(name)
           `)
@@ -288,6 +290,7 @@ export const useTeacherData = () => {
             description: assignment.description,
             due_date: assignment.due_date ? new Date(assignment.due_date) : undefined,
             max_points: assignment.max_points,
+            class_id: assignment.class_id,
             class_name: assignment.class_sections?.name || "Unknown Class",
             subject_name: assignment.subjects?.name || "No Subject",
             created_at: new Date(assignment.created_at),

@@ -13,6 +13,7 @@ interface Assignment {
   id: string;
   title: string;
   max_points: number;
+  class_id?: string;
 }
 
 interface Student {
@@ -23,9 +24,10 @@ interface Student {
 
 interface GradeStudentModalProps {
   onGradeSubmitted: () => void;
+  selectedClassId?: string;
 }
 
-export function GradeStudentModal({ onGradeSubmitted }: GradeStudentModalProps) {
+export function GradeStudentModal({ onGradeSubmitted, selectedClassId }: GradeStudentModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -49,11 +51,18 @@ export function GradeStudentModal({ onGradeSubmitted }: GradeStudentModalProps) 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("assignments")
-        .select("id, title, max_points")
+        .select("id, title, max_points, class_id")
         .eq("teacher_id", user.id)
         .order("created_at", { ascending: false });
+
+      // Filter by class if a specific class is selected
+      if (selectedClassId && selectedClassId !== "all") {
+        query = query.eq("class_id", selectedClassId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setAssignments(data || []);
@@ -68,21 +77,30 @@ export function GradeStudentModal({ onGradeSubmitted }: GradeStudentModalProps) 
       if (!user) return;
 
       // Get students from teacher's teaching assignments
-      const { data: assignments } = await supabase
+      let query = supabase
         .from("teaching_assignments")
         .select("class_section_id")
         .eq("teacher_user_id", user.id);
 
+      // Filter by class if a specific class is selected
+      if (selectedClassId && selectedClassId !== "all") {
+        query = query.eq("class_section_id", selectedClassId);
+      }
+
+      const { data: assignments } = await query;
+
       if (assignments && assignments.length > 0) {
         const classSectionIds = assignments.map(a => a.class_section_id);
         
-        const { data, error } = await supabase
+        let enrollmentQuery = supabase
           .from("enrollments")
           .select(`
             student_user_id,
             profiles!enrollments_student_user_id_fkey(first_name, last_name)
           `)
           .in("class_section_id", classSectionIds);
+
+        const { data, error } = await enrollmentQuery;
 
         if (error) throw error;
         
