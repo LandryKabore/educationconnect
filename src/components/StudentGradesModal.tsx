@@ -16,6 +16,7 @@ interface Grade {
   grade_points: number;
   assignment_title: string;
   graded_at: string;
+  feedback?: string;
 }
 
 interface StudentGradesModalProps {
@@ -42,17 +43,55 @@ export function StudentGradesModal({ open, onOpenChange }: StudentGradesModalPro
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase.rpc('get_student_grades', {
-        student_user_id: user.id
-      });
+      // Query grades table directly to ensure RLS is applied
+      const { data, error } = await supabase
+        .from('grades')
+        .select(`
+          student_id,
+          assignment_id,
+          points_earned,
+          feedback,
+          graded_at,
+          assignments!inner(
+            id,
+            title,
+            max_points,
+            subjects(name)
+          )
+        `)
+        .eq('student_id', user.id)
+        .order('graded_at', { ascending: false });
 
       if (error) throw error;
-      setGrades(data || []);
+
+      // Transform the data to match the Grade interface
+      const transformedGrades = (data || []).map((grade: any) => ({
+        student_id: grade.student_id,
+        assignment_id: grade.assignment_id,
+        points_earned: grade.points_earned || 0,
+        max_points: grade.assignments.max_points || 100,
+        subject_name: grade.assignments.subjects?.name || 'Unknown',
+        percentage: ((grade.points_earned || 0) / (grade.assignments.max_points || 100)) * 100,
+        grade_points: calculateGradePoints(((grade.points_earned || 0) / (grade.assignments.max_points || 100)) * 100),
+        assignment_title: grade.assignments.title,
+        graded_at: grade.graded_at,
+        feedback: grade.feedback
+      }));
+
+      setGrades(transformedGrades);
     } catch (error) {
       console.error("Error fetching grades:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateGradePoints = (percentage: number): number => {
+    if (percentage >= 90) return 4.0;
+    if (percentage >= 80) return 3.0;
+    if (percentage >= 70) return 2.0;
+    if (percentage >= 60) return 1.0;
+    return 0.0;
   };
 
   const fetchGPA = async () => {
@@ -133,7 +172,7 @@ export function StudentGradesModal({ open, onOpenChange }: StudentGradesModalPro
                   {grades.map((grade, index) => (
                     <Card key={`${grade.assignment_id}-${index}`}>
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h4 className="font-medium">{grade.assignment_title}</h4>
@@ -158,6 +197,12 @@ export function StudentGradesModal({ open, onOpenChange }: StudentGradesModalPro
                             </Badge>
                           </div>
                         </div>
+                        {grade.feedback && (
+                          <div className="pt-3 border-t">
+                            <p className="text-sm font-medium text-muted-foreground mb-1">{t('student.teacherFeedback')}:</p>
+                            <p className="text-sm">{grade.feedback}</p>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
