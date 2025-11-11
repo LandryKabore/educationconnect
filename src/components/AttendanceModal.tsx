@@ -335,10 +335,10 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarIcon className="w-5 h-5" />
-            Take Attendance - {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
+            Take Attendance - {format(datePickerDate, 'EEEE, MMMM d, yyyy')}
           </DialogTitle>
           <DialogDescription>
-            Record attendance for your class on {format(new Date(selectedDate), 'MMMM d, yyyy')}.
+            Record attendance for your class on {format(datePickerDate, 'MMMM d, yyyy')}.
             {attendanceDates.has(selectedDate) && (
               <span className="text-orange-400 ml-2">• Editing existing attendance</span>
             )}
