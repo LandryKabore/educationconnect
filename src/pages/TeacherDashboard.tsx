@@ -19,6 +19,7 @@ import { GradeStudentModal } from "@/components/GradeStudentModal";
 import { AttendanceModal } from "@/components/AttendanceModal";
 import { AttendanceReportModal } from "@/components/AttendanceReportModal";
 import { StudentAttendanceDetailsModal } from "@/components/StudentAttendanceDetailsModal";
+import { AttendanceRiskAnalysisModal } from "@/components/AttendanceRiskAnalysisModal";
 import { StatCardModal } from "@/components/StatCardModal";
 import { MessagesModal } from "@/components/MessagesModal";
 import { ParentSelectorModal } from "@/components/ParentSelectorModal";
@@ -495,6 +496,7 @@ const TeacherDashboard = () => {
                 <AllGradesModal />
                 <AttendanceReportModal />
                 <StudentAttendanceDetailsModal />
+                <AttendanceRiskAnalysisModal />
               </div>
             </CardContent>
           </Card>
