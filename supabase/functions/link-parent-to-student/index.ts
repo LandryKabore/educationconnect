@@ -51,19 +51,36 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Verify the link exists and matches the verification code
+    // Verify the link exists and matches the verification code (allow reuse for multiple parents)
     const { data: linkData, error: linkError } = await supabase
       .from('parent_student_links')
       .select('*')
       .eq('id', linkId)
       .eq('verification_code', verificationCode)
-      .eq('status', 'pending')
       .maybeSingle();
 
     if (linkError || !linkData) {
       console.error('Link verification error:', linkError);
       return new Response(JSON.stringify({ 
         error: 'Invalid or expired verification code' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if this parent is already linked to this student
+    const { data: existingLink } = await supabase
+      .from('parent_student_links')
+      .select('id')
+      .eq('parent_user_id', parentUserId)
+      .eq('student_user_id', linkData.student_user_id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (existingLink) {
+      return new Response(JSON.stringify({ 
+        error: 'You are already linked to this student' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -138,28 +155,29 @@ async function handler(req: Request): Promise<Response> {
       console.log('Parent profile created successfully');
     }
 
-    // Update the parent-student link
-    const { error: updateError } = await supabase
+    // Create a new active link for this parent (keep the original pending link for reuse)
+    const { error: insertError } = await supabase
       .from('parent_student_links')
-      .update({
+      .insert({
         parent_user_id: parentUserId,
-        status: 'active',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', linkId);
+        student_user_id: linkData.student_user_id,
+        verification_method: 'code',
+        verification_code: verificationCode,
+        status: 'active'
+      });
 
-    if (updateError) {
-      console.error('Error updating parent link:', updateError);
+    if (insertError) {
+      console.error('Error creating parent link:', insertError);
       return new Response(JSON.stringify({ 
         error: 'Failed to link parent to student',
-        details: updateError.message 
+        details: insertError.message 
       }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Parent-student link updated successfully');
+    console.log('Parent-student link created successfully');
 
     return new Response(JSON.stringify({ 
       success: true,
