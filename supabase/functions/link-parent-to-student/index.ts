@@ -51,16 +51,18 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Verify the link exists and matches the verification code (allow reuse for multiple parents)
-    const { data: linkData, error: linkError } = await supabase
+    // Verify the link exists and matches the verification code
+    // We look for a pending link that serves as the "template" for this verification code
+    const { data: pendingLink, error: pendingError } = await supabase
       .from('parent_student_links')
       .select('*')
-      .eq('id', linkId)
       .eq('verification_code', verificationCode)
+      .eq('status', 'pending')
+      .is('parent_user_id', null)
       .maybeSingle();
 
-    if (linkError || !linkData) {
-      console.error('Link verification error:', linkError);
+    if (pendingError || !pendingLink) {
+      console.error('Link verification error:', pendingError);
       return new Response(JSON.stringify({ 
         error: 'Invalid or expired verification code' 
       }), {
@@ -74,7 +76,7 @@ async function handler(req: Request): Promise<Response> {
       .from('parent_student_links')
       .select('id')
       .eq('parent_user_id', parentUserId)
-      .eq('student_user_id', linkData.student_user_id)
+      .eq('student_user_id', pendingLink.student_user_id)
       .eq('status', 'active')
       .maybeSingle();
 
@@ -155,12 +157,12 @@ async function handler(req: Request): Promise<Response> {
       console.log('Parent profile created successfully');
     }
 
-    // Create a new active link for this parent (keep the original pending link for reuse)
+    // Create a new active link for this parent (keep the pending link for future use)
     const { error: insertError } = await supabase
       .from('parent_student_links')
       .insert({
         parent_user_id: parentUserId,
-        student_user_id: linkData.student_user_id,
+        student_user_id: pendingLink.student_user_id,
         verification_method: 'code',
         verification_code: verificationCode,
         status: 'active'

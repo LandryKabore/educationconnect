@@ -318,12 +318,13 @@ export default function Auth() {
     try {
       setLoading(true);
       
-      // Find the parent-student link with this verification code (allow reuse for multiple parents)
+      // Find the parent-student link with this verification code (must be pending and available)
       const { data: linkData, error: linkError } = await supabase
         .from('parent_student_links')
         .select('*')
         .eq('verification_code', verificationCode)
-        .limit(1)
+        .eq('status', 'pending')
+        .is('parent_user_id', null)
         .maybeSingle();
 
       if (linkError || !linkData) {
