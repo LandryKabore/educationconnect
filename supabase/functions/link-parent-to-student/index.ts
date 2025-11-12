@@ -8,8 +8,8 @@ interface LinkParentRequest {
   parentUserId: string;
   verificationCode: string;
   parentEmail: string;
-  parentFirstName: string;
-  parentLastName: string;
+  parentFirstName?: string;
+  parentLastName?: string;
   schoolId: string;
 }
 
@@ -42,9 +42,9 @@ async function handler(req: Request): Promise<Response> {
 
     const { linkId, parentUserId, verificationCode, parentEmail, parentFirstName, parentLastName, schoolId } = body;
 
-    if (!linkId || !parentUserId || !verificationCode || !parentEmail || !parentFirstName || !parentLastName || !schoolId) {
+    if (!linkId || !parentUserId || !verificationCode || !parentEmail || !schoolId) {
       return new Response(JSON.stringify({ 
-        error: 'Missing required fields: linkId, parentUserId, verificationCode, parentEmail, parentFirstName, parentLastName, schoolId' 
+        error: 'Missing required fields: linkId, parentUserId, verificationCode, parentEmail, schoolId' 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -83,6 +83,16 @@ async function handler(req: Request): Promise<Response> {
 
     if (!parentProfile) {
       console.log('Parent profile not found, creating it...');
+      
+      // Validate firstName and lastName are provided for profile creation
+      if (!parentFirstName || !parentLastName) {
+        return new Response(JSON.stringify({ 
+          error: 'First name and last name are required for new parent accounts' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       
       // Create profile using provided data
       const { error: createProfileError } = await supabase

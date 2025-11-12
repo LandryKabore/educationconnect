@@ -399,15 +399,13 @@ export default function Auth() {
         if (signinError) throw signinError;
         
         if (authData.user) {
-          // Call edge function to link parent to student
+          // Call edge function to link parent to student (no firstName/lastName needed for existing account)
           const { error: linkError } = await supabase.functions.invoke('link-parent-to-student', {
             body: {
               linkId: linkData.id,
               parentUserId: authData.user.id,
               verificationCode: verificationCode,
               parentEmail: email,
-              parentFirstName: firstName,
-              parentLastName: lastName,
               schoolId: studentData.school_id
             }
           });
