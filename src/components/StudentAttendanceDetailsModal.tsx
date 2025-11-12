@@ -158,22 +158,34 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
+      // IMPORTANT: Only show records for the selected class with subject_id
+      // If no class is selected, don't fetch any records (prevents confusion)
+      if (!selectedClassId || selectedClassId === "all") {
+        setAttendanceRecords([]);
+        setStats({
+          totalDays: 0,
+          present: 0,
+          absent: 0,
+          late: 0,
+          excused: 0,
+          attendanceRate: 0
+        });
+        setLoading(false);
+        return;
+      }
+
       // Build query - filter by student, date, class, subject, and teacher
       let query = supabase
         .from("enhanced_attendance")
         .select("date, status, notes, class_section_id, subject_id")
         .eq("student_user_id", selectedStudent)
         .eq("taken_by", user.id) // Only show attendance records this teacher created
+        .eq("class_section_id", selectedClassId) // Must have a specific class selected
         .gte("date", startDate);
 
-      // Filter by selected class if specified
-      if (selectedClassId && selectedClassId !== "all") {
-        query = query.eq("class_section_id", selectedClassId);
-        
-        // Also filter by teacher's subject in this class
-        if (teacherSubjectId) {
-          query = query.eq("subject_id", teacherSubjectId);
-        }
+      // Also filter by teacher's subject in this class (exclude old records with null subject_id)
+      if (teacherSubjectId) {
+        query = query.eq("subject_id", teacherSubjectId);
       }
 
       const { data: attendanceData, error } = await query.order("date", { ascending: false });
@@ -254,9 +266,13 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
             <User className="w-5 h-5" />
             <div className="flex flex-col">
               <span>Student Attendance History</span>
-              {className && (
+              {className ? (
                 <span className="text-sm font-normal text-muted-foreground">
-                  Class: {className}
+                  Showing attendance for: {className}
+                </span>
+              ) : (
+                <span className="text-sm font-normal text-destructive">
+                  ⚠️ Please select a specific class to view accurate attendance data
                 </span>
               )}
             </div>
