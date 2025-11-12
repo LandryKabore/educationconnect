@@ -42,20 +42,55 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [className, setClassName] = useState<string>("");
+  const [internalClassId, setInternalClassId] = useState<string>("");
+  const [classes, setClasses] = useState<Array<{ id: string; name: string; subjectId: string }>>([]);
 
   useEffect(() => {
     if (open) {
-      fetchClassName();
-      fetchStudents();
-      // Refetch attendance data when modal reopens
-      if (selectedStudent) {
-        fetchStudentAttendance();
+      fetchClasses();
+      // If a specific class is selected from header, use it
+      if (selectedClassId && selectedClassId !== "all") {
+        setInternalClassId(selectedClassId);
       }
     }
   }, [open, selectedClassId]);
 
+  useEffect(() => {
+    if (internalClassId) {
+      fetchClassName();
+      fetchStudents();
+    }
+  }, [internalClassId]);
+
+  const fetchClasses = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: assignments } = await supabase
+        .from("teaching_assignments")
+        .select(`
+          class_section_id,
+          subject_id,
+          class_sections!inner(name, grade_level)
+        `)
+        .eq("teacher_user_id", user.id);
+
+      if (assignments) {
+        const classList = assignments.map((a: any) => ({
+          id: a.class_section_id,
+          name: `${a.class_sections.grade_level} - ${a.class_sections.name}`,
+          subjectId: a.subject_id
+        }));
+        setClasses(classList);
+      }
+    } catch (error) {
+      console.error("Error fetching classes:", error);
+    }
+  };
+
   const fetchClassName = async () => {
-    if (!selectedClassId || selectedClassId === "all") {
+    if (!internalClassId || internalClassId === "all") {
       setClassName("");
       return;
     }
@@ -64,7 +99,7 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       const { data, error } = await supabase
         .from("class_sections")
         .select("name, grade_level")
-        .eq("id", selectedClassId)
+        .eq("id", internalClassId)
         .single();
 
       if (error) throw error;
@@ -86,49 +121,28 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get class sections the teacher is assigned to
-      const { data: assignments } = await supabase
-        .from("teaching_assignments")
-        .select("class_section_id")
-        .eq("teacher_user_id", user.id);
-
-      if (!assignments?.length) return;
-
-      let classSectionIds = assignments.map(a => a.class_section_id);
-
-      // Filter by selected class if specified
-      if (selectedClassId && selectedClassId !== "all") {
-        classSectionIds = classSectionIds.filter(id => id === selectedClassId);
-      }
-
-      if (classSectionIds.length === 0) {
+      if (!internalClassId || internalClassId === "all") {
         setStudents([]);
         return;
       }
 
-      // Get students enrolled in the filtered classes
+      // Get students enrolled in the selected class
       const { data: enrollments, error } = await supabase
         .from("enrollments")
         .select(`
           student_user_id,
           profiles!enrollments_student_user_id_fkey(first_name, last_name)
         `)
-        .in("class_section_id", classSectionIds);
+        .eq("class_section_id", internalClassId);
 
       if (error) throw error;
 
-      // Remove duplicates and format
-      const uniqueStudents = new Map<string, Student>();
-      enrollments?.forEach(enrollment => {
-        if (enrollment.profiles && !uniqueStudents.has(enrollment.student_user_id)) {
-          uniqueStudents.set(enrollment.student_user_id, {
-            id: enrollment.student_user_id,
-            name: `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
-          });
-        }
-      });
+      const studentList = enrollments?.map(enrollment => ({
+        id: enrollment.student_user_id,
+        name: `${enrollment.profiles?.first_name || ''} ${enrollment.profiles?.last_name || ''}`.trim()
+      })) || [];
 
-      setStudents(Array.from(uniqueStudents.values()).sort((a, b) => a.name.localeCompare(b.name)));
+      setStudents(studentList.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Error fetching students:", error);
     }
@@ -142,12 +156,12 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
 
       // Get the teacher's subject assignment for this class
       let teacherSubjectId = null;
-      if (selectedClassId && selectedClassId !== "all") {
+      if (internalClassId && internalClassId !== "all") {
         const { data: assignment } = await supabase
           .from("teaching_assignments")
           .select("subject_id")
           .eq("teacher_user_id", user.id)
-          .eq("class_section_id", selectedClassId)
+          .eq("class_section_id", internalClassId)
           .single();
         
         teacherSubjectId = assignment?.subject_id;
@@ -159,8 +173,7 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
       // IMPORTANT: Only show records for the selected class with subject_id
-      // If no class is selected, don't fetch any records (prevents confusion)
-      if (!selectedClassId || selectedClassId === "all") {
+      if (!internalClassId || internalClassId === "all") {
         setAttendanceRecords([]);
         setStats({
           totalDays: 0,
@@ -180,7 +193,7 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
         .select("date, status, notes, class_section_id, subject_id")
         .eq("student_user_id", selectedStudent)
         .eq("taken_by", user.id) // Only show attendance records this teacher created
-        .eq("class_section_id", selectedClassId) // Must have a specific class selected
+        .eq("class_section_id", internalClassId) // Must have a specific class selected
         .gte("date", startDate);
 
       // Also filter by teacher's subject in this class (exclude old records with null subject_id)
@@ -266,13 +279,9 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
             <User className="w-5 h-5" />
             <div className="flex flex-col">
               <span>Student Attendance History</span>
-              {className ? (
+              {className && (
                 <span className="text-sm font-normal text-muted-foreground">
-                  Showing attendance for: {className}
-                </span>
-              ) : (
-                <span className="text-sm font-normal text-destructive">
-                  ⚠️ Please select a specific class to view accurate attendance data
+                  Class: {className}
                 </span>
               )}
             </div>
@@ -280,13 +289,36 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Class Selector (if "All Classes" is selected in header) */}
+          {(!selectedClassId || selectedClassId === "all") && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Class</label>
+              <Select value={internalClassId} onValueChange={setInternalClassId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a class" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes.map((cls) => (
+                    <SelectItem key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Student Selector with Refresh Button */}
           <div className="flex gap-2">
             <div className="flex-1 space-y-2">
               <label className="text-sm font-medium">Select Student</label>
-              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+              <Select 
+                value={selectedStudent} 
+                onValueChange={setSelectedStudent}
+                disabled={!internalClassId || internalClassId === "all"}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a student" />
+                  <SelectValue placeholder={!internalClassId || internalClassId === "all" ? "Select a class first" : "Choose a student"} />
                 </SelectTrigger>
                 <SelectContent>
                   {students.map((student) => (
