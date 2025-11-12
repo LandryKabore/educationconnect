@@ -158,11 +158,12 @@ export function StudentAttendanceDetailsModal({ selectedClassId }: StudentAttend
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const startDate = format(ninetyDaysAgo, 'yyyy-MM-dd');
 
-      // Build query - filter by student, date, class, and subject
+      // Build query - filter by student, date, class, subject, and teacher
       let query = supabase
         .from("enhanced_attendance")
         .select("date, status, notes, class_section_id, subject_id")
         .eq("student_user_id", selectedStudent)
+        .eq("taken_by", user.id) // Only show attendance records this teacher created
         .gte("date", startDate);
 
       // Filter by selected class if specified
