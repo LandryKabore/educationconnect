@@ -15,6 +15,7 @@ import { ParentGradesModal } from "@/components/ParentGradesModal";
 import { ParentCalendarModal } from "@/components/ParentCalendarModal";
 import { LiveClock } from "@/components/LiveClock";
 import { EditSelfProfileModal } from "@/components/EditSelfProfileModal";
+import { ChildSelectorDropdown } from "@/components/ChildSelectorDropdown";
 import { supabase } from "@/integrations/supabase/client";
 
 const ParentDashboard = () => {
@@ -181,22 +182,20 @@ const ParentDashboard = () => {
                 <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
                   <GraduationCap className="w-8 h-8 text-white" />
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-4">
-                    <div>
+              <div className="flex-1">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex-1">
                       <CardTitle className="text-xl text-white">{currentChild?.name || "Select Child"}</CardTitle>
                       <CardDescription className="text-slate-300">{currentChild?.class || "No class assigned"}</CardDescription>
                     </div>
-                    {children.length > 1 && (
-                      <select 
-                        value={selectedChildId || ''} 
-                        onChange={(e) => setSelectedChildId(e.target.value)}
-                        className="bg-slate-700 text-white rounded px-3 py-1 text-sm border border-slate-600"
-                      >
-                        {children.map(child => (
-                          <option key={child.id} value={child.id}>{child.name}</option>
-                        ))}
-                      </select>
+                    {children.length > 0 && (
+                      <div className="w-full sm:w-64">
+                        <ChildSelectorDropdown
+                          children={children}
+                          selectedChildId={selectedChildId}
+                          onSelectChild={setSelectedChildId}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>

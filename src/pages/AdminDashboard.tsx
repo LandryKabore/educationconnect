@@ -40,6 +40,7 @@ import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { SchoolAdminManagementModal } from "@/components/SchoolAdminManagementModal";
 import { AdminGuideModal } from "@/components/AdminGuideModal";
 import { ClassSectionDetailsModal } from "@/components/ClassSectionDetailsModal";
+import { ParentLinksManagementModal } from "@/components/ParentLinksManagementModal";
 import { LiveClock } from "@/components/LiveClock";
 
 interface AdminData {
@@ -88,6 +89,7 @@ const AdminDashboard = () => {
   const [schoolAdminModalOpen, setSchoolAdminModalOpen] = useState(false);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [classSectionDetailsOpen, setClassSectionDetailsOpen] = useState(false);
+  const [parentLinksModalOpen, setParentLinksModalOpen] = useState(false);
   const [viewingClassSection, setViewingClassSection] = useState<any>(null);
   
   // State for items being edited
@@ -537,6 +539,20 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Parent-Student Links Card */}
+          <Card 
+            className="bg-slate-800/50 border-slate-700 shadow-lg cursor-pointer hover:bg-slate-800/70 transition-colors"
+            onClick={() => setParentLinksModalOpen(true)}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-200">Parent Links</CardTitle>
+              <Users className="w-4 h-4 text-pink-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-slate-300">Manage parent-student links</div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Management Sections */}
@@ -970,6 +986,12 @@ const AdminDashboard = () => {
           setViewingClassSection(null);
         }}
         classSection={viewingClassSection}
+      />
+
+      <ParentLinksManagementModal
+        isOpen={parentLinksModalOpen}
+        onClose={() => setParentLinksModalOpen(false)}
+        selectedSchoolId={selectedSchoolId}
       />
 
       <AlertDialog open={!!deletingClassSection} onOpenChange={(open) => !open && setDeletingClassSection(null)}>
