@@ -129,9 +129,17 @@ export function AttendanceReportModal() {
         startDate = subDays(now, 7);
     }
 
+    // Format dates as YYYY-MM-DD in local timezone
+    const formatLocalDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     return {
-      startDate: `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`,
-      endDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(now)
     };
   };
 
@@ -139,6 +147,8 @@ export function AttendanceReportModal() {
     setLoading(true);
     try {
       const { startDate, endDate } = getDateRange();
+      
+      console.log('Fetching attendance data:', { selectedClass, selectedSubjectId, startDate, endDate });
 
       // Fetch attendance records for this teacher's subject with enrollment verification
       const { data: attendanceData, error } = await supabase
@@ -158,6 +168,8 @@ export function AttendanceReportModal() {
         .order("date", { ascending: true });
 
       if (error) throw error;
+      
+      console.log('Raw attendance data fetched:', attendanceData?.length || 0, 'records');
 
       // Verify students are enrolled in the selected class
       const { data: enrolledStudents, error: enrollmentError } = await supabase
