@@ -151,6 +151,7 @@ export function AttendanceReportModal() {
       console.log('Fetching attendance data:', { selectedClass, selectedSubjectId, startDate, endDate });
 
       // Fetch attendance records for this teacher's subject with enrollment verification
+      // Include records with matching subject_id OR null subject_id (legacy records)
       const { data: attendanceData, error } = await supabase
         .from("enhanced_attendance")
         .select(`
@@ -162,7 +163,7 @@ export function AttendanceReportModal() {
           profiles!enhanced_attendance_student_user_id_fkey(first_name, last_name)
         `)
         .eq("class_section_id", selectedClass)
-        .eq("subject_id", selectedSubjectId)
+        .or(`subject_id.eq.${selectedSubjectId},subject_id.is.null`)
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date", { ascending: true });

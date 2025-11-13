@@ -198,13 +198,14 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch dates where THIS teacher took attendance for this class and subject
+      // Fetch dates where THIS teacher took attendance for this class
+      // Include records with matching subject_id OR null subject_id (legacy records)
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("date")
         .eq("class_section_id", selectedClass)
-        .eq("subject_id", selectedSubjectId)
-        .eq("taken_by", user.id);
+        .eq("taken_by", user.id)
+        .or(`subject_id.eq.${selectedSubjectId},subject_id.is.null`);
 
       if (error) throw error;
 
@@ -220,14 +221,15 @@ export function AttendanceModal({ onAttendanceSubmitted, selectedClassId }: Atte
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Load attendance records taken by THIS teacher for THIS subject only
+      // Load attendance records taken by THIS teacher
+      // Include records with matching subject_id OR null subject_id (legacy records)
       const { data, error } = await supabase
         .from("enhanced_attendance")
         .select("student_user_id, status")
         .eq("class_section_id", selectedClass)
-        .eq("subject_id", selectedSubjectId)
         .eq("date", selectedDate)
-        .eq("taken_by", user.id);
+        .eq("taken_by", user.id)
+        .or(`subject_id.eq.${selectedSubjectId},subject_id.is.null`);
 
       if (error) throw error;
 
