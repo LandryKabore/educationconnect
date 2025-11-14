@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Mail, Phone, Users, Calendar } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -25,6 +25,7 @@ interface ParentProfileModalProps {
     email: string;
     phone?: string;
     createdAt?: string;
+    avatarUrl?: string;
   } | null;
   children: ChildInfo[];
 }
@@ -54,6 +55,9 @@ export const ParentProfileModal = ({
           {/* Profile Avatar */}
           <div className="flex justify-center">
             <Avatar className="w-24 h-24 bg-gradient-to-br from-orange-500 to-red-500">
+              {parentInfo.avatarUrl && (
+                <AvatarImage src={parentInfo.avatarUrl} alt={fullName} />
+              )}
               <AvatarFallback className="text-white text-2xl font-bold bg-transparent">
                 {initials}
               </AvatarFallback>
