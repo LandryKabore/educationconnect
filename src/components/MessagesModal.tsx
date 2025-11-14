@@ -88,6 +88,9 @@ export const MessagesModal = ({
   };
 
   const selectedConv = conversations.find((c) => c.user_id === selectedConversation);
+  
+  // Use preselectedUserName if available, otherwise fall back to conversation name
+  const displayName = preselectedUserName || selectedConv?.user_name || "User";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -177,12 +180,12 @@ export const MessagesModal = ({
                   <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500">
                       <AvatarFallback className="text-white bg-transparent">
-                        {getInitials(selectedConv?.user_name || preselectedUserName || "U")}
+                        {getInitials(displayName)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <DialogTitle className="text-white">
-                        {selectedConv?.user_name || preselectedUserName}
+                        {displayName}
                       </DialogTitle>
                       {selectedConv && (
                         <Badge
