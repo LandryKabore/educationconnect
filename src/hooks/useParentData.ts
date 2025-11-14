@@ -60,6 +60,7 @@ export const useParentData = () => {
     email: string;
     phone?: string;
     createdAt?: string;
+    avatarUrl?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export const useParentData = () => {
       // Fetch parent profile information
       const { data: parentProfile } = await supabase
         .from("profiles")
-        .select("first_name, last_name, email, phone, created_at")
+        .select("first_name, last_name, email, phone, created_at, avatar_url")
         .eq("user_id", user.id)
         .single();
 
@@ -91,6 +92,7 @@ export const useParentData = () => {
           email: parentProfile.email,
           phone: parentProfile.phone || undefined,
           createdAt: new Date(parentProfile.created_at).toLocaleDateString(),
+          avatarUrl: parentProfile.avatar_url || undefined,
         });
       }
 
