@@ -247,6 +247,7 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
     let query = supabase
       .from("teaching_assignments")
       .select(`
+        subject_id,
         class_sections(
           id,
           name,
@@ -279,6 +280,8 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
     // For each class, get students and their attendance
     for (const assignment of assignments) {
       if (assignment.class_sections) {
+        const teacherSubjectId = assignment.subject_id;
+        
         // Get enrollments
         const { data: enrollments, error: enrollmentsError } = await supabase
           .from("enrollments")
@@ -303,13 +306,20 @@ export function StatCardModal({ open, onOpenChange, type, data, stats, selectedC
           continue;
         }
 
-        // Get attendance data for these students - for this class only, taken by current teacher
-        const { data: attendanceRecords, error: attendanceError } = await supabase
+        // Get attendance data for these students - filter by class, teacher, and subject
+        let attendanceQuery = supabase
           .from("enhanced_attendance")
           .select("student_user_id, status")
           .eq("class_section_id", assignment.class_sections.id)
           .eq("taken_by", teacherUserId)
           .in("student_user_id", studentIds);
+
+        // Filter by subject (only show records for this specific subject)
+        if (teacherSubjectId) {
+          attendanceQuery = attendanceQuery.eq("subject_id", teacherSubjectId);
+        }
+
+        const { data: attendanceRecords, error: attendanceError } = await attendanceQuery;
 
         if (attendanceError) {
           console.error("Error fetching attendance:", attendanceError);
