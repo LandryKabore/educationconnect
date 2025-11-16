@@ -14,6 +14,8 @@ import { format, subDays } from "date-fns";
 interface Class {
   id: string;
   name: string;
+  subject_id: string;
+  subject_name: string;
 }
 
 interface AtRiskStudent {
@@ -35,6 +37,7 @@ export function AttendanceRiskAnalysisModal() {
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
   const [sendingAlerts, setSendingAlerts] = useState(false);
   const { toast } = useToast();
@@ -46,10 +49,10 @@ export function AttendanceRiskAnalysisModal() {
   }, [open]);
 
   useEffect(() => {
-    if (selectedClass) {
+    if (selectedClass && selectedSubjectId) {
       analyzeAttendanceRisk();
     }
-  }, [selectedClass]);
+  }, [selectedClass, selectedSubjectId]);
 
   const fetchClasses = async () => {
     try {
@@ -61,6 +64,11 @@ export function AttendanceRiskAnalysisModal() {
         .select(`
           class_sections(
             id,
+            name,
+            grade_level
+          ),
+          subjects(
+            id,
             name
           )
         `)
@@ -68,17 +76,15 @@ export function AttendanceRiskAnalysisModal() {
 
       if (error) throw error;
 
-      const uniqueClasses = new Map();
-      data?.forEach(assignment => {
-        if (assignment.class_sections) {
-          uniqueClasses.set(assignment.class_sections.id, {
-            id: assignment.class_sections.id,
-            name: assignment.class_sections.name
-          });
-        }
-      });
+      // Format classes with subject information
+      const formattedClasses = data?.map(assignment => ({
+        id: assignment.class_sections?.id || '',
+        name: `${assignment.class_sections?.name} - ${assignment.subjects?.name}`,
+        subject_id: (assignment.subjects as any)?.id || '',
+        subject_name: assignment.subjects?.name || ''
+      })) || [];
 
-      setClasses(Array.from(uniqueClasses.values()));
+      setClasses(formattedClasses);
     } catch (error) {
       console.error("Error fetching classes:", error);
     }
@@ -100,7 +106,7 @@ export function AttendanceRiskAnalysisModal() {
       const now = new Date();
       const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      // Fetch all attendance records
+      // Fetch all attendance records for this specific subject
       const { data: attendanceData, error: attendanceError } = await supabase
         .from("enhanced_attendance")
         .select(`
@@ -110,6 +116,7 @@ export function AttendanceRiskAnalysisModal() {
           profiles!enhanced_attendance_student_user_id_fkey(first_name, last_name)
         `)
         .eq("class_section_id", selectedClass)
+        .eq("subject_id", selectedSubjectId)
         .gte("date", startDate)
         .lte("date", endDate);
 
@@ -350,13 +357,22 @@ export function AttendanceRiskAnalysisModal() {
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-2 flex-1">
               <label className="text-sm font-medium">Select Class</label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
+              <Select 
+                value={selectedClass} 
+                onValueChange={(value) => {
+                  setSelectedClass(value);
+                  const selectedClassData = classes.find(c => c.id === value);
+                  if (selectedClassData) {
+                    setSelectedSubjectId(selectedClassData.subject_id);
+                  }
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a class" />
+                  <SelectValue placeholder="Choose a class and subject" />
                 </SelectTrigger>
                 <SelectContent>
                   {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
+                    <SelectItem key={`${cls.id}-${cls.subject_id}`} value={cls.id}>
                       {cls.name}
                     </SelectItem>
                   ))}
