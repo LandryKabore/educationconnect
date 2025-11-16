@@ -353,16 +353,20 @@ export const useParentData = () => {
         console.log("Parent - No enrollments found for child:", childId);
       }
 
-      // Calculate attendance from enhanced_attendance
+      // Calculate attendance from enhanced_attendance with subject breakdown
       const { data: attendanceData } = await supabase
         .from("enhanced_attendance")
         .select(`
           status,
           date,
           class_section_id,
+          subject_id,
           class_sections(
             name,
             grade_level
+          ),
+          subjects(
+            name
           )
         `)
         .eq("student_user_id", childId)
@@ -375,23 +379,33 @@ export const useParentData = () => {
         ).length;
         const attendanceRate = `${Math.round((attendingDays / attendanceData.length) * 100)}%`;
         
-        // Group attendance by class section
-        const attendanceByClass = new Map<string, { 
+        // Group attendance by class section AND subject (key: "classId-subjectId")
+        const attendanceByClassSubject = new Map<string, { 
           present: number; 
           total: number; 
           className: string;
+          subjectName: string;
           missedDates: { date: string; status: string }[];
         }>();
         
         attendanceData.forEach(att => {
           const classId = att.class_section_id;
+          const subjectId = att.subject_id || 'no-subject';
+          const key = `${classId}-${subjectId}`;
           const className = att.class_sections?.name || "Unknown Class";
+          const subjectName = att.subjects?.name || "General";
           
-          if (!attendanceByClass.has(classId)) {
-            attendanceByClass.set(classId, { present: 0, total: 0, className, missedDates: [] });
+          if (!attendanceByClassSubject.has(key)) {
+            attendanceByClassSubject.set(key, { 
+              present: 0, 
+              total: 0, 
+              className, 
+              subjectName,
+              missedDates: [] 
+            });
           }
           
-          const classData = attendanceByClass.get(classId)!;
+          const classData = attendanceByClassSubject.get(key)!;
           classData.total++;
           // Count present, late, and excused as attending
           if (att.status === "present" || att.status === "late" || att.status === "excused") {
@@ -404,25 +418,15 @@ export const useParentData = () => {
           }
         });
 
-        // Fetch subjects for each class section
-        const classAttendanceData: ClassAttendance[] = [];
-        for (const [classId, data] of attendanceByClass.entries()) {
-          const { data: subjectData } = await supabase
-            .from("class_section_subjects")
-            .select("subjects(name)")
-            .eq("class_section_id", classId)
-            .limit(1)
-            .single();
-
-          classAttendanceData.push({
-            className: data.className,
-            subjectName: subjectData?.subjects?.name || "General",
-            presentDays: data.present,
-            totalDays: data.total,
-            percentage: (data.present / data.total) * 100,
-            missedDates: data.missedDates,
-          });
-        }
+        // Format attendance data by subject
+        const classAttendanceData: ClassAttendance[] = Array.from(attendanceByClassSubject.values()).map(data => ({
+          className: data.className,
+          subjectName: data.subjectName,
+          presentDays: data.present,
+          totalDays: data.total,
+          percentage: (data.present / data.total) * 100,
+          missedDates: data.missedDates,
+        }));
 
         setClassAttendance(classAttendanceData);
         
