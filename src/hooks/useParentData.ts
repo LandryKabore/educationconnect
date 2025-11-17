@@ -389,10 +389,16 @@ export const useParentData = () => {
         }>();
         
         attendanceData.forEach(att => {
+          // Skip records with missing class information
+          if (!att.class_sections?.name) {
+            console.log("Skipping attendance record with null class_sections:", att);
+            return;
+          }
+          
           const classId = att.class_section_id;
           const subjectId = att.subject_id || 'no-subject';
           const key = `${classId}-${subjectId}`;
-          const className = att.class_sections?.name || "Unknown Class";
+          const className = att.class_sections.name;
           const subjectName = att.subjects?.name || "General";
           
           if (!attendanceByClassSubject.has(key)) {
