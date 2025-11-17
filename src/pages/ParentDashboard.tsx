@@ -16,6 +16,7 @@ import { ParentCalendarModal } from "@/components/ParentCalendarModal";
 import { LiveClock } from "@/components/LiveClock";
 import { EditSelfProfileModal } from "@/components/EditSelfProfileModal";
 import { ChildSelectorDropdown } from "@/components/ChildSelectorDropdown";
+import { StudentPerformanceComparisonModal } from "@/components/StudentPerformanceComparisonModal";
 import { supabase } from "@/integrations/supabase/client";
 
 const ParentDashboard = () => {
@@ -28,6 +29,7 @@ const ParentDashboard = () => {
   const [messagesModalOpen, setMessagesModalOpen] = useState(false);
   const [gradesModalOpen, setGradesModalOpen] = useState(false);
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
   const { loading, children, currentChild, selectedChildId, setSelectedChildId, grades, exams, announcements, classAttendance, parentInfo } = useParentData();
   const { conversations } = useMessages();
 
@@ -260,6 +262,14 @@ const ParentDashboard = () => {
               >
                 View All Grades
               </Button>
+              <Button 
+                onClick={() => setComparisonModalOpen(true)}
+                variant="outline"
+                className="w-full mt-2 border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Compare Performance
+              </Button>
             </CardContent>
           </Card>
 
@@ -425,6 +435,13 @@ const ParentDashboard = () => {
         onSuccess={() => {
           // Optionally refetch parent data
         }}
+      />
+
+      <StudentPerformanceComparisonModal
+        open={comparisonModalOpen}
+        onOpenChange={setComparisonModalOpen}
+        studentUserId={selectedChildId || ""}
+        studentName={currentChild?.name || "Student"}
       />
     </div>
   );
