@@ -86,6 +86,13 @@ export const StudentPerformanceComparisonModal = ({
         if (!classStudents || classStudents.length === 0) continue;
 
         const studentIds = classStudents.map(s => s.student_user_id);
+        
+        console.log(`[Performance Comparison] ${subjectName}:`, {
+          classSectionId,
+          subjectId,
+          totalStudents: classStudents.length,
+          studentIds
+        });
 
         // Calculate attendance averages
         const { data: attendanceRecords } = await supabase
@@ -126,6 +133,17 @@ export const StudentPerformanceComparisonModal = ({
             }, 0);
             classAvgAttendance = avgSum / attendanceByStudent.size;
           }
+
+          console.log(`[Attendance] ${subjectName}:`, {
+            totalRecords: attendanceRecords.length,
+            studentsWithRecords: attendanceByStudent.size,
+            studentAttendance,
+            classAvgAttendance,
+            breakdown: Array.from(attendanceByStudent.entries()).map(([id, data]) => ({
+              studentId: id,
+              rate: Math.round((data.present / data.total) * 100 * 10) / 10
+            }))
+          });
         }
 
         // Calculate grade averages
@@ -170,6 +188,17 @@ export const StudentPerformanceComparisonModal = ({
             }, 0);
             classAvgGrade = avgSum / gradesByStudent.size;
           }
+
+          console.log(`[Grades] ${subjectName}:`, {
+            totalRecords: gradeRecords.length,
+            studentsWithGrades: gradesByStudent.size,
+            studentGrade,
+            classAvgGrade,
+            breakdown: Array.from(gradesByStudent.entries()).map(([id, data]) => ({
+              studentId: id,
+              rate: Math.round((data.totalScore / data.totalMax) * 100 * 10) / 10
+            }))
+          });
         }
 
         // Only add if we have data
