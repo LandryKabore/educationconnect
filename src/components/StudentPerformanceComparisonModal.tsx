@@ -119,15 +119,12 @@ export const StudentPerformanceComparisonModal = ({
             studentAttendance = (thisStudentData.present / thisStudentData.total) * 100;
           }
 
-          // Calculate class average (excluding this student for privacy)
-          const otherStudents = Array.from(attendanceByStudent.entries())
-            .filter(([id]) => id !== studentUserId);
-          
-          if (otherStudents.length > 0) {
-            const avgSum = otherStudents.reduce((sum, [, data]) => {
+          // Calculate class average (including all students for accurate comparison)
+          if (attendanceByStudent.size > 0) {
+            const avgSum = Array.from(attendanceByStudent.entries()).reduce((sum, [, data]) => {
               return sum + (data.present / data.total) * 100;
             }, 0);
-            classAvgAttendance = avgSum / otherStudents.length;
+            classAvgAttendance = avgSum / attendanceByStudent.size;
           }
         }
 
@@ -166,15 +163,12 @@ export const StudentPerformanceComparisonModal = ({
             studentGrade = (thisStudentGrade.totalScore / thisStudentGrade.totalMax) * 100;
           }
 
-          // Calculate class average (excluding this student for privacy)
-          const otherStudents = Array.from(gradesByStudent.entries())
-            .filter(([id]) => id !== studentUserId);
-          
-          if (otherStudents.length > 0) {
-            const avgSum = otherStudents.reduce((sum, [, data]) => {
+          // Calculate class average (including all students for accurate comparison)
+          if (gradesByStudent.size > 0) {
+            const avgSum = Array.from(gradesByStudent.entries()).reduce((sum, [, data]) => {
               return sum + (data.totalScore / data.totalMax) * 100;
             }, 0);
-            classAvgGrade = avgSum / otherStudents.length;
+            classAvgGrade = avgSum / gradesByStudent.size;
           }
         }
 
@@ -277,79 +271,93 @@ export const StudentPerformanceComparisonModal = ({
             {/* Attendance Comparison Chart */}
             <Card className="p-4">
               <h3 className="text-lg font-semibold mb-4">Attendance Comparison by Subject</h3>
-              <ChartContainer config={chartConfig} className="h-[300px]">
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis 
                       dataKey="subject" 
-                      className="text-xs"
                       tick={{ fill: 'hsl(var(--foreground))' }}
+                      stroke="hsl(var(--border))"
                     />
                     <YAxis 
-                      className="text-xs"
                       tick={{ fill: 'hsl(var(--foreground))' }}
                       domain={[0, 100]}
+                      stroke="hsl(var(--border))"
                     />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                      labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                    />
                     <Legend />
                     <Bar 
                       dataKey="studentAttendance" 
-                      fill="hsl(var(--chart-1))" 
+                      fill="hsl(217 91% 60%)" 
                       name={`${studentName}'s Attendance`}
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
                       dataKey="classAvgAttendance" 
-                      fill="hsl(var(--chart-2))" 
+                      fill="hsl(173 58% 39%)" 
                       name="Class Average"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
-              </ChartContainer>
+              </div>
             </Card>
 
             {/* Grade Comparison Chart */}
             <Card className="p-4">
               <h3 className="text-lg font-semibold mb-4">Grade Comparison by Subject</h3>
-              <ChartContainer config={chartConfig} className="h-[300px]">
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis 
                       dataKey="subject" 
-                      className="text-xs"
                       tick={{ fill: 'hsl(var(--foreground))' }}
+                      stroke="hsl(var(--border))"
                     />
                     <YAxis 
-                      className="text-xs"
                       tick={{ fill: 'hsl(var(--foreground))' }}
                       domain={[0, 100]}
+                      stroke="hsl(var(--border))"
                     />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                      labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                    />
                     <Legend />
                     <Bar 
                       dataKey="studentGrade" 
-                      fill="hsl(var(--chart-3))" 
+                      fill="hsl(142 76% 36%)" 
                       name={`${studentName}'s Grade`}
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar 
                       dataKey="classAvgGrade" 
-                      fill="hsl(var(--chart-4))" 
+                      fill="hsl(48 96% 53%)" 
                       name="Class Average"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
-              </ChartContainer>
+              </div>
             </Card>
 
             {/* Privacy Note */}
             <Card className="p-4 bg-muted/50">
               <p className="text-sm text-muted-foreground">
-                <strong>Privacy Note:</strong> Class averages are calculated from anonymized data and exclude your child's scores to provide an accurate comparison. Individual student information is never shared.
+                <strong>Privacy Note:</strong> Class averages are calculated from anonymized aggregated data. Individual student information is never shared.
               </p>
             </Card>
           </div>
