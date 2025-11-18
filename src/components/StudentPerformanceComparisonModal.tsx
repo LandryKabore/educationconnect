@@ -77,28 +77,48 @@ export const StudentPerformanceComparisonModal = ({
         const classSectionId = assignment.class_section_id;
         const subjectName = assignment.subjects?.name || "Unknown";
 
-        // Get all students in this class
-        const { data: classStudents } = await supabase
+        // Get the grade level of the current student's class
+        const { data: currentClass } = await supabase
+          .from("class_sections")
+          .select("grade_level")
+          .eq("id", classSectionId)
+          .single();
+
+        if (!currentClass) continue;
+
+        // Get all class sections with the same grade level
+        const { data: gradeLevelClasses } = await supabase
+          .from("class_sections")
+          .select("id")
+          .eq("grade_level", currentClass.grade_level);
+
+        if (!gradeLevelClasses || gradeLevelClasses.length === 0) continue;
+
+        const gradeLevelClassIds = gradeLevelClasses.map(c => c.id);
+
+        // Get all students in the same grade level
+        const { data: gradeStudents } = await supabase
           .from("enrollments")
           .select("student_user_id")
-          .eq("class_section_id", classSectionId);
+          .in("class_section_id", gradeLevelClassIds);
 
-        if (!classStudents || classStudents.length === 0) continue;
+        if (!gradeStudents || gradeStudents.length === 0) continue;
 
-        const studentIds = classStudents.map(s => s.student_user_id);
+        const studentIds = gradeStudents.map(s => s.student_user_id);
         
         console.log(`[Performance Comparison] ${subjectName}:`, {
-          classSectionId,
+          gradeLevel: currentClass.grade_level,
+          classSectionIds: gradeLevelClassIds,
           subjectId,
-          totalStudents: classStudents.length,
-          studentIds
+          totalStudents: gradeStudents.length,
+          currentStudentId: studentUserId
         });
 
-        // Calculate attendance averages
+        // Calculate attendance averages across the grade level for this subject
         const { data: attendanceRecords } = await supabase
           .from("enhanced_attendance")
           .select("student_user_id, status")
-          .eq("class_section_id", classSectionId)
+          .in("class_section_id", gradeLevelClassIds)
           .eq("subject_id", subjectId)
           .in("student_user_id", studentIds);
 
@@ -146,7 +166,7 @@ export const StudentPerformanceComparisonModal = ({
           });
         }
 
-        // Calculate grade averages
+        // Calculate grade averages across the grade level for this subject
         const { data: gradeRecords } = await supabase
           .from("enhanced_grades")
           .select(`
@@ -155,7 +175,7 @@ export const StudentPerformanceComparisonModal = ({
             max_score,
             exams!inner(subject_id, class_section_id)
           `)
-          .eq("exams.class_section_id", classSectionId)
+          .in("exams.class_section_id", gradeLevelClassIds)
           .eq("exams.subject_id", subjectId)
           .in("student_user_id", studentIds);
 
