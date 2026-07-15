@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const inviteSite =
       Deno.env.get("INVITE_SITE_URL") ||
-      "https://edufaso-votre-cole-simplifiee.lovable.app";
+      "https://edufaso.lovable.app";
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
