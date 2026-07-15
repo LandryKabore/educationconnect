@@ -1,0 +1,73 @@
+{
+  "appName": "EduFaso",
+  "tagline": "Système de gestion scolaire",
+  "loading": "Chargement…",
+  "save": "Enregistrer",
+  "cancel": "Annuler",
+  "create": "Créer",
+  "edit": "Modifier",
+  "delete": "Supprimer",
+  "search": "Rechercher",
+  "back": "Retour",
+  "logout": "Déconnexion",
+  "profile": "Profil",
+  "actions": "Actions",
+  "connexions": {
+    "title": "Connexion",
+    "identifiant": "Identifiant ou e-mail",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "error": "Identifiants incorrects",
+    "hint": "Compte créé par votre établissement. Pas d'inscription libre.",
+    "installHint": "Installez EduFaso sur votre téléphone pour un accès rapide."
+  },
+  "premiere": {
+    "title": "Première connexion",
+    "subtitle": "Choisissez un nouveau mot de passe sécurisé",
+    "newPassword": "Nouveau mot de passe",
+    "confirm": "Confirmer le mot de passe",
+    "submit": "Valider et continuer",
+    "mismatch": "Les mots de passe ne correspondent pas",
+    "tooShort": "Au moins 6 caractères"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "schools": "Écoles",
+    "school": "Mon école",
+    "years": "Années scolaires",
+    "classes": "Classes",
+    "subjects": "Matières",
+    "students": "Élèves",
+    "teachers": "Enseignants",
+    "parents": "Parents",
+    "timetable": "Emploi du temps",
+    "reports": "Bulletins",
+    "attendance": "Présences",
+    "grades": "Notes",
+    "assignments": "Devoirs",
+    "messages": "Messages",
+    "myGrades": "Mes notes",
+    "myAssignments": "Mes devoirs",
+    "myTimetable": "Mon emploi du temps",
+    "children": "Enfants",
+    "download": "Télécharger l'app"
+  },
+  "roles": {
+    "super_admin": "Super administrateur",
+    "school_admin": "Administrateur d'école",
+    "teacher": "Enseignant",
+    "student": "Élève",
+    "parent": "Parent"
+  },
+  "attendance": {
+    "present": "Présent",
+    "absent": "Absent",
+    "late": "Retard",
+    "excused": "Justifié"
+  },
+  "empty": "Aucune donnée pour le moment.",
+  "errors": {
+    "generic": "Une erreur est survenue",
+    "forbidden": "Accès non autorisé"
+  }
+}

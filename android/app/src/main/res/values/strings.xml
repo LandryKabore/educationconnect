@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EduFaso</string>
+    <string name="title_activity_main">EduFaso</string>
+    <string name="package_name">bf.edufaso.app</string>
+    <string name="custom_url_scheme">bf.edufaso.app</string>
+</resources>

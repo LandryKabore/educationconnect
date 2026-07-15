@@ -1,0 +1,13 @@
+project_id = "uszmpknbnpsenoahivkf"
+
+[api]
+enabled = true
+
+[db]
+major_version = 17
+
+[functions.creer-utilisateur]
+verify_jwt = true
+
+[functions.bootstrap-super-admin]
+verify_jwt = false

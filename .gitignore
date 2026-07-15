@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env
+.env
+.env.*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Capacitor / Android
+android/.gradle
+android/app/build
+android/build
+android/local.properties
+android/captures
+*.apk
+*.aab
+
+# Legacy
+_legacy_educationconnect
+
+# Logs
+*.log
+npm-debug.log*
+
+# Generated
+dev-dist
+_site.zip
