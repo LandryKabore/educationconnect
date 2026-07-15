@@ -5,8 +5,13 @@ import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 export default defineConfig({
-  // GitHub Pages project site: https://landrykabore.github.io/educationconnect/
-  base: process.env.GITHUB_PAGES === "true" ? "/educationconnect/" : "/",
+  // Electron needs relative assets; GitHub Pages needs the repo base path
+  base:
+    process.env.ELECTRON === "true"
+      ? "./"
+      : process.env.GITHUB_PAGES === "true"
+        ? "/educationconnect/"
+        : "/",
   plugins: [
     react(),
     tailwindcss(),

@@ -23,6 +23,10 @@ android/captures
 *.apk
 *.aab
 
+# Electron
+release
+dist-electron
+
 # Legacy
 _legacy_educationconnect
 

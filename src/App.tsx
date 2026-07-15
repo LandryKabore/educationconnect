@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import Connexion from "@/pages/Connexion";
@@ -36,212 +36,230 @@ function HomeRedirect() {
   return <Navigate to={homePath} replace />;
 }
 
-export default function App() {
-  const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+function AppRoutes() {
   return (
-    <BrowserRouter basename={basename}>
-      <Routes>
-        <Route path="/connexion" element={<Connexion />} />
+    <Routes>
+      <Route path="/connexion" element={<Connexion />} />
+      <Route
+        path="/premiere-connexion"
+        element={
+          <RequireAuth>
+            <PremiereConnexion />
+          </RequireAuth>
+        }
+      />
+      <Route path="/telecharger" element={<Telecharger />} />
+
+      <Route
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<HomeRedirect />} />
+        <Route path="/profil" element={<Profil />} />
+
         <Route
-          path="/premiere-connexion"
+          path="/admin/ecoles"
           element={
-            <RequireAuth>
-              <PremiereConnexion />
+            <RequireAuth roles={["super_admin"]}>
+              <EcolesList />
             </RequireAuth>
           }
         />
-        <Route path="/telecharger" element={<Telecharger />} />
-
         <Route
+          path="/admin/ecoles/:id"
           element={
-            <RequireAuth>
-              <AppShell />
+            <RequireAuth roles={["super_admin"]}>
+              <EcoleDetail />
             </RequireAuth>
           }
-        >
-          <Route index element={<HomeRedirect />} />
-          <Route path="/profil" element={<Profil />} />
+        />
 
-          <Route
-            path="/admin/ecoles"
-            element={
-              <RequireAuth roles={["super_admin"]}>
-                <EcolesList />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/ecoles/:id"
-            element={
-              <RequireAuth roles={["super_admin"]}>
-                <EcoleDetail />
-              </RequireAuth>
-            }
-          />
+        <Route
+          path="/ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <EcoleOverview />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/annees"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Annees />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/classes"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Classes />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/matieres"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Matieres />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/eleves"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Eleves />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enseignants"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Enseignants />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/parents"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Parents />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/emplois-du-temps"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <EmploisDuTemps />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/bulletins"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Bulletins />
+            </RequireAuth>
+          }
+        />
 
-          <Route
-            path="/ecole"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <EcoleOverview />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/annees"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Annees />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/classes"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Classes />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/matieres"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Matieres />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/eleves"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Eleves />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/enseignants"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Enseignants />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/parents"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Parents />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/emplois-du-temps"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <EmploisDuTemps />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/bulletins"
-            element={
-              <RequireAuth roles={["school_admin"]}>
-                <Bulletins />
-              </RequireAuth>
-            }
-          />
+        <Route path="/tableau-de-bord" element={<Dashboard />} />
 
-          <Route path="/tableau-de-bord" element={<Dashboard />} />
+        <Route
+          path="/classes/:id"
+          element={
+            <RequireAuth roles={["teacher", "school_admin"]}>
+              <ClassDetail />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/classes/:id/presences"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <Presences />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/classes/:id/notes"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <Notes />
+            </RequireAuth>
+          }
+        />
 
-          <Route
-            path="/classes/:id"
-            element={
-              <RequireAuth roles={["teacher", "school_admin"]}>
-                <ClassDetail />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/classes/:id/presences"
-            element={
-              <RequireAuth roles={["teacher"]}>
-                <Presences />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/classes/:id/notes"
-            element={
-              <RequireAuth roles={["teacher"]}>
-                <Notes />
-              </RequireAuth>
-            }
-          />
+        <Route
+          path="/devoirs"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <Devoirs />
+            </RequireAuth>
+          }
+        />
+        <Route path="/messages" element={<Messages />} />
 
-          <Route
-            path="/devoirs"
-            element={
-              <RequireAuth roles={["teacher"]}>
-                <Devoirs />
-              </RequireAuth>
-            }
-          />
-          <Route path="/messages" element={<Messages />} />
+        <Route
+          path="/mes-notes"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesNotes />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mes-devoirs"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesDevoirs />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mon-emploi-du-temps"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MonEmploiDuTemps />
+            </RequireAuth>
+          }
+        />
 
-          <Route
-            path="/mes-notes"
-            element={
-              <RequireAuth roles={["student"]}>
-                <MesNotes />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/mes-devoirs"
-            element={
-              <RequireAuth roles={["student"]}>
-                <MesDevoirs />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/mon-emploi-du-temps"
-            element={
-              <RequireAuth roles={["student"]}>
-                <MonEmploiDuTemps />
-              </RequireAuth>
-            }
-          />
+        <Route
+          path="/enfants"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <Enfants />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/notes"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantNotes />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/presences"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantPresences />
+            </RequireAuth>
+          }
+        />
+      </Route>
 
-          <Route
-            path="/enfants"
-            element={
-              <RequireAuth roles={["parent"]}>
-                <Enfants />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/enfants/:id/notes"
-            element={
-              <RequireAuth roles={["parent"]}>
-                <EnfantNotes />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/enfants/:id/presences"
-            element={
-              <RequireAuth roles={["parent"]}>
-                <EnfantPresences />
-              </RequireAuth>
-            }
-          />
-        </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+export default function App() {
+  // Electron (file://) needs HashRouter; web uses BrowserRouter
+  const isDesktopFile =
+    typeof window !== "undefined" && window.location.protocol === "file:";
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+
+  if (isDesktopFile) {
+    return (
+      <HashRouter>
+        <AppRoutes />
+      </HashRouter>
+    );
+  }
+
+  return (
+    <BrowserRouter basename={basename}>
+      <AppRoutes />
     </BrowserRouter>
   );
 }
