@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Copy } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Profile, School, UserRoleRow } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -21,10 +21,9 @@ export default function EcoleDetail() {
   const qc = useQueryClient();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [creating, setCreating] = useState(false);
-  const [creds, setCreds] = useState<{ username: string; tempPassword: string } | null>(
-    null
-  );
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const { data: school, isLoading } = useQuery({
     queryKey: ["ecole", id],
@@ -70,20 +69,21 @@ export default function EcoleDetail() {
     },
   });
 
-  const handleCreateAdmin = async (e: React.FormEvent) => {
+  const handleInviteAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !firstName.trim() || !lastName.trim()) return;
+    if (!id || !firstName.trim() || !lastName.trim() || !email.trim()) return;
 
     setCreating(true);
-    setCreds(null);
+    setInviteUrl(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("creer-utilisateur", {
+      const { data, error } = await supabase.functions.invoke("inviter-admin", {
         body: {
           role: "school_admin",
           schoolId: id,
           firstName: firstName.trim(),
           lastName: lastName.trim(),
+          email: email.trim().toLowerCase(),
         },
       });
 
@@ -92,29 +92,38 @@ export default function EcoleDetail() {
       const res = data as {
         success?: boolean;
         error?: string;
-        username?: string;
-        tempPassword?: string;
+        inviteUrl?: string;
+        emailSent?: boolean;
+        message?: string;
       };
 
-      if (res.error || !res.username) {
-        throw new Error(res.error ?? "Création échouée");
+      if (res.error || !res.inviteUrl) {
+        throw new Error(res.error ?? "Invitation échouée");
       }
 
-      setCreds({
-        username: res.username,
-        tempPassword: res.tempPassword ?? "—",
-      });
-      toast.success("Administrateur d'école créé");
+      setInviteUrl(res.inviteUrl);
+      toast.success(
+        res.emailSent
+          ? "E-mail d'invitation envoyé"
+          : "Lien créé — partagez-le (e-mail non envoyé)"
+      );
       setFirstName("");
       setLastName("");
+      setEmail("");
       void qc.invalidateQueries({ queryKey: ["ecole-admins", id] });
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Impossible de créer l'administrateur"
+        err instanceof Error ? err.message : "Impossible d'envoyer l'invitation"
       );
     } finally {
       setCreating(false);
     }
+  };
+
+  const copyLink = async () => {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    toast.success("Lien copié");
   };
 
   const handleRevoke = async (roleId: string) => {
@@ -187,7 +196,7 @@ export default function EcoleDetail() {
                     {fullName(a.profil?.first_name, a.profil?.last_name)}
                     {a.profil?.email ? (
                       <span className="mt-0.5 block text-xs text-slate-500">
-                        {a.profil.email.replace("@edufaso.local", "")}
+                        {a.profil.email}
                       </span>
                     ) : null}
                   </span>
@@ -204,10 +213,10 @@ export default function EcoleDetail() {
             </ul>
           )}
 
-          <form onSubmit={(e) => void handleCreateAdmin(e)} className="space-y-3">
+          <form onSubmit={(e) => void handleInviteAdmin(e)} className="space-y-3">
             <p className="text-sm text-slate-600">
-              Créer un compte administrateur pour cette école. Notez bien les identifiants
-              temporaires affichés ensuite.
+              Invitez un administrateur par e-mail. Il ouvrira un lien sur le site EduFaso
+              pour créer son mot de passe.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -229,20 +238,36 @@ export default function EcoleDetail() {
                 />
               </div>
             </div>
+            <div>
+              <Label htmlFor="adminEmail">E-mail</Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                placeholder="ex. directeur@ecole.bf"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
             <Button type="submit" size="sm" disabled={creating}>
-              {creating ? "Création…" : "Créer l'administrateur"}
+              {creating ? "Envoi…" : "Envoyer l'invitation"}
             </Button>
           </form>
 
-          {creds ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-              <p className="font-semibold">Identifiants (à donner une seule fois)</p>
-              <p className="mt-2">
-                Identifiant : <code className="font-mono">{creds.username}</code>
-              </p>
-              <p>
-                Mot de passe : <code className="font-mono">{creds.tempPassword}</code>
-              </p>
+          {inviteUrl ? (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+              <p className="font-semibold">Lien d'invitation</p>
+              <p className="mt-2 break-all text-xs">{inviteUrl}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void copyLink()}
+              >
+                <Copy className="h-4 w-4" />
+                Copier le lien
+              </Button>
             </div>
           ) : null}
         </Card>

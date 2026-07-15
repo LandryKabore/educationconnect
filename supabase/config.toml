@@ -11,3 +11,12 @@ verify_jwt = true
 
 [functions.bootstrap-super-admin]
 verify_jwt = false
+
+[functions.inviter-admin]
+verify_jwt = true
+
+[functions.get-invitation]
+verify_jwt = false
+
+[functions.accepter-invitation]
+verify_jwt = false
