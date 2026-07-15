@@ -19,7 +19,12 @@ import {
 export default function EcoleDetail() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const [adminEmail, setAdminEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [creds, setCreds] = useState<{ username: string; tempPassword: string } | null>(
+    null
+  );
 
   const { data: school, isLoading } = useQuery({
     queryKey: ["ecole", id],
@@ -41,24 +46,87 @@ export default function EcoleDetail() {
     queryFn: async () => {
       const { data: roles, error } = await supabase
         .from("roles_utilisateurs")
-        .select("*, profils(*)")
+        .select("id, user_id, role, school_id, active")
         .eq("school_id", id!)
         .eq("role", "school_admin")
         .eq("active", true);
       if (error) throw error;
-      return (roles ?? []).map((r) => ({
-        ...(r as UserRoleRow),
-        profil: (r as { profils: Profile }).profils,
+
+      const rows = (roles ?? []) as UserRoleRow[];
+      if (rows.length === 0) return [];
+
+      const userIds = rows.map((r) => r.user_id);
+      const { data: profils, error: pErr } = await supabase
+        .from("profils")
+        .select("*")
+        .in("id", userIds);
+      if (pErr) throw pErr;
+
+      const byId = new Map((profils as Profile[]).map((p) => [p.id, p]));
+      return rows.map((r) => ({
+        ...r,
+        profil: byId.get(r.user_id) ?? null,
       }));
     },
   });
 
-  const handleAssignAdmin = async (e: React.FormEvent) => {
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.info(
-      "Fonction d'attribution d'administrateur à venir — utilisez la fonction creer-utilisateur avec le rôle school_admin."
-    );
-    setAdminEmail("");
+    if (!id || !firstName.trim() || !lastName.trim()) return;
+
+    setCreating(true);
+    setCreds(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("creer-utilisateur", {
+        body: {
+          role: "school_admin",
+          schoolId: id,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        },
+      });
+
+      if (error) throw error;
+
+      const res = data as {
+        success?: boolean;
+        error?: string;
+        username?: string;
+        tempPassword?: string;
+      };
+
+      if (res.error || !res.username) {
+        throw new Error(res.error ?? "Création échouée");
+      }
+
+      setCreds({
+        username: res.username,
+        tempPassword: res.tempPassword ?? "—",
+      });
+      toast.success("Administrateur d'école créé");
+      setFirstName("");
+      setLastName("");
+      void qc.invalidateQueries({ queryKey: ["ecole-admins", id] });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Impossible de créer l'administrateur"
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRevoke = async (roleId: string) => {
+    const { error } = await supabase
+      .from("roles_utilisateurs")
+      .update({ active: false })
+      .eq("id", roleId);
+    if (error) {
+      toast.error("Impossible de retirer cet administrateur");
+      return;
+    }
+    toast.success("Administrateur retiré");
     void qc.invalidateQueries({ queryKey: ["ecole-admins", id] });
   };
 
@@ -113,28 +181,70 @@ export default function EcoleDetail() {
               {admins.map((a) => (
                 <li
                   key={a.id}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 >
-                  {fullName(a.profil?.first_name, a.profil?.last_name)}
+                  <span>
+                    {fullName(a.profil?.first_name, a.profil?.last_name)}
+                    {a.profil?.email ? (
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        {a.profil.email.replace("@edufaso.local", "")}
+                      </span>
+                    ) : null}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleRevoke(a.id)}
+                  >
+                    Retirer
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
 
-          <form onSubmit={(e) => void handleAssignAdmin(e)} className="space-y-3">
-            <div>
-              <Label htmlFor="adminEmail">Attribuer un administrateur</Label>
-              <Input
-                id="adminEmail"
-                placeholder="identifiant ou e-mail"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-              />
+          <form onSubmit={(e) => void handleCreateAdmin(e)} className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Créer un compte administrateur pour cette école. Notez bien les identifiants
+              temporaires affichés ensuite.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="adminFirst">Prénom</Label>
+                <Input
+                  id="adminFirst"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="adminLast">Nom</Label>
+                <Input
+                  id="adminLast"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
+              </div>
             </div>
-            <Button type="submit" variant="outline" size="sm">
-              Attribuer (bientôt)
+            <Button type="submit" size="sm" disabled={creating}>
+              {creating ? "Création…" : "Créer l'administrateur"}
             </Button>
           </form>
+
+          {creds ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <p className="font-semibold">Identifiants (à donner une seule fois)</p>
+              <p className="mt-2">
+                Identifiant : <code className="font-mono">{creds.username}</code>
+              </p>
+              <p>
+                Mot de passe : <code className="font-mono">{creds.tempPassword}</code>
+              </p>
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>
