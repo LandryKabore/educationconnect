@@ -64,8 +64,21 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
 
 const COMMON_NAV: NavItem[] = [
   { to: "/profil", label: "Profil", icon: <User className="h-4 w-4" /> },
-  { to: "/telecharger", label: "Télécharger l'app", icon: <Download className="h-4 w-4" /> },
 ];
+
+const DOWNLOAD_NAV: NavItem = {
+  to: "/telecharger",
+  label: "Télécharger l'app",
+  icon: <Download className="h-4 w-4" />,
+};
+
+function isDesktopApp() {
+  if (typeof window === "undefined") return false;
+  if (window.location.protocol === "file:") return true;
+  return Boolean(
+    (window as Window & { edufasoDesktop?: unknown }).edufasoDesktop
+  );
+}
 
 export function AppShell() {
   const { profile, role, schools, signOut } = useAuth();
@@ -74,7 +87,12 @@ export function AppShell() {
   const [open, setOpen] = useState(false);
 
   const roleNav = role ? NAV_BY_ROLE[role] : [];
-  const navItems = [...roleNav, ...COMMON_NAV];
+  // "Télécharger" only on the web site — useless inside the installed desktop app
+  const navItems = [
+    ...roleNav,
+    ...COMMON_NAV,
+    ...(isDesktopApp() ? [] : [DOWNLOAD_NAV]),
+  ];
 
   const handleLogout = async () => {
     await signOut();
