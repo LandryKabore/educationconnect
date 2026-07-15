@@ -5,6 +5,8 @@ import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 export default defineConfig({
+  // GitHub Pages project site: https://landrykabore.github.io/educationconnect/
+  base: process.env.GITHUB_PAGES === "true" ? "/educationconnect/" : "/",
   plugins: [
     react(),
     tailwindcss(),

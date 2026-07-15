@@ -37,8 +37,9 @@ function HomeRedirect() {
 }
 
 export default function App() {
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <Routes>
         <Route path="/connexion" element={<Connexion />} />
         <Route
