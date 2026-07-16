@@ -1,10 +1,13 @@
 import * as React from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { formatFrDateInput, frToIso, isoToFr } from "@/lib/dateFr";
 import { cn } from "@/lib/utils";
 
 export function Button({
   className,
   variant = "primary",
   size = "md",
+  type = "button",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
@@ -12,6 +15,7 @@ export function Button({
 }) {
   return (
     <button
+      type={type}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-50",
         size === "sm" && "h-9 px-3 text-sm",
@@ -29,12 +33,13 @@ export function Button({
   );
 }
 
-export function Input({
-  className,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+export const Input = React.forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement>
+>(function Input({ className, ...props }, ref) {
   return (
     <input
+      ref={ref}
       className={cn(
         "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100",
         className
@@ -42,7 +47,120 @@ export function Input({
       {...props}
     />
   );
+});
+
+/** Date field in JJ/MM/AAAA. `value` / `onChange` use ISO YYYY-MM-DD. */
+export function DateInputFr({
+  value,
+  onChange,
+  className,
+  id,
+  required,
+  disabled,
+  name,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  className?: string;
+  id?: string;
+  required?: boolean;
+  disabled?: boolean;
+  name?: string;
+}) {
+  const [text, setText] = React.useState(() => isoToFr(value));
+  const [invalid, setInvalid] = React.useState(false);
+
+  React.useEffect(() => {
+    setText(isoToFr(value));
+    setInvalid(false);
+  }, [value]);
+
+  return (
+    <input
+      id={id}
+      name={name}
+      type="text"
+      inputMode="numeric"
+      placeholder="jj/mm/aaaa"
+      autoComplete="off"
+      required={required}
+      disabled={disabled}
+      value={text}
+      className={cn(
+        "h-11 w-full rounded-xl border bg-white px-3 outline-none focus:ring-2",
+        invalid
+          ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+          : "border-slate-300 focus:border-brand-600 focus:ring-brand-100",
+        className,
+      )}
+      onChange={(e) => {
+        const next = formatFrDateInput(e.target.value);
+        setText(next);
+        if (next.length < 10) {
+          setInvalid(false);
+          if (!next) onChange("");
+          return;
+        }
+        const iso = frToIso(next);
+        if (iso) {
+          setInvalid(false);
+          onChange(iso);
+        } else {
+          setInvalid(true);
+        }
+      }}
+      onBlur={() => {
+        if (!text.trim()) {
+          setInvalid(false);
+          onChange("");
+          return;
+        }
+        const iso = frToIso(text);
+        if (iso) {
+          setText(isoToFr(iso));
+          setInvalid(false);
+          onChange(iso);
+        } else {
+          setInvalid(true);
+        }
+      }}
+    />
+  );
 }
+
+export const PasswordInput = React.forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">
+>(function PasswordInput({ className, ...props }, ref) {
+  const [visible, setVisible] = React.useState(false);
+
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        ref={ref}
+        type={visible ? "text" : "password"}
+        className={cn(
+          "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 pr-11 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100",
+          className,
+        )}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800"
+        aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+        tabIndex={-1}
+      >
+        {visible ? (
+          <EyeOff className="h-[18px] w-[18px]" aria-hidden />
+        ) : (
+          <Eye className="h-[18px] w-[18px]" aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+});
 
 export function Label({
   className,

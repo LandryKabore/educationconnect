@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button, Card, Input, Label } from "@/components/ui";
+import { Button, Card, Label, PasswordInput } from "@/components/ui";
 
 export default function PremiereConnexion() {
   const { t } = useTranslation();
@@ -52,21 +52,21 @@ export default function PremiereConnexion() {
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-4">
           <div>
             <Label htmlFor="newPassword">{t("premiere.newPassword")}</Label>
-            <Input
+            <PasswordInput
               id="newPassword"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               required
             />
           </div>
           <div>
             <Label htmlFor="confirm">{t("premiere.confirm")}</Label>
-            <Input
+            <PasswordInput
               id="confirm"
-              type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
               required
             />
           </div>

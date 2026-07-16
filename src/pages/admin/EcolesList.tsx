@@ -6,21 +6,26 @@ import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { School } from "@/lib/types";
 import {
+  emptySchoolForm,
+  formToSchoolPayload,
+  isSchoolFormComplete,
+  schoolTypeLabel,
+  type SchoolFormFields,
+} from "@/lib/schoolForm";
+import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
+import {
   Badge,
   Button,
   Card,
   EmptyState,
-  Input,
-  Label,
   PageHeader,
 } from "@/components/ui";
 
 export default function EcolesList() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [city, setCity] = useState("");
+  const [form, setForm] = useState<SchoolFormFields>(emptySchoolForm);
+  const [submitting, setSubmitting] = useState(false);
 
   const { data: schools = [], isLoading } = useQuery({
     queryKey: ["ecoles"],
@@ -34,21 +39,34 @@ export default function EcolesList() {
     },
   });
 
+  const setField = (key: keyof SchoolFormFields, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from("ecoles").insert({
-      name: name.trim(),
-      code: code.trim() || null,
-      city: city.trim() || null,
-    });
-    if (error) {
-      toast.error("Impossible de créer l'école");
+    if (!isSchoolFormComplete(form)) {
+      toast.error("Tous les champs sont obligatoires");
       return;
     }
+
+    setSubmitting(true);
+    const { error } = await supabase
+      .from("ecoles")
+      .insert(formToSchoolPayload(form));
+    setSubmitting(false);
+
+    if (error) {
+      toast.error(
+        error.message.includes("duplicate") || error.code === "23505"
+          ? "Ce code d'école existe déjà"
+          : "Impossible de créer l'école"
+      );
+      return;
+    }
+
     toast.success("École créée");
-    setName("");
-    setCode("");
-    setCity("");
+    setForm(emptySchoolForm);
     setShowForm(false);
     void qc.invalidateQueries({ queryKey: ["ecoles"] });
   };
@@ -57,7 +75,7 @@ export default function EcolesList() {
     <div>
       <PageHeader
         title="Écoles"
-        subtitle="Gestion des établissements"
+        subtitle="Créer et gérer les établissements"
         actions={
           <Button onClick={() => setShowForm(!showForm)}>
             <Plus className="h-4 w-4" />
@@ -67,23 +85,25 @@ export default function EcolesList() {
       />
 
       {showForm ? (
-        <Card className="mb-6 max-w-lg">
+        <Card className="mb-6 max-w-2xl">
+          <h2 className="mb-1 text-lg font-semibold">Nouvelle école</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Tous les champs sont obligatoires.
+          </p>
           <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
-            <div>
-              <Label htmlFor="name">Nom</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-            <div>
-              <Label htmlFor="code">Code</Label>
-              <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="city">Ville</Label>
-              <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
+            <SchoolFieldsForm form={form} onChange={setField} idPrefix="new" />
             <div className="flex gap-2">
-              <Button type="submit">Créer</Button>
-              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Création…" : "Créer l’école"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowForm(false);
+                  setForm(emptySchoolForm);
+                }}
+              >
                 Annuler
               </Button>
             </div>
@@ -100,7 +120,7 @@ export default function EcolesList() {
           {schools.map((school) => (
             <Link key={school.id} to={`/admin/ecoles/${school.id}`}>
               <Card className="transition hover:border-brand-300 hover:shadow-md">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-slate-900">{school.name}</h3>
                   <Badge tone={school.active ? "success" : "danger"}>
                     {school.active ? "Active" : "Inactive"}
@@ -109,9 +129,12 @@ export default function EcolesList() {
                 {school.code ? (
                   <p className="mt-1 text-sm text-slate-500">Code : {school.code}</p>
                 ) : null}
-                {school.city ? (
-                  <p className="text-sm text-slate-500">{school.city}</p>
-                ) : null}
+                <p className="text-sm text-slate-500">
+                  {schoolTypeLabel(school.school_type)}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {[school.city, school.region].filter(Boolean).join(" · ") || "—"}
+                </p>
               </Card>
             </Link>
           ))}

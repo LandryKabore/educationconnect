@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 import { fullName } from "@/lib/utils";
+import { SetupGuideBar } from "@/components/SetupGuideBar";
 import {
   Badge,
   Button,
@@ -56,7 +57,37 @@ export default function Parents() {
         .eq("role", "parent")
         .eq("active", true);
       if (error) throw error;
-      return (roles ?? []).map((r) => (r as unknown as { profils: Profile }).profils);
+      const profiles = (roles ?? []).map(
+        (r) => (r as unknown as { profils: Profile }).profils,
+      );
+      if (!profiles.length) return [];
+
+      const { data: links } = await supabase
+        .from("liens_parent_eleve")
+        .select("parent_id, student_id, profils:profils!liens_parent_eleve_student_id_fkey(first_name, last_name)")
+        .in(
+          "parent_id",
+          profiles.map((p) => p.id),
+        );
+
+      const childrenByParent = new Map<string, string[]>();
+      for (const link of links ?? []) {
+        const child = (
+          link as {
+            parent_id: string;
+            profils: { first_name: string; last_name: string } | null;
+          }
+        ).profils;
+        const name = child ? fullName(child.first_name, child.last_name) : "Élève";
+        const list = childrenByParent.get((link as { parent_id: string }).parent_id) ?? [];
+        list.push(name);
+        childrenByParent.set((link as { parent_id: string }).parent_id, list);
+      }
+
+      return profiles.map((p) => ({
+        ...p,
+        children: childrenByParent.get(p.id) ?? [],
+      }));
     },
   });
 
@@ -83,13 +114,16 @@ export default function Parents() {
         tempPassword: "demo1234",
       });
     } else {
-      const res = data as { username?: string; tempPassword?: string; userId?: string };
-      if (studentId && res.userId) {
-        await supabase.from("liens_parent_eleve").insert({
-          parent_id: res.userId,
-          student_id: studentId,
-          relationship: "parent",
-        });
+      const res = data as {
+        username?: string;
+        tempPassword?: string;
+        userId?: string;
+        error?: string;
+      };
+      if (res.error) {
+        toast.error(res.error);
+        setCreating(false);
+        return;
       }
       setResult({
         username: res.username ?? "—",
@@ -97,6 +131,7 @@ export default function Parents() {
       });
       toast.success("Parent créé et lié à l'élève");
       void qc.invalidateQueries({ queryKey: ["parents", schoolId] });
+      void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     }
 
     setCreating(false);
@@ -107,8 +142,10 @@ export default function Parents() {
 
   return (
     <div>
+      <SetupGuideBar />
       <PageHeader
         title="Parents"
+        subtitle="Liez chaque parent à au moins un élève"
         actions={<Button onClick={() => setShowForm(!showForm)}>Nouveau parent</Button>}
       />
 
@@ -135,9 +172,12 @@ export default function Parents() {
                   </option>
                 ))}
               </Select>
+              {students.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">Créez d’abord des élèves.</p>
+              ) : null}
             </div>
             <div className="flex gap-2">
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating || students.length === 0}>
                 {creating ? "Création…" : "Créer"}
               </Button>
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
@@ -169,6 +209,13 @@ export default function Parents() {
           {parents.map((p) => (
             <Card key={p.id}>
               <h3 className="font-semibold">{fullName(p.first_name, p.last_name)}</h3>
+              {p.children.length > 0 ? (
+                <p className="mt-1 text-sm text-slate-600">
+                  Enfant(s) : {p.children.join(", ")}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-amber-700">Aucun enfant lié</p>
+              )}
             </Card>
           ))}
         </div>

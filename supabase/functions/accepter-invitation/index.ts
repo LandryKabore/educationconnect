@@ -54,6 +54,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    if ((invitation as { cancelled_at?: string | null }).cancelled_at) {
+      return new Response(JSON.stringify({ error: "Invitation annulée" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (new Date(invitation.expires_at) < new Date()) {
       return new Response(JSON.stringify({ error: "Invitation expirée" }), {
         status: 400,
@@ -111,20 +118,32 @@ Deno.serve(async (req) => {
       active: true,
     });
 
-    // ensure single active role row
-    await admin
+    // Upsert role (unique on user_id+role+school_id — don't insert a duplicate)
+    let existingRoleQuery = admin
       .from("roles_utilisateurs")
-      .update({ active: false })
+      .select("id")
       .eq("user_id", userId)
-      .eq("role", role)
-      .eq("school_id", schoolId);
+      .eq("role", role);
+    existingRoleQuery = schoolId
+      ? existingRoleQuery.eq("school_id", schoolId)
+      : existingRoleQuery.is("school_id", null);
+    const { data: existingRole } = await existingRoleQuery.maybeSingle();
 
-    await admin.from("roles_utilisateurs").insert({
-      user_id: userId,
-      role,
-      school_id: schoolId,
-      active: true,
-    });
+    if (existingRole?.id) {
+      const { error: roleUpdErr } = await admin
+        .from("roles_utilisateurs")
+        .update({ active: true })
+        .eq("id", existingRole.id);
+      if (roleUpdErr) throw roleUpdErr;
+    } else {
+      const { error: roleInsErr } = await admin.from("roles_utilisateurs").insert({
+        user_id: userId,
+        role,
+        school_id: schoolId || null,
+        active: true,
+      });
+      if (roleInsErr) throw roleInsErr;
+    }
 
     await admin
       .from("invitations")

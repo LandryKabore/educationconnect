@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.accepter-invitation]
 verify_jwt = false
+
+[functions.support-user-action]
+verify_jwt = true

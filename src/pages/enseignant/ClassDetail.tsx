@@ -1,11 +1,28 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Users } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import type { ClassProgrammeRow, Subject } from "@/lib/types";
+import { cn, fullName } from "@/lib/utils";
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  PageHeader,
+} from "@/components/ui";
 
 export default function ClassDetail() {
   const { id } = useParams<{ id: string }>();
+  const { role, schoolId } = useAuth();
+  const qc = useQueryClient();
+  const isAdmin = role === "school_admin";
+
+  const [pendingAdds, setPendingAdds] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const { data: cls, isLoading } = useQuery({
     queryKey: ["class", id],
@@ -13,26 +30,158 @@ export default function ClassDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("classes")
-        .select("*")
+        .select("*, annees_scolaires(label)")
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data;
+      return data as {
+        name: string;
+        grade_level: string | null;
+        capacity: number | null;
+        annees_scolaires: { label: string } | null;
+      };
     },
   });
 
-  const { data: studentCount = 0 } = useQuery({
-    queryKey: ["class-students", id],
+  const { data: roster = [] } = useQuery({
+    queryKey: ["class-roster", id],
     enabled: !!id,
     queryFn: async () => {
-      const { count } = await supabase
+      const { data, error } = await supabase
         .from("inscriptions")
-        .select("id", { count: "exact", head: true })
+        .select("id, profils:profils!inscriptions_student_id_fkey(first_name, last_name)")
         .eq("class_section_id", id!)
         .eq("status", "active");
-      return count ?? 0;
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        profils: { first_name: string; last_name: string } | null;
+      }[];
     },
   });
+
+  const { data: assignments = [] } = useQuery({
+    queryKey: ["class-assignments", id],
+    enabled: !!id && isAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("affectations_enseignement")
+        .select(
+          "id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
+        )
+        .eq("class_section_id", id!);
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        matieres: { name: string } | null;
+        profils: { first_name: string; last_name: string } | null;
+      }[];
+    },
+  });
+
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["matieres", schoolId],
+    enabled: !!schoolId && isAdmin,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("matieres")
+        .select("*")
+        .eq("school_id", schoolId!)
+        .order("name");
+      return (data ?? []) as Subject[];
+    },
+  });
+
+  const { data: programme = [] } = useQuery({
+    queryKey: ["programme-classe", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("programme_classe")
+        .select("*, matieres(name, coefficient)")
+        .eq("class_section_id", id!)
+        .order("created_at");
+      if (error) throw error;
+      return (data ?? []) as (ClassProgrammeRow & {
+        matieres: { name: string; coefficient: number } | null;
+      })[];
+    },
+  });
+
+  const programmeSubjectIds = new Set(programme.map((p) => p.subject_id));
+  const availableSubjects = subjects.filter((s) => !programmeSubjectIds.has(s.id));
+
+  const togglePending = (subjectId: string) => {
+    setPendingAdds((prev) => {
+      if (prev[subjectId] !== undefined) {
+        const next = { ...prev };
+        delete next[subjectId];
+        return next;
+      }
+      return { ...prev, [subjectId]: "1" };
+    });
+  };
+
+  const addSelectedToProgramme = async () => {
+    if (!id) return;
+    const rows = Object.entries(pendingAdds);
+    if (!rows.length) {
+      toast.message("Cochez au moins une matière");
+      return;
+    }
+    for (const [, c] of rows) {
+      if (!Number(c) || Number(c) <= 0) {
+        toast.error("Chaque coefficient doit être > 0");
+        return;
+      }
+    }
+    setSaving(true);
+    const { error } = await supabase.from("programme_classe").insert(
+      rows.map(([subject_id, coefficient]) => ({
+        class_section_id: id,
+        subject_id,
+        coefficient: Number(coefficient),
+      })),
+    );
+    setSaving(false);
+    if (error) {
+      toast.error(error.message || "Erreur");
+      return;
+    }
+    toast.success(`${rows.length} matière(s) ajoutée(s)`);
+    setPendingAdds({});
+    void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
+    void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+  };
+
+  const updateCoef = async (rowId: string, value: string) => {
+    const coefficient = Number(value);
+    if (!coefficient || coefficient <= 0) {
+      toast.error("Coefficient invalide");
+      return;
+    }
+    const { error } = await supabase
+      .from("programme_classe")
+      .update({ coefficient })
+      .eq("id", rowId);
+    if (error) toast.error("Modification impossible");
+    else {
+      toast.success("Coefficient mis à jour");
+      void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
+    }
+  };
+
+  const removeFromProgramme = async (rowId: string) => {
+    const { error } = await supabase.from("programme_classe").delete().eq("id", rowId);
+    if (error) toast.error("Suppression impossible");
+    else {
+      toast.success("Retiré du programme");
+      void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
+      void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+      void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+    }
+  };
 
   if (isLoading) return <p className="text-slate-500">Chargement…</p>;
   if (!cls) return <EmptyState message="Classe introuvable." />;
@@ -40,11 +189,17 @@ export default function ClassDetail() {
   return (
     <div>
       <PageHeader
-        title={cls.name as string}
-        subtitle={(cls.grade_level as string) || undefined}
+        title={cls.name}
+        subtitle={
+          [cls.grade_level, cls.annees_scolaires?.label].filter(Boolean).join(" · ") ||
+          undefined
+        }
       />
 
-      <p className="mb-6 text-sm text-slate-500">{studentCount} élève(s) inscrit(s)</p>
+      <p className="mb-6 text-sm text-slate-500">
+        {roster.length} élève(s) inscrit(s)
+        {cls.capacity ? ` · capacité ${cls.capacity}` : ""}
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link to={`/classes/${id}/presences`}>
@@ -54,7 +209,9 @@ export default function ClassDetail() {
             </div>
             <div>
               <h3 className="font-semibold">Présences</h3>
-              <p className="text-sm text-slate-500">Marquer les présences du jour</p>
+              <p className="text-sm text-slate-500">
+                {isAdmin ? "Consulter / marquer les présences" : "Marquer les présences du jour"}
+              </p>
             </div>
           </Card>
         </Link>
@@ -65,10 +222,183 @@ export default function ClassDetail() {
             </div>
             <div>
               <h3 className="font-semibold">Notes</h3>
-              <p className="text-sm text-slate-500">Saisir les notes des élèves</p>
+              <p className="text-sm text-slate-500">
+                {isAdmin ? "Consulter / saisir les notes" : "Saisir les notes des élèves"}
+              </p>
             </div>
           </Card>
         </Link>
+      </div>
+
+      {isAdmin ? (
+        <Card className="mt-8">
+          <h3 className="font-semibold text-slate-900">Programme & coefficients</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Cochez les matières enseignées dans cette classe et réglez leur coefficient.
+          </p>
+
+          {programme.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">Aucune matière dans le programme.</p>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {programme.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2"
+                >
+                  <p className="font-medium">{p.matieres?.name ?? "—"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Coef.</span>
+                    <Input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      className="w-20"
+                      defaultValue={String(p.coefficient)}
+                      onBlur={(e) => {
+                        if (e.target.value !== String(p.coefficient)) {
+                          void updateCoef(p.id, e.target.value);
+                        }
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600"
+                      onClick={() => void removeFromProgramme(p.id)}
+                    >
+                      Retirer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {availableSubjects.length > 0 ? (
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <p className="mb-2 text-sm font-medium text-slate-700">
+                Ajouter des matières ({Object.keys(pendingAdds).length} cochée(s))
+              </p>
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                {availableSubjects.map((s) => {
+                  const checked = pendingAdds[s.id] !== undefined;
+                  return (
+                    <label
+                      key={s.id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2",
+                        checked ? "bg-brand-50" : "hover:bg-slate-50",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-brand-700"
+                        checked={checked}
+                        onChange={() => togglePending(s.id)}
+                      />
+                      <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
+                      {checked ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs text-slate-500">Coef.</span>
+                          <Input
+                            type="number"
+                            min="0.5"
+                            step="0.5"
+                            className="h-9 w-16 px-2"
+                            value={pendingAdds[s.id]}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setPendingAdds((prev) => ({
+                                ...prev,
+                                [s.id]: e.target.value,
+                              }))
+                            }
+                          />
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+              <Button
+                className="mt-3"
+                disabled={saving || Object.keys(pendingAdds).length === 0}
+                onClick={() => void addSelectedToProgramme()}
+              >
+                {saving ? "Ajout…" : "Ajouter la sélection"}
+              </Button>
+            </div>
+          ) : subjects.length > 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              Toutes les matières du catalogue sont déjà dans le programme.
+            </p>
+          ) : null}
+        </Card>
+      ) : programme.length > 0 ? (
+        <Card className="mt-8">
+          <h3 className="mb-3 font-semibold">Matières de la classe</h3>
+          <ul className="space-y-1 text-sm text-slate-600">
+            {programme.map((p) => (
+              <li key={p.id}>
+                {p.matieres?.name ?? "—"} · coef. {p.coefficient}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Effectif
+          </h3>
+          {roster.length === 0 ? (
+            <EmptyState message="Aucun élève dans cette classe." />
+          ) : (
+            <div className="space-y-2">
+              {roster.map((row) => (
+                <Card key={row.id}>
+                  <p className="font-medium">
+                    {row.profils
+                      ? fullName(row.profils.first_name, row.profils.last_name)
+                      : "Élève"}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isAdmin ? (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Enseignants affectés
+            </h3>
+            {assignments.length === 0 ? (
+              <EmptyState message="Aucune affectation. Allez dans Enseignants." />
+            ) : (
+              <div className="space-y-2">
+                {assignments.map((a) => (
+                  <Card key={a.id}>
+                    <p className="font-medium">
+                      {a.profils
+                        ? fullName(a.profils.first_name, a.profils.last_name)
+                        : "—"}
+                    </p>
+                    <p className="text-sm text-slate-500">{a.matieres?.name ?? "—"}</p>
+                  </Card>
+                ))}
+              </div>
+            )}
+            <Link
+              to="/enseignants"
+              className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline"
+            >
+              Gérer les affectations →
+            </Link>
+          </div>
+        ) : null}
       </div>
     </div>
   );

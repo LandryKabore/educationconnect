@@ -34,7 +34,47 @@ export interface School {
   city: string | null;
   address: string | null;
   phone: string | null;
+  email: string | null;
+  region: string | null;
+  school_type: string | null;
+  plan: string | null;
+  billing_status: string | null;
+  subscription_ends_at: string | null;
   active: boolean;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface PlatformSettings {
+  id: number;
+  invite_site_url: string;
+  app_name: string;
+  support_email: string | null;
+  default_year_label: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AuditLogRow {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface InvitationRow {
+  id: string;
+  email: string;
+  role: AppRole;
+  school_id: string | null;
+  first_name: string;
+  last_name: string;
+  expires_at: string;
+  accepted_at: string | null;
+  cancelled_at: string | null;
   created_at: string;
 }
 
@@ -61,6 +101,14 @@ export interface Subject {
   school_id: string;
   name: string;
   code: string | null;
+  /** Default school-wide coefficient; overridden per class in programme_classe */
+  coefficient: number;
+}
+
+export interface ClassProgrammeRow {
+  id: string;
+  class_section_id: string;
+  subject_id: string;
   coefficient: number;
 }
 
@@ -151,7 +199,7 @@ export interface MessageRow {
 }
 
 export const ROLE_HOME: Record<AppRole, string> = {
-  super_admin: "/admin/ecoles",
+  super_admin: "/admin",
   school_admin: "/ecole",
   teacher: "/tableau-de-bord",
   student: "/tableau-de-bord",

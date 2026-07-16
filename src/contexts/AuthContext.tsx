@@ -18,15 +18,22 @@ import {
 } from "@/lib/types";
 import { toAuthEmail } from "@/lib/utils";
 
+const SUPPORT_KEY = "ef_support_school";
+
 interface AuthState {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   role: AppRole | null;
+  /** Real role ignoring support mode */
+  realRole: AppRole | null;
   roles: UserRoleRow[];
   schoolId: string | null;
   schools: School[];
   loading: boolean;
+  supportSchoolId: string | null;
+  enterSupportMode: (schoolId: string) => void;
+  exitSupportMode: () => void;
   signIn: (identifiant: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -42,6 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<UserRoleRow[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
+  const [supportSchoolId, setSupportSchoolId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem(SUPPORT_KEY);
+  });
 
   const loadUserData = useCallback(async (userId: string) => {
     const [{ data: profil }, { data: roleRows }] = await Promise.all([
@@ -96,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setRoles([]);
         setSchools([]);
+        setSupportSchoolId(null);
+        sessionStorage.removeItem(SUPPORT_KEY);
       }
     });
 
@@ -119,10 +132,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [roles]);
 
+  const inSupport =
+    primaryRole === "super_admin" && Boolean(supportSchoolId);
+
+  const role: AppRole | null = inSupport ? "school_admin" : primaryRole;
+
   const schoolId = useMemo(() => {
+    if (inSupport && supportSchoolId) return supportSchoolId;
     const withSchool = roles.find((r) => r.school_id);
     return withSchool?.school_id ?? schools[0]?.id ?? null;
-  }, [roles, schools]);
+  }, [roles, schools, inSupport, supportSchoolId]);
+
+  const enterSupportMode = (id: string) => {
+    sessionStorage.setItem(SUPPORT_KEY, id);
+    setSupportSchoolId(id);
+  };
+
+  const exitSupportMode = () => {
+    sessionStorage.removeItem(SUPPORT_KEY);
+    setSupportSchoolId(null);
+  };
 
   const signIn = async (identifiant: string, password: string) => {
     const email = toAuthEmail(identifiant);
@@ -135,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setRoles([]);
     setSchools([]);
+    exitSupportMode();
   };
 
   const refreshProfile = async () => {
@@ -153,20 +183,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const homePath = inSupport
+    ? "/ecole"
+    : primaryRole
+      ? ROLE_HOME[primaryRole]
+      : "/connexion";
+
   const value: AuthState = {
     session,
     user: session?.user ?? null,
     profile,
-    role: primaryRole,
+    role,
+    realRole: primaryRole,
     roles,
     schoolId,
     schools,
     loading,
+    supportSchoolId: inSupport ? supportSchoolId : null,
+    enterSupportMode,
+    exitSupportMode,
     signIn,
     signOut,
     refreshProfile,
     completePasswordChange,
-    homePath: primaryRole ? ROLE_HOME[primaryRole] : "/connexion",
+    homePath,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

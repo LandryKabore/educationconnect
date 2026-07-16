@@ -52,6 +52,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    if ((data as { cancelled_at?: string | null }).cancelled_at) {
+      return new Response(JSON.stringify({ error: "Invitation annulée" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (new Date(data.expires_at) < new Date()) {
       return new Response(JSON.stringify({ error: "Invitation expirée" }), {
         status: 400,

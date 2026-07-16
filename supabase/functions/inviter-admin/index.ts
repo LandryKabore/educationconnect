@@ -72,7 +72,16 @@ Deno.serve(async (req) => {
     const lastName = String(body.lastName ?? body.last_name ?? "").trim();
     const role = (body.role ?? "school_admin") as string;
 
-    if (!email || !schoolId || !firstName || !lastName) {
+    if (!["school_admin", "teacher", "parent", "super_admin"].includes(role)) {
+      return new Response(JSON.stringify({ error: "Rôle non autorisé pour invitation" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (role === "super_admin") {
+      // platform-level invite — no school required
+    } else if (!schoolId) {
       return new Response(
         JSON.stringify({
           error: "email, schoolId, firstName et lastName sont requis",
@@ -84,24 +93,70 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!["school_admin", "teacher", "parent"].includes(role)) {
-      return new Response(JSON.stringify({ error: "Rôle non autorisé pour invitation" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!email || !firstName || !lastName) {
+      return new Response(
+        JSON.stringify({
+          error: "email, firstName et lastName sont requis",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const inviteToken = token();
     const inviteUrl = `${inviteSite.replace(/\/$/, "")}/invitation?token=${inviteToken}`;
+    const resolvedSchoolId = role === "super_admin" ? null : schoolId;
 
-    // invalidate previous pending invites for same email+school+role
-    await admin
+    let schoolName = "la plateforme EduFaso";
+    if (resolvedSchoolId) {
+      const { data: school } = await admin
+        .from("ecoles")
+        .select("name")
+        .eq("id", resolvedSchoolId)
+        .maybeSingle();
+      schoolName = school?.name ?? "votre école";
+    }
+
+    const roleLabel =
+      role === "super_admin"
+        ? "super administrateur"
+        : role === "school_admin"
+          ? "administrateur d'école"
+          : role === "teacher"
+            ? "enseignant"
+            : "parent";
+
+    const emailMessage =
+      role === "super_admin"
+        ? `Bonjour ${firstName},\n\n` +
+          `Vous avez été invité(e) à devenir super administrateur sur EduFaso ` +
+          `(système de gestion scolaire).\n\n` +
+          `Cliquez sur ce lien pour choisir votre mot de passe et activer votre compte :\n` +
+          `${inviteUrl}\n\n` +
+          `Ce lien expire dans 7 jours.\n\n` +
+          `— L'équipe EduFaso`
+        : `Bonjour ${firstName},\n\n` +
+          `Vous avez été invité(e) à créer un compte sur EduFaso ` +
+          `(système de gestion scolaire) en tant que ${roleLabel} pour « ${schoolName} ».\n\n` +
+          `Cliquez sur ce lien pour choisir votre mot de passe et activer votre compte :\n` +
+          `${inviteUrl}\n\n` +
+          `Ce lien expire dans 7 jours.\n\n` +
+          `— L'équipe EduFaso`;
+
+    // invalidate previous pending invites for same email+role(+school)
+    let invalidate = admin
       .from("invitations")
-      .update({ accepted_at: new Date().toISOString() })
+      .update({ cancelled_at: new Date().toISOString() })
       .eq("email", email)
-      .eq("school_id", schoolId)
       .eq("role", role)
-      .is("accepted_at", null);
+      .is("accepted_at", null)
+      .is("cancelled_at", null);
+    invalidate = resolvedSchoolId
+      ? invalidate.eq("school_id", resolvedSchoolId)
+      : invalidate.is("school_id", null);
+    await invalidate;
 
     const { data: invitation, error: invErr } = await admin
       .from("invitations")
@@ -109,7 +164,7 @@ Deno.serve(async (req) => {
         email,
         token: inviteToken,
         role,
-        school_id: schoolId,
+        school_id: resolvedSchoolId,
         first_name: firstName,
         last_name: lastName,
         invited_by: user.id,
@@ -127,35 +182,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Try Supabase invite email (works if Auth email is enabled)
-    let emailSent = false;
-    let emailError: string | null = null;
-    const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: inviteUrl,
-      data: {
-        first_name: firstName,
-        last_name: lastName,
-        invitation_token: inviteToken,
-        school_id: schoolId,
-        role,
-      },
-    });
-    if (inviteErr) {
-      emailError = inviteErr.message;
-    } else {
-      emailSent = true;
-    }
-
+    // Do NOT call inviteUserByEmail here — that would create an Auth user
+    // before they accept. Account is created only in accepter-invitation.
+    // Share emailMessage / inviteUrl manually (or wire a custom mailer later).
     return new Response(
       JSON.stringify({
         success: true,
         invitationId: invitation.id,
         inviteUrl,
-        emailSent,
-        emailError,
-        message: emailSent
-          ? "Invitation envoyée par e-mail."
-          : "E-mail non envoyé (config Auth). Partagez le lien manuellement.",
+        emailMessage,
+        schoolName,
+        emailSent: false,
+        emailError: null,
+        message:
+          "Invitation créée. Partagez le message / lien — le compte sera créé à l'acceptation.",
       }),
       {
         status: 200,

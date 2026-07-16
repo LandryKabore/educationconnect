@@ -53,11 +53,25 @@ export default function Bulletins() {
       .eq("status", "active")
       .maybeSingle();
 
+    const classSectionId = (enrollment as { class_section_id?: string } | null)
+      ?.class_section_id;
+
     const { data: grades } = await supabase
       .from("notes")
       .select("*, matieres(*)")
       .eq("student_id", studentId)
       .eq("period_label", period);
+
+    let coefficientBySubject: Record<string, number> = {};
+    if (classSectionId) {
+      const { data: programme } = await supabase
+        .from("programme_classe")
+        .select("subject_id, coefficient")
+        .eq("class_section_id", classSectionId);
+      for (const row of programme ?? []) {
+        coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
+      }
+    }
 
     const className =
       (enrollment as { classes?: { name: string } } | null)?.classes?.name ?? "—";
@@ -67,6 +81,7 @@ export default function Bulletins() {
       student,
       className,
       periodLabel: period,
+      coefficientBySubject,
       grades: ((grades ?? []) as (GradeRow & { matieres: Subject })[]).map((g) => ({
         ...g,
         subject: g.matieres,

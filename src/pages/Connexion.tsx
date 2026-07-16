@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { WEBSITE_URL } from "@/lib/config";
-import { Button, Card, Input, Label } from "@/components/ui";
+import { isDesktopApp } from "@/lib/platform";
+import { Button, Card, Input, Label, PasswordInput } from "@/components/ui";
 
 export default function Connexion() {
   const { t } = useTranslation();
@@ -57,9 +58,8 @@ export default function Connexion() {
           </div>
           <div>
             <Label htmlFor="password">{t("connexions.password")}</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
@@ -74,11 +74,13 @@ export default function Connexion() {
         <p className="mt-4 text-center text-xs text-slate-500">
           {t("connexions.hint")}
         </p>
-        <p className="mt-2 text-center text-xs">
-          <Link to="/telecharger" className="text-brand-700 hover:underline">
-            {t("connexions.installHint")}
-          </Link>
-        </p>
+        {!isDesktopApp() ? (
+          <p className="mt-2 text-center text-xs">
+            <Link to="/telecharger" className="text-brand-700 hover:underline">
+              {t("connexions.installHint")}
+            </Link>
+          </p>
+        ) : null}
         {WEBSITE_URL ? (
           <p className="mt-2 text-center text-xs">
             <a

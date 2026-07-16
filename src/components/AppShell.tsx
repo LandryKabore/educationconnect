@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Calendar,
+  CheckCircle2,
   ClipboardList,
   Download,
   GraduationCap,
@@ -11,6 +12,7 @@ import {
   Menu,
   MessageSquare,
   School,
+  Settings,
   User,
   Users,
   X,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui";
 import { cn, fullName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
+import { isDesktopApp } from "@/lib/platform";
 
 interface NavItem {
   to: string;
@@ -29,15 +32,34 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
   super_admin: [
+    { to: "/admin", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
     { to: "/admin/ecoles", label: "Écoles", icon: <School className="h-4 w-4" /> },
+    { to: "/admin/utilisateurs", label: "Utilisateurs", icon: <Users className="h-4 w-4" /> },
+    { to: "/admin/invitations", label: "Invitations", icon: <MessageSquare className="h-4 w-4" /> },
+    { to: "/admin/rapports", label: "Rapports", icon: <ClipboardList className="h-4 w-4" /> },
+    { to: "/admin/abonnements", label: "Abonnements", icon: <BookOpen className="h-4 w-4" /> },
+    { to: "/admin/parametres", label: "Paramètres", icon: <Calendar className="h-4 w-4" /> },
+    { to: "/admin/audit", label: "Journal d'audit", icon: <ClipboardList className="h-4 w-4" /> },
+    { to: "/admin/super-admins", label: "Super admins", icon: <User className="h-4 w-4" /> },
   ],
   school_admin: [
     { to: "/ecole", label: "Mon école", icon: <School className="h-4 w-4" /> },
+    {
+      to: "/ecole/configuration",
+      label: "Configuration",
+      icon: <CheckCircle2 className="h-4 w-4" />,
+    },
+    {
+      to: "/ecole/parametres",
+      label: "Paramètres école",
+      icon: <Settings className="h-4 w-4" />,
+    },
     { to: "/annees", label: "Années scolaires", icon: <Calendar className="h-4 w-4" /> },
-    { to: "/classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
     { to: "/matieres", label: "Matières", icon: <BookOpen className="h-4 w-4" /> },
-    { to: "/eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
+    { to: "/classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
+    { to: "/programmes", label: "Programmes", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/enseignants", label: "Enseignants", icon: <User className="h-4 w-4" /> },
+    { to: "/eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
     { to: "/parents", label: "Parents", icon: <Users className="h-4 w-4" /> },
     { to: "/emplois-du-temps", label: "Emplois du temps", icon: <Calendar className="h-4 w-4" /> },
     { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
@@ -72,22 +94,21 @@ const DOWNLOAD_NAV: NavItem = {
   icon: <Download className="h-4 w-4" />,
 };
 
-function isDesktopApp() {
-  if (typeof window === "undefined") return false;
-  if (window.location.protocol === "file:") return true;
-  return Boolean(
-    (window as Window & { edufasoDesktop?: unknown }).edufasoDesktop
-  );
-}
-
 export function AppShell() {
-  const { profile, role, schools, signOut } = useAuth();
+  const {
+    profile,
+    role,
+    schools,
+    schoolId,
+    signOut,
+    supportSchoolId,
+    exitSupportMode,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const roleNav = role ? NAV_BY_ROLE[role] : [];
-  // "Télécharger" only on the web site — useless inside the installed desktop app
   const navItems = [
     ...roleNav,
     ...COMMON_NAV,
@@ -99,10 +120,34 @@ export function AppShell() {
     navigate("/connexion");
   };
 
-  const schoolName = schools[0]?.name;
+  const supportSchool = schools.find((s) => s.id === supportSchoolId);
+  const schoolName =
+    supportSchool?.name ??
+    schools.find((s) => s.id === schoolId)?.name ??
+    schools[0]?.name;
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      {supportSchoolId ? (
+        <div className="fixed inset-x-0 top-0 z-[60] flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
+          <span>
+            Mode support — vous consultez l’école comme administrateur
+            {supportSchool?.name ? ` (${supportSchool.name})` : ""}.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              exitSupportMode();
+              navigate("/admin");
+            }}
+          >
+            Quitter le mode support
+          </Button>
+        </div>
+      ) : null}
+
       {open ? (
         <button
           type="button"
@@ -114,11 +159,12 @@ export function AppShell() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0",
+          supportSchoolId ? "top-12" : "",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-lg font-bold text-brand-700">EduFaso</p>
             {schoolName ? (
@@ -134,7 +180,7 @@ export function AppShell() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
           {navItems.map((item) => {
             const active =
               location.pathname === item.to ||
@@ -160,7 +206,7 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="border-t border-slate-200 p-4">
+        <div className="shrink-0 border-t border-slate-200 bg-white p-4">
           <div className="mb-3">
             <p className="text-sm font-medium text-slate-900">
               {fullName(profile?.first_name, profile?.last_name)}
@@ -181,7 +227,12 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col lg:ml-72",
+          supportSchoolId ? "pt-12" : "",
+        )}
+      >
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
           <button
             type="button"

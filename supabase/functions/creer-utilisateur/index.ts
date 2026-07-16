@@ -177,13 +177,24 @@ Deno.serve(async (req) => {
       used: false,
     });
 
-    if (role === "student" && classId && academicYearId) {
-      await admin.from("inscriptions").insert({
-        student_id: newUserId,
-        class_section_id: classId,
-        academic_year_id: academicYearId,
-        status: "active",
-      });
+    if (role === "student" && classId) {
+      let yearId = academicYearId;
+      if (!yearId) {
+        const { data: cls } = await admin
+          .from("classes")
+          .select("academic_year_id")
+          .eq("id", classId)
+          .maybeSingle();
+        yearId = (cls?.academic_year_id as string | undefined) ?? null;
+      }
+      if (yearId) {
+        await admin.from("inscriptions").insert({
+          student_id: newUserId,
+          class_section_id: classId,
+          academic_year_id: yearId,
+          status: "active",
+        });
+      }
     }
 
     if (role === "teacher" && classId && subjectId) {

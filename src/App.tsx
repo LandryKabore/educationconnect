@@ -7,9 +7,20 @@ import Profil from "@/pages/Profil";
 import Telecharger from "@/pages/Telecharger";
 import EcolesList from "@/pages/admin/EcolesList";
 import EcoleDetail from "@/pages/admin/EcoleDetail";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminInvites from "@/pages/admin/AdminInvites";
+import AdminSettings from "@/pages/admin/AdminSettings";
+import AdminReports from "@/pages/admin/AdminReports";
+import AdminAudit from "@/pages/admin/AdminAudit";
+import AdminBilling from "@/pages/admin/AdminBilling";
+import AdminSuperAdmins from "@/pages/admin/AdminSuperAdmins";
 import EcoleOverview from "@/pages/ecole/EcoleOverview";
+import ConfigurationEcole from "@/pages/ecole/ConfigurationEcole";
+import ParametresEcole from "@/pages/ecole/ParametresEcole";
 import Annees from "@/pages/ecole/Annees";
 import Classes from "@/pages/ecole/Classes";
+import ProgrammeClasses from "@/pages/ecole/ProgrammeClasses";
 import Matieres from "@/pages/ecole/Matieres";
 import Eleves from "@/pages/ecole/Eleves";
 import Enseignants from "@/pages/ecole/Enseignants";
@@ -61,6 +72,14 @@ function AppRoutes() {
         <Route path="/profil" element={<Profil />} />
 
         <Route
+          path="/admin"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/admin/ecoles"
           element={
             <RequireAuth roles={["super_admin"]}>
@@ -76,12 +95,84 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
+        <Route
+          path="/admin/utilisateurs"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminUsers />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/invitations"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminInvites />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/parametres"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminSettings />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/rapports"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminReports />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/audit"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminAudit />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/abonnements"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminBilling />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/super-admins"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <AdminSuperAdmins />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="/ecole"
           element={
             <RequireAuth roles={["school_admin"]}>
               <EcoleOverview />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/ecole/configuration"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <ConfigurationEcole />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/ecole/parametres"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <ParametresEcole />
             </RequireAuth>
           }
         />
@@ -98,6 +189,14 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["school_admin"]}>
               <Classes />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/programmes"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <ProgrammeClasses />
             </RequireAuth>
           }
         />
@@ -163,7 +262,7 @@ function AppRoutes() {
         <Route
           path="/classes/:id/presences"
           element={
-            <RequireAuth roles={["teacher"]}>
+            <RequireAuth roles={["teacher", "school_admin"]}>
               <Presences />
             </RequireAuth>
           }
@@ -171,7 +270,7 @@ function AppRoutes() {
         <Route
           path="/classes/:id/notes"
           element={
-            <RequireAuth roles={["teacher"]}>
+            <RequireAuth roles={["teacher", "school_admin"]}>
               <Notes />
             </RequireAuth>
           }
