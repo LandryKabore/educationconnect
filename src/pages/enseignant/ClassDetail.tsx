@@ -53,7 +53,7 @@ export default function ClassDetail() {
         .eq("class_section_id", id!)
         .eq("status", "active");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         profils: { first_name: string; last_name: string } | null;
       }[];
@@ -71,7 +71,7 @@ export default function ClassDetail() {
         )
         .eq("class_section_id", id!);
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         matieres: { name: string } | null;
         profils: { first_name: string; last_name: string } | null;

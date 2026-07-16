@@ -1,16 +1,19 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Download, Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { sortClassesByProgression } from "@/lib/classCatalog";
+import { fullName, matchesSearch } from "@/lib/utils";
 import {
   credentialsToCsv,
+  downloadBlob,
   downloadTextFile,
-  parseStudentCsv,
+  parseStudentImportFile,
   studentCsvTemplate,
+  studentXlsxTemplateBlob,
   type StudentCsvRow,
 } from "@/lib/studentCsv";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
@@ -60,8 +63,9 @@ export default function Eleves() {
   const [importFailed, setImportFailed] = useState<
     { line: number | null; firstName: string; lastName: string; error: string }[]
   >([]);
+  const [search, setSearch] = useState("");
 
-  const { data: classes = [] } = useQuery({
+  const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
@@ -73,6 +77,10 @@ export default function Eleves() {
       return (data ?? []) as ClassSection[];
     },
   });
+  const classes = useMemo(
+    () => sortClassesByProgression(classesRaw),
+    [classesRaw],
+  );
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ["eleves", schoolId],
@@ -101,7 +109,7 @@ export default function Eleves() {
 
       const classByStudent = new Map<string, string>();
       for (const row of enrollments ?? []) {
-        const cls = (row as { classes?: { name: string } | null }).classes;
+        const cls = (row as unknown as { classes?: { name: string } | null }).classes;
         if (cls?.name) {
           classByStudent.set(
             (row as { student_id: string }).student_id,
@@ -116,6 +124,44 @@ export default function Eleves() {
       }));
     },
   });
+
+  const filteredStudents = useMemo(
+    () =>
+      students.filter((s) =>
+        matchesSearch(search, s.first_name, s.last_name, s.className, s.phone),
+      ),
+    [students, search],
+  );
+
+  const studentsByClass = useMemo(() => {
+    const map = new Map<string, typeof filteredStudents>();
+    for (const s of filteredStudents) {
+      const key = s.className?.trim() || "__none__";
+      const list = map.get(key) ?? [];
+      list.push(s);
+      map.set(key, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) =>
+        fullName(a.first_name, a.last_name).localeCompare(
+          fullName(b.first_name, b.last_name),
+          "fr",
+        ),
+      );
+    }
+    const keys = [...map.keys()];
+    const ordered = sortClassesByProgression(
+      keys
+        .filter((k) => k !== "__none__")
+        .map((name) => ({ name })),
+    ).map((c) => c.name);
+    if (keys.includes("__none__")) ordered.push("__none__");
+    return ordered.map((key) => ({
+      key,
+      label: key === "__none__" ? "Sans classe" : key,
+      students: map.get(key) ?? [],
+    }));
+  }, [filteredStudents]);
 
   const invalidateStudentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
@@ -175,8 +221,7 @@ export default function Eleves() {
 
   const onFileSelected = async (file: File | null) => {
     if (!file) return;
-    const text = await file.text();
-    const parsed = parseStudentCsv(text);
+    const parsed = await parseStudentImportFile(file);
     setParseErrors(parsed.errors);
     setPreviewRows(parsed.rows);
     setImportCreds([]);
@@ -256,7 +301,7 @@ export default function Eleves() {
       <SetupGuideBar />
       <PageHeader
         title="Élèves"
-        subtitle="Création individuelle ou import CSV"
+        subtitle="Création individuelle ou import CSV / Excel"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -267,7 +312,7 @@ export default function Eleves() {
               }}
             >
               <Upload className="mr-1 h-4 w-4" />
-              Importer CSV
+              Importer
             </Button>
             <Button
               onClick={() => {
@@ -283,45 +328,64 @@ export default function Eleves() {
 
       {showImport ? (
         <Card className="mb-6 max-w-3xl">
-          <h3 className="font-semibold text-slate-900">Import CSV</h3>
+          <h3 className="font-semibold text-slate-900">Import CSV / Excel</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Colonnes : <code className="text-xs">prenom</code>,{" "}
+            Importez votre fichier <code className="text-xs">.csv</code> ou{" "}
+            <code className="text-xs">.xlsx</code> : colonne A = prénom, B =
+            nom, C = classe (optionnel), D = téléphone (optionnel). Avec
+            en-tête : <code className="text-xs">prenom</code>,{" "}
             <code className="text-xs">nom</code>,{" "}
-            <code className="text-xs">classe</code> (optionnel si classe par
-            défaut), <code className="text-xs">telephone</code> (optionnel).
-            La classe peut être écrite <code className="text-xs">6eme A</code> ou{" "}
-            <code className="text-xs">6emeA</code>. Pas besoin de virgule finale
-            si le téléphone est vide. Séparateur virgule ou point-virgule. Max
-            200 élèves.
+            <code className="text-xs">classe</code>,{" "}
+            <code className="text-xs">telephone</code>. Première feuille
+            Excel. Max 200 élèves.
           </p>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                downloadTextFile("modele-eleves-edufaso.csv", studentCsvTemplate())
-              }
-            >
-              <Download className="mr-1 h-4 w-4" />
-              Télécharger le modèle
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
               onClick={() => fileRef.current?.click()}
             >
-              Choisir un fichier
+              <Upload className="mr-1 h-4 w-4" />
+              Choisir le fichier à importer
             </Button>
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
-              onChange={(e) => void onFileSelected(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                void onFileSelected(e.target.files?.[0] ?? null);
+                e.target.value = "";
+              }}
             />
+            <p className="mt-2 text-xs text-slate-500">
+              Besoin d’un exemple de format ?{" "}
+              <button
+                type="button"
+                className="text-brand-700 underline underline-offset-2 hover:text-brand-800"
+                onClick={() =>
+                  downloadTextFile(
+                    "modele-eleves-edufaso.csv",
+                    studentCsvTemplate(),
+                  )
+                }
+              >
+                modèle CSV
+              </button>
+              {" · "}
+              <button
+                type="button"
+                className="text-brand-700 underline underline-offset-2 hover:text-brand-800"
+                onClick={() =>
+                  downloadBlob(
+                    "modele-eleves-edufaso.xlsx",
+                    studentXlsxTemplateBlob(),
+                  )
+                }
+              >
+                modèle Excel
+              </button>
+            </p>
           </div>
 
           <div className="mt-4 max-w-md">
@@ -518,18 +582,44 @@ export default function Eleves() {
       ) : students.length === 0 ? (
         <EmptyState message="Aucun élève inscrit." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {students.map((s) => (
-            <Card key={s.id}>
-              <h3 className="font-semibold">{fullName(s.first_name, s.last_name)}</h3>
-              {s.className ? (
-                <p className="mt-1 text-sm text-brand-700">{s.className}</p>
-              ) : (
-                <p className="mt-1 text-sm text-amber-700">Non inscrit en classe</p>
-              )}
-              {s.phone ? <p className="text-sm text-slate-500">{s.phone}</p> : null}
-            </Card>
-          ))}
+        <div className="space-y-4">
+          <div className="max-w-md">
+            <Label htmlFor="search-eleves">Rechercher</Label>
+            <Input
+              id="search-eleves"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nom, classe…"
+            />
+          </div>
+          {filteredStudents.length === 0 ? (
+            <EmptyState message="Aucun élève ne correspond à la recherche." />
+          ) : (
+            <div className="space-y-8">
+              {studentsByClass.map((group) => (
+                <section key={group.key}>
+                  <h3 className="mb-3 flex flex-wrap items-baseline gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    <span>{group.label}</span>
+                    <span className="font-normal normal-case tracking-normal text-slate-400">
+                      ({group.students.length})
+                    </span>
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.students.map((s) => (
+                      <Card key={s.id}>
+                        <h4 className="font-semibold">
+                          {fullName(s.first_name, s.last_name)}
+                        </h4>
+                        {s.phone ? (
+                          <p className="mt-1 text-sm text-slate-500">{s.phone}</p>
+                        ) : null}
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

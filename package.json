@@ -1,7 +1,7 @@
 {
   "name": "edufaso",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "EduFaso — système de gestion scolaire",
   "author": "EduFaso",
   "main": "electron/main.cjs",
@@ -42,6 +42,7 @@
     "react-router-dom": "^7.18.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -65,6 +66,8 @@
   "build": {
     "appId": "bf.edufaso.desktop",
     "productName": "EduFaso",
+    "compression": "maximum",
+    "electronLanguages": ["fr", "en-US"],
     "directories": {
       "output": "release"
     },
@@ -77,12 +80,6 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
           "arch": [
             "x64"
           ]

@@ -8,6 +8,11 @@ import type { AcademicYear, ClassSection, Subject } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { cn } from "@/lib/utils";
 import {
+  SUBJECT_CATEGORIES,
+  resolveSubjectCategory,
+} from "@/lib/subjectCatalog";
+import { sortClassesByProgression } from "@/lib/classCatalog";
+import {
   Button,
   Card,
   EmptyState,
@@ -75,8 +80,36 @@ export default function ProgrammeClasses() {
   });
 
   const classesForYear = useMemo(
-    () => (yearId ? classes.filter((c) => c.academic_year_id === yearId) : classes),
+    () =>
+      sortClassesByProgression(
+        yearId ? classes.filter((c) => c.academic_year_id === yearId) : classes,
+      ),
     [classes, yearId],
+  );
+
+  const subjectsByCategory = useMemo(() => {
+    const map = new Map<string, Subject[]>();
+    for (const s of subjects) {
+      const cat = resolveSubjectCategory(s);
+      const list = map.get(cat) ?? [];
+      list.push(s);
+      map.set(cat, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    }
+    const order = [...SUBJECT_CATEGORIES, "Autres"];
+    return order
+      .filter((cat) => (map.get(cat)?.length ?? 0) > 0)
+      .map((cat) => ({ category: cat, items: map.get(cat)! }));
+  }, [subjects]);
+
+  const primarySubjectIds = useMemo(
+    () =>
+      subjectsByCategory.find((g) => g.category === "Primaire")?.items.map(
+        (s) => s.id,
+      ) ?? [],
+    [subjectsByCategory],
   );
 
   const { data: classesWithProg = new Set<string>() } = useQuery({
@@ -227,74 +260,119 @@ export default function ProgrammeClasses() {
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <Label className="mb-0">1. Matières</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-slate-400">Sélection rapide :</span>
+                  {primarySubjectIds.length > 0 ? (
+                    <button
+                      type="button"
+                      className="font-medium text-brand-700 hover:underline"
+                      onClick={() =>
+                        setProgSubjects(new Set(primarySubjectIds))
+                      }
+                    >
+                      Cocher le primaire
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    className="text-xs font-medium text-brand-700 hover:underline"
+                    className="font-medium text-brand-700 hover:underline"
                     onClick={() =>
                       setProgSubjects(new Set(subjects.map((s) => s.id)))
                     }
                   >
-                    Toutes
+                    Tout cocher
                   </button>
                   {progSubjects.size > 0 ? (
                     <button
                       type="button"
-                      className="text-xs font-medium text-slate-500 hover:underline"
+                      className="font-medium text-slate-500 hover:underline"
                       onClick={() => setProgSubjects(new Set())}
                     >
-                      Aucune
+                      Tout décocher
                     </button>
                   ) : null}
                 </div>
               </div>
-              <div className="max-h-56 grid gap-1 overflow-y-auto rounded-xl border border-slate-200 p-2 sm:grid-cols-2 lg:grid-cols-3">
-                {subjects.map((s) => {
-                  const checked = progSubjects.has(s.id);
-                  return (
-                    <label
-                      key={s.id}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
-                        checked ? "bg-brand-50" : "hover:bg-slate-50",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
-                        checked={checked}
-                        onChange={() => toggleSubject(s.id)}
-                      />
-                      <span className="min-w-0 flex-1 font-medium">
-                        {s.name}
-                        {s.code ? (
-                          <span className="ml-1 text-xs font-normal text-slate-400">
-                            ({s.code})
-                          </span>
+
+              <div className="max-h-80 space-y-4 overflow-y-auto rounded-xl border border-slate-200 p-3">
+                {subjectsByCategory.map(({ category, items }) => (
+                  <div key={category}>
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">
+                          {category}
+                        </p>
+                        {category === "Primaire" ? (
+                          <p className="text-xs text-slate-500">
+                            Curriculum CP–CM — Histoire et Géographie séparées
+                          </p>
                         ) : null}
-                      </span>
-                    </label>
-                  );
-                })}
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-brand-700 hover:underline"
+                        onClick={() =>
+                          setProgSubjects((prev) => {
+                            const next = new Set(prev);
+                            for (const s of items) next.add(s.id);
+                            return next;
+                          })
+                        }
+                      >
+                        Tout cocher
+                      </button>
+                    </div>
+                    <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {items.map((s) => {
+                        const checked = progSubjects.has(s.id);
+                        return (
+                          <label
+                            key={s.id}
+                            className={cn(
+                              "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
+                              checked ? "bg-brand-50" : "hover:bg-slate-50",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+                              checked={checked}
+                              onChange={() => toggleSubject(s.id)}
+                            />
+                            <span className="min-w-0 flex-1 font-medium">
+                              {s.name}
+                              {s.code ? (
+                                <span className="ml-1 text-xs font-normal text-slate-400">
+                                  ({s.code})
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <Label className="mb-0">2. Classes</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-slate-400">Sélection rapide :</span>
                   <button
                     type="button"
-                    className="text-xs font-medium text-brand-700 hover:underline"
+                    className="font-medium text-brand-700 hover:underline"
                     onClick={() =>
                       setProgClasses(new Set(classesForYear.map((c) => c.id)))
                     }
                   >
-                    Toutes
+                    Tout cocher
                   </button>
                   <button
                     type="button"
-                    className="text-xs font-medium text-brand-700 hover:underline"
+                    className="font-medium text-brand-700 hover:underline"
                     onClick={() =>
                       setProgClasses(
                         new Set(
@@ -305,15 +383,15 @@ export default function ProgrammeClasses() {
                       )
                     }
                   >
-                    Sans programme
+                    Cocher sans programme
                   </button>
                   {progClasses.size > 0 ? (
                     <button
                       type="button"
-                      className="text-xs font-medium text-slate-500 hover:underline"
+                      className="font-medium text-slate-500 hover:underline"
                       onClick={() => setProgClasses(new Set())}
                     >
-                      Aucune
+                      Tout décocher
                     </button>
                   ) : null}
                 </div>

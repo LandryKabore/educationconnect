@@ -9,6 +9,7 @@ import { findTimetableConflicts } from "@/lib/timetableConflicts";
 import type { ClassSection, Subject, TimetableSlot } from "@/lib/types";
 import { fullName } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
+import { sortClassesByProgression } from "@/lib/classCatalog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import {
   Button,
@@ -41,7 +42,7 @@ export default function EmploisDuTemps() {
   const [room, setRoom] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const { data: classes = [] } = useQuery({
+  const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
@@ -53,6 +54,10 @@ export default function EmploisDuTemps() {
       return (data ?? []) as ClassSection[];
     },
   });
+  const classes = useMemo(
+    () => sortClassesByProgression(classesRaw),
+    [classesRaw],
+  );
 
   const { data: subjects = [] } = useQuery({
     queryKey: ["matieres", schoolId],

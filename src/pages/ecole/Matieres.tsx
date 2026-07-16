@@ -76,6 +76,12 @@ export default function Matieres() {
     },
   });
 
+  const catalogCodes = useMemo(() => {
+    const codes = new Set<string>();
+    for (const item of SUBJECT_CATALOG) codes.add(item.code);
+    return codes;
+  }, []);
+
   const addedKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const item of SUBJECT_CATALOG) {
@@ -84,8 +90,8 @@ export default function Matieres() {
     return keys;
   }, [subjects]);
 
-  const availableCount = SUBJECT_CATALOG.filter(
-    (item) => !addedKeys.has(item.code),
+  const availableCount = [...catalogCodes].filter(
+    (code) => !addedKeys.has(code),
   ).length;
 
   const resetCustomForm = () => {
@@ -142,14 +148,24 @@ export default function Matieres() {
     if (!schoolId || selected.size === 0) return;
     setSaving(true);
 
-    const rows = SUBJECT_CATALOG.filter(
-      (item) => selected.has(item.code) && !addedKeys.has(item.code),
-    ).map((item) => ({
-      school_id: schoolId,
-      name: item.name,
-      code: item.code,
-      coefficient: 1,
-    }));
+    const seen = new Set<string>();
+    const rows: {
+      school_id: string;
+      name: string;
+      code: string;
+      coefficient: number;
+    }[] = [];
+    for (const item of SUBJECT_CATALOG) {
+      if (!selected.has(item.code) || addedKeys.has(item.code)) continue;
+      if (seen.has(item.code)) continue;
+      seen.add(item.code);
+      rows.push({
+        school_id: schoolId,
+        name: item.name,
+        code: item.code,
+        coefficient: 1,
+      });
+    }
 
     if (rows.length === 0) {
       setSaving(false);
@@ -352,8 +368,8 @@ export default function Matieres() {
             <h3 className="font-semibold text-slate-900">Matières courantes</h3>
             <p className="mt-1 text-sm text-slate-500">
               Cochez celles enseignées dans votre école
-              {availableCount < SUBJECT_CATALOG.length
-                ? ` · ${SUBJECT_CATALOG.length - availableCount} déjà ajoutée(s)`
+              {availableCount < catalogCodes.size
+                ? ` · ${catalogCodes.size - availableCount} déjà ajoutée(s)`
                 : ""}
             </p>
           </div>
@@ -393,9 +409,23 @@ export default function Matieres() {
             return (
               <div key={category}>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-medium text-slate-700">
-                    {category}
-                  </h4>
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700">
+                      {category}
+                    </h4>
+                    {category === "Primaire" ? (
+                      <p className="text-xs text-slate-500">
+                        Curriculum CP–CM — Histoire et Géographie sont séparées au
+                        primaire
+                      </p>
+                    ) : null}
+                    {category === "Sciences humaines (collège / lycée)" ? (
+                      <p className="text-xs text-slate-500">
+                        Au collège/lycée, prenez Histoire-Géographie (une seule
+                        matière), pas Histoire et Géographie séparées
+                      </p>
+                    ) : null}
+                  </div>
                   {canSelectAny ? (
                     <button
                       type="button"

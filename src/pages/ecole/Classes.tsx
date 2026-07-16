@@ -10,6 +10,7 @@ import {
   CLASS_CATALOG,
   CLASS_CATEGORIES,
   normalizeClassName,
+  sortClassesByProgression,
   type CatalogClass,
 } from "@/lib/classCatalog";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
@@ -94,7 +95,10 @@ export default function Classes() {
   });
 
   const classesForYear = useMemo(
-    () => (yearId ? classes.filter((c) => c.academic_year_id === yearId) : classes),
+    () =>
+      sortClassesByProgression(
+        yearId ? classes.filter((c) => c.academic_year_id === yearId) : classes,
+      ),
     [classes, yearId],
   );
 

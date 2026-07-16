@@ -66,3 +66,54 @@ export function normalizeClassName(name: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
+
+/** School progression: CP → … → CM → 6ème → … → 3ème → Seconde → Première → Terminale */
+const GRADE_PROGRESSION = [
+  "cp1",
+  "cp2",
+  "ce1",
+  "ce2",
+  "cm1",
+  "cm2",
+  "6eme",
+  "5eme",
+  "4eme",
+  "3eme",
+  "seconde",
+  "premiere",
+  "terminale",
+] as const;
+
+function compactKey(text: string): string {
+  return normalizeClassName(text).replace(/\s+/g, "");
+}
+
+function gradeRank(c: { name: string; grade_level?: string | null }): number {
+  const keys = [c.grade_level, c.name]
+    .filter(Boolean)
+    .map((t) => compactKey(String(t)));
+
+  for (const key of keys) {
+    for (let i = 0; i < GRADE_PROGRESSION.length; i++) {
+      const g = GRADE_PROGRESSION[i];
+      if (key === g || key.startsWith(g)) return i;
+    }
+  }
+  return GRADE_PROGRESSION.length + 1;
+}
+
+export function compareClassesByProgression(
+  a: { name: string; grade_level?: string | null },
+  b: { name: string; grade_level?: string | null },
+): number {
+  const ra = gradeRank(a);
+  const rb = gradeRank(b);
+  if (ra !== rb) return ra - rb;
+  return a.name.localeCompare(b.name, "fr", { numeric: true, sensitivity: "base" });
+}
+
+export function sortClassesByProgression<
+  T extends { name: string; grade_level?: string | null },
+>(classes: T[]): T[] {
+  return [...classes].sort(compareClassesByProgression);
+}

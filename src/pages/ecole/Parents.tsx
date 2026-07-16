@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { fullName, matchesSearch } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import {
   Badge,
@@ -31,6 +31,7 @@ export default function Parents() {
   const [studentId, setStudentId] = useState("");
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: students = [] } = useQuery({
     queryKey: ["eleves", schoolId],
@@ -73,7 +74,7 @@ export default function Parents() {
       const childrenByParent = new Map<string, string[]>();
       for (const link of links ?? []) {
         const child = (
-          link as {
+          link as unknown as {
             parent_id: string;
             profils: { first_name: string; last_name: string } | null;
           }
@@ -90,6 +91,20 @@ export default function Parents() {
       }));
     },
   });
+
+  const filteredParents = useMemo(
+    () =>
+      parents.filter((p) =>
+        matchesSearch(
+          search,
+          p.first_name,
+          p.last_name,
+          p.phone,
+          ...(p.children ?? []),
+        ),
+      ),
+    [parents, search],
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,19 +220,36 @@ export default function Parents() {
       ) : parents.length === 0 ? (
         <EmptyState message="Aucun parent enregistré." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {parents.map((p) => (
-            <Card key={p.id}>
-              <h3 className="font-semibold">{fullName(p.first_name, p.last_name)}</h3>
-              {p.children.length > 0 ? (
-                <p className="mt-1 text-sm text-slate-600">
-                  Enfant(s) : {p.children.join(", ")}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-amber-700">Aucun enfant lié</p>
-              )}
-            </Card>
-          ))}
+        <div className="space-y-4">
+          <div className="max-w-md">
+            <Label htmlFor="search-parents">Rechercher</Label>
+            <Input
+              id="search-parents"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nom, enfant…"
+            />
+          </div>
+          {filteredParents.length === 0 ? (
+            <EmptyState message="Aucun parent ne correspond à la recherche." />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredParents.map((p) => (
+                <Card key={p.id}>
+                  <h3 className="font-semibold">
+                    {fullName(p.first_name, p.last_name)}
+                  </h3>
+                  {p.children.length > 0 ? (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Enfant(s) : {p.children.join(", ")}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-amber-700">Aucun enfant lié</p>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

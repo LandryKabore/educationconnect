@@ -214,7 +214,9 @@ export default function Annees() {
                   onChange={setStartDate}
                   required
                 />
-                <p className="mt-1 text-xs text-slate-500">Format : jj/mm/aaaa</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Format jj/mm/aaaa — ou cliquez sur l’icône calendrier
+                </p>
               </div>
               <div>
                 <Label htmlFor="annee-fin">Fin</Label>
@@ -224,7 +226,9 @@ export default function Annees() {
                   onChange={setEndDate}
                   required
                 />
-                <p className="mt-1 text-xs text-slate-500">Format : jj/mm/aaaa</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Format jj/mm/aaaa — ou cliquez sur l’icône calendrier
+                </p>
               </div>
             </div>
             <div className="flex gap-2">

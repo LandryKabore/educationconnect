@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Assignment, ClassSection, Subject } from "@/lib/types";
+import { sortClassesByProgression } from "@/lib/classCatalog";
 import {
   Button,
   Card,
@@ -57,7 +58,7 @@ export default function Devoirs() {
         const c = (row as unknown as { classes: ClassSection }).classes;
         if (c) map.set(c.id, c);
       }
-      return [...map.values()];
+      return sortClassesByProgression([...map.values()]);
     },
   });
 

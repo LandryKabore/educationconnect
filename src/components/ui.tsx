@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { formatFrDateInput, frToIso, isoToFr } from "@/lib/dateFr";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,34 @@ export const Input = React.forwardRef<
   );
 });
 
-/** Date field in JJ/MM/AAAA. `value` / `onChange` use ISO YYYY-MM-DD. */
+const FR_MONTHS = [
+  "janvier",
+  "février",
+  "mars",
+  "avril",
+  "mai",
+  "juin",
+  "juillet",
+  "août",
+  "septembre",
+  "octobre",
+  "novembre",
+  "décembre",
+];
+
+const FR_DAYS = ["lu", "ma", "me", "je", "ve", "sa", "di"];
+
+function parseIsoParts(iso: string): { y: number; m: number; d: number } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  return { y, m, d };
+}
+
+function toIso(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Date field in JJ/MM/AAAA with an openable French calendar. ISO value in/out. */
 export function DateInputFr({
   value,
   onChange,
@@ -69,62 +96,264 @@ export function DateInputFr({
 }) {
   const [text, setText] = React.useState(() => isoToFr(value));
   const [invalid, setInvalid] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+
+  const selected = parseIsoParts(value);
+  const today = new Date();
+  const [viewYear, setViewYear] = React.useState(
+    () => selected?.y ?? today.getFullYear(),
+  );
+  const [viewMonth, setViewMonth] = React.useState(
+    () => selected?.m ?? today.getMonth() + 1,
+  );
 
   React.useEffect(() => {
     setText(isoToFr(value));
     setInvalid(false);
+    const parts = parseIsoParts(value);
+    if (parts) {
+      setViewYear(parts.y);
+      setViewMonth(parts.m);
+    }
   }, [value]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const firstWeekday = (() => {
+    // Monday = 0 … Sunday = 6
+    const dow = new Date(viewYear, viewMonth - 1, 1).getDay();
+    return dow === 0 ? 6 : dow - 1;
+  })();
+  const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+  const pickDay = (day: number) => {
+    const iso = toIso(viewYear, viewMonth, day);
+    onChange(iso);
+    setText(isoToFr(iso));
+    setInvalid(false);
+    setOpen(false);
+  };
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(viewYear, viewMonth - 1 + delta, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth() + 1);
+  };
+
   return (
-    <input
-      id={id}
-      name={name}
-      type="text"
-      inputMode="numeric"
-      placeholder="jj/mm/aaaa"
-      autoComplete="off"
-      required={required}
-      disabled={disabled}
-      value={text}
-      className={cn(
-        "h-11 w-full rounded-xl border bg-white px-3 outline-none focus:ring-2",
-        invalid
-          ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-          : "border-slate-300 focus:border-brand-600 focus:ring-brand-100",
-        className,
-      )}
-      onChange={(e) => {
-        const next = formatFrDateInput(e.target.value);
-        setText(next);
-        if (next.length < 10) {
-          setInvalid(false);
-          if (!next) onChange("");
-          return;
-        }
-        const iso = frToIso(next);
-        if (iso) {
-          setInvalid(false);
-          onChange(iso);
-        } else {
-          setInvalid(true);
-        }
-      }}
-      onBlur={() => {
-        if (!text.trim()) {
-          setInvalid(false);
-          onChange("");
-          return;
-        }
-        const iso = frToIso(text);
-        if (iso) {
-          setText(isoToFr(iso));
-          setInvalid(false);
-          onChange(iso);
-        } else {
-          setInvalid(true);
-        }
-      }}
-    />
+    <div ref={rootRef} className={cn("relative", className)}>
+      <div className="relative">
+        <input
+          id={id}
+          name={name}
+          type="text"
+          inputMode="numeric"
+          placeholder="jj/mm/aaaa"
+          autoComplete="off"
+          required={required}
+          disabled={disabled}
+          value={text}
+          className={cn(
+            "h-11 w-full rounded-xl border bg-white px-3 pr-11 outline-none focus:ring-2",
+            invalid
+              ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+              : "border-slate-300 focus:border-brand-600 focus:ring-brand-100",
+          )}
+          onChange={(e) => {
+            const next = formatFrDateInput(e.target.value);
+            setText(next);
+            if (next.length < 10) {
+              setInvalid(false);
+              if (!next) onChange("");
+              return;
+            }
+            const iso = frToIso(next);
+            if (iso) {
+              setInvalid(false);
+              onChange(iso);
+            } else {
+              setInvalid(true);
+            }
+          }}
+          onBlur={() => {
+            // Delay so calendar clicks register first
+            window.setTimeout(() => {
+              if (open) return;
+              if (!text.trim()) {
+                setInvalid(false);
+                onChange("");
+                return;
+              }
+              const iso = frToIso(text);
+              if (iso) {
+                setText(isoToFr(iso));
+                setInvalid(false);
+                onChange(iso);
+              } else {
+                setInvalid(true);
+              }
+            }, 150);
+          }}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          title="Ouvrir le calendrier"
+          aria-label="Ouvrir le calendrier"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-brand-700 disabled:opacity-50"
+          onClick={() => {
+            if (!open && selected) {
+              setViewYear(selected.y);
+              setViewMonth(selected.m);
+            } else if (!open) {
+              setViewYear(today.getFullYear());
+              setViewMonth(today.getMonth() + 1);
+            }
+            setOpen((v) => !v);
+          }}
+        >
+          <Calendar className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+      </div>
+
+      {open ? (
+        <div className="absolute left-0 z-50 mt-2 w-[19rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-lg">
+          <div className="mb-2 flex items-center gap-1">
+            <button
+              type="button"
+              className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
+              aria-label="Mois précédent"
+              onClick={() => shiftMonth(-1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <select
+              aria-label="Mois"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-sm font-medium capitalize text-slate-900 outline-none focus:border-brand-600"
+              value={viewMonth}
+              onChange={(e) => setViewMonth(Number(e.target.value))}
+            >
+              {FR_MONTHS.map((label, i) => (
+                <option key={label} value={i + 1}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Année"
+              className="w-[4.75rem] shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-sm font-medium text-slate-900 outline-none focus:border-brand-600"
+              value={viewYear}
+              onChange={(e) => setViewYear(Number(e.target.value))}
+            >
+              {Array.from({ length: 31 }, (_, i) => today.getFullYear() - 10 + i).map(
+                (y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ),
+              )}
+            </select>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
+              aria-label="Mois suivant"
+              onClick={() => shiftMonth(1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mb-1 grid grid-cols-7 gap-0.5 text-center text-[11px] font-medium uppercase text-slate-400">
+            {FR_DAYS.map((d) => (
+              <span key={d} className="py-1">
+                {d}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstWeekday }).map((_, i) => (
+              <span key={`e-${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const isSelected =
+                selected?.y === viewYear &&
+                selected?.m === viewMonth &&
+                selected?.d === day;
+              const isToday =
+                today.getFullYear() === viewYear &&
+                today.getMonth() + 1 === viewMonth &&
+                today.getDate() === day;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => pickDay(day)}
+                  className={cn(
+                    "h-8 rounded-lg text-sm transition",
+                    isSelected
+                      ? "bg-brand-700 font-semibold text-white"
+                      : isToday
+                        ? "bg-brand-50 font-medium text-brand-800 hover:bg-brand-100"
+                        : "text-slate-700 hover:bg-slate-100",
+                  )}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-2 flex justify-between border-t border-slate-100 pt-2">
+            <button
+              type="button"
+              className="text-xs font-medium text-brand-700 hover:underline"
+              onClick={() => {
+                const iso = toIso(
+                  today.getFullYear(),
+                  today.getMonth() + 1,
+                  today.getDate(),
+                );
+                onChange(iso);
+                setText(isoToFr(iso));
+                setInvalid(false);
+                setOpen(false);
+              }}
+            >
+              Aujourd’hui
+            </button>
+            <button
+              type="button"
+              className="text-xs font-medium text-slate-500 hover:underline"
+              onClick={() => {
+                onChange("");
+                setText("");
+                setInvalid(false);
+                setOpen(false);
+              }}
+            >
+              Effacer
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

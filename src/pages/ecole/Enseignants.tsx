@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { compareClassesByProgression, sortClassesByProgression } from "@/lib/classCatalog";
+import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import {
   Badge,
@@ -18,10 +19,20 @@ import {
   Select,
 } from "@/components/ui";
 
-interface CreateResult {
+type TeacherCredential = {
   username: string;
-  tempPassword: string;
-}
+  tempPassword: string | null;
+  used: boolean;
+};
+
+type AssignmentRow = {
+  id: string;
+  teacher_id: string;
+  class_section_id: string;
+  subject_id: string;
+  classes: { name: string } | null;
+  matieres: { name: string } | null;
+};
 
 export default function Enseignants() {
   const { schoolId } = useAuth();
@@ -35,10 +46,10 @@ export default function Enseignants() {
   const [lastName, setLastName] = useState("");
   const [creating, setCreating] = useState(false);
   const [assigning, setAssigning] = useState(false);
-  const [result, setResult] = useState<CreateResult | null>(null);
   const [teacherId, setTeacherId] = useState("");
   const [classId, setClassId] = useState("");
   const [subjectId, setSubjectId] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (searchParams.get("assign") === "1") {
@@ -47,9 +58,14 @@ export default function Enseignants() {
     }
   }, [searchParams]);
 
-  const openAssign = () => {
+  const openAssign = (preselectTeacherId?: string) => {
     setShowAssign(true);
     setShowForm(false);
+    if (preselectTeacherId) {
+      setTeacherId(preselectTeacherId);
+      setClassId("");
+      setSubjectId("");
+    }
     const next = new URLSearchParams(searchParams);
     next.set("assign", "1");
     setSearchParams(next, { replace: true });
@@ -60,6 +76,17 @@ export default function Enseignants() {
     const next = new URLSearchParams(searchParams);
     next.delete("assign");
     setSearchParams(next, { replace: true });
+  };
+
+  const openCreate = () => {
+    setShowForm(true);
+    closeAssign();
+  };
+
+  const closeCreate = () => {
+    setShowForm(false);
+    setFirstName("");
+    setLastName("");
   };
 
   const { data: teachers = [], isLoading } = useQuery({
@@ -73,11 +100,46 @@ export default function Enseignants() {
         .eq("role", "teacher")
         .eq("active", true);
       if (error) throw error;
-      return (roles ?? []).map((r) => (r as unknown as { profils: Profile }).profils);
+      return (roles ?? []).map(
+        (r) => (r as unknown as { profils: Profile }).profils,
+      );
     },
   });
 
-  const { data: classes = [] } = useQuery({
+  const teacherIds = useMemo(() => teachers.map((t) => t.id), [teachers]);
+
+  const { data: credentialsByUser = {} } = useQuery({
+    queryKey: ["identifiants-enseignants", schoolId, teacherIds.join(",")],
+    enabled: !!schoolId && teacherIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("identifiants_temporaires")
+        .select("user_id, username, temp_password_hint, used")
+        .in("user_id", teacherIds);
+      if (error) throw error;
+      const map: Record<string, TeacherCredential> = {};
+      for (const row of data ?? []) {
+        map[row.user_id as string] = {
+          username: row.username as string,
+          tempPassword: (row.temp_password_hint as string | null) ?? null,
+          used: Boolean(row.used),
+        };
+      }
+      return map;
+    },
+  });
+
+  const credentialFor = (t: Profile): TeacherCredential => {
+    const stored = credentialsByUser[t.id];
+    if (stored) return stored;
+    return {
+      username: fromAuthEmail(t.email) || "—",
+      tempPassword: null,
+      used: false,
+    };
+  };
+
+  const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
@@ -89,19 +151,31 @@ export default function Enseignants() {
       return (data ?? []) as ClassSection[];
     },
   });
+  const classes = useMemo(
+    () => sortClassesByProgression(classesRaw),
+    [classesRaw],
+  );
 
-  const { data: subjects = [] } = useQuery({
-    queryKey: ["matieres", schoolId],
-    enabled: !!schoolId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("matieres")
-        .select("*")
-        .eq("school_id", schoolId!)
-        .order("name");
-      return (data ?? []) as Subject[];
-    },
-  });
+  const { data: classSubjects = [], isFetching: loadingClassSubjects } =
+    useQuery({
+      queryKey: ["programme-classe-subjects", classId],
+      enabled: !!classId,
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("programme_classe")
+          .select("subject_id, matieres(*)")
+          .eq("class_section_id", classId);
+        if (error) throw error;
+        const map = new Map<string, Subject>();
+        for (const row of data ?? []) {
+          const s = (row as unknown as { matieres: Subject | null }).matieres;
+          if (s) map.set(s.id, s);
+        }
+        return [...map.values()].sort((a, b) =>
+          a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
+        );
+      },
+    });
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["affectations", schoolId],
@@ -110,30 +184,71 @@ export default function Enseignants() {
       const { data, error } = await supabase
         .from("affectations_enseignement")
         .select(
-          "id, teacher_id, class_section_id, subject_id, classes(name), matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
+          "id, teacher_id, class_section_id, subject_id, classes(name), matieres(name)",
         )
         .in(
           "class_section_id",
           classes.map((c) => c.id),
         );
       if (error) throw error;
-      return (data ?? []) as {
-        id: string;
-        teacher_id: string;
-        class_section_id: string;
-        subject_id: string;
-        classes: { name: string } | null;
-        matieres: { name: string } | null;
-        profils: { first_name: string; last_name: string } | null;
-      }[];
+      return (data ?? []) as unknown as AssignmentRow[];
     },
   });
+
+  const assignmentsByTeacher = useMemo(() => {
+    const map = new Map<string, AssignmentRow[]>();
+    for (const a of assignments) {
+      const list = map.get(a.teacher_id) ?? [];
+      list.push(a);
+      map.set(a.teacher_id, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const byClass = compareClassesByProgression(
+          { name: a.classes?.name ?? "" },
+          { name: b.classes?.name ?? "" },
+        );
+        if (byClass !== 0) return byClass;
+        return (a.matieres?.name ?? "").localeCompare(
+          b.matieres?.name ?? "",
+          "fr",
+        );
+      });
+    }
+    return map;
+  }, [assignments]);
+
+  const sortedTeachers = useMemo(
+    () =>
+      [...teachers].sort((a, b) =>
+        fullName(a.first_name, a.last_name).localeCompare(
+          fullName(b.first_name, b.last_name),
+          "fr",
+        ),
+      ),
+    [teachers],
+  );
+
+  const filteredTeachers = useMemo(
+    () =>
+      sortedTeachers.filter((t) => {
+        const cred = credentialsByUser[t.id];
+        return matchesSearch(
+          search,
+          t.first_name,
+          t.last_name,
+          t.phone,
+          cred?.username,
+          fromAuthEmail(t.email),
+        );
+      }),
+    [sortedTeachers, search, credentialsByUser],
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!schoolId) return;
     setCreating(true);
-    setResult(null);
 
     const { data, error } = await supabase.functions.invoke("creer-utilisateur", {
       body: {
@@ -145,36 +260,36 @@ export default function Enseignants() {
     });
 
     if (error) {
-      toast.error("La création a échoué — mode démo activé");
-      const demoUser = `ens.${lastName.toLowerCase().slice(0, 5)}`;
-      setResult({ username: demoUser, tempPassword: "demo1234" });
-      toast.message("Identifiants de démonstration générés localement");
-    } else {
-      const res = data as {
-        username?: string;
-        tempPassword?: string;
-        userId?: string;
-        error?: string;
-      };
-      if (res.error) {
-        toast.error(res.error);
-        setCreating(false);
-        return;
-      }
-      setResult({
-        username: res.username ?? "—",
-        tempPassword: res.tempPassword ?? "—",
-      });
-      if (res.userId) setTeacherId(res.userId);
-      toast.success("Enseignant créé — vous pouvez l’affecter ci-dessous");
-      setShowAssign(true);
-      void qc.invalidateQueries({ queryKey: ["enseignants", schoolId] });
-      void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+      toast.error("La création a échoué");
+      setCreating(false);
+      return;
     }
 
+    const res = data as {
+      username?: string;
+      tempPassword?: string;
+      userId?: string;
+      error?: string;
+    };
+    if (res.error) {
+      toast.error(res.error);
+      setCreating(false);
+      return;
+    }
+
+    toast.success(
+      res.username
+        ? `Compte créé — identifiant ${res.username}`
+        : "Enseignant créé",
+    );
+    closeCreate();
+    if (res.userId) openAssign(res.userId);
+    else openAssign();
+
+    void qc.invalidateQueries({ queryKey: ["enseignants", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["identifiants-enseignants", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     setCreating(false);
-    setFirstName("");
-    setLastName("");
   };
 
   const handleAssign = async (e: React.FormEvent) => {
@@ -191,30 +306,26 @@ export default function Enseignants() {
     });
     if (error) {
       setAssigning(false);
-      toast.error(error.message.includes("duplicate") ? "Affectation déjà existante" : "Erreur");
+      toast.error(
+        error.message.includes("duplicate")
+          ? "Affectation déjà existante"
+          : "Erreur",
+      );
       return;
     }
 
-    await supabase.from("programme_classe").upsert(
-      {
-        class_section_id: classId,
-        subject_id: subjectId,
-        coefficient: 1,
-      },
-      { onConflict: "class_section_id,subject_id", ignoreDuplicates: true },
-    );
-
     setAssigning(false);
     toast.success("Affectation enregistrée");
-    setClassId("");
     setSubjectId("");
     void qc.invalidateQueries({ queryKey: ["affectations", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
-    void qc.invalidateQueries({ queryKey: ["programme-classe", classId] });
   };
 
   const removeAssignment = async (id: string) => {
-    const { error } = await supabase.from("affectations_enseignement").delete().eq("id", id);
+    const { error } = await supabase
+      .from("affectations_enseignement")
+      .delete()
+      .eq("id", id);
     if (error) toast.error("Suppression impossible");
     else {
       toast.success("Affectation retirée");
@@ -228,7 +339,7 @@ export default function Enseignants() {
       <SetupGuideBar />
       <PageHeader
         title="Enseignants"
-        subtitle="Créez les comptes puis affectez-les aux classes et matières"
+        subtitle="Comptes, identifiants et affectations par enseignant"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -241,10 +352,7 @@ export default function Enseignants() {
             <Button
               type="button"
               variant={showForm ? "outline" : "primary"}
-              onClick={() => {
-                setShowForm(!showForm);
-                if (!showForm) closeAssign();
-              }}
+              onClick={() => (showForm ? closeCreate() : openCreate())}
             >
               {showForm ? "Fermer" : "Nouvel enseignant"}
             </Button>
@@ -254,38 +362,35 @@ export default function Enseignants() {
 
       {showForm ? (
         <Card className="mb-6 max-w-lg">
+          <h3 className="mb-4 font-semibold">Nouvel enseignant</h3>
           <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>Prénom</Label>
-                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                <Input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <Label>Nom</Label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
               </div>
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={creating}>
                 {creating ? "Création…" : "Créer"}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+              <Button type="button" variant="ghost" onClick={closeCreate}>
                 Annuler
               </Button>
             </div>
           </form>
-
-          {result ? (
-            <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm">
-              <p className="font-medium text-brand-800">Identifiants créés</p>
-              <p className="mt-2">
-                Identifiant : <Badge>{result.username}</Badge>
-              </p>
-              <p className="mt-1">
-                Mot de passe temporaire : <Badge tone="warning">{result.tempPassword}</Badge>
-              </p>
-            </div>
-          ) : null}
         </Card>
       ) : null}
 
@@ -295,9 +400,17 @@ export default function Enseignants() {
           <form onSubmit={(e) => void handleAssign(e)} className="space-y-4">
             <div>
               <Label>Enseignant</Label>
-              <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} required>
+              <Select
+                value={teacherId}
+                onChange={(e) => {
+                  setTeacherId(e.target.value);
+                  setClassId("");
+                  setSubjectId("");
+                }}
+                required
+              >
                 <option value="">Choisir…</option>
-                {teachers.map((t) => (
+                {sortedTeachers.map((t) => (
                   <option key={t.id} value={t.id}>
                     {fullName(t.first_name, t.last_name)}
                   </option>
@@ -306,8 +419,20 @@ export default function Enseignants() {
             </div>
             <div>
               <Label>Classe</Label>
-              <Select value={classId} onChange={(e) => setClassId(e.target.value)} required>
-                <option value="">Choisir…</option>
+              <Select
+                value={classId}
+                onChange={(e) => {
+                  setClassId(e.target.value);
+                  setSubjectId("");
+                }}
+                required
+                disabled={!teacherId}
+              >
+                <option value="">
+                  {teacherId
+                    ? "Choisir…"
+                    : "Choisissez d’abord un enseignant"}
+                </option>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -317,67 +442,141 @@ export default function Enseignants() {
             </div>
             <div>
               <Label>Matière</Label>
-              <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required>
-                <option value="">Choisir…</option>
-                {subjects.map((s) => (
+              <Select
+                value={subjectId}
+                onChange={(e) => setSubjectId(e.target.value)}
+                required
+                disabled={!classId}
+              >
+                <option value="">
+                  {!classId
+                    ? "Choisissez d’abord une classe"
+                    : loadingClassSubjects
+                      ? "Chargement…"
+                      : classSubjects.length === 0
+                        ? "Aucune matière au programme"
+                        : "Choisir…"}
+                </option>
+                {classSubjects.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </Select>
+              {classId &&
+              !loadingClassSubjects &&
+              classSubjects.length === 0 ? (
+                <p className="mt-1.5 text-xs text-amber-700">
+                  Définissez d’abord le programme de cette classe (page
+                  Programmes).
+                </p>
+              ) : null}
             </div>
-            <Button type="submit" disabled={assigning}>
+            <Button
+              type="submit"
+              disabled={assigning || !teacherId || !classId || !subjectId}
+            >
               {assigning ? "Enregistrement…" : "Enregistrer l’affectation"}
             </Button>
           </form>
         </Card>
       ) : null}
 
-      {assignments.length > 0 ? (
-        <div className="mb-8">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Affectations ({assignments.length})
-          </h3>
-          <div className="space-y-2">
-            {assignments.map((a) => (
-              <Card key={a.id} className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium">
-                    {a.profils
-                      ? fullName(a.profils.first_name, a.profils.last_name)
-                      : "Enseignant"}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {a.classes?.name ?? "—"} · {a.matieres?.name ?? "—"}
-                  </p>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => void removeAssignment(a.id)}>
-                  Retirer
-                </Button>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
-      ) : teachers.length === 0 ? (
-        <EmptyState message="Aucun enseignant." />
+      ) : sortedTeachers.length === 0 ? (
+        <EmptyState message="Aucun enseignant. Créez le premier compte." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {teachers.map((t) => {
-            const count = assignments.filter((a) => a.teacher_id === t.id).length;
-            return (
-              <Card key={t.id}>
-                <h3 className="font-semibold">{fullName(t.first_name, t.last_name)}</h3>
-                {t.phone ? <p className="text-sm text-slate-500">{t.phone}</p> : null}
-                <p className="mt-1 text-xs text-slate-400">
-                  {count > 0 ? `${count} affectation(s)` : "Pas encore affecté"}
-                </p>
-              </Card>
-            );
-          })}
+        <div className="space-y-4">
+          <div className="max-w-md">
+            <Label htmlFor="search-enseignants">Rechercher</Label>
+            <Input
+              id="search-enseignants"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nom, identifiant…"
+            />
+          </div>
+          {filteredTeachers.length === 0 ? (
+            <EmptyState message="Aucun enseignant ne correspond à la recherche." />
+          ) : (
+            <div className="space-y-3">
+              {filteredTeachers.map((t) => {
+                const cred = credentialFor(t);
+                const teacherAssignments = assignmentsByTeacher.get(t.id) ?? [];
+                return (
+                  <Card key={t.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold">
+                          {fullName(t.first_name, t.last_name)}
+                        </h3>
+                        {t.phone ? (
+                          <p className="text-sm text-slate-500">{t.phone}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                          <span className="text-slate-500">Identifiant</span>
+                          <Badge>{cred.username}</Badge>
+                          {cred.tempPassword ? (
+                            <>
+                              <span className="text-slate-500">Mot de passe</span>
+                              <Badge tone="warning">{cred.tempPassword}</Badge>
+                              {cred.used ? (
+                                <span className="text-xs text-slate-400">
+                                  (déjà utilisé)
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              Mot de passe non disponible
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openAssign(t.id)}
+                      >
+                        Affecter
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 border-t border-slate-100 pt-3">
+                      {teacherAssignments.length === 0 ? (
+                        <p className="text-sm text-slate-400">
+                          Pas encore affecté
+                        </p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {teacherAssignments.map((a) => (
+                            <li
+                              key={a.id}
+                              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                            >
+                              <span className="text-slate-700">
+                                {a.classes?.name ?? "—"} ·{" "}
+                                {a.matieres?.name ?? "—"}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void removeAssignment(a.id)}
+                              >
+                                Retirer
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

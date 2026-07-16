@@ -22,3 +22,23 @@ export function fromAuthEmail(email?: string | null) {
     ? email.replace("@edufaso.local", "")
     : email;
 }
+
+/** Case/accent-insensitive match for people lists (name, class, username, …). */
+export function matchesSearch(
+  query: string,
+  ...parts: (string | null | undefined)[]
+): boolean {
+  const q = query
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  if (!q) return true;
+  const hay = parts
+    .filter(Boolean)
+    .join(" ")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  return q.split(/\s+/).every((token) => hay.includes(token));
+}
