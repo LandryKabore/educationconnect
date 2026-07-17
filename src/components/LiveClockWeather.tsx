@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -8,6 +8,7 @@ import {
   CloudLightning,
   CloudRain,
   CloudSnow,
+  RefreshCw,
   Sun,
   CloudSun,
 } from "lucide-react";
@@ -200,10 +201,12 @@ function sourceHint(source: LocationSource) {
 
 export function LiveClockWeather({ className }: { className?: string }) {
   const { schoolId, schools } = useAuth();
+  const qc = useQueryClient();
   const school = schools.find((s) => s.id === schoolId) ?? schools[0];
   const cityFallback = school?.city || school?.region || "Ouagadougou";
 
   const [now, setNow] = useState(() => new Date());
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -220,6 +223,17 @@ export function LiveClockWeather({ className }: { className?: string }) {
 
   const { Icon } = weatherFromCode(weather?.code ?? 0);
 
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setNow(new Date());
+    try {
+      await qc.invalidateQueries();
+    } finally {
+      window.setTimeout(() => setRefreshing(false), 500);
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -230,9 +244,23 @@ export function LiveClockWeather({ className }: { className?: string }) {
       <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
         {format(now, "EEEE d MMM", { locale: fr })}
       </p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">
-        {format(now, "HH:mm:ss")}
-      </p>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        <p className="text-lg font-semibold tabular-nums text-slate-900">
+          {format(now, "HH:mm:ss")}
+        </p>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          title="Actualiser la page"
+          aria-label="Actualiser la page"
+          className="rounded-md p-1 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-60"
+        >
+          <RefreshCw
+            className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
+          />
+        </button>
+      </div>
       <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
         <Icon className="h-3.5 w-3.5 shrink-0 text-brand-700" />
         {weather ? (
