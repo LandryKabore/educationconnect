@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Users } from "lucide-react";
+import { BookOpen, ClipboardList, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -15,11 +15,33 @@ import {
   PageHeader,
 } from "@/components/ui";
 
+type Tab = "overview" | "programme";
+
+type AssignmentRow = {
+  id: string;
+  subject_id: string;
+  matieres: { name: string } | null;
+  profils: { first_name: string; last_name: string } | null;
+};
+
 export default function ClassDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { role, schoolId } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
+
+  const tabParam = searchParams.get("tab");
+  const tab: Tab =
+    tabParam === "overview" || tabParam === "programme"
+      ? tabParam
+      : isAdmin
+        ? "programme"
+        : "overview";
+
+  const setTab = (next: Tab) => {
+    setSearchParams({ tab: next }, { replace: true });
+  };
 
   const [pendingAdds, setPendingAdds] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -62,20 +84,16 @@ export default function ClassDetail() {
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["class-assignments", id],
-    enabled: !!id && isAdmin,
+    enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("affectations_enseignement")
         .select(
-          "id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
+          "id, subject_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
         )
         .eq("class_section_id", id!);
       if (error) throw error;
-      return (data ?? []) as unknown as {
-        id: string;
-        matieres: { name: string } | null;
-        profils: { first_name: string; last_name: string } | null;
-      }[];
+      return (data ?? []) as unknown as AssignmentRow[];
     },
   });
 
@@ -108,8 +126,22 @@ export default function ClassDetail() {
     },
   });
 
+  const teachersBySubject = useMemo(() => {
+    const map = new Map<string, AssignmentRow[]>();
+    for (const a of assignments) {
+      const list = map.get(a.subject_id) ?? [];
+      list.push(a);
+      map.set(a.subject_id, list);
+    }
+    return map;
+  }, [assignments]);
+
   const programmeSubjectIds = new Set(programme.map((p) => p.subject_id));
   const availableSubjects = subjects.filter((s) => !programmeSubjectIds.has(s.id));
+
+  const orphanAssignments = assignments.filter(
+    (a) => !programmeSubjectIds.has(a.subject_id),
+  );
 
   const togglePending = (subjectId: string) => {
     setPendingAdds((prev) => {
@@ -172,15 +204,28 @@ export default function ClassDetail() {
     }
   };
 
-  const removeFromProgramme = async (rowId: string) => {
-    const { error } = await supabase.from("programme_classe").delete().eq("id", rowId);
-    if (error) toast.error("Suppression impossible");
-    else {
-      toast.success("Retiré du programme");
-      void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
-      void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
-      void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+  const removeFromProgramme = async (row: ClassProgrammeRow) => {
+    if (!id) return;
+    const { error } = await supabase
+      .from("programme_classe")
+      .delete()
+      .eq("id", row.id);
+    if (error) {
+      toast.error("Suppression impossible");
+      return;
     }
+    await supabase
+      .from("affectations_enseignement")
+      .delete()
+      .eq("class_section_id", id)
+      .eq("subject_id", row.subject_id);
+
+    toast.success("Matière retirée du programme");
+    void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
+    void qc.invalidateQueries({ queryKey: ["class-assignments", id] });
+    void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["affectations", schoolId] });
   };
 
   if (isLoading) return <p className="text-slate-500">Chargement…</p>;
@@ -194,93 +239,163 @@ export default function ClassDetail() {
           [cls.grade_level, cls.annees_scolaires?.label].filter(Boolean).join(" · ") ||
           undefined
         }
+        actions={
+          isAdmin ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={tab === "overview" ? "primary" : "outline"}
+                onClick={() => setTab("overview")}
+              >
+                Vue d’ensemble
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={tab === "programme" ? "primary" : "outline"}
+                onClick={() => setTab("programme")}
+              >
+                Programme
+              </Button>
+            </div>
+          ) : undefined
+        }
       />
 
       <p className="mb-6 text-sm text-slate-500">
         {roster.length} élève(s) inscrit(s)
         {cls.capacity ? ` · capacité ${cls.capacity}` : ""}
+        {programme.length > 0 ? ` · ${programme.length} matière(s)` : ""}
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link to={`/classes/${id}/presences`}>
-          <Card className="flex items-center gap-4 transition hover:border-brand-300">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-              <Users className="h-6 w-6" />
+      {tab === "programme" && isAdmin ? (
+        <div className="space-y-6">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-900">
+                  Programme de la classe
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Corrigez les coefficients, voyez qui enseigne chaque matière, ou
+                  retirez une matière de cette classe.
+                </p>
+              </div>
+              <Link
+                to="/enseignants"
+                className="text-sm font-medium text-brand-700 hover:underline"
+              >
+                Gérer les affectations →
+              </Link>
             </div>
-            <div>
-              <h3 className="font-semibold">Présences</h3>
-              <p className="text-sm text-slate-500">
-                {isAdmin ? "Consulter / marquer les présences" : "Marquer les présences du jour"}
-              </p>
-            </div>
-          </Card>
-        </Link>
-        <Link to={`/classes/${id}/notes`}>
-          <Card className="flex items-center gap-4 transition hover:border-brand-300">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-              <ClipboardList className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Notes</h3>
-              <p className="text-sm text-slate-500">
-                {isAdmin ? "Consulter / saisir les notes" : "Saisir les notes des élèves"}
-              </p>
-            </div>
-          </Card>
-        </Link>
-      </div>
 
-      {isAdmin ? (
-        <Card className="mt-8">
-          <h3 className="font-semibold text-slate-900">Programme & coefficients</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Cochez les matières enseignées dans cette classe et réglez leur coefficient.
-          </p>
+            {programme.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500">
+                Aucune matière dans le programme. Ajoutez-en ci-dessous ou via{" "}
+                <Link to="/programmes" className="font-medium text-brand-700 underline">
+                  Programme par classe
+                </Link>
+                .
+              </p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[28rem] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                      <th className="pb-2 pr-3 font-medium">Matière</th>
+                      <th className="pb-2 pr-3 font-medium">Coef.</th>
+                      <th className="pb-2 pr-3 font-medium">Enseignant(s)</th>
+                      <th className="pb-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {programme.map((p) => {
+                      const teachers = teachersBySubject.get(p.subject_id) ?? [];
+                      return (
+                        <tr key={p.id}>
+                          <td className="py-3 pr-3 font-medium text-slate-900">
+                            {p.matieres?.name ?? "—"}
+                          </td>
+                          <td className="py-3 pr-3">
+                            <Input
+                              type="number"
+                              min="0.5"
+                              step="0.5"
+                              className="w-20"
+                              key={`${p.id}-${p.coefficient}`}
+                              defaultValue={String(p.coefficient)}
+                              onBlur={(e) => {
+                                if (e.target.value !== String(p.coefficient)) {
+                                  void updateCoef(p.id, e.target.value);
+                                }
+                              }}
+                            />
+                          </td>
+                          <td className="py-3 pr-3 text-slate-600">
+                            {teachers.length === 0 ? (
+                              <span className="text-amber-700">Non affecté</span>
+                            ) : (
+                              <ul className="space-y-0.5">
+                                {teachers.map((t) => (
+                                  <li key={t.id}>
+                                    {t.profils
+                                      ? fullName(
+                                          t.profils.first_name,
+                                          t.profils.last_name,
+                                        )
+                                      : "—"}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                          <td className="py-3 text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600"
+                              onClick={() => void removeFromProgramme(p)}
+                            >
+                              Retirer
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-          {programme.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-500">Aucune matière dans le programme.</p>
-          ) : (
-            <div className="mt-4 space-y-2">
-              {programme.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2"
-                >
-                  <p className="font-medium">{p.matieres?.name ?? "—"}</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Coef.</span>
-                    <Input
-                      type="number"
-                      min="0.5"
-                      step="0.5"
-                      className="w-20"
-                      defaultValue={String(p.coefficient)}
-                      onBlur={(e) => {
-                        if (e.target.value !== String(p.coefficient)) {
-                          void updateCoef(p.id, e.target.value);
-                        }
-                      }}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-600"
-                      onClick={() => void removeFromProgramme(p.id)}
-                    >
-                      Retirer
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            {orphanAssignments.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="font-medium">
+                  Affectations hors programme ({orphanAssignments.length})
+                </p>
+                <ul className="mt-1 list-disc pl-5">
+                  {orphanAssignments.map((a) => (
+                    <li key={a.id}>
+                      {a.matieres?.name ?? "Matière"} —{" "}
+                      {a.profils
+                        ? fullName(a.profils.first_name, a.profils.last_name)
+                        : "—"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </Card>
 
           {availableSubjects.length > 0 ? (
-            <div className="mt-6 border-t border-slate-100 pt-4">
-              <p className="mb-2 text-sm font-medium text-slate-700">
-                Ajouter des matières ({Object.keys(pendingAdds).length} cochée(s))
+            <Card>
+              <h3 className="font-semibold text-slate-900">
+                Ajouter des matières
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {Object.keys(pendingAdds).length} cochée(s)
               </p>
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+              <div className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
                 {availableSubjects.map((s) => {
                   const checked = pendingAdds[s.id] !== undefined;
                   return (
@@ -297,7 +412,9 @@ export default function ClassDetail() {
                         checked={checked}
                         onChange={() => togglePending(s.id)}
                       />
-                      <span className="min-w-0 flex-1 text-sm font-medium">{s.name}</span>
+                      <span className="min-w-0 flex-1 text-sm font-medium">
+                        {s.name}
+                      </span>
                       {checked ? (
                         <span className="flex items-center gap-1.5">
                           <span className="text-xs text-slate-500">Coef.</span>
@@ -328,78 +445,111 @@ export default function ClassDetail() {
               >
                 {saving ? "Ajout…" : "Ajouter la sélection"}
               </Button>
-            </div>
+            </Card>
           ) : subjects.length > 0 ? (
-            <p className="mt-4 text-sm text-slate-500">
+            <p className="text-sm text-slate-500">
               Toutes les matières du catalogue sont déjà dans le programme.
             </p>
           ) : null}
-        </Card>
-      ) : programme.length > 0 ? (
-        <Card className="mt-8">
-          <h3 className="mb-3 font-semibold">Matières de la classe</h3>
-          <ul className="space-y-1 text-sm text-slate-600">
-            {programme.map((p) => (
-              <li key={p.id}>
-                {p.matieres?.name ?? "—"} · coef. {p.coefficient}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Effectif
-          </h3>
-          {roster.length === 0 ? (
-            <EmptyState message="Aucun élève dans cette classe." />
-          ) : (
-            <div className="space-y-2">
-              {roster.map((row) => (
-                <Card key={row.id}>
-                  <p className="font-medium">
-                    {row.profils
-                      ? fullName(row.profils.first_name, row.profils.last_name)
-                      : "Élève"}
-                  </p>
-                </Card>
-              ))}
-            </div>
-          )}
         </div>
-
-        {isAdmin ? (
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Enseignants affectés
-            </h3>
-            {assignments.length === 0 ? (
-              <EmptyState message="Aucune affectation. Allez dans Enseignants." />
-            ) : (
-              <div className="space-y-2">
-                {assignments.map((a) => (
-                  <Card key={a.id}>
-                    <p className="font-medium">
-                      {a.profils
-                        ? fullName(a.profils.first_name, a.profils.last_name)
-                        : "—"}
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Link to={`/classes/${id}/presences`}>
+              <Card className="flex items-center gap-4 transition hover:border-brand-300">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
+                  <Users className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Présences</h3>
+                  <p className="text-sm text-slate-500">
+                    {isAdmin
+                      ? "Consulter / marquer les présences"
+                      : "Marquer les présences du jour"}
+                  </p>
+                </div>
+              </Card>
+            </Link>
+            <Link to={`/classes/${id}/notes`}>
+              <Card className="flex items-center gap-4 transition hover:border-brand-300">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
+                  <ClipboardList className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Notes</h3>
+                  <p className="text-sm text-slate-500">
+                    {isAdmin
+                      ? "Consulter / saisir les notes"
+                      : "Saisir les notes des élèves"}
+                  </p>
+                </div>
+              </Card>
+            </Link>
+            {isAdmin ? (
+              <button type="button" onClick={() => setTab("programme")} className="text-left">
+                <Card className="flex items-center gap-4 transition hover:border-brand-300">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
+                    <BookOpen className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Programme</h3>
+                    <p className="text-sm text-slate-500">
+                      Coefficients, matières et enseignants
                     </p>
-                    <p className="text-sm text-slate-500">{a.matieres?.name ?? "—"}</p>
+                  </div>
+                </Card>
+              </button>
+            ) : null}
+          </div>
+
+          {!isAdmin && programme.length > 0 ? (
+            <Card className="mt-8">
+              <h3 className="mb-3 font-semibold">Matières de la classe</h3>
+              <ul className="space-y-1 text-sm text-slate-600">
+                {programme.map((p) => {
+                  const teachers = teachersBySubject.get(p.subject_id) ?? [];
+                  return (
+                    <li key={p.id}>
+                      {p.matieres?.name ?? "—"} · coef. {p.coefficient}
+                      {teachers.length > 0
+                        ? ` · ${teachers
+                            .map((t) =>
+                              t.profils
+                                ? fullName(t.profils.first_name, t.profils.last_name)
+                                : null,
+                            )
+                            .filter(Boolean)
+                            .join(", ")}`
+                        : ""}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          ) : null}
+
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Effectif
+            </h3>
+            {roster.length === 0 ? (
+              <EmptyState message="Aucun élève dans cette classe." />
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {roster.map((row) => (
+                  <Card key={row.id}>
+                    <p className="font-medium">
+                      {row.profils
+                        ? fullName(row.profils.first_name, row.profils.last_name)
+                        : "Élève"}
+                    </p>
                   </Card>
                 ))}
               </div>
             )}
-            <Link
-              to="/enseignants"
-              className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline"
-            >
-              Gérer les affectations →
-            </Link>
           </div>
-        ) : null}
-      </div>
+        </>
+      )}
     </div>
   );
 }

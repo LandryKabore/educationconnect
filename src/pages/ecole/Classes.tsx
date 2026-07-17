@@ -15,6 +15,7 @@ import {
 } from "@/lib/classCatalog";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
 import { cn } from "@/lib/utils";
 import {
   Button,
@@ -306,11 +307,10 @@ export default function Classes() {
         actions={
           <Button
             type="button"
-            variant={showCustom ? "outline" : "primary"}
-            onClick={() => (showCustom ? resetCustomForm() : openCustomCreate())}
+            onClick={openCustomCreate}
           >
             <Plus className="h-4 w-4" />
-            {showCustom ? "Fermer" : "Classe personnalisée"}
+            Classe personnalisée
           </Button>
         }
       />
@@ -347,8 +347,13 @@ export default function Classes() {
       </Card>
 
       {showCustom ? (
-        <Card className="mb-6 max-w-xl">
-          <h3 className="mb-4 font-semibold text-slate-900">Classe personnalisée</h3>
+        <Modal
+          open={showCustom}
+          title="Classe personnalisée"
+          onClose={resetCustomForm}
+          closeDisabled={saving}
+          size="lg"
+        >
           <form
             onSubmit={(e) => void handleCustomCreate(e)}
             className="space-y-4"
@@ -391,7 +396,7 @@ export default function Classes() {
               </Button>
             </div>
           </form>
-        </Card>
+        </Modal>
       ) : null}
 
       <Card className="mb-6">
@@ -496,20 +501,49 @@ export default function Classes() {
       ) : classesForYear.length === 0 ? (
         <EmptyState message="Aucune classe pour cette année. Cochez la liste ci-dessus." />
       ) : (
-        <Card className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-semibold text-slate-900">
-              {classesForYear.length} classe(s) pour cette année
-            </p>
-            <p className="text-sm text-slate-500">
-              {classesForYear.filter((c) => classesWithProg.has(c.id)).length}/
-              {classesForYear.length} avec programme — décochez une classe
-              « Créée » (mot de passe requis) pour la retirer
-            </p>
+        <Card>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-slate-900">
+                {classesForYear.length} classe(s) pour cette année
+              </p>
+              <p className="text-sm text-slate-500">
+                {classesForYear.filter((c) => classesWithProg.has(c.id)).length}/
+                {classesForYear.length} avec programme — ouvrez une classe pour
+                corriger les coefs ou voir les enseignants
+              </p>
+            </div>
+            <Link to="/programmes">
+              <Button type="button">Définir les programmes →</Button>
+            </Link>
           </div>
-          <Link to="/programmes">
-            <Button type="button">Définir les programmes →</Button>
-          </Link>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {classesForYear.map((c) => {
+              const hasProg = classesWithProg.has(c.id);
+              return (
+                <Link
+                  key={c.id}
+                  to={`/classes/${c.id}?tab=programme`}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium text-slate-900">{c.name}</span>
+                    {c.grade_level ? (
+                      <span className="text-xs text-slate-500">{c.grade_level}</span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs font-medium",
+                      hasProg ? "text-emerald-700" : "text-amber-700",
+                    )}
+                  >
+                    {hasProg ? "Programme" : "À faire"}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
         </Card>
       )}
     </div>

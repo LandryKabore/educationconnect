@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AcademicYear } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
 import {
   Badge,
   Button,
@@ -182,19 +183,17 @@ export default function Annees() {
         title="Années scolaires"
         subtitle="Créez, modifiez ou définissez l’année courante"
         actions={
-          <Button
-            onClick={() => (showForm && !editingId ? resetForm() : openCreate())}
-          >
-            {showForm && !editingId ? "Fermer" : "Nouvelle année"}
-          </Button>
+          <Button onClick={openCreate}>Nouvelle année</Button>
         }
       />
 
       {showForm ? (
-        <Card className="mb-6 max-w-lg">
-          <h3 className="mb-4 font-semibold text-slate-900">
-            {editingId ? "Modifier l’année scolaire" : "Nouvelle année scolaire"}
-          </h3>
+        <Modal
+          open={showForm}
+          title={editingId ? "Modifier l’année scolaire" : "Nouvelle année scolaire"}
+          onClose={resetForm}
+          closeDisabled={saving}
+        >
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
             <div>
               <Label>Libellé</Label>
@@ -244,7 +243,7 @@ export default function Annees() {
               </Button>
             </div>
           </form>
-        </Card>
+        </Modal>
       ) : null}
 
       {isLoading ? (

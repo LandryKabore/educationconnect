@@ -3,6 +3,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import Connexion from "@/pages/Connexion";
 import PremiereConnexion from "@/pages/PremiereConnexion";
+import CompleterProfil from "@/pages/CompleterProfil";
 import Profil from "@/pages/Profil";
 import Telecharger from "@/pages/Telecharger";
 import EcolesList from "@/pages/admin/EcolesList";
@@ -57,6 +58,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <PremiereConnexion />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/completer-profil"
+        element={
+          <RequireAuth>
+            <CompleterProfil />
           </RequireAuth>
         }
       />

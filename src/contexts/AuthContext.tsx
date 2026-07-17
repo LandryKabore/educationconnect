@@ -17,6 +17,7 @@ import {
   type UserRoleRow,
 } from "@/lib/types";
 import { toAuthEmail } from "@/lib/utils";
+import { isPasswordStrong } from "@/lib/passwordRules";
 
 const SUPPORT_KEY = "ef_support_school";
 
@@ -181,6 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const completePasswordChange = async (newPassword: string) => {
+    if (!isPasswordStrong(newPassword)) {
+      throw new Error(
+        "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial",
+      );
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
     if (session?.user) {

@@ -14,6 +14,7 @@ import {
 } from "@/lib/subjectCatalog";
 import { cn } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
 import {
   Button,
   Card,
@@ -303,22 +304,21 @@ export default function Matieres() {
         actions={
           <Button
             type="button"
-            variant={showCustom || editingId ? "outline" : "primary"}
-            onClick={() =>
-              showCustom || editingId ? resetCustomForm() : openCustomCreate()
-            }
+            onClick={openCustomCreate}
           >
             <Plus className="h-4 w-4" />
-            {showCustom || editingId ? "Fermer" : "Matière personnalisée"}
+            Matière personnalisée
           </Button>
         }
       />
 
       {(showCustom || editingId) && (
-        <Card className="mb-6 max-w-lg">
-          <h3 className="mb-4 font-semibold text-slate-900">
-            {editingId ? "Modifier la matière" : "Matière personnalisée"}
-          </h3>
+        <Modal
+          open={showCustom || !!editingId}
+          title={editingId ? "Modifier la matière" : "Matière personnalisée"}
+          onClose={resetCustomForm}
+          closeDisabled={saving}
+        >
           <form
             onSubmit={(e) => void handleCustomSubmit(e)}
             className="space-y-4"
@@ -359,7 +359,7 @@ export default function Matieres() {
               </Button>
             </div>
           </form>
-        </Card>
+        </Modal>
       )}
 
       <Card className="mb-6">

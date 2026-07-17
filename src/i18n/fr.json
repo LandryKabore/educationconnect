@@ -28,7 +28,8 @@
     "confirm": "Confirmer le mot de passe",
     "submit": "Valider et continuer",
     "mismatch": "Les mots de passe ne correspondent pas",
-    "tooShort": "Au moins 6 caractères"
+    "tooShort": "Au moins 8 caractères",
+    "weak": "Le mot de passe doit contenir une majuscule, un chiffre et un caractère spécial"
   },
   "nav": {
     "dashboard": "Tableau de bord",

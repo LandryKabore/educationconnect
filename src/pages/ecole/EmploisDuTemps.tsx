@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,11 @@ import { fullName } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
+import {
+  TimetableGrid,
+  type TimetableGridSlot,
+} from "@/components/TimetableGrid";
 import {
   Button,
   Card,
@@ -26,6 +31,19 @@ type SlotRow = TimetableSlot & {
   matieres: { name: string } | null;
   profils: { first_name: string; last_name: string } | null;
 };
+
+/** Créneaux horaires : 06:00 → 23:45, pas de 15 min */
+const TIMETABLE_TIME_OPTIONS = (() => {
+  const opts: string[] = [];
+  for (let h = 6; h <= 23; h++) {
+    for (const m of [0, 15, 30, 45]) {
+      opts.push(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      );
+    }
+  }
+  return opts;
+})();
 
 export default function EmploisDuTemps() {
   const { schoolId } = useAuth();
@@ -58,6 +76,16 @@ export default function EmploisDuTemps() {
     () => sortClassesByProgression(classesRaw),
     [classesRaw],
   );
+
+  useEffect(() => {
+    if (!classes.length) {
+      setFilterClassId("");
+      return;
+    }
+    if (!filterClassId || !classes.some((c) => c.id === filterClassId)) {
+      setFilterClassId(classes[0].id);
+    }
+  }, [classes, filterClassId]);
 
   const { data: subjects = [] } = useQuery({
     queryKey: ["matieres", schoolId],
@@ -229,22 +257,29 @@ export default function EmploisDuTemps() {
   ]);
 
   const filteredSlots = useMemo(() => {
+    if (!filterClassId) return [];
     return slots.filter((s) => {
-      if (filterClassId && s.class_section_id !== filterClassId) return false;
+      if (s.class_section_id !== filterClassId) return false;
       if (filterTeacherId && s.teacher_id !== filterTeacherId) return false;
       return true;
     });
   }, [slots, filterClassId, filterTeacherId]);
 
-  const slotsByDay = useMemo(() => {
-    const map = new Map<number, SlotRow[]>();
-    for (const s of filteredSlots) {
-      const list = map.get(s.day_of_week) ?? [];
-      list.push(s);
-      map.set(s.day_of_week, list);
-    }
-    return [...map.entries()].sort((a, b) => a[0] - b[0]);
-  }, [filteredSlots]);
+  const gridSlots: TimetableGridSlot[] = useMemo(
+    () =>
+      filteredSlots.map((s) => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        subjectName: s.matieres?.name ?? "Matière",
+        teacherName: s.profils
+          ? fullName(s.profils.first_name, s.profils.last_name)
+          : null,
+        room: s.room,
+      })),
+    [filteredSlots],
+  );
 
   const resetForm = () => {
     setShowForm(false);
@@ -302,7 +337,7 @@ export default function EmploisDuTemps() {
       return;
     }
     toast.success("Créneau ajouté");
-    if (!filterClassId) setFilterClassId(classId);
+    setFilterClassId(classId);
     resetForm();
     void qc.invalidateQueries({ queryKey: ["creneaux", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
@@ -327,7 +362,7 @@ export default function EmploisDuTemps() {
         actions={
           <Button
             onClick={() => {
-              setShowForm(!showForm);
+              setShowForm(true);
               if (!classId && filterClassId) setClassId(filterClassId);
             }}
           >
@@ -339,21 +374,24 @@ export default function EmploisDuTemps() {
       <Card className="mb-6 max-w-3xl">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label>Filtrer par classe</Label>
+            <Label>Classe</Label>
             <Select
               value={filterClassId}
               onChange={(e) => {
-                const next = e.target.value;
-                setFilterClassId(next);
+                setFilterClassId(e.target.value);
                 setFilterTeacherId("");
               }}
+              disabled={classes.length === 0}
             >
-              <option value="">Toutes les classes</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {classes.length === 0 ? (
+                <option value="">Aucune classe</option>
+              ) : (
+                classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))
+              )}
             </Select>
           </div>
           <div>
@@ -374,7 +412,12 @@ export default function EmploisDuTemps() {
       </Card>
 
       {showForm ? (
-        <Card className="mb-6 max-w-lg">
+        <Modal
+          open={showForm}
+          title="Ajouter un créneau"
+          onClose={resetForm}
+          closeDisabled={saving}
+        >
           <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
             <div>
               <Label>Classe</Label>
@@ -462,21 +505,31 @@ export default function EmploisDuTemps() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>Début</Label>
-                <Input
-                  type="time"
+                <Select
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
-                />
+                >
+                  {TIMETABLE_TIME_OPTIONS.map((t) => (
+                    <option key={`start-${t}`} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
               </div>
               <div>
                 <Label>Fin</Label>
-                <Input
-                  type="time"
+                <Select
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
                   required
-                />
+                >
+                  {TIMETABLE_TIME_OPTIONS.map((t) => (
+                    <option key={`end-${t}`} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
             <div>
@@ -522,59 +575,23 @@ export default function EmploisDuTemps() {
               </Button>
             </div>
           </form>
-        </Card>
+        </Modal>
       ) : null}
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
-      ) : filteredSlots.length === 0 ? (
-        <EmptyState
-          message={
-            slots.length === 0
-              ? "Aucun créneau défini."
-              : "Aucun créneau pour ce filtre."
-          }
-        />
+      ) : classes.length === 0 ? (
+        <EmptyState message="Créez d’abord des classes pour planifier l’emploi du temps." />
       ) : (
-        <div className="space-y-6">
-          {slotsByDay.map(([day, daySlots]) => (
-            <div key={day}>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                {formatDay(day)}
-              </h3>
-              <div className="space-y-2">
-                {daySlots.map((slot) => (
-                  <Card
-                    key={slot.id}
-                    className="flex flex-wrap items-center justify-between gap-2"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
-                        {" · "}
-                        {slot.profils
-                          ? fullName(slot.profils.first_name, slot.profils.last_name)
-                          : "Sans enseignant"}
-                        {" · "}
-                        {slot.matieres?.name}
-                        {!filterClassId ? ` · ${slot.classes?.name}` : ""}
-                      </p>
-                      {slot.room ? (
-                        <p className="text-sm text-slate-500">Salle {slot.room}</p>
-                      ) : null}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void removeSlot(slot.id)}
-                    >
-                      Supprimer
-                    </Button>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="space-y-3">
+          {filteredSlots.length === 0 ? (
+            <EmptyState message="Aucun créneau pour cette classe — ajoutez-en pour remplir la grille." />
+          ) : null}
+          <TimetableGrid
+            slots={gridSlots}
+            title={`Emploi du temps — ${classNameById.get(filterClassId) ?? "classe"}`}
+            onRemove={(id) => void removeSlot(id)}
+          />
         </div>
       )}
     </div>

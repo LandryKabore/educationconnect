@@ -16,7 +16,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Input,
   Label,
   PageHeader,
   Select,
@@ -29,7 +28,7 @@ export default function ProgrammeClasses() {
   const [yearId, setYearId] = useState("");
   const [progSubjects, setProgSubjects] = useState<Set<string>>(() => new Set());
   const [progClasses, setProgClasses] = useState<Set<string>>(() => new Set());
-  const [progCoef, setProgCoef] = useState("1");
+  const [subjectCoefs, setSubjectCoefs] = useState<Record<string, string>>({});
   const [applying, setApplying] = useState(false);
 
   const { data: years = [] } = useQuery({
@@ -125,13 +124,48 @@ export default function ProgrammeClasses() {
     },
   });
 
+  const ensureCoef = (id: string) => {
+    setSubjectCoefs((prev) =>
+      prev[id] != null && prev[id] !== "" ? prev : { ...prev, [id]: "1" },
+    );
+  };
+
   const toggleSubject = (id: string) => {
     setProgSubjects((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        setSubjectCoefs((coefs) => {
+          const copy = { ...coefs };
+          delete copy[id];
+          return copy;
+        });
+      } else {
+        next.add(id);
+        ensureCoef(id);
+      }
       return next;
     });
+  };
+
+  const selectSubjects = (ids: string[]) => {
+    setProgSubjects(new Set(ids));
+    setSubjectCoefs((prev) => {
+      const next: Record<string, string> = {};
+      for (const id of ids) {
+        next[id] = prev[id] && prev[id] !== "" ? prev[id] : "1";
+      }
+      return next;
+    });
+  };
+
+  const clearSubjects = () => {
+    setProgSubjects(new Set());
+    setSubjectCoefs({});
+  };
+
+  const setCoef = (id: string, value: string) => {
+    setSubjectCoefs((prev) => ({ ...prev, [id]: value }));
   };
 
   const toggleClass = (id: string) => {
@@ -152,9 +186,14 @@ export default function ProgrammeClasses() {
       toast.error("Cochez au moins une classe.");
       return;
     }
-    const coef = Number(progCoef);
-    if (!coef || coef <= 0) {
-      toast.error("Le coefficient doit être supérieur à 0.");
+
+    const bad = [...progSubjects].find((id) => {
+      const coef = Number(subjectCoefs[id] ?? "0");
+      return !coef || coef <= 0;
+    });
+    if (bad) {
+      const name = subjects.find((s) => s.id === bad)?.name ?? "une matière";
+      toast.error(`Coefficient invalide pour « ${name} » (doit être > 0).`);
       return;
     }
 
@@ -163,7 +202,7 @@ export default function ProgrammeClasses() {
       [...progSubjects].map((subjectId) => ({
         class_section_id: classId,
         subject_id: subjectId,
-        coefficient: coef,
+        coefficient: Number(subjectCoefs[subjectId] ?? "1"),
       })),
     );
 
@@ -180,7 +219,7 @@ export default function ProgrammeClasses() {
     toast.success(
       `${progSubjects.size} matière(s) → ${progClasses.size} classe(s)`,
     );
-    setProgSubjects(new Set());
+    clearSubjects();
     setProgClasses(new Set());
     void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
@@ -201,16 +240,15 @@ export default function ProgrammeClasses() {
       <Card className="mb-6 border-brand-100 bg-brand-50/60">
         <p className="font-semibold text-brand-950">Comment ça marche</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-brand-900">
-          <li>Cochez les matières à enseigner.</li>
+          <li>Cochez les matières et réglez le coefficient de chacune.</li>
           <li>Cochez les classes qui reçoivent ces matières (ex. toutes les 6èmes).</li>
           <li>
-            Indiquez un coefficient commun, puis cliquez sur{" "}
-            <strong>Appliquer</strong>.
+            Cliquez sur <strong>Appliquer</strong>.
           </li>
         </ol>
         <p className="mt-3 text-sm text-brand-800">
-          Vous pourrez ensuite ouvrir une classe pour ajuster un coef ou retirer
-          une matière individuellement.
+          Pour corriger un coefficient ou voir qui enseigne quoi, ouvrez la
+          classe → onglet Programme.
         </p>
       </Card>
 
@@ -266,9 +304,7 @@ export default function ProgrammeClasses() {
                     <button
                       type="button"
                       className="font-medium text-brand-700 hover:underline"
-                      onClick={() =>
-                        setProgSubjects(new Set(primarySubjectIds))
-                      }
+                      onClick={() => selectSubjects(primarySubjectIds)}
                     >
                       Cocher le primaire
                     </button>
@@ -276,9 +312,7 @@ export default function ProgrammeClasses() {
                   <button
                     type="button"
                     className="font-medium text-brand-700 hover:underline"
-                    onClick={() =>
-                      setProgSubjects(new Set(subjects.map((s) => s.id)))
-                    }
+                    onClick={() => selectSubjects(subjects.map((s) => s.id))}
                   >
                     Tout cocher
                   </button>
@@ -286,7 +320,7 @@ export default function ProgrammeClasses() {
                     <button
                       type="button"
                       className="font-medium text-slate-500 hover:underline"
-                      onClick={() => setProgSubjects(new Set())}
+                      onClick={clearSubjects}
                     >
                       Tout décocher
                     </button>
@@ -311,13 +345,23 @@ export default function ProgrammeClasses() {
                       <button
                         type="button"
                         className="text-xs font-medium text-brand-700 hover:underline"
-                        onClick={() =>
+                        onClick={() => {
+                          const ids = items.map((s) => s.id);
                           setProgSubjects((prev) => {
                             const next = new Set(prev);
-                            for (const s of items) next.add(s.id);
+                            for (const id of ids) next.add(id);
                             return next;
-                          })
-                        }
+                          });
+                          setSubjectCoefs((prev) => {
+                            const next = { ...prev };
+                            for (const id of ids) {
+                              if (next[id] == null || next[id] === "") {
+                                next[id] = "1";
+                              }
+                            }
+                            return next;
+                          });
+                        }}
                       >
                         Tout cocher
                       </button>
@@ -326,28 +370,51 @@ export default function ProgrammeClasses() {
                       {items.map((s) => {
                         const checked = progSubjects.has(s.id);
                         return (
-                          <label
+                          <div
                             key={s.id}
                             className={cn(
-                              "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
+                              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition",
                               checked ? "bg-brand-50" : "hover:bg-slate-50",
                             )}
                           >
+                            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+                                checked={checked}
+                                onChange={() => toggleSubject(s.id)}
+                              />
+                              <span className="min-w-0 flex-1 font-medium leading-snug">
+                                {s.name}
+                                {s.code ? (
+                                  <span className="ml-1 text-xs font-normal text-slate-400">
+                                    ({s.code})
+                                  </span>
+                                ) : null}
+                              </span>
+                            </label>
                             <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
-                              checked={checked}
-                              onChange={() => toggleSubject(s.id)}
+                              type="number"
+                              min="0.5"
+                              step="0.5"
+                              title={`Coefficient ${s.name}`}
+                              aria-label={`Coefficient ${s.name}`}
+                              disabled={!checked}
+                              value={checked ? (subjectCoefs[s.id] ?? "1") : ""}
+                              placeholder="Coef"
+                              onChange={(e) => {
+                                if (!checked) return;
+                                setCoef(s.id, e.target.value);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className={cn(
+                                "h-8 w-14 shrink-0 rounded-lg border px-1.5 text-center text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100",
+                                checked
+                                  ? "border-slate-300 bg-white"
+                                  : "border-slate-200 bg-slate-50 text-slate-300",
+                              )}
                             />
-                            <span className="min-w-0 flex-1 font-medium">
-                              {s.name}
-                              {s.code ? (
-                                <span className="ml-1 text-xs font-normal text-slate-400">
-                                  ({s.code})
-                                </span>
-                              ) : null}
-                            </span>
-                          </label>
+                          </div>
                         );
                       })}
                     </div>
@@ -426,20 +493,10 @@ export default function ProgrammeClasses() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">
-              <div className="w-28">
-                <Label htmlFor="prog-coef">Coef.</Label>
-                <Input
-                  id="prog-coef"
-                  type="number"
-                  min="0.5"
-                  step="0.5"
-                  value={progCoef}
-                  onChange={(e) => setProgCoef(e.target.value)}
-                />
-              </div>
-              <p className="mb-2 flex-1 text-xs text-slate-500">
-                Ajustable ensuite dans chaque fiche classe.
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <p className="text-xs text-slate-500">
+                Chaque matière utilise son propre coefficient (modifiable à
+                droite).
               </p>
               <Button
                 type="button"
@@ -458,6 +515,40 @@ export default function ProgrammeClasses() {
           </div>
         </Card>
       )}
+
+      {classesForYear.length > 0 ? (
+        <Card className="mb-6">
+          <h3 className="font-semibold text-slate-900">
+            Ajuster une classe
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Ouvrez une classe pour corriger un coefficient ou voir qui enseigne
+            chaque matière.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {classesForYear.map((c) => {
+              const hasProg = classesWithProg.has(c.id);
+              return (
+                <Link
+                  key={c.id}
+                  to={`/classes/${c.id}?tab=programme`}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
+                >
+                  <span className="font-medium text-slate-900">{c.name}</span>
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      hasProg ? "text-emerald-700" : "text-amber-700",
+                    )}
+                  >
+                    {hasProg ? "Ouvrir" : "À faire"}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </Card>
+      ) : null}
 
       {subjects.length === 0 ? (
         <p className="text-sm text-slate-500">

@@ -22,6 +22,8 @@ import type {
   Subject,
 } from "@/lib/types";
 import { fromAuthEmail, fullName } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
   Badge,
   Button,
@@ -306,14 +308,12 @@ export default function EleveDetail() {
       if (res.error) throw new Error(res.error);
 
       if (action === "reset_password" && res.tempPassword) {
+        const creds = `${res.username}\n${res.tempPassword}`;
         toast.success("Nouveau mot de passe temporaire", {
           description: `${res.username ?? ""} · ${res.tempPassword}`,
           action: {
             label: "Copier",
-            onClick: () =>
-              void navigator.clipboard.writeText(
-                `${res.username}\n${res.tempPassword}`,
-              ),
+            onClick: () => void copyToClipboard(creds),
           },
           duration: 30_000,
         });
@@ -321,8 +321,15 @@ export default function EleveDetail() {
         void qc.invalidateQueries({ queryKey: ["eleve-detail", id] });
         void qc.invalidateQueries({ queryKey: ["identifiants-eleves"] });
       } else if (action === "recovery_link" && res.recoveryLink) {
-        await navigator.clipboard.writeText(res.recoveryLink);
-        toast.success("Lien de réinitialisation copié");
+        const copied = await copyToClipboard(res.recoveryLink);
+        if (copied) {
+          toast.success("Lien de réinitialisation copié");
+        } else {
+          toast.success("Lien de réinitialisation", {
+            description: res.recoveryLink,
+            duration: 60_000,
+          });
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action impossible");
@@ -390,6 +397,21 @@ export default function EleveDetail() {
           </div>
         }
       />
+
+      <Card className="mb-6">
+        <h3 className="mb-3 font-semibold text-slate-900">Photo de profil</h3>
+        <ProfileAvatar
+          userId={student.id}
+          avatarUrl={student.avatar_url}
+          name={fullName(student.first_name, student.last_name)}
+          editable
+          size="lg"
+          invalidateKeys={[
+            ["eleve-detail", id, schoolId],
+            ["eleves", schoolId],
+          ]}
+        />
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

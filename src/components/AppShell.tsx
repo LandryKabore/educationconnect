@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
+import { LiveClockWeather } from "@/components/LiveClockWeather";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui";
 import { cn, fullName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
@@ -110,6 +112,10 @@ export function AppShell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname, location.search]);
+
   const roleNav = role ? NAV_BY_ROLE[role] : [];
   const navItems = [
     ...roleNav,
@@ -138,7 +144,7 @@ export function AppShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-[var(--bg)]">
       {supportSchoolId ? (
         <div className="fixed inset-x-0 top-0 z-[60] flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
           <span>
@@ -170,12 +176,12 @@ export function AppShell() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 dark:border-[var(--border)] dark:bg-[var(--surface)]",
           supportSchoolId ? "top-12" : "",
-          open ? "translate-x-0" : "-translate-x-full"
+          open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-[var(--border)]">
           <div>
             <p className="text-lg font-bold text-brand-700">EduFaso</p>
             {schoolName ? (
@@ -189,6 +195,11 @@ export function AppShell() {
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        <div className="shrink-0 space-y-2 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
+          <LiveClockWeather />
+          <ThemeToggle className="w-full justify-center" />
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
@@ -226,7 +237,7 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="shrink-0 border-t border-slate-200 bg-white p-4">
+        <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]">
           <div className="mb-3">
             <p className="text-sm font-medium text-slate-900">
               {fullName(profile?.first_name, profile?.last_name)}
@@ -253,7 +264,7 @@ export function AppShell() {
           supportSchoolId ? "pt-12" : "",
         )}
       >
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
           <button
             type="button"
             className="rounded-lg p-2 hover:bg-slate-100"
@@ -261,7 +272,8 @@ export function AppShell() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-semibold text-brand-700">EduFaso</span>
+          <span className="flex-1 font-semibold text-brand-700">EduFaso</span>
+          <ThemeToggle compact />
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">

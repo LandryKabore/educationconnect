@@ -2,29 +2,52 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Check, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { needsProfileCompletion } from "@/lib/profileCompletion";
+import {
+  PASSWORD_RULES,
+  isPasswordStrong,
+  passwordStrengthError,
+} from "@/lib/passwordRules";
+import { cn } from "@/lib/utils";
 import { Button, Card, Label, PasswordInput } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function PremiereConnexion() {
   const { t } = useTranslation();
-  const { session, profile, completePasswordChange, homePath, loading } = useAuth();
+  const {
+    session,
+    profile,
+    role,
+    realRole,
+    completePasswordChange,
+    homePath,
+    loading,
+    refreshProfile,
+  } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const effectiveRole = role ?? realRole;
 
   if (!loading && !session) {
     return <Navigate to="/connexion" replace />;
   }
 
   if (!loading && session && !profile?.must_change_password) {
+    if (needsProfileCompletion(profile, effectiveRole)) {
+      return <Navigate to="/completer-profil" replace />;
+    }
     return <Navigate to={homePath} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast.error(t("premiere.tooShort"));
+    const strengthErr = passwordStrengthError(password);
+    if (strengthErr) {
+      toast.error(strengthErr);
       return;
     }
     if (password !== confirm) {
@@ -34,8 +57,9 @@ export default function PremiereConnexion() {
     setSubmitting(true);
     try {
       await completePasswordChange(password);
+      await refreshProfile();
       toast.success("Mot de passe mis à jour");
-      navigate(homePath);
+      navigate("/completer-profil", { replace: true });
     } catch {
       toast.error(t("errors.generic"));
     } finally {
@@ -44,7 +68,10 @@ export default function PremiereConnexion() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <h1 className="text-xl font-bold text-slate-900">{t("premiere.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("premiere.subtitle")}</p>
@@ -59,6 +86,27 @@ export default function PremiereConnexion() {
               autoComplete="new-password"
               required
             />
+            <ul className="mt-2 space-y-1">
+              {PASSWORD_RULES.map((rule) => {
+                const ok = rule.test(password);
+                return (
+                  <li
+                    key={rule.id}
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs",
+                      ok ? "text-emerald-700" : "text-slate-500",
+                    )}
+                  >
+                    {ok ? (
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <X className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    {rule.label}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
           <div>
             <Label htmlFor="confirm">{t("premiere.confirm")}</Label>
@@ -70,7 +118,11 @@ export default function PremiereConnexion() {
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={submitting || !isPasswordStrong(password)}
+          >
             {submitting ? t("loading") : t("premiere.submit")}
           </Button>
         </form>

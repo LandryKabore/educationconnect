@@ -3,21 +3,28 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { needsProfileCompletion } from "@/lib/profileCompletion";
 import { WEBSITE_URL } from "@/lib/config";
 import { isDesktopApp } from "@/lib/platform";
 import { Button, Card, Input, Label, PasswordInput } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Connexion() {
   const { t } = useTranslation();
-  const { signIn, session, profile, homePath, loading } = useAuth();
+  const { signIn, session, profile, role, realRole, homePath, loading } =
+    useAuth();
   const navigate = useNavigate();
   const [identifiant, setIdentifiant] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const effectiveRole = role ?? realRole;
 
   if (!loading && session) {
     if (profile?.must_change_password) {
       return <Navigate to="/premiere-connexion" replace />;
+    }
+    if (needsProfileCompletion(profile, effectiveRole)) {
+      return <Navigate to="/completer-profil" replace />;
     }
     return <Navigate to={homePath} replace />;
   }
@@ -36,7 +43,10 @@ export default function Connexion() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-brand-700">EduFaso</h1>

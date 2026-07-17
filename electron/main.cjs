@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, session } = require("electron");
 const path = require("path");
 
 const isDev = !app.isPackaged;
@@ -33,6 +33,21 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const allowed = new Set([
+    "geolocation",
+    "clipboard-sanitized-write",
+    "clipboard-read",
+  ]);
+
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      callback(allowed.has(permission));
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission) => allowed.has(permission),
+  );
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

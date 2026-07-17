@@ -8,6 +8,7 @@ import type { ClassSection, Profile, Subject } from "@/lib/types";
 import { compareClassesByProgression, sortClassesByProgression } from "@/lib/classCatalog";
 import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
 import {
   Badge,
   Button,
@@ -16,7 +17,6 @@ import {
   Input,
   Label,
   PageHeader,
-  Select,
 } from "@/components/ui";
 
 type TeacherCredential = {
@@ -40,41 +40,39 @@ export default function Enseignants() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [showAssign, setShowAssign] = useState(
-    () => searchParams.get("assign") === "1",
+    () =>
+      searchParams.get("assign") === "1" && !!searchParams.get("teacher"),
   );
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [creating, setCreating] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [teacherId, setTeacherId] = useState("");
-  const [classId, setClassId] = useState("");
-  const [subjectId, setSubjectId] = useState("");
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [subjectsByClassSelection, setSubjectsByClassSelection] = useState<
+    Record<string, string[]>
+  >({});
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (searchParams.get("assign") === "1") {
-      setShowAssign(true);
-      setShowForm(false);
-    }
-  }, [searchParams]);
-
-  const openAssign = (preselectTeacherId?: string) => {
+  const openAssign = (preselectTeacherId: string) => {
     setShowAssign(true);
     setShowForm(false);
-    if (preselectTeacherId) {
-      setTeacherId(preselectTeacherId);
-      setClassId("");
-      setSubjectId("");
-    }
+    setTeacherId(preselectTeacherId);
+    setClassIds([]);
+    setSubjectsByClassSelection({});
     const next = new URLSearchParams(searchParams);
     next.set("assign", "1");
+    next.set("teacher", preselectTeacherId);
     setSearchParams(next, { replace: true });
   };
 
   const closeAssign = () => {
     setShowAssign(false);
+    setTeacherId("");
+    setClassIds([]);
+    setSubjectsByClassSelection({});
     const next = new URLSearchParams(searchParams);
     next.delete("assign");
+    next.delete("teacher");
     setSearchParams(next, { replace: true });
   };
 
@@ -88,6 +86,16 @@ export default function Enseignants() {
     setFirstName("");
     setLastName("");
   };
+
+  useEffect(() => {
+    const assign = searchParams.get("assign") === "1";
+    const teacher = searchParams.get("teacher");
+    if (assign && teacher) {
+      setShowAssign(true);
+      setShowForm(false);
+      setTeacherId(teacher);
+    }
+  }, [searchParams]);
 
   const { data: teachers = [], isLoading } = useQuery({
     queryKey: ["enseignants", schoolId],
@@ -156,26 +164,74 @@ export default function Enseignants() {
     [classesRaw],
   );
 
-  const { data: classSubjects = [], isFetching: loadingClassSubjects } =
-    useQuery({
-      queryKey: ["programme-classe-subjects", classId],
-      enabled: !!classId,
-      queryFn: async () => {
-        const { data, error } = await supabase
-          .from("programme_classe")
-          .select("subject_id, matieres(*)")
-          .eq("class_section_id", classId);
-        if (error) throw error;
-        const map = new Map<string, Subject>();
-        for (const row of data ?? []) {
-          const s = (row as unknown as { matieres: Subject | null }).matieres;
-          if (s) map.set(s.id, s);
-        }
-        return [...map.values()].sort((a, b) =>
+  const {
+    data: subjectsByClass = {},
+    isFetching: loadingClassSubjects,
+  } = useQuery({
+    queryKey: [
+      "programme-classe-subjects-by-class",
+      classIds.slice().sort().join(","),
+    ],
+    enabled: classIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("programme_classe")
+        .select("class_section_id, subject_id, matieres(*)")
+        .in("class_section_id", classIds);
+      if (error) throw error;
+
+      const map: Record<string, Subject[]> = {};
+      for (const id of classIds) map[id] = [];
+
+      const seen = new Map<string, Set<string>>();
+      for (const row of data ?? []) {
+        const classSectionId = row.class_section_id as string;
+        const s = (row as unknown as { matieres: Subject | null }).matieres;
+        if (!s) continue;
+        const used = seen.get(classSectionId) ?? new Set<string>();
+        if (used.has(s.id)) continue;
+        used.add(s.id);
+        seen.set(classSectionId, used);
+        if (!map[classSectionId]) map[classSectionId] = [];
+        map[classSectionId].push(s);
+      }
+
+      for (const id of Object.keys(map)) {
+        map[id].sort((a, b) =>
           a.name.localeCompare(b.name, "fr", { sensitivity: "base" }),
         );
-      },
+      }
+      return map;
+    },
+  });
+
+  const toggleClass = (id: string) => {
+    setClassIds((prev) => {
+      if (prev.includes(id)) {
+        setSubjectsByClassSelection((subjects) => {
+          const next = { ...subjects };
+          delete next[id];
+          return next;
+        });
+        return prev.filter((x) => x !== id);
+      }
+      return [...prev, id];
     });
+  };
+
+  const toggleSubject = (classId: string, subjectId: string) => {
+    setSubjectsByClassSelection((prev) => {
+      const current = prev[classId] ?? [];
+      const next = current.includes(subjectId)
+        ? current.filter((id) => id !== subjectId)
+        : [...current, subjectId];
+      return { ...prev, [classId]: next };
+    });
+  };
+
+  const allSubjectsChosen =
+    classIds.length > 0 &&
+    classIds.every((id) => (subjectsByClassSelection[id] ?? []).length > 0);
 
   const { data: assignments = [] } = useQuery({
     queryKey: ["affectations", schoolId],
@@ -284,7 +340,6 @@ export default function Enseignants() {
     );
     closeCreate();
     if (res.userId) openAssign(res.userId);
-    else openAssign();
 
     void qc.invalidateQueries({ queryKey: ["enseignants", schoolId] });
     void qc.invalidateQueries({ queryKey: ["identifiants-enseignants", schoolId] });
@@ -294,29 +349,58 @@ export default function Enseignants() {
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teacherId || !classId || !subjectId) {
-      toast.error("Choisissez enseignant, classe et matière");
+    if (!teacherId || classIds.length === 0 || !allSubjectsChosen) {
+      toast.error("Choisissez au moins une matière pour chaque classe");
       return;
     }
     setAssigning(true);
-    const { error } = await supabase.from("affectations_enseignement").insert({
-      teacher_id: teacherId,
-      class_section_id: classId,
-      subject_id: subjectId,
-    });
-    if (error) {
-      setAssigning(false);
-      toast.error(
-        error.message.includes("duplicate")
-          ? "Affectation déjà existante"
-          : "Erreur",
-      );
-      return;
+    let ok = 0;
+    let skipped = 0;
+    for (const classSectionId of classIds) {
+      const subjectIds = subjectsByClassSelection[classSectionId] ?? [];
+      for (const subjectId of subjectIds) {
+        const { error } = await supabase
+          .from("affectations_enseignement")
+          .insert({
+            teacher_id: teacherId,
+            class_section_id: classSectionId,
+            subject_id: subjectId,
+          });
+        if (error) {
+          if (error.message.includes("duplicate") || error.code === "23505") {
+            skipped += 1;
+          } else {
+            setAssigning(false);
+            toast.error(error.message || "Erreur lors de l’affectation");
+            return;
+          }
+        } else {
+          ok += 1;
+        }
+      }
     }
 
     setAssigning(false);
-    toast.success("Affectation enregistrée");
-    setSubjectId("");
+    if (ok > 0) {
+      toast.success(
+        ok === 1
+          ? "Affectation enregistrée"
+          : `${ok} affectations enregistrées`,
+      );
+      void qc.invalidateQueries({ queryKey: ["affectations", schoolId] });
+      void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+      closeAssign();
+      return;
+    }
+    if (skipped > 0) {
+      toast.message(
+        skipped === 1
+          ? "1 affectation existait déjà"
+          : `${skipped} affectations existaient déjà`,
+      );
+    }
+    setSubjectsByClassSelection({});
+    setClassIds([]);
     void qc.invalidateQueries({ queryKey: ["affectations", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
   };
@@ -341,145 +425,187 @@ export default function Enseignants() {
         title="Enseignants"
         subtitle="Comptes, identifiants et affectations par enseignant"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant={showAssign ? "primary" : "outline"}
-              onClick={() => (showAssign ? closeAssign() : openAssign())}
-            >
-              {showAssign ? "Fermer affectation" : "Affecter"}
-            </Button>
-            <Button
-              type="button"
-              variant={showForm ? "outline" : "primary"}
-              onClick={() => (showForm ? closeCreate() : openCreate())}
-            >
-              {showForm ? "Fermer" : "Nouvel enseignant"}
-            </Button>
-          </div>
+          <Button type="button" onClick={openCreate}>
+            Nouvel enseignant
+          </Button>
         }
       />
 
       {showForm ? (
-        <Card className="mb-6 max-w-lg">
-          <h3 className="mb-4 font-semibold">Nouvel enseignant</h3>
-          <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Prénom</Label>
-                <Input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                />
+        <Modal
+          open={showForm}
+          title="Nouvel enseignant"
+          onClose={closeCreate}
+          closeDisabled={creating}
+        >
+            <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Prénom</Label>
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Label>Nom</Label>
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Nom</Label>
-                <Input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                />
+              <div className="flex gap-2">
+                <Button type="submit" disabled={creating}>
+                  {creating ? "Création…" : "Créer"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={creating}
+                  onClick={closeCreate}
+                >
+                  Annuler
+                </Button>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={creating}>
-                {creating ? "Création…" : "Créer"}
-              </Button>
-              <Button type="button" variant="ghost" onClick={closeCreate}>
-                Annuler
-              </Button>
-            </div>
-          </form>
-        </Card>
+            </form>
+        </Modal>
       ) : null}
 
       {showAssign ? (
-        <Card className="mb-6 max-w-lg">
-          <h3 className="mb-4 font-semibold">Affecter un enseignant</h3>
-          <form onSubmit={(e) => void handleAssign(e)} className="space-y-4">
-            <div>
-              <Label>Enseignant</Label>
-              <Select
-                value={teacherId}
-                onChange={(e) => {
-                  setTeacherId(e.target.value);
-                  setClassId("");
-                  setSubjectId("");
-                }}
-                required
-              >
-                <option value="">Choisir…</option>
-                {sortedTeachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {fullName(t.first_name, t.last_name)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Classe</Label>
-              <Select
-                value={classId}
-                onChange={(e) => {
-                  setClassId(e.target.value);
-                  setSubjectId("");
-                }}
-                required
-                disabled={!teacherId}
-              >
-                <option value="">
-                  {teacherId
-                    ? "Choisir…"
-                    : "Choisissez d’abord un enseignant"}
-                </option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Matière</Label>
-              <Select
-                value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
-                required
-                disabled={!classId}
-              >
-                <option value="">
-                  {!classId
-                    ? "Choisissez d’abord une classe"
-                    : loadingClassSubjects
-                      ? "Chargement…"
-                      : classSubjects.length === 0
-                        ? "Aucune matière au programme"
-                        : "Choisir…"}
-                </option>
-                {classSubjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-              {classId &&
-              !loadingClassSubjects &&
-              classSubjects.length === 0 ? (
-                <p className="mt-1.5 text-xs text-amber-700">
-                  Définissez d’abord le programme de cette classe (page
-                  Programmes).
+        <Modal
+          open={showAssign}
+          title="Affecter un enseignant"
+          onClose={closeAssign}
+          closeDisabled={assigning}
+        >
+            <form onSubmit={(e) => void handleAssign(e)} className="space-y-4">
+              <div>
+                <Label>Enseignant</Label>
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-800">
+                  {fullName(
+                    sortedTeachers.find((t) => t.id === teacherId)?.first_name,
+                    sortedTeachers.find((t) => t.id === teacherId)?.last_name,
+                  ) || "Enseignant sélectionné"}
                 </p>
+              </div>
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <Label>Classes</Label>
+                  <span className="text-xs text-slate-500">
+                    {classIds.length} sélectionnée
+                    {classIds.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                  {classes.length === 0 ? (
+                    <p className="px-2 py-1.5 text-sm text-slate-400">
+                      Aucune classe
+                    </p>
+                  ) : (
+                    classes.map((c) => {
+                      const checked = classIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                            checked={checked}
+                            onChange={() => toggleClass(c.id)}
+                          />
+                          <span className="text-slate-800">{c.name}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {classIds.length > 0 ? (
+                <div className="space-y-3">
+                  <Label>Matières par classe</Label>
+                  <p className="text-xs text-slate-500">
+                    Cochez une ou plusieurs matières pour chaque classe.
+                  </p>
+                  {loadingClassSubjects ? (
+                    <p className="text-sm text-slate-500">Chargement…</p>
+                  ) : (
+                    classIds.map((id) => {
+                      const cls = classes.find((c) => c.id === id);
+                      const subjects = subjectsByClass[id] ?? [];
+                      const selected = subjectsByClassSelection[id] ?? [];
+                      return (
+                        <div
+                          key={id}
+                          className="rounded-xl border border-slate-200 p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-800">
+                              {cls?.name ?? "Classe"}
+                            </p>
+                            <span className="text-xs text-slate-500">
+                              {selected.length} matière
+                              {selected.length > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          {subjects.length === 0 ? (
+                            <p className="text-xs text-amber-700">
+                              Définissez le programme de cette classe d’abord.
+                            </p>
+                          ) : (
+                            <div className="max-h-36 space-y-1 overflow-y-auto">
+                              {subjects.map((s) => {
+                                const checked = selected.includes(s.id);
+                                return (
+                                  <label
+                                    key={s.id}
+                                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                                      checked={checked}
+                                      onChange={() => toggleSubject(id, s.id)}
+                                    />
+                                    <span className="text-slate-800">
+                                      {s.name}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               ) : null}
-            </div>
-            <Button
-              type="submit"
-              disabled={assigning || !teacherId || !classId || !subjectId}
-            >
-              {assigning ? "Enregistrement…" : "Enregistrer l’affectation"}
-            </Button>
-          </form>
-        </Card>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  type="submit"
+                  disabled={
+                    assigning ||
+                    !teacherId ||
+                    classIds.length === 0 ||
+                    !allSubjectsChosen
+                  }
+                >
+                  {assigning ? "Enregistrement…" : "Enregistrer l’affectation"}
+                </Button>
+                <Button type="button" variant="ghost" onClick={closeAssign}>
+                  Annuler
+                </Button>
+              </div>
+            </form>
+        </Modal>
       ) : null}
 
       {isLoading ? (
@@ -540,7 +666,9 @@ export default function Enseignants() {
                         variant="outline"
                         onClick={() => openAssign(t.id)}
                       >
-                        Affecter
+                        {teacherAssignments.length > 0
+                          ? "Affecter à d’autres classes"
+                          : "Affecter à une classe"}
                       </Button>
                     </div>
 

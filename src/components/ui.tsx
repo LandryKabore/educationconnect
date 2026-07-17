@@ -22,9 +22,12 @@ export function Button({
         size === "md" && "h-11 px-4 text-sm",
         size === "lg" && "h-12 px-5",
         variant === "primary" && "bg-brand-700 text-white hover:bg-brand-800",
-        variant === "secondary" && "bg-slate-900 text-white hover:bg-slate-800",
-        variant === "outline" && "border border-slate-300 bg-white hover:bg-slate-50",
-        variant === "ghost" && "hover:bg-slate-100 text-slate-700",
+        variant === "secondary" &&
+          "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
+        variant === "outline" &&
+          "border border-slate-300 bg-white hover:bg-slate-50 dark:border-slate-600 dark:bg-[var(--surface)] dark:hover:bg-[var(--surface-2)]",
+        variant === "ghost" &&
+          "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
         variant === "danger" && "bg-red-600 text-white hover:bg-red-700",
         className
       )}
@@ -487,11 +490,16 @@ export function Badge({
     <span
       className={cn(
         "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-        tone === "default" && "bg-slate-100 text-slate-700",
-        tone === "success" && "bg-emerald-100 text-emerald-800",
-        tone === "warning" && "bg-amber-100 text-amber-800",
-        tone === "danger" && "bg-red-100 text-red-800",
-        tone === "info" && "bg-sky-100 text-sky-800"
+        tone === "default" &&
+          "bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-100",
+        tone === "success" &&
+          "bg-emerald-100 text-emerald-800 dark:bg-emerald-700 dark:text-emerald-50",
+        tone === "warning" &&
+          "bg-amber-100 text-amber-900 dark:bg-amber-600 dark:text-amber-50",
+        tone === "danger" &&
+          "bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-50",
+        tone === "info" &&
+          "bg-sky-100 text-sky-800 dark:bg-sky-700 dark:text-sky-50",
       )}
     >
       {children}

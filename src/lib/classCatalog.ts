@@ -30,13 +30,13 @@ function sections(
 }
 
 export const CLASS_CATALOG: CatalogClass[] = [
-  // Primaire — usually one class per level
-  { id: "prim-cp1", name: "CP1", gradeLevel: "CP1", category: "Primaire" },
-  { id: "prim-cp2", name: "CP2", gradeLevel: "CP2", category: "Primaire" },
-  { id: "prim-ce1", name: "CE1", gradeLevel: "CE1", category: "Primaire" },
-  { id: "prim-ce2", name: "CE2", gradeLevel: "CE2", category: "Primaire" },
-  { id: "prim-cm1", name: "CM1", gradeLevel: "CM1", category: "Primaire" },
-  { id: "prim-cm2", name: "CM2", gradeLevel: "CM2", category: "Primaire" },
+  // Primaire — parallel groups A/B/C (each has its own emploi du temps)
+  ...sections("Primaire", "CP1", "CP1", ["A", "B", "C"]),
+  ...sections("Primaire", "CP2", "CP2", ["A", "B", "C"]),
+  ...sections("Primaire", "CE1", "CE1", ["A", "B", "C"]),
+  ...sections("Primaire", "CE2", "CE2", ["A", "B", "C"]),
+  ...sections("Primaire", "CM1", "CM1", ["A", "B", "C"]),
+  ...sections("Primaire", "CM2", "CM2", ["A", "B", "C"]),
 
   // Collège — common A/B/C groups
   ...sections("Collège", "6ème", "6ème", ["A", "B", "C"]),

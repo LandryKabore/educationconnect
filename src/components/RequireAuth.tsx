@@ -1,6 +1,12 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { needsProfileCompletion } from "@/lib/profileCompletion";
 import type { AppRole } from "@/lib/types";
+
+const PROFILE_GATE_PATHS = new Set([
+  "/premiere-connexion",
+  "/completer-profil",
+]);
 
 export function RequireAuth({
   children,
@@ -11,6 +17,7 @@ export function RequireAuth({
 }) {
   const { session, profile, role, realRole, loading } = useAuth();
   const location = useLocation();
+  const effectiveRole = role ?? realRole;
 
   if (loading) {
     return (
@@ -29,6 +36,14 @@ export function RequireAuth({
     location.pathname !== "/premiere-connexion"
   ) {
     return <Navigate to="/premiere-connexion" replace />;
+  }
+
+  if (
+    !profile?.must_change_password &&
+    needsProfileCompletion(profile, effectiveRole) &&
+    !PROFILE_GATE_PATHS.has(location.pathname)
+  ) {
+    return <Navigate to="/completer-profil" replace />;
   }
 
   if (roles?.length) {

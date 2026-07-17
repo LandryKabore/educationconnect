@@ -8,12 +8,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
   downloadTextFile,
 } from "@/lib/studentCsv";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { StudentSearchPicker } from "@/components/StudentSearchPicker";
+import { Modal } from "@/components/Modal";
 import {
   Badge,
   Button,
@@ -294,24 +296,29 @@ export default function Parents() {
       if (res.error) throw new Error(res.error);
 
       if (action === "reset_password" && res.tempPassword) {
+        const creds = `${res.username}\n${res.tempPassword}`;
         toast.success("Nouveau mot de passe temporaire", {
           description: `${res.username ?? ""} · ${res.tempPassword}`,
           action: {
             label: "Copier",
-            onClick: () =>
-              void navigator.clipboard.writeText(
-                `${res.username}\n${res.tempPassword}`,
-              ),
+            onClick: () => void copyToClipboard(creds),
           },
           duration: 30_000,
         });
         invalidateParentQueries();
       } else if (action === "recovery_link" && res.recoveryLink) {
-        await navigator.clipboard.writeText(res.recoveryLink);
-        toast.success("Lien de réinitialisation copié", {
-          description: "Envoyez-le au parent.",
-          duration: 12_000,
-        });
+        const copied = await copyToClipboard(res.recoveryLink);
+        if (copied) {
+          toast.success("Lien de réinitialisation copié", {
+            description: "Envoyez-le au parent.",
+            duration: 12_000,
+          });
+        } else {
+          toast.success("Lien de réinitialisation", {
+            description: res.recoveryLink,
+            duration: 60_000,
+          });
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action impossible");
@@ -381,12 +388,17 @@ export default function Parents() {
         title="Parents"
         subtitle="Comptes, identifiants et liaison avec les élèves"
         actions={
-          <Button onClick={() => setShowForm(!showForm)}>Nouveau parent</Button>
+          <Button onClick={() => setShowForm(true)}>Nouveau parent</Button>
         }
       />
 
       {showForm ? (
-        <Card className="mb-6 max-w-lg">
+        <Modal
+          open={showForm}
+          title="Nouveau parent"
+          onClose={() => setShowForm(false)}
+          closeDisabled={creating}
+        >
           <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -495,7 +507,7 @@ export default function Parents() {
               </p>
             </div>
           ) : null}
-        </Card>
+        </Modal>
       ) : null}
 
       {isLoading ? (
