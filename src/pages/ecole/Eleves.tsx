@@ -1,12 +1,15 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, Upload } from "lucide-react";
+import { Download, KeyRound, Link2, Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { fullName, matchesSearch } from "@/lib/utils";
+import { cn, fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
 import {
   credentialsToCsv,
   downloadBlob,
@@ -21,6 +24,7 @@ import {
   Badge,
   Button,
   Card,
+  DateInputFr,
   EmptyState,
   Input,
   Label,
@@ -41,6 +45,40 @@ interface ImportCredential {
   tempPassword: string;
 }
 
+interface StudentCredential {
+  username: string;
+  tempPassword: string | null;
+  used: boolean;
+}
+
+type StudentRow = Profile & { className: string | null };
+
+function accountStatus(s: StudentRow, cred: StudentCredential) {
+  if (!s.must_change_password && (cred.used || s.last_login_at)) {
+    return {
+      label: "Mot de passe modifié",
+      tone: "success" as const,
+      detail: s.last_login_at
+        ? `Dernière connexion : ${format(new Date(s.last_login_at), "d MMM yyyy à HH:mm", { locale: fr })}`
+        : null,
+    };
+  }
+  if (s.last_login_at) {
+    return {
+      label: "Connecté · à changer le mot de passe",
+      tone: "warning" as const,
+      detail: `Dernière connexion : ${format(new Date(s.last_login_at), "d MMM yyyy à HH:mm", { locale: fr })}`,
+    };
+  }
+  return {
+    label: "Jamais connecté",
+    tone: "default" as const,
+    detail: cred.tempPassword
+      ? "Identifiants temporaires encore valides"
+      : "Réinitialisez le mot de passe si besoin",
+  };
+}
+
 export default function Eleves() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
@@ -50,6 +88,11 @@ export default function Eleves() {
   const [showImport, setShowImport] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [gender, setGender] = useState("");
+  const [phone, setPhone] = useState("");
+  const [matricule, setMatricule] = useState("");
+  const [address, setAddress] = useState("");
   const [classId, setClassId] = useState("");
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
@@ -58,12 +101,14 @@ export default function Eleves() {
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [defaultClassId, setDefaultClassId] = useState("");
   const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState("");
+  const [importDone, setImportDone] = useState(0);
+  const [importTotal, setImportTotal] = useState(0);
   const [importCreds, setImportCreds] = useState<ImportCredential[]>([]);
   const [importFailed, setImportFailed] = useState<
     { line: number | null; firstName: string; lastName: string; error: string }[]
   >([]);
   const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
@@ -121,16 +166,58 @@ export default function Eleves() {
       return profiles.map((p) => ({
         ...p,
         className: classByStudent.get(p.id) ?? null,
-      }));
+      })) as StudentRow[];
     },
   });
 
+  const studentIds = useMemo(() => students.map((s) => s.id), [students]);
+
+  const { data: credentialsByUser = {} } = useQuery({
+    queryKey: ["identifiants-eleves", schoolId, studentIds.join(",")],
+    enabled: !!schoolId && studentIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("identifiants_temporaires")
+        .select("user_id, username, temp_password_hint, used")
+        .in("user_id", studentIds);
+      if (error) throw error;
+      const map: Record<string, StudentCredential> = {};
+      for (const row of data ?? []) {
+        map[row.user_id as string] = {
+          username: row.username as string,
+          tempPassword: (row.temp_password_hint as string | null) ?? null,
+          used: Boolean(row.used),
+        };
+      }
+      return map;
+    },
+  });
+
+  const credentialFor = (s: StudentRow): StudentCredential => {
+    const stored = credentialsByUser[s.id];
+    if (stored) return stored;
+    return {
+      username: fromAuthEmail(s.email) || "—",
+      tempPassword: null,
+      used: !s.must_change_password,
+    };
+  };
+
   const filteredStudents = useMemo(
     () =>
-      students.filter((s) =>
-        matchesSearch(search, s.first_name, s.last_name, s.className, s.phone),
-      ),
-    [students, search],
+      students.filter((s) => {
+        const cred = credentialFor(s);
+        return matchesSearch(
+          search,
+          s.first_name,
+          s.last_name,
+          s.className,
+          s.phone,
+          cred.username,
+        );
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- credentialFor depends on credentialsByUser
+    [students, search, credentialsByUser],
   );
 
   const studentsByClass = useMemo(() => {
@@ -155,7 +242,7 @@ export default function Eleves() {
         .filter((k) => k !== "__none__")
         .map((name) => ({ name })),
     ).map((c) => c.name);
-    if (keys.includes("__none__")) ordered.push("__none__");
+    if (keys.includes("__none__")) ordered.unshift("__none__");
     return ordered.map((key) => ({
       key,
       label: key === "__none__" ? "Sans classe" : key,
@@ -163,10 +250,99 @@ export default function Eleves() {
     }));
   }, [filteredStudents]);
 
+  const sansClasseCount = useMemo(
+    () => students.filter((s) => !s.className?.trim()).length,
+    [students],
+  );
+
   const invalidateStudentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["identifiants-eleves", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves-sans-classe", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     void qc.invalidateQueries({ queryKey: ["ecole-stats", schoolId] });
+  };
+
+  const downloadAllCredentials = () => {
+    const rows = students
+      .map((s) => {
+        const cred = credentialFor(s);
+        if (!cred.tempPassword || cred.used) return null;
+        return {
+          firstName: s.first_name,
+          lastName: s.last_name,
+          className: s.className ?? "",
+          username: cred.username,
+          tempPassword: cred.tempPassword,
+        };
+      })
+      .filter(Boolean) as ImportCredential[];
+    if (rows.length === 0) {
+      toast.message("Aucun mot de passe temporaire à télécharger");
+      return;
+    }
+    downloadTextFile(
+      `identifiants-eleves-${new Date().toISOString().slice(0, 10)}.csv`,
+      credentialsToCsv(rows),
+    );
+    toast.success(`${rows.length} identifiant(s) exporté(s)`);
+  };
+
+  const runCredentialAction = async (
+    student: StudentRow,
+    action: "reset_password" | "recovery_link",
+  ) => {
+    if (!schoolId) return;
+    setBusyId(student.id);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "gerer-identifiant",
+        {
+          body: {
+            action,
+            userId: student.id,
+            schoolId,
+            redirectTo:
+              typeof window !== "undefined"
+                ? `${window.location.origin}/premiere-connexion`
+                : undefined,
+          },
+        },
+      );
+      if (error) throw error;
+      const res = data as {
+        error?: string;
+        tempPassword?: string;
+        username?: string;
+        recoveryLink?: string;
+      };
+      if (res.error) throw new Error(res.error);
+
+      if (action === "reset_password" && res.tempPassword) {
+        toast.success("Nouveau mot de passe temporaire", {
+          description: `${res.username ?? ""} · ${res.tempPassword}`,
+          action: {
+            label: "Copier",
+            onClick: () =>
+              void navigator.clipboard.writeText(
+                `${res.username}\n${res.tempPassword}`,
+              ),
+          },
+          duration: 30_000,
+        });
+        invalidateStudentQueries();
+      } else if (action === "recovery_link" && res.recoveryLink) {
+        await navigator.clipboard.writeText(res.recoveryLink);
+        toast.success("Lien de réinitialisation copié", {
+          description: "Envoyez-le à l’élève ou au parent.",
+          duration: 12_000,
+        });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action impossible");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -193,6 +369,11 @@ export default function Eleves() {
         lastName: lastName.trim(),
         classId,
         academicYearId: selected.academic_year_id,
+        dateOfBirth: dateOfBirth || null,
+        gender: gender || null,
+        phone: phone.trim() || null,
+        matricule: matricule.trim() || null,
+        address: address.trim() || null,
       },
     });
 
@@ -216,6 +397,11 @@ export default function Eleves() {
     setCreating(false);
     setFirstName("");
     setLastName("");
+    setDateOfBirth("");
+    setGender("");
+    setPhone("");
+    setMatricule("");
+    setAddress("");
     setClassId("");
   };
 
@@ -244,55 +430,81 @@ export default function Eleves() {
       return;
     }
 
+    const total = previewRows.length;
+    const batchSize = 5;
     setImporting(true);
-    setImportProgress(`Import de ${previewRows.length} élève(s)…`);
+    setImportDone(0);
+    setImportTotal(total);
     setImportCreds([]);
     setImportFailed([]);
 
-    const { data, error } = await supabase.functions.invoke("importer-eleves", {
-      body: {
-        schoolId,
-        defaultClassId: defaultClassId || null,
-        students: previewRows.map((r) => ({
-          line: r.line,
-          firstName: r.firstName,
-          lastName: r.lastName,
-          className: r.className || undefined,
-          phone: r.phone || null,
-        })),
-      },
-    });
+    const created: ImportCredential[] = [];
+    const failed: typeof importFailed = [];
+
+    for (let i = 0; i < previewRows.length; i += batchSize) {
+      const batch = previewRows.slice(i, i + batchSize);
+      const { data, error } = await supabase.functions.invoke("importer-eleves", {
+        body: {
+          schoolId,
+          defaultClassId: defaultClassId || null,
+          students: batch.map((r) => ({
+            line: r.line,
+            firstName: r.firstName,
+            lastName: r.lastName,
+            className: r.className || undefined,
+            phone: r.phone || null,
+          })),
+        },
+      });
+
+      if (error) {
+        for (const r of batch) {
+          failed.push({
+            line: r.line,
+            firstName: r.firstName,
+            lastName: r.lastName,
+            error: error.message || "Import impossible",
+          });
+        }
+      } else {
+        const res = data as {
+          error?: string;
+          created?: ImportCredential[];
+          failed?: typeof importFailed;
+        };
+        if (res.error) {
+          for (const r of batch) {
+            failed.push({
+              line: r.line,
+              firstName: r.firstName,
+              lastName: r.lastName,
+              error: res.error,
+            });
+          }
+        } else {
+          created.push(...(res.created ?? []));
+          failed.push(...(res.failed ?? []));
+        }
+      }
+
+      setImportDone(Math.min(i + batch.length, total));
+    }
 
     setImporting(false);
-    setImportProgress("");
+    setImportCreds(created);
+    setImportFailed(failed);
 
-    if (error) {
-      toast.error(error.message || "Import impossible");
-      return;
-    }
-
-    const res = data as {
-      error?: string;
-      created?: ImportCredential[];
-      failed?: typeof importFailed;
-      summary?: { ok: number; errors: number };
-    };
-
-    if (res.error) {
-      toast.error(res.error);
-      return;
-    }
-
-    setImportCreds(res.created ?? []);
-    setImportFailed(res.failed ?? []);
-    const ok = res.summary?.ok ?? res.created?.length ?? 0;
-    const errCount = res.summary?.errors ?? res.failed?.length ?? 0;
+    const ok = created.length;
+    const errCount = failed.length;
     if (ok > 0) {
       toast.success(`${ok} élève(s) importé(s)`);
       invalidateStudentQueries();
     }
     if (errCount > 0) {
       toast.message(`${errCount} ligne(s) en erreur`);
+    }
+    if (ok === 0 && errCount === 0) {
+      toast.error("Aucun élève importé");
     }
   };
 
@@ -301,7 +513,7 @@ export default function Eleves() {
       <SetupGuideBar />
       <PageHeader
         title="Élèves"
-        subtitle="Création individuelle ou import CSV / Excel"
+        subtitle="Comptes, identifiants et import CSV / Excel"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -325,6 +537,17 @@ export default function Eleves() {
           </div>
         }
       />
+
+      {sansClasseCount > 0 ? (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">
+            {sansClasseCount} élève{sansClasseCount > 1 ? "s" : ""} sans classe
+          </p>
+          <p className="mt-0.5 text-amber-800">
+            Ouvrez leur profil pour les réaffecter à une classe.
+          </p>
+        </div>
+      ) : null}
 
       {showImport ? (
         <Card className="mb-6 max-w-3xl">
@@ -450,15 +673,48 @@ export default function Eleves() {
                 </p>
               ) : null}
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => void runImport()}
-                  disabled={importing || classes.length === 0}
-                >
-                  {importing ? "Import en cours…" : `Importer ${previewRows.length} élève(s)`}
-                </Button>
-                {importProgress ? (
-                  <span className="text-sm text-slate-500">{importProgress}</span>
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    onClick={() => void runImport()}
+                    disabled={importing || classes.length === 0}
+                  >
+                    {importing
+                      ? "Import en cours…"
+                      : `Importer ${previewRows.length} élève(s)`}
+                  </Button>
+                </div>
+                {importing && importTotal > 0 ? (
+                  <div className="max-w-md space-y-1.5">
+                    <div className="flex items-center justify-between text-sm text-slate-600">
+                      <span>
+                        {importDone} / {importTotal} élève(s)
+                      </span>
+                      <span>
+                        {Math.round((importDone / importTotal) * 100)}%
+                      </span>
+                    </div>
+                    <div
+                      className="h-2.5 overflow-hidden rounded-full bg-slate-200"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={importTotal}
+                      aria-valuenow={importDone}
+                    >
+                      <div
+                        className="h-full rounded-full bg-brand-600 transition-[width] duration-300 ease-out"
+                        style={{
+                          width: `${Math.max(
+                            (importDone / importTotal) * 100,
+                            importDone === 0 ? 4 : 0,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Merci de patienter — l’import continue…
+                    </p>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -534,6 +790,46 @@ export default function Eleves() {
                 <Input value={lastName} onChange={(e) => setLastName(e.target.value)} required />
               </div>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Date de naissance</Label>
+                <DateInputFr value={dateOfBirth} onChange={setDateOfBirth} />
+              </div>
+              <div>
+                <Label>Sexe</Label>
+                <Select value={gender} onChange={(e) => setGender(e.target.value)}>
+                  <option value="">Choisir…</option>
+                  <option value="M">Masculin</option>
+                  <option value="F">Féminin</option>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Téléphone</Label>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="ex. 70 12 34 56"
+                />
+              </div>
+              <div>
+                <Label>Matricule</Label>
+                <Input
+                  value={matricule}
+                  onChange={(e) => setMatricule(e.target.value)}
+                  placeholder="Optionnel"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Adresse / quartier</Label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Optionnel"
+              />
+            </div>
             <div>
               <Label>Classe</Label>
               <Select value={classId} onChange={(e) => setClassId(e.target.value)} required>
@@ -583,38 +879,142 @@ export default function Eleves() {
         <EmptyState message="Aucun élève inscrit." />
       ) : (
         <div className="space-y-4">
-          <div className="max-w-md">
-            <Label htmlFor="search-eleves">Rechercher</Label>
-            <Input
-              id="search-eleves"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nom, classe…"
-            />
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="max-w-md flex-1">
+              <Label htmlFor="search-eleves">Rechercher</Label>
+              <Input
+                id="search-eleves"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nom, classe, identifiant…"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={downloadAllCredentials}
+            >
+              <Download className="mr-1 h-4 w-4" />
+              Télécharger les mots de passe temporaires
+            </Button>
           </div>
+          <p className="text-sm text-slate-500">
+            Les identifiants restent visibles ici tant que l’élève n’a pas
+            changé son mot de passe. Vous pouvez aussi générer un nouveau mot
+            de passe ou un lien « mot de passe oublié ».
+          </p>
           {filteredStudents.length === 0 ? (
             <EmptyState message="Aucun élève ne correspond à la recherche." />
           ) : (
             <div className="space-y-8">
               {studentsByClass.map((group) => (
-                <section key={group.key}>
-                  <h3 className="mb-3 flex flex-wrap items-baseline gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                <section key={group.key} id={group.key === "__none__" ? "sans-classe" : undefined}>
+                  <h3
+                    className={cn(
+                      "mb-3 flex flex-wrap items-baseline gap-2 text-sm font-semibold uppercase tracking-wide",
+                      group.key === "__none__"
+                        ? "text-amber-700"
+                        : "text-slate-500",
+                    )}
+                  >
                     <span>{group.label}</span>
-                    <span className="font-normal normal-case tracking-normal text-slate-400">
+                    <span
+                      className={cn(
+                        "font-normal normal-case tracking-normal",
+                        group.key === "__none__"
+                          ? "rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white"
+                          : "text-slate-400",
+                      )}
+                    >
                       ({group.students.length})
                     </span>
                   </h3>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {group.students.map((s) => (
-                      <Card key={s.id}>
-                        <h4 className="font-semibold">
-                          {fullName(s.first_name, s.last_name)}
-                        </h4>
-                        {s.phone ? (
-                          <p className="mt-1 text-sm text-slate-500">{s.phone}</p>
-                        ) : null}
-                      </Card>
-                    ))}
+                  <div className="space-y-3">
+                    {group.students.map((s) => {
+                      const cred = credentialFor(s);
+                      const status = accountStatus(s, cred);
+                      const busy = busyId === s.id;
+                      return (
+                        <Card
+                          key={s.id}
+                          className="transition hover:border-brand-300 hover:shadow-md"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <Link
+                              to={`/eleves/${s.id}`}
+                              className="min-w-0 flex-1 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
+                            >
+                              <h4 className="font-semibold text-slate-900 hover:text-brand-800">
+                                {fullName(s.first_name, s.last_name)}
+                              </h4>
+                              {s.phone ? (
+                                <p className="text-sm text-slate-500">
+                                  {s.phone}
+                                </p>
+                              ) : null}
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                                <span className="text-slate-500">
+                                  Identifiant
+                                </span>
+                                <Badge>{cred.username}</Badge>
+                                {cred.tempPassword && !cred.used ? (
+                                  <>
+                                    <span className="text-slate-500">
+                                      Mot de passe
+                                    </span>
+                                    <Badge tone="warning">
+                                      {cred.tempPassword}
+                                    </Badge>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-slate-400">
+                                    Mot de passe temporaire non affiché
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Badge tone={status.tone}>{status.label}</Badge>
+                                {status.detail ? (
+                                  <span className="text-xs text-slate-400">
+                                    {status.detail}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-2 text-xs font-medium text-brand-700">
+                                Voir le profil →
+                              </p>
+                            </Link>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                  void runCredentialAction(s, "reset_password")
+                                }
+                              >
+                                <KeyRound className="mr-1 h-3.5 w-3.5" />
+                                {busy ? "…" : "Nouveau mot de passe"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                  void runCredentialAction(s, "recovery_link")
+                                }
+                              >
+                                <Link2 className="mr-1 h-3.5 w-3.5" />
+                                Lien oublié
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </section>
               ))}

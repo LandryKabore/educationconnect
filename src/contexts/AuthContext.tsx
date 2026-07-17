@@ -155,8 +155,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (identifiant: string, password: string) => {
     const email = toAuthEmail(identifiant);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
+    if (data.user) {
+      await supabase
+        .from("profils")
+        .update({ last_login_at: new Date().toISOString() })
+        .eq("id", data.user.id);
+    }
   };
 
   const signOut = async () => {

@@ -129,28 +129,77 @@ export default function EmploisDuTemps() {
     return m;
   }, [classes]);
 
-  const suggestedTeacherIds = useMemo(() => {
-    if (!classId || !subjectId) return null;
-    const ids = assignments
-      .filter((a) => a.class_section_id === classId && a.subject_id === subjectId)
-      .map((a) => a.teacher_id);
-    return new Set(ids);
-  }, [assignments, classId, subjectId]);
+  const teachersForClass = useMemo(() => {
+    if (!classId) return teachers;
+    const ids = new Set(
+      assignments
+        .filter((a) => a.class_section_id === classId)
+        .map((a) => a.teacher_id),
+    );
+    if (ids.size === 0) return teachers;
+    return teachers.filter((t) => ids.has(t.id));
+  }, [teachers, assignments, classId]);
 
-  const teacherOptions = useMemo(() => {
-    if (!suggestedTeacherIds || suggestedTeacherIds.size === 0) return teachers;
-    const preferred = teachers.filter((t) => suggestedTeacherIds.has(t.id));
-    const others = teachers.filter((t) => !suggestedTeacherIds.has(t.id));
-    return [...preferred, ...others];
-  }, [teachers, suggestedTeacherIds]);
+  const filterTeachers = useMemo(() => {
+    if (!filterClassId) return teachers;
+    const fromAssignments = new Set(
+      assignments
+        .filter((a) => a.class_section_id === filterClassId)
+        .map((a) => a.teacher_id),
+    );
+    const fromSlots = new Set(
+      slots
+        .filter((s) => s.class_section_id === filterClassId && s.teacher_id)
+        .map((s) => s.teacher_id as string),
+    );
+    const ids = new Set([...fromAssignments, ...fromSlots]);
+    if (ids.size === 0) return [];
+    return teachers.filter((t) => ids.has(t.id));
+  }, [filterClassId, teachers, assignments, slots]);
+
+  const subjectsForTeacher = useMemo(() => {
+    if (!teacherId) return [];
+    const subjectIds = new Set(
+      assignments
+        .filter(
+          (a) =>
+            a.teacher_id === teacherId &&
+            (!classId || a.class_section_id === classId),
+        )
+        .map((a) => a.subject_id),
+    );
+    return subjects
+      .filter((s) => subjectIds.has(s.id))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }, [assignments, teacherId, classId, subjects]);
+
+  const describeSlot = useMemo(() => {
+    return (slot: {
+      id?: string;
+      class_section_id: string;
+      teacher_id?: string | null;
+      room?: string | null;
+      day_of_week: number;
+      start_time: string;
+      end_time: string;
+    }) => {
+      const full = slots.find((s) => s.id === slot.id);
+      const subject = full?.matieres?.name ?? "Matière";
+      const teacher = full?.profils
+        ? fullName(full.profils.first_name, full.profils.last_name)
+        : "sans enseignant";
+      const salle = full?.room ? `salle ${full.room}` : null;
+      return [subject, teacher, salle].filter(Boolean).join(" · ");
+    };
+  }, [slots]);
 
   const liveConflicts = useMemo(() => {
-    if (!classId || !showForm) return [];
+    if (!classId || !teacherId || !showForm) return [];
     const teacher = teachers.find((t) => t.id === teacherId);
     return findTimetableConflicts(
       {
         class_section_id: classId,
-        teacher_id: teacherId || null,
+        teacher_id: teacherId,
         room: room.trim() || null,
         day_of_week: Number(dayOfWeek),
         start_time: startTime,
@@ -162,6 +211,7 @@ export default function EmploisDuTemps() {
           ? fullName(teacher.first_name, teacher.last_name)
           : undefined,
         otherClassName: (id) => classNameById.get(id) ?? "une autre classe",
+        describeSlot,
       },
     );
   }, [
@@ -175,6 +225,7 @@ export default function EmploisDuTemps() {
     slots,
     teachers,
     classNameById,
+    describeSlot,
   ]);
 
   const filteredSlots = useMemo(() => {
@@ -204,13 +255,16 @@ export default function EmploisDuTemps() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!classId || !subjectId) return;
+    if (!classId || !subjectId || !teacherId) {
+      toast.error("Choisissez classe, enseignant et matière");
+      return;
+    }
 
     const teacher = teachers.find((t) => t.id === teacherId);
     const conflicts = findTimetableConflicts(
       {
         class_section_id: classId,
-        teacher_id: teacherId || null,
+        teacher_id: teacherId,
         room: room.trim() || null,
         day_of_week: Number(dayOfWeek),
         start_time: startTime,
@@ -222,6 +276,7 @@ export default function EmploisDuTemps() {
           ? fullName(teacher.first_name, teacher.last_name)
           : undefined,
         otherClassName: (id) => classNameById.get(id) ?? "une autre classe",
+        describeSlot,
       },
     );
 
@@ -230,23 +285,11 @@ export default function EmploisDuTemps() {
       return;
     }
 
-    if (
-      suggestedTeacherIds &&
-      suggestedTeacherIds.size > 0 &&
-      teacherId &&
-      !suggestedTeacherIds.has(teacherId)
-    ) {
-      const ok = window.confirm(
-        "Cet enseignant n’est pas affecté à cette classe/matière. Continuer quand même ?",
-      );
-      if (!ok) return;
-    }
-
     setSaving(true);
     const { error } = await supabase.from("creneaux_edt").insert({
       class_section_id: classId,
       subject_id: subjectId,
-      teacher_id: teacherId || null,
+      teacher_id: teacherId,
       day_of_week: Number(dayOfWeek),
       start_time: startTime,
       end_time: endTime,
@@ -299,7 +342,11 @@ export default function EmploisDuTemps() {
             <Label>Filtrer par classe</Label>
             <Select
               value={filterClassId}
-              onChange={(e) => setFilterClassId(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setFilterClassId(next);
+                setFilterTeacherId("");
+              }}
             >
               <option value="">Toutes les classes</option>
               {classes.map((c) => (
@@ -316,7 +363,7 @@ export default function EmploisDuTemps() {
               onChange={(e) => setFilterTeacherId(e.target.value)}
             >
               <option value="">Tous les enseignants</option>
-              {teachers.map((t) => (
+              {filterTeachers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {fullName(t.first_name, t.last_name)}
                 </option>
@@ -336,6 +383,7 @@ export default function EmploisDuTemps() {
                 onChange={(e) => {
                   setClassId(e.target.value);
                   setTeacherId("");
+                  setSubjectId("");
                 }}
                 required
               >
@@ -348,40 +396,56 @@ export default function EmploisDuTemps() {
               </Select>
             </div>
             <div>
+              <Label>Enseignant (obligatoire)</Label>
+              <Select
+                value={teacherId}
+                onChange={(e) => {
+                  setTeacherId(e.target.value);
+                  setSubjectId("");
+                }}
+                required
+                disabled={!classId}
+              >
+                <option value="">
+                  {classId ? "Choisir…" : "Choisissez d’abord une classe"}
+                </option>
+                {teachersForClass.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {fullName(t.first_name, t.last_name)}
+                  </option>
+                ))}
+              </Select>
+              {classId && teachersForClass.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  Aucun enseignant affecté à cette classe — créez une
+                  affectation dans Enseignants.
+                </p>
+              ) : null}
+            </div>
+            <div>
               <Label>Matière</Label>
               <Select
                 value={subjectId}
-                onChange={(e) => {
-                  setSubjectId(e.target.value);
-                  setTeacherId("");
-                }}
+                onChange={(e) => setSubjectId(e.target.value)}
                 required
+                disabled={!teacherId}
               >
-                <option value="">Choisir…</option>
-                {subjects.map((s) => (
+                <option value="">
+                  {!teacherId
+                    ? "Choisissez d’abord un enseignant"
+                    : subjectsForTeacher.length === 0
+                      ? "Aucune matière pour cet enseignant"
+                      : "Choisir…"}
+                </option>
+                {subjectsForTeacher.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </Select>
-            </div>
-            <div>
-              <Label>Enseignant</Label>
-              <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-                <option value="">Aucun</option>
-                {teacherOptions.map((t) => {
-                  const suggested = suggestedTeacherIds?.has(t.id);
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {fullName(t.first_name, t.last_name)}
-                      {suggested ? " ★ affecté" : ""}
-                    </option>
-                  );
-                })}
-              </Select>
-              {suggestedTeacherIds && suggestedTeacherIds.size === 0 && classId && subjectId ? (
+              {teacherId && subjectsForTeacher.length === 0 ? (
                 <p className="mt-1 text-xs text-amber-700">
-                  Aucune affectation pour cette classe/matière — créez-en une dans Enseignants.
+                  Cet enseignant n’a pas de matière affectée pour cette classe.
                 </p>
               ) : null}
             </div>
@@ -436,14 +500,20 @@ export default function EmploisDuTemps() {
                   ))}
                 </ul>
               </div>
-            ) : classId ? (
+            ) : classId && teacherId ? (
               <p className="text-sm text-emerald-700">Aucun conflit pour ce créneau.</p>
             ) : null}
 
             <div className="flex gap-2">
               <Button
                 type="submit"
-                disabled={saving || liveConflicts.length > 0 || !classId}
+                disabled={
+                  saving ||
+                  liveConflicts.length > 0 ||
+                  !classId ||
+                  !teacherId ||
+                  !subjectId
+                }
               >
                 {saving ? "Ajout…" : "Ajouter"}
               </Button>
@@ -482,15 +552,16 @@ export default function EmploisDuTemps() {
                       <p className="font-medium">
                         {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
                         {" · "}
-                        {slot.matieres?.name}
-                        {!filterClassId ? ` · ${slot.classes?.name}` : ""}
-                      </p>
-                      <p className="text-sm text-slate-500">
                         {slot.profils
                           ? fullName(slot.profils.first_name, slot.profils.last_name)
                           : "Sans enseignant"}
-                        {slot.room ? ` · Salle ${slot.room}` : ""}
+                        {" · "}
+                        {slot.matieres?.name}
+                        {!filterClassId ? ` · ${slot.classes?.name}` : ""}
                       </p>
+                      {slot.room ? (
+                        <p className="text-sm text-slate-500">Salle {slot.room}</p>
+                      ) : null}
                     </div>
                     <Button
                       size="sm"

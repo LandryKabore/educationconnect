@@ -23,6 +23,7 @@ import Classes from "@/pages/ecole/Classes";
 import ProgrammeClasses from "@/pages/ecole/ProgrammeClasses";
 import Matieres from "@/pages/ecole/Matieres";
 import Eleves from "@/pages/ecole/Eleves";
+import EleveDetail from "@/pages/ecole/EleveDetail";
 import Enseignants from "@/pages/ecole/Enseignants";
 import Parents from "@/pages/ecole/Parents";
 import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
@@ -213,6 +214,14 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["school_admin"]}>
               <Eleves />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/eleves/:id"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <EleveDetail />
             </RequireAuth>
           }
         />

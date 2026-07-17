@@ -41,6 +41,8 @@ export function findTimetableConflicts(
     className?: string;
     teacherName?: string;
     otherClassName?: (id: string) => string;
+    /** Extra detail for an existing slot (matière, enseignant, salle…) */
+    describeSlot?: (slot: SlotLike) => string;
   },
 ): TimetableConflict[] {
   const conflicts: TimetableConflict[] = [];
@@ -66,11 +68,13 @@ export function findTimetableConflicts(
     const when = `${slot.start_time.slice(0, 5)}–${slot.end_time.slice(0, 5)}`;
     const otherClass =
       labels?.otherClassName?.(slot.class_section_id) ?? "une autre classe";
+    const detail = labels?.describeSlot?.(slot);
+    const detailSuffix = detail ? ` : ${detail}` : "";
 
     if (slot.class_section_id === candidate.class_section_id) {
       conflicts.push({
         type: "class",
-        message: `Cette classe a déjà un cours à ${when}.`,
+        message: `Cette classe a déjà un cours à ${when}${detailSuffix}.`,
       });
     }
 
@@ -82,7 +86,7 @@ export function findTimetableConflicts(
       const who = labels?.teacherName ?? "Cet enseignant";
       conflicts.push({
         type: "teacher",
-        message: `${who} est déjà en cours (${otherClass}) à ${when}.`,
+        message: `${who} est déjà en cours (${otherClass}) à ${when}${detailSuffix}.`,
       });
     }
 
@@ -93,7 +97,7 @@ export function findTimetableConflicts(
     ) {
       conflicts.push({
         type: "room",
-        message: `La salle « ${candidate.room!.trim()} » est déjà prise (${otherClass}) à ${when}.`,
+        message: `La salle « ${candidate.room!.trim()} » est déjà prise (${otherClass}) à ${when}${detailSuffix}.`,
       });
     }
   }

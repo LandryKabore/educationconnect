@@ -14,7 +14,12 @@ export interface Profile {
   email: string | null;
   phone: string | null;
   avatar_url: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  matricule?: string | null;
   must_change_password: boolean;
+  last_login_at?: string | null;
   active: boolean;
   created_at: string;
 }
@@ -180,7 +185,7 @@ export interface TimetableSlot {
   id: string;
   class_section_id: string;
   subject_id: string;
-  teacher_id: string | null;
+  teacher_id: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
@@ -196,6 +201,8 @@ export interface MessageRow {
   body: string;
   read_at: string | null;
   created_at: string;
+  allow_replies: boolean;
+  parent_message_id: string | null;
 }
 
 export const ROLE_HOME: Record<AppRole, string> = {

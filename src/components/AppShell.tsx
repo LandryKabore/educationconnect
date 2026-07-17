@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { Button } from "@/components/ui";
 import { cn, fullName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
@@ -28,6 +29,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
+  badgeKey?: "eleves-sans-classe";
 }
 
 const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -59,7 +61,7 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
     { to: "/programmes", label: "Programmes", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/enseignants", label: "Enseignants", icon: <User className="h-4 w-4" /> },
-    { to: "/eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
+    { to: "/eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "eleves-sans-classe" },
     { to: "/parents", label: "Parents", icon: <Users className="h-4 w-4" /> },
     { to: "/emplois-du-temps", label: "Emplois du temps", icon: <Calendar className="h-4 w-4" /> },
     { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
@@ -126,6 +128,15 @@ export function AppShell() {
     schools.find((s) => s.id === schoolId)?.name ??
     schools[0]?.name;
 
+  const { data: sansClasseCount = 0 } = useStudentsWithoutClassCount();
+
+  const badgeFor = (item: NavItem) => {
+    if (item.badgeKey === "eleves-sans-classe" && sansClasseCount > 0) {
+      return sansClasseCount;
+    }
+    return null;
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       {supportSchoolId ? (
@@ -187,6 +198,7 @@ export function AppShell() {
               (item.to !== "/tableau-de-bord" &&
                 item.to !== "/ecole" &&
                 location.pathname.startsWith(item.to));
+            const badge = badgeFor(item);
             return (
               <Link
                 key={item.to}
@@ -196,11 +208,19 @@ export function AppShell() {
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                   active
                     ? "bg-brand-50 text-brand-800"
-                    : "text-slate-600 hover:bg-slate-100"
+                    : "text-slate-600 hover:bg-slate-100",
                 )}
               >
                 {item.icon}
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {badge != null ? (
+                  <span
+                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                    title={`${badge} élève(s) sans classe`}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

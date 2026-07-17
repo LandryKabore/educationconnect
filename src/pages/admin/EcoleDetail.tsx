@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Pencil, RefreshCw } from "lucide-react";
+import { WEBSITE_URL } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
 import type { Profile, School, UserRoleRow } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -29,9 +30,19 @@ type PendingInvite = {
   email: string;
   first_name: string;
   last_name: string;
+  token: string;
   expires_at: string;
   created_at: string;
 };
+
+const INVITE_SITE = (WEBSITE_URL || "https://edufaso.lovable.app").replace(
+  /\/$/,
+  "",
+);
+
+function inviteLinkFor(token: string) {
+  return `${INVITE_SITE}/invitation?token=${token}`;
+}
 
 export default function EcoleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +51,7 @@ export default function EcoleDetail() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [creating, setCreating] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -106,7 +118,7 @@ export default function EcoleDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invitations")
-        .select("id, email, first_name, last_name, expires_at, created_at")
+        .select("id, email, first_name, last_name, token, expires_at, created_at")
         .eq("school_id", id!)
         .eq("role", "school_admin")
         .is("accepted_at", null)
@@ -117,6 +129,49 @@ export default function EcoleDetail() {
       return (data ?? []) as PendingInvite[];
     },
   });
+
+  const copyPendingLink = async (token: string) => {
+    await navigator.clipboard.writeText(inviteLinkFor(token));
+    toast.success("Lien d'invitation copié — envoyez-le à la personne");
+  };
+
+  const resendPendingInvite = async (inv: PendingInvite) => {
+    if (!id) return;
+    setResendingId(inv.id);
+    setInviteUrl(null);
+    setEmailMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("inviter-admin", {
+        body: {
+          role: "school_admin",
+          schoolId: id,
+          firstName: inv.first_name,
+          lastName: inv.last_name,
+          email: inv.email,
+        },
+      });
+      if (error) throw error;
+      const res = data as {
+        error?: string;
+        inviteUrl?: string;
+        emailMessage?: string;
+        emailSent?: boolean;
+      };
+      if (res.error) throw new Error(res.error);
+      setInviteUrl(res.inviteUrl ?? null);
+      setEmailMessage(res.emailMessage ?? null);
+      toast.success(
+        res.emailSent
+          ? "Invitation renvoyée par e-mail"
+          : "Invitation recréée — copiez le lien",
+      );
+      refreshLists();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Renvoi impossible");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const refreshLists = () => {
     void qc.invalidateQueries({ queryKey: ["ecole-admins", id] });
@@ -206,7 +261,9 @@ export default function EcoleDetail() {
       setInviteUrl(res.inviteUrl);
       setEmailMessage(res.emailMessage ?? null);
       toast.success(
-        "Invitation créée — copiez le message pour le partager (compte créé à l'acceptation)"
+        res.emailSent
+          ? "Invitation envoyée par e-mail"
+          : "Invitation créée — e-mail non envoyé, copiez le lien pour le partager",
       );
       setFirstName("");
       setLastName("");
@@ -420,17 +477,40 @@ export default function EcoleDetail() {
                 {pendingInvites.map((inv) => (
                   <li
                     key={inv.id}
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm"
                   >
-                    <span className="font-medium">
-                      {fullName(inv.first_name, inv.last_name)}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-slate-600">
-                      {inv.email}
-                    </span>
-                    <span className="mt-1 inline-block">
-                      <Badge tone="warning">En attente d'acceptation</Badge>
-                    </span>
+                    <div>
+                      <span className="font-medium">
+                        {fullName(inv.first_name, inv.last_name)}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-600">
+                        {inv.email}
+                      </span>
+                      <span className="mt-1 inline-block">
+                        <Badge tone="warning">En attente d'acceptation</Badge>
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={resendingId === inv.id}
+                        onClick={() => void resendPendingInvite(inv)}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {resendingId === inv.id ? "Envoi…" : "Renvoyer"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void copyPendingLink(inv.token)}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copier le lien
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -439,7 +519,8 @@ export default function EcoleDetail() {
 
           <form onSubmit={(e) => void handleInviteAdmin(e)} className="space-y-3">
             <p className="text-sm text-slate-600">
-              Vous pouvez inviter plusieurs administrateurs.
+              Un e-mail d’invitation est envoyé. Vous pouvez aussi copier le
+              lien si besoin (WhatsApp, etc.).
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

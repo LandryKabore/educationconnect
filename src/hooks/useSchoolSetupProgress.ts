@@ -10,8 +10,7 @@ import {
 } from "@/lib/schoolSetup";
 
 export function useSchoolSetupProgress() {
-  const { schoolId, schools } = useAuth();
-  const school = schools.find((s) => s.id === schoolId);
+  const { schoolId } = useAuth();
 
   const query = useQuery({
     queryKey: ["school-setup", schoolId],
@@ -20,6 +19,7 @@ export function useSchoolSetupProgress() {
       const sid = schoolId!;
 
       const [
+        schoolRes,
         yearsRes,
         subjectsRes,
         classesRes,
@@ -28,6 +28,13 @@ export function useSchoolSetupProgress() {
         parentsRes,
         classIdsRes,
       ] = await Promise.all([
+        supabase
+          .from("ecoles")
+          .select(
+            "name, code, school_type, region, city, address, phone, email",
+          )
+          .eq("id", sid)
+          .maybeSingle(),
         supabase.from("annees_scolaires").select("id, is_current").eq("school_id", sid),
         supabase.from("matieres").select("id", { count: "exact", head: true }).eq("school_id", sid),
         supabase.from("classes").select("id", { count: "exact", head: true }).eq("school_id", sid),
@@ -86,8 +93,8 @@ export function useSchoolSetupProgress() {
       }
 
       const years = yearsRes.data ?? [];
-      const profileComplete = school
-        ? isSchoolFormComplete(schoolToForm(school))
+      const profileComplete = schoolRes.data
+        ? isSchoolFormComplete(schoolToForm(schoolRes.data))
         : false;
 
       return {

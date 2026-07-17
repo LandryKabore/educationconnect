@@ -137,6 +137,8 @@ export default function Classes() {
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["classes", schoolId] });
     void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves-sans-classe", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
   };
 

@@ -182,9 +182,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Do NOT call inviteUserByEmail here — that would create an Auth user
-    // before they accept. Account is created only in accepter-invitation.
-    // Share emailMessage / inviteUrl manually (or wire a custom mailer later).
+    // Send invite email via Supabase Auth (creates pending auth user).
+    // accepter-invitation will set the password when they open our link.
+    let emailSent = false;
+    let emailError: string | null = null;
+    const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: inviteUrl,
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        role,
+        school_id: resolvedSchoolId,
+        invite_token: inviteToken,
+      },
+    });
+    if (inviteErr) {
+      emailError = inviteErr.message;
+    } else {
+      emailSent = true;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -192,10 +209,11 @@ Deno.serve(async (req) => {
         inviteUrl,
         emailMessage,
         schoolName,
-        emailSent: false,
-        emailError: null,
-        message:
-          "Invitation créée. Partagez le message / lien — le compte sera créé à l'acceptation.",
+        emailSent,
+        emailError,
+        message: emailSent
+          ? "Invitation envoyée par e-mail."
+          : `E-mail non envoyé (${emailError ?? "config Auth"}). Partagez le lien manuellement.`,
       }),
       {
         status: 200,

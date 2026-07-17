@@ -72,7 +72,21 @@ Deno.serve(async (req) => {
       | null;
     const subjectId = (body.subjectId ?? body.subject_id ?? null) as string | null;
     const studentId = (body.studentId ?? body.student_id ?? null) as string | null;
-    const phone = (body.phone ?? null) as string | null;
+    const phone = body.phone != null ? String(body.phone).trim() || null : null;
+    const dateOfBirth = body.dateOfBirth ?? body.date_of_birth ?? null;
+    const gender = body.gender != null ? String(body.gender).trim() || null : null;
+    const address = body.address != null ? String(body.address).trim() || null : null;
+    const matricule =
+      body.matricule != null ? String(body.matricule).trim() || null : null;
+    const relationship =
+      body.relationship != null
+        ? String(body.relationship).trim() || "parent"
+        : "parent";
+    const rawContact = body.contactEmail ?? body.contact_email;
+    const contactEmail =
+      rawContact != null
+        ? String(rawContact).trim().toLowerCase() || null
+        : null;
 
     if (!role || !firstName || !lastName) {
       return new Response(
@@ -157,8 +171,12 @@ Deno.serve(async (req) => {
         id: newUserId,
         first_name: firstName,
         last_name: lastName,
-        email,
+        email: role === "parent" && contactEmail ? contactEmail : email,
         phone,
+        date_of_birth: dateOfBirth || null,
+        gender,
+        address,
+        matricule,
         must_change_password: true,
         active: true,
       });
@@ -209,7 +227,7 @@ Deno.serve(async (req) => {
       await admin.from("liens_parent_eleve").insert({
         parent_id: newUserId,
         student_id: studentId,
-        relationship: "parent",
+        relationship,
       });
     }
 
