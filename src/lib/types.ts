@@ -203,6 +203,10 @@ export interface MessageRow {
   created_at: string;
   allow_replies: boolean;
   parent_message_id: string | null;
+  is_announcement: boolean;
+  announcement_id: string | null;
+  is_cc: boolean;
+  thread_id: string | null;
 }
 
 export const ROLE_HOME: Record<AppRole, string> = {

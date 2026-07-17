@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, isToday } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ArrowLeft, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -20,7 +21,7 @@ import {
   Textarea,
 } from "@/components/ui";
 
-type MessageTab = "inbox" | "sent" | "compose" | "announce";
+type MessageTab = "discussions" | "announcements" | "compose" | "announce";
 
 type ContactRole = "student" | "parent" | "teacher" | "school_admin";
 
@@ -37,6 +38,20 @@ type InboxMessage = MessageRow & {
 
 type SentMessage = MessageRow & {
   recipient: { first_name: string; last_name: string } | null;
+};
+
+type ChatMessage = MessageRow & {
+  direction: "in" | "out";
+  otherId: string;
+  otherName: string;
+};
+
+type Conversation = {
+  otherId: string;
+  otherName: string;
+  messages: ChatMessage[];
+  lastMessage: ChatMessage;
+  unreadCount: number;
 };
 
 const CONTACT_ROLE_OPTIONS: { value: ContactRole | ""; label: string }[] = [
@@ -56,6 +71,20 @@ const ANNOUNCE_ROLE_OPTIONS: { value: ContactRole; label: string }[] = [
 
 function formatSeenAt(iso: string) {
   return format(new Date(iso), "d MMM yyyy à HH:mm", { locale: fr });
+}
+
+function formatConvoTime(iso: string) {
+  const date = new Date(iso);
+  return isToday(date)
+    ? format(date, "HH:mm")
+    : format(date, "d MMM", { locale: fr });
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
 }
 
 function asProfile(raw: unknown): Profile | null {
@@ -81,9 +110,15 @@ function pushContact(
 export default function Messages() {
   const { user, schoolId, role } = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<MessageTab>("inbox");
+  const [tab, setTab] = useState<MessageTab>("discussions");
+  const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
+  const [discussionsSearch, setDiscussionsSearch] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
   const [recipientRole, setRecipientRole] = useState<ContactRole | "">("");
-  const [recipientId, setRecipientId] = useState("");
+  const [recipientIds, setRecipientIds] = useState<string[]>([]);
+  const [ccIds, setCcIds] = useState<string[]>([]);
+  const [pickerTarget, setPickerTarget] = useState<"to" | "cc">("to");
   const [contactSearch, setContactSearch] = useState("");
   const [listSearch, setListSearch] = useState("");
   const [subject, setSubject] = useState("");
@@ -97,10 +132,8 @@ export default function Messages() {
   const [announceBody, setAnnounceBody] = useState("");
   const [announceNoReplies, setAnnounceNoReplies] = useState(true);
   const [announceSending, setAnnounceSending] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyBody, setReplyBody] = useState("");
-  const [replySending, setReplySending] = useState(false);
   const markingRead = useRef(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const canControlReplies =
     role === "school_admin" || role === "teacher" || role === "super_admin";
@@ -115,7 +148,7 @@ export default function Messages() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, school_id, sender_id, recipient_id, subject, body, read_at, created_at, allow_replies, parent_message_id, sender:profils!messages_sender_id_fkey(first_name, last_name)",
+          "id, school_id, sender_id, recipient_id, subject, body, read_at, created_at, allow_replies, parent_message_id, is_announcement, announcement_id, is_cc, thread_id, sender:profils!messages_sender_id_fkey(first_name, last_name)",
         )
         .eq("recipient_id", user!.id)
         .order("created_at", { ascending: false });
@@ -132,7 +165,7 @@ export default function Messages() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, school_id, sender_id, recipient_id, subject, body, read_at, created_at, allow_replies, parent_message_id, recipient:profils!messages_recipient_id_fkey(first_name, last_name)",
+          "id, school_id, sender_id, recipient_id, subject, body, read_at, created_at, allow_replies, parent_message_id, is_announcement, announcement_id, is_cc, thread_id, recipient:profils!messages_recipient_id_fkey(first_name, last_name)",
         )
         .eq("sender_id", user!.id)
         .order("created_at", { ascending: false });
@@ -354,24 +387,48 @@ export default function Messages() {
     return contacts.filter((c) => c.role === recipientRole);
   }, [contacts, recipientRole]);
 
-  const searchedContacts = useMemo(() => {
-    return filteredContacts.filter((c) =>
-      matchesSearch(
-        contactSearch,
-        c.first_name,
-        c.last_name,
-        ROLE_LABELS[c.role as AppRole],
-      ),
-    );
-  }, [filteredContacts, contactSearch]);
-
-  const selectedContact = useMemo(
-    () => contacts.find((c) => c.id === recipientId) ?? null,
-    [contacts, recipientId],
+  const selectedRecipients = useMemo(
+    () => contacts.filter((c) => recipientIds.includes(c.id)),
+    [contacts, recipientIds],
   );
 
-  const filteredInbox = useMemo(() => {
-    return inbox.filter((m) =>
+  const selectedCc = useMemo(
+    () => contacts.filter((c) => ccIds.includes(c.id)),
+    [contacts, ccIds],
+  );
+
+  const pickerExclude = useMemo(() => {
+    return new Set(pickerTarget === "to" ? ccIds : recipientIds);
+  }, [pickerTarget, ccIds, recipientIds]);
+
+  const searchedContacts = useMemo(() => {
+    return filteredContacts.filter(
+      (c) =>
+        !pickerExclude.has(c.id) &&
+        matchesSearch(
+          contactSearch,
+          c.first_name,
+          c.last_name,
+          ROLE_LABELS[c.role as AppRole],
+        ),
+    );
+  }, [filteredContacts, contactSearch, pickerExclude]);
+
+  const directInbox = useMemo(
+    () => inbox.filter((m) => !m.is_announcement),
+    [inbox],
+  );
+  const announcementInbox = useMemo(
+    () => inbox.filter((m) => !!m.is_announcement),
+    [inbox],
+  );
+  const directSent = useMemo(
+    () => sent.filter((m) => !m.is_announcement),
+    [sent],
+  );
+
+  const filteredAnnouncements = useMemo(() => {
+    return announcementInbox.filter((m) =>
       matchesSearch(
         listSearch,
         m.subject,
@@ -380,19 +437,80 @@ export default function Messages() {
         m.sender?.last_name,
       ),
     );
-  }, [inbox, listSearch]);
+  }, [announcementInbox, listSearch]);
 
-  const filteredSent = useMemo(() => {
-    return sent.filter((m) =>
-      matchesSearch(
-        listSearch,
-        m.subject,
-        m.body,
+  const conversations = useMemo((): Conversation[] => {
+    const map = new Map<string, ChatMessage[]>();
+
+    for (const m of directInbox) {
+      const otherName = fullName(m.sender?.first_name, m.sender?.last_name);
+      const list = map.get(m.sender_id) ?? [];
+      list.push({ ...m, direction: "in", otherId: m.sender_id, otherName });
+      map.set(m.sender_id, list);
+    }
+    for (const m of directSent) {
+      const otherName = fullName(
         m.recipient?.first_name,
         m.recipient?.last_name,
+      );
+      const list = map.get(m.recipient_id) ?? [];
+      list.push({
+        ...m,
+        direction: "out",
+        otherId: m.recipient_id,
+        otherName,
+      });
+      map.set(m.recipient_id, list);
+    }
+
+    const result: Conversation[] = [];
+    for (const [otherId, msgs] of map) {
+      msgs.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      const lastMessage = msgs[msgs.length - 1]!;
+      const unreadCount = msgs.filter(
+        (mm) => mm.direction === "in" && !mm.read_at,
+      ).length;
+      result.push({
+        otherId,
+        otherName: lastMessage.otherName,
+        messages: msgs,
+        lastMessage,
+        unreadCount,
+      });
+    }
+
+    return result.sort(
+      (a, b) =>
+        new Date(b.lastMessage.created_at).getTime() -
+        new Date(a.lastMessage.created_at).getTime(),
+    );
+  }, [directInbox, directSent]);
+
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((c) =>
+      matchesSearch(
+        discussionsSearch,
+        c.otherName,
+        c.lastMessage.body,
+        c.lastMessage.subject,
       ),
     );
-  }, [sent, listSearch]);
+  }, [conversations, discussionsSearch]);
+
+  const selectedConversation = useMemo(
+    () => conversations.find((c) => c.otherId === selectedOtherId) ?? null,
+    [conversations, selectedOtherId],
+  );
+
+  const chatTitle = useMemo(() => {
+    if (selectedConversation) return selectedConversation.otherName;
+    if (!selectedOtherId) return "";
+    const c = contacts.find((x) => x.id === selectedOtherId);
+    return c ? fullName(c.first_name, c.last_name) : "Conversation";
+  }, [selectedConversation, selectedOtherId, contacts]);
 
   const announceRoleOptions = useMemo(() => {
     const present = new Set(contacts.map((c) => c.role));
@@ -425,6 +543,12 @@ export default function Messages() {
     if (!user) return;
     void qc.invalidateQueries({ queryKey: ["messages-inbox", user.id] });
     void qc.invalidateQueries({ queryKey: ["messages-sent", user.id] });
+  };
+
+  const openChat = (otherId: string) => {
+    setTab("discussions");
+    setSelectedOtherId(otherId);
+    setDiscussionsSearch("");
   };
 
   // Live updates: new messages + read receipts without reconnect
@@ -466,9 +590,19 @@ export default function Messages() {
     };
   }, [user?.id, qc]);
 
+  // Mark unread incoming messages as read when opening a chat thread
   useEffect(() => {
-    if (tab !== "inbox" || !user || inboxLoading || markingRead.current) return;
-    const unreadIds = inbox.filter((m) => !m.read_at).map((m) => m.id);
+    if (
+      tab !== "discussions" ||
+      !selectedOtherId ||
+      !user ||
+      inboxLoading ||
+      markingRead.current
+    )
+      return;
+    const unreadIds = (selectedConversation?.messages ?? [])
+      .filter((m) => m.direction === "in" && !m.read_at)
+      .map((m) => m.id);
     if (unreadIds.length === 0) return;
 
     markingRead.current = true;
@@ -490,42 +624,172 @@ export default function Messages() {
           ),
       );
     })();
-  }, [tab, user, inbox, inboxLoading, qc]);
+  }, [tab, selectedOtherId, user, selectedConversation, inboxLoading, qc]);
+
+  // Mark unread announcements as read when viewing that tab
+  useEffect(() => {
+    if (tab !== "announcements" || !user || inboxLoading || markingRead.current)
+      return;
+    const unreadIds = announcementInbox
+      .filter((m) => !m.read_at)
+      .map((m) => m.id);
+    if (unreadIds.length === 0) return;
+
+    markingRead.current = true;
+    const readAt = new Date().toISOString();
+    void (async () => {
+      const { error } = await supabase
+        .from("messages")
+        .update({ read_at: readAt })
+        .in("id", unreadIds)
+        .eq("recipient_id", user.id)
+        .is("read_at", null);
+      markingRead.current = false;
+      if (error) return;
+      qc.setQueryData(
+        ["messages-inbox", user.id],
+        (prev: InboxMessage[] | undefined) =>
+          (prev ?? []).map((m) =>
+            unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m,
+          ),
+      );
+    })();
+  }, [tab, user, announcementInbox, inboxLoading, qc]);
+
+  // Keep chat scrolled to the latest message
+  useEffect(() => {
+    if (tab !== "discussions" || !selectedOtherId) return;
+    chatEndRef.current?.scrollIntoView({ block: "end" });
+  }, [tab, selectedOtherId, selectedConversation?.messages.length]);
 
   useEffect(() => {
-    if (
-      recipientId &&
-      !filteredContacts.some((c) => c.id === recipientId)
-    ) {
-      setRecipientId("");
-    }
-  }, [filteredContacts, recipientId]);
+    if (contacts.length === 0) return;
+    const known = new Set(contacts.map((c) => c.id));
+    setRecipientIds((prev) => prev.filter((id) => known.has(id)));
+    setCcIds((prev) => prev.filter((id) => known.has(id)));
+  }, [contacts]);
 
-  const handleSend = async (e: React.FormEvent) => {
+  const togglePickerId = (id: string) => {
+    if (pickerTarget === "to") {
+      setRecipientIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      );
+      setCcIds((prev) => prev.filter((x) => x !== id));
+    } else {
+      setCcIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      );
+      setRecipientIds((prev) => prev.filter((x) => x !== id));
+    }
+  };
+
+  const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !schoolId || !recipientId) return;
-    setSending(true);
+    if (!user || !schoolId || !selectedOtherId) return;
+    const text = chatInput.trim();
+    if (!text) return;
+
+    setChatSending(true);
     const { error } = await supabase.from("messages").insert({
       school_id: schoolId,
       sender_id: user.id,
-      recipient_id: recipientId,
-      subject: subject.trim() || null,
-      body: body.trim(),
-      allow_replies: canControlReplies ? !noReplies : true,
+      recipient_id: selectedOtherId,
+      subject: null,
+      body: text,
+      allow_replies: true,
+      is_announcement: false,
+      is_cc: false,
     });
-    setSending(false);
+    setChatSending(false);
+
     if (error) {
       toast.error("Envoi impossible");
       return;
     }
-    toast.success("Message envoyé");
-    setRecipientId("");
+    setChatInput("");
+    invalidateMessages();
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !schoolId || recipientIds.length === 0) return;
+    const text = body.trim();
+    if (!text) {
+      toast.error("Écrivez le message");
+      return;
+    }
+
+    setSending(true);
+    const threadId = crypto.randomUUID();
+    const allowReplies = canControlReplies ? !noReplies : true;
+    const subjectText = subject.trim() || null;
+    const singleRecipientId =
+      recipientIds.length === 1 && ccIds.length === 0 ? recipientIds[0]! : null;
+    const payload = [
+      ...recipientIds.map((id) => ({
+        school_id: schoolId,
+        sender_id: user.id,
+        recipient_id: id,
+        subject: subjectText,
+        body: text,
+        allow_replies: allowReplies,
+        is_announcement: false,
+        is_cc: false,
+        thread_id: threadId,
+      })),
+      ...ccIds
+        .filter((id) => !recipientIds.includes(id))
+        .map((id) => ({
+          school_id: schoolId,
+          sender_id: user.id,
+          recipient_id: id,
+          subject: subjectText,
+          body: text,
+          allow_replies: allowReplies,
+          is_announcement: false,
+          is_cc: true,
+          thread_id: threadId,
+        })),
+    ];
+
+    const batchSize = 40;
+    let sentCount = 0;
+    let failed = false;
+    for (let i = 0; i < payload.length; i += batchSize) {
+      const batch = payload.slice(i, i + batchSize);
+      const { error } = await supabase.from("messages").insert(batch);
+      if (error) {
+        failed = true;
+        break;
+      }
+      sentCount += batch.length;
+    }
+    setSending(false);
+
+    if (failed && sentCount === 0) {
+      toast.error("Envoi impossible");
+      return;
+    }
+    if (failed) {
+      toast.message(`Envoi partiel : ${sentCount}/${payload.length}`);
+    } else {
+      toast.success(
+        payload.length === 1
+          ? "Message envoyé"
+          : `Message envoyé à ${payload.length} personnes`,
+      );
+    }
+    setRecipientIds([]);
+    setCcIds([]);
     setRecipientRole("");
     setContactSearch("");
+    setPickerTarget("to");
     setSubject("");
     setBody("");
     setNoReplies(false);
-    setTab("sent");
+    setTab("discussions");
+    setSelectedOtherId(singleRecipientId);
+    setDiscussionsSearch("");
     invalidateMessages();
   };
 
@@ -550,6 +814,7 @@ export default function Messages() {
     const subjectText =
       announceSubject.trim() ||
       `Annonce — ${format(new Date(), "d MMM yyyy", { locale: fr })}`;
+    const announcementId = crypto.randomUUID();
     const payload = announceRecipients.map((c) => ({
       school_id: schoolId,
       sender_id: user.id,
@@ -557,6 +822,8 @@ export default function Messages() {
       subject: subjectText,
       body: text,
       allow_replies: !announceNoReplies,
+      is_announcement: true,
+      announcement_id: announcementId,
     }));
 
     const batchSize = 40;
@@ -587,38 +854,9 @@ export default function Messages() {
     setAnnounceSubject("");
     setAnnounceBody("");
     setAnnounceNoReplies(true);
-    setTab("sent");
-    invalidateMessages();
-  };
-
-  const handleReply = async (message: InboxMessage) => {
-    if (!user || !schoolId || !replyBody.trim()) return;
-    if (!message.allow_replies) {
-      toast.error("Ce message n’accepte pas de réponse");
-      return;
-    }
-    setReplySending(true);
-    const reSubject = message.subject?.startsWith("Re: ")
-      ? message.subject
-      : `Re: ${message.subject || "Message"}`;
-    const { error } = await supabase.from("messages").insert({
-      school_id: schoolId,
-      sender_id: user.id,
-      recipient_id: message.sender_id,
-      subject: reSubject,
-      body: replyBody.trim(),
-      allow_replies: true,
-      parent_message_id: message.id,
-    });
-    setReplySending(false);
-    if (error) {
-      toast.error("Réponse impossible");
-      return;
-    }
-    toast.success("Réponse envoyée");
-    setReplyingTo(null);
-    setReplyBody("");
-    setTab("sent");
+    setTab("discussions");
+    setSelectedOtherId(null);
+    setDiscussionsSearch("");
     invalidateMessages();
   };
 
@@ -629,24 +867,25 @@ export default function Messages() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
-              variant={tab === "inbox" ? "primary" : "outline"}
+              variant={tab === "discussions" ? "primary" : "outline"}
               size="sm"
               onClick={() => {
-                setTab("inbox");
-                setListSearch("");
+                setTab("discussions");
+                setSelectedOtherId(null);
+                setDiscussionsSearch("");
               }}
             >
-              Boîte de réception
+              Discussions
             </Button>
             <Button
-              variant={tab === "sent" ? "primary" : "outline"}
+              variant={tab === "announcements" ? "primary" : "outline"}
               size="sm"
               onClick={() => {
-                setTab("sent");
+                setTab("announcements");
                 setListSearch("");
               }}
             >
-              Messages envoyés
+              Annonces
             </Button>
             <Button
               variant={tab === "compose" ? "primary" : "outline"}
@@ -664,7 +903,7 @@ export default function Messages() {
                 size="sm"
                 onClick={() => setTab("announce")}
               >
-                Annonce
+                Envoyer une annonce
               </Button>
             ) : null}
           </div>
@@ -781,7 +1020,6 @@ export default function Messages() {
                 value={recipientRole}
                 onChange={(e) => {
                   setRecipientRole(e.target.value as ContactRole | "");
-                  setRecipientId("");
                   setContactSearch("");
                 }}
               >
@@ -793,7 +1031,90 @@ export default function Messages() {
               </Select>
             </div>
             <div>
-              <Label>Destinataire</Label>
+              <div className="mb-2 flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={pickerTarget === "to" ? "primary" : "outline"}
+                  onClick={() => setPickerTarget("to")}
+                >
+                  À ({recipientIds.length})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={pickerTarget === "cc" ? "primary" : "outline"}
+                  onClick={() => setPickerTarget("cc")}
+                >
+                  Cc ({ccIds.length})
+                </Button>
+              </div>
+              <Label>
+                {pickerTarget === "to" ? "Destinataires" : "Cc (copie)"}
+              </Label>
+              {selectedRecipients.length > 0 ? (
+                <div className="mb-2">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    À
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedRecipients.map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs text-brand-950"
+                      >
+                        {fullName(c.first_name, c.last_name)}
+                        <button
+                          type="button"
+                          className="font-medium text-brand-700 hover:text-brand-900"
+                          onClick={() =>
+                            setRecipientIds((prev) =>
+                              prev.filter((id) => id !== c.id),
+                            )
+                          }
+                          aria-label="Retirer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {selectedCc.length > 0 ? (
+                <div className="mb-2">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    Cc
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedCc.map((c) => (
+                      <span
+                        key={c.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800"
+                      >
+                        {fullName(c.first_name, c.last_name)}
+                        <button
+                          type="button"
+                          className="font-medium text-slate-600 hover:text-slate-900"
+                          onClick={() =>
+                            setCcIds((prev) => prev.filter((id) => id !== c.id))
+                          }
+                          aria-label="Retirer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {selectedRecipients.length === 0 && selectedCc.length === 0 ? (
+                <p className="mb-2 text-xs text-slate-500">
+                  {pickerTarget === "to"
+                    ? "Sélectionnez une ou plusieurs personnes."
+                    : "Optionnel — personnes en copie."}
+                </p>
+              ) : null}
               <Input
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
@@ -801,25 +1122,6 @@ export default function Messages() {
                 className="mb-2"
                 disabled={contactsLoading || filteredContacts.length === 0}
               />
-              {selectedContact ? (
-                <p className="mb-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-950">
-                  Sélectionné :{" "}
-                  <strong>
-                    {fullName(
-                      selectedContact.first_name,
-                      selectedContact.last_name,
-                    )}
-                  </strong>{" "}
-                  · {ROLE_LABELS[selectedContact.role as AppRole]}
-                  <button
-                    type="button"
-                    className="ml-2 text-xs font-medium text-brand-700 underline"
-                    onClick={() => setRecipientId("")}
-                  >
-                    Changer
-                  </button>
-                </p>
-              ) : null}
               <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200">
                 {contactsLoading ? (
                   <p className="px-3 py-2 text-sm text-slate-500">Chargement…</p>
@@ -831,12 +1133,15 @@ export default function Messages() {
                   </p>
                 ) : (
                   searchedContacts.map((c) => {
-                    const selected = c.id === recipientId;
+                    const selected =
+                      pickerTarget === "to"
+                        ? recipientIds.includes(c.id)
+                        : ccIds.includes(c.id);
                     return (
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => setRecipientId(c.id)}
+                        onClick={() => togglePickerId(c.id)}
                         className={cn(
                           "flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0",
                           selected
@@ -846,6 +1151,9 @@ export default function Messages() {
                       >
                         <span>{fullName(c.first_name, c.last_name)}</span>
                         <span className="shrink-0 text-xs text-slate-500">
+                          {selected
+                            ? "✓ "
+                            : ""}
                           {ROLE_LABELS[c.role as AppRole] ?? c.role}
                         </span>
                       </button>
@@ -896,200 +1204,293 @@ export default function Messages() {
             ) : null}
             <Button
               type="submit"
-              disabled={sending || !recipientId || filteredContacts.length === 0}
+              disabled={
+                sending ||
+                recipientIds.length === 0 ||
+                filteredContacts.length === 0
+              }
             >
-              {sending ? "Envoi…" : "Envoyer"}
+              {sending
+                ? "Envoi…"
+                : recipientIds.length + ccIds.length > 1
+                  ? `Envoyer (${recipientIds.length + ccIds.length})`
+                  : "Envoyer"}
             </Button>
           </form>
         </Card>
-      ) : tab === "sent" ? (
-        sentLoading ? (
+      ) : tab === "announcements" ? (
+        inboxLoading ? (
           <p className="text-slate-500">Chargement…</p>
-        ) : sent.length === 0 ? (
-          <EmptyState message="Aucun message envoyé." />
+        ) : announcementInbox.length === 0 ? (
+          <EmptyState message="Aucune annonce pour le moment." />
         ) : (
           <div className="space-y-3">
             <div className="max-w-md">
-              <Label htmlFor="search-sent">Rechercher</Label>
+              <Label htmlFor="search-announcements">Rechercher</Label>
               <Input
-                id="search-sent"
+                id="search-announcements"
                 value={listSearch}
                 onChange={(e) => setListSearch(e.target.value)}
-                placeholder="Destinataire, objet, contenu…"
+                placeholder="Expéditeur, objet, contenu…"
               />
             </div>
-            {filteredSent.length === 0 ? (
-              <EmptyState message="Aucun message ne correspond à la recherche." />
+            {filteredAnnouncements.length === 0 ? (
+              <EmptyState message="Aucune annonce ne correspond à la recherche." />
             ) : (
-              filteredSent.map((m) => (
-              <Card
-                key={m.id}
-                className={cn(
-                  m.allow_replies
-                    ? "border-l-4 border-l-teal-500"
-                    : "border-l-4 border-l-slate-300 bg-slate-50",
-                )}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{m.subject || "(Sans objet)"}</p>
-                    <p className="text-sm text-slate-500">
-                      À{" "}
-                      {fullName(
-                        m.recipient?.first_name,
-                        m.recipient?.last_name,
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+              filteredAnnouncements.map((m) => {
+                const canReply = m.allow_replies !== false;
+                return (
+                  <Card
+                    key={m.id}
+                    className="border-l-4 border-l-amber-500 bg-amber-50/40"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium">
+                          {m.subject || "(Sans objet)"}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          De{" "}
+                          {fullName(m.sender?.first_name, m.sender?.last_name)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="warning">Annonce</Badge>
+                        {!m.read_at ? (
+                          <Badge tone="info">Nouveau</Badge>
+                        ) : (
+                          <Badge tone="default">Vu</Badge>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          {format(new Date(m.created_at), "d MMM yyyy", {
+                            locale: fr,
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-700">{m.body}</p>
                     {m.read_at ? (
-                      <Badge tone="success">Vu</Badge>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Vu le {formatSeenAt(m.read_at)}
+                      </p>
+                    ) : null}
+                    {canReply ? (
+                      <div className="mt-3 border-t border-amber-100 pt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openChat(m.sender_id)}
+                        >
+                          Répondre
+                        </Button>
+                      </div>
                     ) : (
-                      <Badge tone="warning">Non lu</Badge>
+                      <p className="mt-3 text-xs text-slate-400">
+                        Cette annonce n’accepte pas de réponse.
+                      </p>
                     )}
-                    {m.allow_replies ? (
-                      <Badge tone="success">Réponses autorisées</Badge>
-                    ) : (
-                      <Badge tone="default">Sans réponse</Badge>
-                    )}
-                    <span className="text-xs text-slate-400">
-                      {format(new Date(m.created_at), "d MMM yyyy", {
-                        locale: fr,
-                      })}
-                    </span>
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-slate-700">{m.body}</p>
-                <p className="mt-2 text-xs text-slate-400">
-                  {m.read_at
-                    ? `Vu le ${formatSeenAt(m.read_at)}`
-                    : "Pas encore vu par le destinataire"}
-                </p>
-              </Card>
-              ))
+                  </Card>
+                );
+              })
             )}
           </div>
         )
-      ) : inboxLoading ? (
-        <p className="text-slate-500">Chargement…</p>
-      ) : inbox.length === 0 ? (
-        <EmptyState message="Aucun message reçu." />
       ) : (
-        <div className="space-y-3">
-          <div className="max-w-md">
-            <Label htmlFor="search-inbox">Rechercher</Label>
-            <Input
-              id="search-inbox"
-              value={listSearch}
-              onChange={(e) => setListSearch(e.target.value)}
-              placeholder="Expéditeur, objet, contenu…"
-            />
-          </div>
-          {filteredInbox.length === 0 ? (
-            <EmptyState message="Aucun message ne correspond à la recherche." />
-          ) : (
-          filteredInbox.map((m) => {
-            const canReply = m.allow_replies !== false;
-            const isReplying = replyingTo === m.id;
-            return (
-              <Card
-                key={m.id}
-                className={cn(
-                  canReply
-                    ? "border-l-4 border-l-teal-500"
-                    : "border-l-4 border-l-slate-300 bg-slate-50",
-                )}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{m.subject || "(Sans objet)"}</p>
-                    <p className="text-sm text-slate-500">
-                      De {fullName(m.sender?.first_name, m.sender?.last_name)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!m.read_at ? (
-                      <Badge tone="info">Nouveau</Badge>
-                    ) : (
-                      <Badge tone="default">Vu</Badge>
-                    )}
-                    {canReply ? (
-                      <Badge tone="success">Réponse possible</Badge>
-                    ) : (
-                      <Badge tone="default">Sans réponse</Badge>
-                    )}
-                    <span className="text-xs text-slate-400">
-                      {format(new Date(m.created_at), "d MMM yyyy", {
-                        locale: fr,
-                      })}
-                    </span>
-                  </div>
-                </div>
-                <p
-                  className={cn(
-                    "mt-2 text-sm",
-                    canReply ? "text-slate-700" : "text-slate-600",
-                  )}
-                >
-                  {m.body}
-                </p>
-                {m.read_at ? (
-                  <p className="mt-1 text-xs text-slate-400">
-                    Vu le {formatSeenAt(m.read_at)}
+        <div className="mx-auto max-w-3xl">
+          <Card className="overflow-hidden p-0">
+            {selectedOtherId ? (
+              <div className="flex h-[75vh] flex-col">
+                <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-full p-0"
+                    aria-label="Retour aux discussions"
+                    onClick={() => setSelectedOtherId(null)}
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800">
+                    {initials(chatTitle)}
+                  </span>
+                  <p className="truncate font-semibold text-slate-900">
+                    {chatTitle}
                   </p>
-                ) : null}
-                {canReply ? (
-                  <div className="mt-3 border-t border-slate-100 pt-3">
-                    {isReplying ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={replyBody}
-                          onChange={(e) => setReplyBody(e.target.value)}
-                          placeholder="Votre réponse…"
-                          required
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            disabled={replySending || !replyBody.trim()}
-                            onClick={() => void handleReply(m)}
+                </div>
+
+                <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100 px-3 py-4 sm:px-4">
+                  {(selectedConversation?.messages ?? []).length === 0 ? (
+                    <p className="mt-8 text-center text-sm text-slate-400">
+                      Aucun message. Écrivez le premier !
+                    </p>
+                  ) : (
+                    (selectedConversation?.messages ?? []).map((m) => {
+                      const mine = m.direction === "out";
+                      return (
+                        <div
+                          key={m.id}
+                          className={cn(
+                            "flex",
+                            mine ? "justify-end" : "justify-start",
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "flex max-w-[80%] flex-col",
+                              mine ? "items-end" : "items-start",
+                            )}
                           >
-                            {replySending ? "Envoi…" : "Envoyer la réponse"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setReplyingTo(null);
-                              setReplyBody("");
-                            }}
-                          >
-                            Annuler
-                          </Button>
+                            {m.subject ? (
+                              <span className="mb-1 max-w-full truncate px-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                                {m.subject}
+                              </span>
+                            ) : null}
+                            <div
+                              className={cn(
+                                "rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                                mine
+                                  ? "bg-brand-600 text-white"
+                                  : "bg-slate-200 text-slate-800",
+                              )}
+                            >
+                              <p className="whitespace-pre-wrap break-words">
+                                {m.body}
+                              </p>
+                              <div
+                                className={cn(
+                                  "mt-1 flex items-center gap-1.5 text-[11px]",
+                                  mine
+                                    ? "justify-end text-brand-100/80"
+                                    : "text-slate-500",
+                                )}
+                              >
+                                {m.is_cc ? (
+                                  <span
+                                    className={cn(
+                                      "rounded px-1 py-0.5 font-medium",
+                                      mine
+                                        ? "bg-white/15"
+                                        : "bg-slate-300/70 text-slate-600",
+                                    )}
+                                  >
+                                    Cc
+                                  </span>
+                                ) : null}
+                                <span>
+                                  {format(new Date(m.created_at), "HH:mm")}
+                                </span>
+                              </div>
+                            </div>
+                            {m.allow_replies === false ? (
+                              <span className="mt-1 max-w-full px-1 text-[10px] italic text-slate-400">
+                                Réponses désactivées pour ce message
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setReplyingTo(m.id);
-                          setReplyBody("");
-                        }}
-                      >
-                        Répondre
-                      </Button>
-                    )}
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <form
+                  onSubmit={(e) => void handleSendChat(e)}
+                  className="flex items-center gap-2 border-t border-slate-200 bg-white p-3"
+                >
+                  <Input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Écrivez un message…"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={chatSending || !chatInput.trim()}
+                    className="h-11 w-11 shrink-0 rounded-full p-0"
+                    aria-label="Envoyer"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </div>
+            ) : (
+              <div>
+                <div className="border-b border-slate-100 p-3">
+                  <Input
+                    value={discussionsSearch}
+                    onChange={(e) => setDiscussionsSearch(e.target.value)}
+                    placeholder="Rechercher une discussion…"
+                  />
+                </div>
+                {inboxLoading || sentLoading ? (
+                  <p className="p-6 text-center text-slate-500">Chargement…</p>
+                ) : conversations.length === 0 ? (
+                  <div className="p-4">
+                    <EmptyState message="Aucune discussion pour le moment. Lancez une conversation depuis « Nouveau message »." />
+                  </div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="p-4">
+                    <EmptyState message="Aucune discussion ne correspond à la recherche." />
                   </div>
                 ) : (
-                  <p className="mt-3 text-xs text-slate-400">
-                    L’expéditeur n’autorise pas de réponse à ce message.
-                  </p>
+                  <div className="max-h-[70vh] overflow-y-auto">
+                    {filteredConversations.map((c) => {
+                      const unread = c.unreadCount > 0;
+                      return (
+                        <button
+                          key={c.otherId}
+                          type="button"
+                          onClick={() => setSelectedOtherId(c.otherId)}
+                          className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 last:border-b-0"
+                        >
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+                            {initials(c.otherName)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span
+                                className={cn(
+                                  "truncate text-sm",
+                                  unread
+                                    ? "font-semibold text-slate-900"
+                                    : "font-medium text-slate-800",
+                                )}
+                              >
+                                {c.otherName}
+                              </span>
+                              <span className="shrink-0 text-xs text-slate-400">
+                                {formatConvoTime(c.lastMessage.created_at)}
+                              </span>
+                            </span>
+                            <span className="flex items-center justify-between gap-2">
+                              <span
+                                className={cn(
+                                  "truncate text-xs",
+                                  unread
+                                    ? "font-medium text-slate-700"
+                                    : "text-slate-500",
+                                )}
+                              >
+                                {c.lastMessage.direction === "out"
+                                  ? "Vous : "
+                                  : ""}
+                                {c.lastMessage.body}
+                              </span>
+                              {unread ? (
+                                <Badge tone="success">{c.unreadCount}</Badge>
+                              ) : null}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </Card>
-            );
-          })
-          )}
+              </div>
+            )}
+          </Card>
         </div>
       )}
     </div>
