@@ -1,5 +1,13 @@
 import * as React from "react";
-import { Calendar, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { formatFrDateInput, frToIso, isoToFr } from "@/lib/dateFr";
 import { cn } from "@/lib/utils";
 
@@ -468,6 +476,34 @@ export function PageHeader({
       </div>
       {actions}
     </div>
+  );
+}
+
+/** In-app back control: uses history when possible, otherwise `to`. */
+export function BackLink({
+  to,
+  label = "Retour",
+}: {
+  to: string;
+  label?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const idx = (window.history.state as { idx?: number } | null)?.idx;
+        if (typeof idx === "number" && idx > 0) {
+          navigate(-1);
+        } else {
+          navigate(to);
+        }
+      }}
+      className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      {label}
+    </button>
   );
 }
 

@@ -37,7 +37,9 @@ import Devoirs from "@/pages/enseignant/Devoirs";
 import Messages from "@/pages/Messages";
 import MesNotes from "@/pages/eleve/MesNotes";
 import MesDevoirs from "@/pages/eleve/MesDevoirs";
+import MesPresences from "@/pages/eleve/MesPresences";
 import MonEmploiDuTemps from "@/pages/eleve/MonEmploiDuTemps";
+import MonBulletin from "@/pages/eleve/MonBulletin";
 import Enfants from "@/pages/parent/Enfants";
 import EnfantNotes from "@/pages/parent/EnfantNotes";
 import EnfantPresences from "@/pages/parent/EnfantPresences";
@@ -321,10 +323,26 @@ function AppRoutes() {
           }
         />
         <Route
+          path="/mes-presences"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesPresences />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/mon-emploi-du-temps"
           element={
             <RequireAuth roles={["student"]}>
               <MonEmploiDuTemps />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mon-bulletin"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MonBulletin />
             </RequireAuth>
           }
         />

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { ClassProgrammeRow, Subject } from "@/lib/types";
 import { cn, fullName } from "@/lib/utils";
 import {
+  BackLink,
   Button,
   Card,
   EmptyState,
@@ -229,10 +230,24 @@ export default function ClassDetail() {
   };
 
   if (isLoading) return <p className="text-slate-500">Chargement…</p>;
-  if (!cls) return <EmptyState message="Classe introuvable." />;
+  if (!cls) {
+    return (
+      <div>
+        <BackLink
+          to={isAdmin ? "/classes" : "/tableau-de-bord"}
+          label={isAdmin ? "Retour aux classes" : "Retour"}
+        />
+        <EmptyState message="Classe introuvable." />
+      </div>
+    );
+  }
 
   return (
     <div>
+      <BackLink
+        to={isAdmin ? "/classes" : "/tableau-de-bord"}
+        label={isAdmin ? "Retour aux classes" : "Retour"}
+      />
       <PageHeader
         title={cls.name}
         subtitle={

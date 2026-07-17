@@ -7,7 +7,9 @@ import { ROLE_LABELS } from "@/lib/types";
 import {
   BookOpen,
   Calendar,
+  CheckCircle2,
   ClipboardList,
+  FileText,
   GraduationCap,
   MessageSquare,
   School,
@@ -38,6 +40,52 @@ export default function Dashboard() {
     },
   });
 
+  const { data: studentHome } = useQuery({
+    queryKey: ["student-home", user?.id],
+    enabled: role === "student" && !!user?.id,
+    queryFn: async () => {
+      const { data: enrollment } = await supabase
+        .from("inscriptions")
+        .select("class_section_id, classes(name, grade_level)")
+        .eq("student_id", user!.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      const row = enrollment as {
+        class_section_id?: string;
+        classes?: { name: string; grade_level: string | null } | null;
+      } | null;
+
+      let devoirsCount = 0;
+      if (row?.class_section_id) {
+        const { count } = await supabase
+          .from("devoirs")
+          .select("id", { count: "exact", head: true })
+          .eq("class_section_id", row.class_section_id);
+        devoirsCount = count ?? 0;
+      }
+
+      const { count: notesCount } = await supabase
+        .from("notes")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", user!.id);
+
+      const { count: absences } = await supabase
+        .from("presences")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", user!.id)
+        .eq("status", "absent");
+
+      return {
+        className: row?.classes?.name ?? null,
+        gradeLevel: row?.classes?.grade_level ?? null,
+        devoirsCount,
+        notesCount: notesCount ?? 0,
+        absencesCount: absences ?? 0,
+      };
+    },
+  });
+
   const cardsByRole: Record<string, DashCard[]> = {
     teacher: [
       {
@@ -63,8 +111,14 @@ export default function Dashboard() {
       {
         to: "/mes-devoirs",
         label: "Mes devoirs",
-        description: "Voir les devoirs à rendre",
+        description: "Voir et rendre les devoirs",
         icon: <ClipboardList className="h-5 w-5" />,
+      },
+      {
+        to: "/mes-presences",
+        label: "Mes présences",
+        description: "Absences et retards",
+        icon: <CheckCircle2 className="h-5 w-5" />,
       },
       {
         to: "/mon-emploi-du-temps",
@@ -73,10 +127,22 @@ export default function Dashboard() {
         icon: <Calendar className="h-5 w-5" />,
       },
       {
+        to: "/mon-bulletin",
+        label: "Mon bulletin",
+        description: "Télécharger le PDF",
+        icon: <FileText className="h-5 w-5" />,
+      },
+      {
         to: "/messages",
         label: "Messages",
         description: "Boîte de réception",
         icon: <MessageSquare className="h-5 w-5" />,
+      },
+      {
+        to: "/profil",
+        label: "Mon profil",
+        description: "Informations personnelles",
+        icon: <GraduationCap className="h-5 w-5" />,
       },
     ],
     parent: [
@@ -94,14 +160,34 @@ export default function Dashboard() {
       },
     ],
     school_admin: [
-      { to: "/ecole", label: "Mon école", description: "Vue d'ensemble", icon: <School className="h-5 w-5" /> },
-      { to: "/eleves", label: "Élèves", description: "Gestion des élèves", icon: <GraduationCap className="h-5 w-5" /> },
-      { to: "/classes", label: "Classes", description: "Organisation", icon: <Users className="h-5 w-5" /> },
-      { to: "/bulletins", label: "Bulletins", description: "Génération PDF", icon: <BookOpen className="h-5 w-5" /> },
+      {
+        to: "/ecole",
+        label: "Mon école",
+        description: "Vue d'ensemble",
+        icon: <School className="h-5 w-5" />,
+      },
+      {
+        to: "/eleves",
+        label: "Élèves",
+        description: "Gestion des élèves",
+        icon: <GraduationCap className="h-5 w-5" />,
+      },
+      {
+        to: "/classes",
+        label: "Classes",
+        description: "Organisation",
+        icon: <Users className="h-5 w-5" />,
+      },
+      {
+        to: "/bulletins",
+        label: "Bulletins",
+        description: "Génération PDF",
+        icon: <BookOpen className="h-5 w-5" />,
+      },
     ],
   };
 
-  const cards = role ? cardsByRole[role] ?? [] : [];
+  const cards = role ? (cardsByRole[role] ?? []) : [];
 
   return (
     <div>
@@ -114,12 +200,56 @@ export default function Dashboard() {
         }
       />
 
+      {role === "student" && studentHome ? (
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Ma classe
+            </p>
+            <p className="mt-1 text-lg font-bold text-slate-900">
+              {studentHome.className ?? "Non affecté"}
+            </p>
+            {studentHome.gradeLevel ? (
+              <p className="text-xs text-slate-500">{studentHome.gradeLevel}</p>
+            ) : null}
+          </Card>
+          <Card className="py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Notes
+            </p>
+            <p className="mt-1 text-lg font-bold text-slate-900">
+              {studentHome.notesCount}
+            </p>
+          </Card>
+          <Card className="py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Devoirs (classe)
+            </p>
+            <p className="mt-1 text-lg font-bold text-slate-900">
+              {studentHome.devoirsCount}
+            </p>
+          </Card>
+          <Card className="py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Absences
+            </p>
+            <p className="mt-1 text-lg font-bold text-slate-900">
+              {studentHome.absencesCount}
+            </p>
+          </Card>
+        </div>
+      ) : null}
+
       {role === "teacher" && teacherClasses.length > 0 ? (
         <div className="mb-6">
           <h2 className="mb-3 text-lg font-semibold">Mes classes</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {teacherClasses.map((a) => {
-              const cls = (a as { classes: { id: string; name: string; grade_level: string } }).classes;
+              const cls = (
+                a as {
+                  classes: { id: string; name: string; grade_level: string };
+                }
+              ).classes;
               const mat = (a as { matieres: { name: string } }).matieres;
               return (
                 <Link key={(a as { id: string }).id} to={`/classes/${cls.id}`}>

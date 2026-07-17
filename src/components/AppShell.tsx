@@ -78,7 +78,9 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
     { to: "/mes-notes", label: "Mes notes", icon: <BookOpen className="h-4 w-4" /> },
     { to: "/mes-devoirs", label: "Mes devoirs", icon: <ClipboardList className="h-4 w-4" /> },
+    { to: "/mes-presences", label: "Mes présences", icon: <CheckCircle2 className="h-4 w-4" /> },
     { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <Calendar className="h-4 w-4" /> },
+    { to: "/mon-bulletin", label: "Mon bulletin", icon: <GraduationCap className="h-4 w-4" /> },
     { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
   ],
   parent: [

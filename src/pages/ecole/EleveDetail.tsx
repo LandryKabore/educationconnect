@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowLeft, KeyRound, Link2 } from "lucide-react";
+import { KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
@@ -25,6 +25,7 @@ import { fromAuthEmail, fullName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
+  BackLink,
   Badge,
   Button,
   Card,
@@ -345,13 +346,7 @@ export default function EleveDetail() {
   if (!student) {
     return (
       <div>
-        <Link
-          to="/eleves"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Retour aux élèves
-        </Link>
+        <BackLink to="/eleves" label="Retour aux élèves" />
         <EmptyState message="Élève introuvable." />
       </div>
     );
@@ -359,13 +354,7 @@ export default function EleveDetail() {
 
   return (
     <div>
-      <Link
-        to="/eleves"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour aux élèves
-      </Link>
+      <BackLink to="/eleves" label="Retour aux élèves" />
 
       <PageHeader
         title={fullName(student.first_name, student.last_name)}

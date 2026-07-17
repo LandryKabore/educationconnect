@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { KeyRound, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
 import { compareClassesByProgression, sortClassesByProgression } from "@/lib/classCatalog";
 import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
 import {
@@ -53,6 +55,7 @@ export default function Enseignants() {
     Record<string, string[]>
   >({});
   const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const openAssign = (preselectTeacherId: string) => {
     setShowAssign(true);
     setShowForm(false);
@@ -145,6 +148,71 @@ export default function Enseignants() {
       tempPassword: null,
       used: false,
     };
+  };
+
+  const invalidateTeacherQueries = () => {
+    void qc.invalidateQueries({ queryKey: ["enseignants", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["identifiants-enseignants", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
+  };
+
+  const runCredentialAction = async (
+    teacher: Profile,
+    action: "reset_password" | "recovery_link",
+  ) => {
+    if (!schoolId) return;
+    setBusyId(teacher.id);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "gerer-identifiant",
+        {
+          body: {
+            action,
+            userId: teacher.id,
+            schoolId,
+            redirectTo: `${window.location.origin}/premiere-connexion`,
+          },
+        },
+      );
+      if (error) throw error;
+      const res = data as {
+        error?: string;
+        tempPassword?: string;
+        username?: string;
+        recoveryLink?: string;
+      };
+      if (res.error) throw new Error(res.error);
+
+      if (action === "reset_password" && res.tempPassword) {
+        const creds = `${res.username}\n${res.tempPassword}`;
+        toast.success("Nouveau mot de passe temporaire", {
+          description: `${res.username ?? ""} · ${res.tempPassword}`,
+          action: {
+            label: "Copier",
+            onClick: () => void copyToClipboard(creds),
+          },
+          duration: 30_000,
+        });
+        invalidateTeacherQueries();
+      } else if (action === "recovery_link" && res.recoveryLink) {
+        const copied = await copyToClipboard(res.recoveryLink);
+        if (copied) {
+          toast.success("Lien de réinitialisation copié", {
+            description: "Envoyez-le à l’enseignant.",
+            duration: 12_000,
+          });
+        } else {
+          toast.success("Lien de réinitialisation", {
+            description: res.recoveryLink,
+            duration: 60_000,
+          });
+        }
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action impossible");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const { data: classesRaw = [] } = useQuery({
@@ -630,6 +698,7 @@ export default function Enseignants() {
               {filteredTeachers.map((t) => {
                 const cred = credentialFor(t);
                 const teacherAssignments = assignmentsByTeacher.get(t.id) ?? [];
+                const busy = busyId === t.id;
                 return (
                   <Card key={t.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -643,33 +712,54 @@ export default function Enseignants() {
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                           <span className="text-slate-500">Identifiant</span>
                           <Badge>{cred.username}</Badge>
-                          {cred.tempPassword ? (
+                          {cred.tempPassword && !cred.used ? (
                             <>
                               <span className="text-slate-500">Mot de passe</span>
                               <Badge tone="warning">{cred.tempPassword}</Badge>
-                              {cred.used ? (
-                                <span className="text-xs text-slate-400">
-                                  (déjà utilisé)
-                                </span>
-                              ) : null}
                             </>
                           ) : (
                             <span className="text-xs text-slate-400">
-                              Mot de passe non disponible
+                              Mot de passe temporaire non affiché
                             </span>
                           )}
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openAssign(t.id)}
-                      >
-                        {teacherAssignments.length > 0
-                          ? "Affecter à d’autres classes"
-                          : "Affecter à une classe"}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void runCredentialAction(t, "reset_password")
+                          }
+                        >
+                          <KeyRound className="mr-1 h-3.5 w-3.5" />
+                          {busy ? "…" : "Nouveau mot de passe"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void runCredentialAction(t, "recovery_link")
+                          }
+                        >
+                          <Link2 className="mr-1 h-3.5 w-3.5" />
+                          Lien oublié
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openAssign(t.id)}
+                        >
+                          {teacherAssignments.length > 0
+                            ? "Affecter à d’autres classes"
+                            : "Affecter à une classe"}
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="mt-4 border-t border-slate-100 pt-3">
