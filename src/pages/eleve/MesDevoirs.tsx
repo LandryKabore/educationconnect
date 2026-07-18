@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, isPast, parseISO } from "date-fns";
+import { isPast } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +11,7 @@ import {
   assignmentKindSubmittedToast,
   type AssignmentKind,
 } from "@/lib/assignmentKinds";
+import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { Assignment } from "@/lib/types";
 import {
@@ -134,16 +135,12 @@ export default function MesDevoirs({ kind }: Props) {
           {assignments.map((a) => {
             const submission = a.rendus_devoirs?.[0];
             const done = !!submission?.submitted_at;
-            const overdue =
-              !done &&
-              a.due_date &&
-              isPast(
-                parseISO(
-                  a.due_date.length === 10
-                    ? `${a.due_date}T23:59:59`
-                    : a.due_date,
-                ),
-              );
+            const dueAt = parseValidDate(
+              a.due_date?.length === 10
+                ? `${a.due_date}T23:59:59`
+                : a.due_date,
+            );
+            const overdue = !done && !!dueAt && isPast(dueAt);
             const busy = busyId === a.id;
             return (
               <Card key={a.id}>
@@ -169,7 +166,7 @@ export default function MesDevoirs({ kind }: Props) {
                 {a.due_date ? (
                   <p className="mt-1 text-xs text-slate-400">
                     {kind === "examen" ? "Date : " : "Échéance : "}
-                    {format(new Date(a.due_date), "d MMMM yyyy", {
+                    {formatDateSafe(a.due_date, "d MMMM yyyy", {
                       locale: fr,
                     })}
                   </p>
@@ -179,13 +176,11 @@ export default function MesDevoirs({ kind }: Props) {
                   <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-sm">
                     <p className="font-medium text-emerald-900">
                       Rendu le{" "}
-                      {submission.submitted_at
-                        ? format(
-                            new Date(submission.submitted_at),
-                            "d MMM yyyy à HH:mm",
-                            { locale: fr },
-                          )
-                        : "—"}
+                      {formatDateSafe(
+                        submission.submitted_at,
+                        "d MMM yyyy à HH:mm",
+                        { locale: fr },
+                      )}
                     </p>
                     {submission.content ? (
                       <p className="mt-1 whitespace-pre-wrap text-slate-700">

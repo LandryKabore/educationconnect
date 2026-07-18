@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   Bell,
@@ -21,6 +20,7 @@ import {
   relativeFr,
   snippet,
 } from "@/components/PortalHomeKit";
+import { formatDateSafe } from "@/lib/dateFr";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
@@ -403,7 +403,7 @@ export default function StudentHome() {
                         </div>
                         {d.due_date ? (
                           <span className="shrink-0 text-xs font-medium text-amber-800">
-                            {format(parseISO(d.due_date), "d MMM", {
+                            {formatDateSafe(d.due_date, "d MMM", {
                               locale: fr,
                             })}
                           </span>
@@ -447,7 +447,7 @@ export default function StudentHome() {
                       {m.subject?.trim() || "Annonce"}
                     </p>
                     <span className="shrink-0 text-[11px] text-slate-400">
-                      {format(new Date(m.created_at), "d/MM/yyyy")}
+                      {formatDateSafe(m.created_at, "d/MM/yyyy")}
                     </span>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-slate-500">

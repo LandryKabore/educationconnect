@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +11,7 @@ import {
   assignmentKindLabel,
   type AssignmentKind,
 } from "@/lib/assignmentKinds";
+import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { Assignment, ClassSection, Subject } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
@@ -218,7 +218,7 @@ export default function Devoirs({ kind }: Props) {
               {a.due_date ? (
                 <p className="mt-1 text-xs text-slate-400">
                   {kind === "examen" ? "Le " : "À rendre avant le "}
-                  {format(new Date(a.due_date), "d MMMM yyyy", { locale: fr })}
+                  {formatDateSafe(a.due_date, "d MMMM yyyy", { locale: fr })}
                 </p>
               ) : null}
             </Card>

@@ -5,6 +5,7 @@ import { fr } from "date-fns/locale";
 import { ArrowLeft, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, MessageRow, Profile } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
@@ -72,14 +73,15 @@ const ANNOUNCE_ROLE_OPTIONS: { value: ContactRole; label: string }[] = [
 ];
 
 function formatSeenAt(iso: string) {
-  return format(new Date(iso), "d MMM yyyy à HH:mm", { locale: fr });
+  return formatDateSafe(iso, "d MMM yyyy à HH:mm", { locale: fr });
 }
 
 function formatConvoTime(iso: string) {
-  const date = new Date(iso);
+  const date = parseValidDate(iso);
+  if (!date) return "—";
   return isToday(date)
-    ? format(date, "HH:mm")
-    : format(date, "d MMM", { locale: fr });
+    ? formatDateSafe(date, "HH:mm")
+    : formatDateSafe(date, "d MMM", { locale: fr });
 }
 
 function initials(name: string) {
@@ -114,11 +116,8 @@ function pushContact(
 
 function formatContactDob(iso: string | null | undefined) {
   if (!iso) return null;
-  try {
-    return format(new Date(iso), "dd/MM/yyyy");
-  } catch {
-    return null;
-  }
+  const formatted = formatDateSafe(iso, "dd/MM/yyyy", { fallback: "" });
+  return formatted || null;
 }
 
 function contactDisplayName(c: MessageContact) {
@@ -1330,7 +1329,7 @@ export default function Messages() {
                           <Badge tone="default">Vu</Badge>
                         )}
                         <span className="text-xs text-slate-400">
-                          {format(new Date(m.created_at), "d MMM yyyy", {
+                          {formatDateSafe(m.created_at, "d MMM yyyy", {
                             locale: fr,
                           })}
                         </span>
@@ -1446,7 +1445,7 @@ export default function Messages() {
                                   </span>
                                 ) : null}
                                 <span>
-                                  {format(new Date(m.created_at), "HH:mm")}
+                                  {formatDateSafe(m.created_at, "HH:mm")}
                                 </span>
                               </div>
                             </div>

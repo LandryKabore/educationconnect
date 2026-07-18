@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import {
   Bell,
   BookOpen,
@@ -23,6 +22,7 @@ import {
   snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import { formatDateSafe } from "@/lib/dateFr";
 import { enterSetupGuide } from "@/components/SetupGuideBar";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
@@ -359,7 +359,7 @@ export default function EcoleOverview() {
                             {m.subject?.trim() || "Annonce"}
                           </p>
                           <span className="shrink-0 text-[11px] text-slate-400">
-                            {format(new Date(m.created_at), "d/MM/yyyy")}
+                            {formatDateSafe(m.created_at, "d/MM/yyyy")}
                           </span>
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500">

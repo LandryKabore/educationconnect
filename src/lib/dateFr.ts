@@ -1,5 +1,8 @@
 /** French date helpers: display JJ/MM/AAAA, store ISO YYYY-MM-DD. */
 
+import { format, isValid, parseISO } from "date-fns";
+import type { Locale } from "date-fns";
+
 export function isoToFr(iso: string): string {
   const v = iso.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "";
@@ -40,4 +43,41 @@ export function formatFrDateInput(raw: string): string {
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/** Never throws — returns null for empty / garbage timestamps. */
+export function parseValidDate(
+  value: string | Date | null | undefined,
+): Date | null {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return isValid(value) ? value : null;
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  // Prefer parseISO for Postgres date / timestamptz strings
+  const iso = parseISO(trimmed);
+  if (isValid(iso)) return iso;
+
+  const fallback = new Date(trimmed);
+  return isValid(fallback) ? fallback : null;
+}
+
+/** Safe date-fns format — never throws "Invalid time value". */
+export function formatDateSafe(
+  value: string | Date | null | undefined,
+  pattern: string,
+  options?: { locale?: Locale; fallback?: string },
+): string {
+  const d = parseValidDate(value);
+  if (!d) return options?.fallback ?? "—";
+  try {
+    return format(
+      d,
+      pattern,
+      options?.locale ? { locale: options.locale } : undefined,
+    );
+  } catch {
+    return options?.fallback ?? "—";
+  }
 }
