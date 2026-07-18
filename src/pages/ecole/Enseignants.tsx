@@ -238,30 +238,44 @@ export default function Enseignants() {
   } = useQuery({
     queryKey: [
       "programme-classe-subjects-by-class",
+      schoolId,
       classIds.slice().sort().join(","),
     ],
-    enabled: classIds.length > 0,
+    enabled: !!schoolId && classIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("programme_classe")
-        .select("class_section_id, subject_id, matieres(*)")
-        .in("class_section_id", classIds);
+        .from("classes")
+        .select("id, programme_classe(subject_id, matieres(*))")
+        .eq("school_id", schoolId!)
+        .in("id", classIds);
       if (error) throw error;
 
+      const selected = new Set(classIds);
       const map: Record<string, Subject[]> = {};
       for (const id of classIds) map[id] = [];
 
       const seen = new Map<string, Set<string>>();
-      for (const row of data ?? []) {
-        const classSectionId = row.class_section_id as string;
-        const s = (row as unknown as { matieres: Subject | null }).matieres;
-        if (!s) continue;
-        const used = seen.get(classSectionId) ?? new Set<string>();
-        if (used.has(s.id)) continue;
-        used.add(s.id);
-        seen.set(classSectionId, used);
-        if (!map[classSectionId]) map[classSectionId] = [];
-        map[classSectionId].push(s);
+      for (const cls of data ?? []) {
+        const classSectionId = cls.id as string;
+        if (!selected.has(classSectionId)) continue;
+        const rows = (
+          cls as {
+            programme_classe?: {
+              subject_id: string;
+              matieres: Subject | null;
+            }[] | null;
+          }
+        ).programme_classe;
+        if (!Array.isArray(rows)) continue;
+        for (const row of rows) {
+          const s = row.matieres;
+          if (!s) continue;
+          const used = seen.get(classSectionId) ?? new Set<string>();
+          if (used.has(s.id)) continue;
+          used.add(s.id);
+          seen.set(classSectionId, used);
+          map[classSectionId].push(s);
+        }
       }
 
       for (const id of Object.keys(map)) {
@@ -302,20 +316,41 @@ export default function Enseignants() {
     classIds.every((id) => (subjectsByClassSelection[id] ?? []).length > 0);
 
   const { data: assignments = [] } = useQuery({
-    queryKey: ["affectations", schoolId],
-    enabled: !!schoolId && classes.length > 0,
+    queryKey: ["affectations", schoolId, "v4"],
+    enabled: !!schoolId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("affectations_enseignement")
-        .select(
-          "id, teacher_id, class_section_id, subject_id, classes(name), matieres(name)",
-        )
-        .in(
-          "class_section_id",
-          classes.map((c) => c.id),
-        );
-      if (error) throw error;
-      return (data ?? []) as unknown as AssignmentRow[];
+      const { data: schoolClasses, error: classError } = await supabase
+        .from("classes")
+        .select("id, name")
+        .eq("school_id", schoolId!);
+      if (classError) throw classError;
+      const classList = (schoolClasses ?? []) as { id: string; name: string }[];
+      if (classList.length === 0) return [] as AssignmentRow[];
+
+      const nameById = new Map(classList.map((c) => [c.id, c.name]));
+      const ids = classList.map((c) => c.id);
+      const rows: AssignmentRow[] = [];
+      const chunkSize = 50;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data, error } = await supabase
+          .from("affectations_enseignement")
+          .select("id, teacher_id, class_section_id, subject_id, matieres(name)")
+          .in("class_section_id", chunk);
+        if (error) throw error;
+        for (const a of data ?? []) {
+          const classId = a.class_section_id as string;
+          rows.push({
+            id: a.id as string,
+            teacher_id: a.teacher_id as string,
+            class_section_id: classId,
+            subject_id: a.subject_id as string,
+            classes: { name: nameById.get(classId) ?? "—" },
+            matieres: (a as { matieres: { name: string } | null }).matieres,
+          });
+        }
+      }
+      return rows;
     },
   });
 

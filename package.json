@@ -13,6 +13,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "electron:multi": "wait-on http://localhost:5173 && concurrently -k \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=1 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=2 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=3 electron .\"",
     "electron:pack": "npm run build:electron && electron-builder --dir",
     "dist:win": "npm run build:electron && electron-builder --win nsis portable",
     "dist:mac": "npm run build:electron && electron-builder --mac dmg",

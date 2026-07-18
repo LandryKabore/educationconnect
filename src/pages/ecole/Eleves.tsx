@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
+import { fetchEnrollmentsByStudent, fetchByIdChunks } from "@/lib/programmeCounts";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -117,6 +118,9 @@ export default function Eleves() {
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Selected class id, or `__none__` for students without a class */
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [bulkClassId, setBulkClassId] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
 
   const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
@@ -136,7 +140,7 @@ export default function Eleves() {
   );
 
   const { data: students = [], isLoading } = useQuery({
-    queryKey: ["eleves", schoolId],
+    queryKey: ["eleves", schoolId, "v4"],
     enabled: !!schoolId,
     queryFn: async () => {
       const { data: roles, error } = await supabase
@@ -151,32 +155,7 @@ export default function Eleves() {
       );
       if (!profiles.length) return [];
 
-      const { data: enrollments } = await supabase
-        .from("inscriptions")
-        .select("student_id, class_section_id, classes(name)")
-        .eq("status", "active")
-        .in(
-          "student_id",
-          profiles.map((p) => p.id),
-        );
-
-      const classByStudent = new Map<
-        string,
-        { id: string; name: string }
-      >();
-      for (const row of enrollments ?? []) {
-        const r = row as unknown as {
-          student_id: string;
-          class_section_id: string;
-          classes?: { name: string } | null;
-        };
-        if (r.class_section_id) {
-          classByStudent.set(r.student_id, {
-            id: r.class_section_id,
-            name: r.classes?.name ?? "Classe",
-          });
-        }
-      }
+      const classByStudent = await fetchEnrollmentsByStudent(schoolId!);
 
       return profiles.map((p) => {
         const cls = classByStudent.get(p.id);
@@ -195,16 +174,22 @@ export default function Eleves() {
     queryKey: ["identifiants-eleves", schoolId, studentIds.join(",")],
     enabled: !!schoolId && studentIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("identifiants_temporaires")
-        .select("user_id, username, temp_password_hint, used")
-        .in("user_id", studentIds);
-      if (error) throw error;
+      const rows = await fetchByIdChunks<{
+        user_id: string;
+        username: string;
+        temp_password_hint: string | null;
+        used: boolean;
+      }>(
+        "identifiants_temporaires",
+        "user_id",
+        studentIds,
+        "user_id, username, temp_password_hint, used",
+      );
       const map: Record<string, StudentCredential> = {};
-      for (const row of data ?? []) {
-        map[row.user_id as string] = {
-          username: row.username as string,
-          tempPassword: (row.temp_password_hint as string | null) ?? null,
+      for (const row of rows) {
+        map[row.user_id] = {
+          username: row.username,
+          tempPassword: row.temp_password_hint ?? null,
           used: Boolean(row.used),
         };
       }
@@ -258,6 +243,73 @@ export default function Eleves() {
     () => students.filter((s) => !s.classSectionId).length,
     [students],
   );
+
+  const viewingSansClasse = selectedClassId === "__none__";
+
+  const allFilteredSelected =
+    viewingSansClasse &&
+    filteredStudents.length > 0 &&
+    filteredStudents.every((s) => selectedStudentIds.includes(s.id));
+
+  const toggleStudentSelected = (id: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      const filteredSet = new Set(filteredStudents.map((s) => s.id));
+      setSelectedStudentIds((prev) => prev.filter((id) => !filteredSet.has(id)));
+      return;
+    }
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      for (const s of filteredStudents) next.add(s.id);
+      return [...next];
+    });
+  };
+
+  const handleBulkAssignClass = async () => {
+    if (!viewingSansClasse) return;
+    if (selectedStudentIds.length === 0) {
+      toast.error("Sélectionnez au moins un élève");
+      return;
+    }
+    if (!bulkClassId) {
+      toast.error("Choisissez une classe");
+      return;
+    }
+    const target = classes.find((c) => c.id === bulkClassId);
+    if (!target?.academic_year_id) {
+      toast.error("Cette classe n’a pas d’année scolaire");
+      return;
+    }
+
+    setBulkAssigning(true);
+    try {
+      const payload = selectedStudentIds.map((studentId) => ({
+        student_id: studentId,
+        class_section_id: bulkClassId,
+        academic_year_id: target.academic_year_id,
+        status: "active",
+      }));
+      const { error } = await supabase.from("inscriptions").insert(payload);
+      if (error) throw error;
+      toast.success(
+        `${payload.length} élève${payload.length > 1 ? "s" : ""} affecté${payload.length > 1 ? "s" : ""} en ${target.name}`,
+      );
+      setSelectedStudentIds([]);
+      setBulkClassId("");
+      invalidateStudentQueries();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Affectation impossible",
+      );
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
 
   const invalidateStudentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
@@ -588,15 +640,19 @@ export default function Eleves() {
               {sansClasseCount} élève{sansClasseCount > 1 ? "s" : ""} sans classe
             </p>
             <p className="mt-0.5 text-amber-800">
-              Sélectionnez « Sans classe » pour les voir, puis ouvrez leur profil
-              pour les affecter.
+              Sélectionnez « Sans classe », cochez les élèves, puis affectez-les
+              en masse à une classe.
             </p>
           </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => setSelectedClassId("__none__")}
+            onClick={() => {
+              setSelectedClassId("__none__");
+              setSelectedStudentIds([]);
+              setBulkClassId("");
+            }}
           >
             Voir sans classe
           </Button>
@@ -989,6 +1045,8 @@ export default function Eleves() {
               onChange={(e) => {
                 setSelectedClassId(e.target.value);
                 setSearch("");
+                setSelectedStudentIds([]);
+                setBulkClassId("");
               }}
             >
               <option value="">Choisir une classe…</option>
@@ -1029,6 +1087,62 @@ export default function Eleves() {
                   Télécharger les mots de passe temporaires
                 </Button>
               </div>
+              {viewingSansClasse && filteredStudents.length > 0 ? (
+                <Card className="border-amber-200 bg-amber-50/60">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAllFiltered}
+                      />
+                      Tout sélectionner ({filteredStudents.length})
+                    </label>
+                    <div className="min-w-[12rem] flex-1">
+                      <Label htmlFor="bulk-class">Classe cible</Label>
+                      <Select
+                        id="bulk-class"
+                        value={bulkClassId}
+                        onChange={(e) => setBulkClassId(e.target.value)}
+                      >
+                        <option value="">Choisir…</option>
+                        {classes.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={
+                        bulkAssigning ||
+                        selectedStudentIds.length === 0 ||
+                        !bulkClassId ||
+                        classes.length === 0
+                      }
+                      onClick={() => void handleBulkAssignClass()}
+                    >
+                      {bulkAssigning
+                        ? "Affectation…"
+                        : `Affecter (${selectedStudentIds.length})`}
+                    </Button>
+                  </div>
+                  {selectedStudentIds.length > 0 ? (
+                    <p className="mt-2 text-xs text-amber-900">
+                      {selectedStudentIds.length} élève
+                      {selectedStudentIds.length > 1 ? "s" : ""} sélectionné
+                      {selectedStudentIds.length > 1 ? "s" : ""}.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-800">
+                      Cochez les élèves à affecter, choisissez une classe, puis
+                      validez.
+                    </p>
+                  )}
+                </Card>
+              ) : null}
               <p className="text-sm text-slate-500">
                 {filteredStudents.length} élève
                 {filteredStudents.length !== 1 ? "s" : ""}
@@ -1052,64 +1166,82 @@ export default function Eleves() {
                     const cred = credentialFor(s);
                     const status = accountStatus(s, cred);
                     const busy = busyId === s.id;
+                    const checked = selectedStudentIds.includes(s.id);
                     return (
                       <Card
                         key={s.id}
-                        className="transition hover:border-brand-300 hover:shadow-md"
+                        className={
+                          viewingSansClasse && checked
+                            ? "border-brand-300 bg-brand-50/40 transition hover:border-brand-300 hover:shadow-md"
+                            : "transition hover:border-brand-300 hover:shadow-md"
+                        }
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
-                          <Link
-                            to={`/eleves/${s.id}`}
-                            className="flex min-w-0 flex-1 items-start gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
-                          >
-                            <ProfileAvatar
-                              userId={s.id}
-                              avatarUrl={s.avatar_url}
-                              name={fullName(s.first_name, s.last_name)}
-                              size="sm"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <h4 className="font-semibold text-slate-900 hover:text-brand-800">
-                                {fullName(s.first_name, s.last_name)}
-                              </h4>
-                              {s.phone ? (
-                                <p className="text-sm text-slate-500">
-                                  {s.phone}
-                                </p>
-                              ) : null}
-                              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                                <span className="text-slate-500">
-                                  Identifiant
-                                </span>
-                                <Badge>{cred.username}</Badge>
-                                {cred.tempPassword && !cred.used ? (
-                                  <>
-                                    <span className="text-slate-500">
-                                      Mot de passe
-                                    </span>
-                                    <Badge tone="warning">
-                                      {cred.tempPassword}
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-slate-400">
-                                    Mot de passe temporaire non affiché
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <Badge tone={status.tone}>{status.label}</Badge>
-                                {status.detail ? (
-                                  <span className="text-xs text-slate-400">
-                                    {status.detail}
-                                  </span>
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                            {viewingSansClasse ? (
+                              <input
+                                type="checkbox"
+                                className="mt-2 h-4 w-4 shrink-0 rounded border-slate-300"
+                                checked={checked}
+                                onChange={() => toggleStudentSelected(s.id)}
+                                aria-label={`Sélectionner ${fullName(s.first_name, s.last_name)}`}
+                              />
+                            ) : null}
+                            <Link
+                              to={`/eleves/${s.id}`}
+                              className="flex min-w-0 flex-1 items-start gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
+                            >
+                              <ProfileAvatar
+                                userId={s.id}
+                                avatarUrl={s.avatar_url}
+                                name={fullName(s.first_name, s.last_name)}
+                                size="sm"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-semibold text-slate-900 hover:text-brand-800">
+                                  {fullName(s.first_name, s.last_name)}
+                                </h4>
+                                {s.phone ? (
+                                  <p className="text-sm text-slate-500">
+                                    {s.phone}
+                                  </p>
                                 ) : null}
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                                  <span className="text-slate-500">
+                                    Identifiant
+                                  </span>
+                                  <Badge>{cred.username}</Badge>
+                                  {cred.tempPassword && !cred.used ? (
+                                    <>
+                                      <span className="text-slate-500">
+                                        Mot de passe
+                                      </span>
+                                      <Badge tone="warning">
+                                        {cred.tempPassword}
+                                      </Badge>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">
+                                      Mot de passe temporaire non affiché
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <Badge tone={status.tone}>
+                                    {status.label}
+                                  </Badge>
+                                  {status.detail ? (
+                                    <span className="text-xs text-slate-400">
+                                      {status.detail}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-2 text-xs font-medium text-brand-700">
+                                  Voir le profil →
+                                </p>
                               </div>
-                              <p className="mt-2 text-xs font-medium text-brand-700">
-                                Voir le profil →
-                              </p>
-                            </div>
-                          </Link>
+                            </Link>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"

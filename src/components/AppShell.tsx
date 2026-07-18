@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
+import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui";
@@ -31,7 +32,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
-  badgeKey?: "eleves-sans-classe";
+  badgeKey?: "eleves-sans-classe" | "messages-unread";
 }
 
 const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -67,12 +68,12 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/parents", label: "Parents", icon: <Users className="h-4 w-4" /> },
     { to: "/emplois-du-temps", label: "Emplois du temps", icon: <Calendar className="h-4 w-4" /> },
     { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
-    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
   teacher: [
     { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
     { to: "/devoirs", label: "Devoirs", icon: <ClipboardList className="h-4 w-4" /> },
-    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
   student: [
     { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -81,12 +82,12 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/mes-presences", label: "Mes présences", icon: <CheckCircle2 className="h-4 w-4" /> },
     { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <Calendar className="h-4 w-4" /> },
     { to: "/mon-bulletin", label: "Mon bulletin", icon: <GraduationCap className="h-4 w-4" /> },
-    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
   parent: [
     { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
     { to: "/enfants", label: "Enfants", icon: <Users className="h-4 w-4" /> },
-    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" /> },
+    { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
 };
 
@@ -137,10 +138,22 @@ export function AppShell() {
     schools[0]?.name;
 
   const { data: sansClasseCount = 0 } = useStudentsWithoutClassCount();
+  const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
 
-  const badgeFor = (item: NavItem) => {
+  const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" } | null => {
     if (item.badgeKey === "eleves-sans-classe" && sansClasseCount > 0) {
-      return sansClasseCount;
+      return {
+        count: sansClasseCount,
+        title: `${sansClasseCount} élève(s) sans classe`,
+        tone: "amber",
+      };
+    }
+    if (item.badgeKey === "messages-unread" && unreadMessagesCount > 0) {
+      return {
+        count: unreadMessagesCount,
+        title: `${unreadMessagesCount} message(s) non lu(s)`,
+        tone: "rose",
+      };
     }
     return null;
   };
@@ -228,10 +241,13 @@ export function AppShell() {
                 <span className="flex-1">{item.label}</span>
                 {badge != null ? (
                   <span
-                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
-                    title={`${badge} élève(s) sans classe`}
+                    className={cn(
+                      "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white",
+                      badge.tone === "rose" ? "bg-rose-500" : "bg-amber-500",
+                    )}
+                    title={badge.title}
                   >
-                    {badge > 99 ? "99+" : badge}
+                    {badge.count > 99 ? "99+" : badge.count}
                   </span>
                 ) : null}
               </Link>

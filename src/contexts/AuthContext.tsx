@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type Context,
   type ReactNode,
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
@@ -42,7 +43,15 @@ interface AuthState {
   homePath: string;
 }
 
-const AuthContext = createContext<AuthState | null>(null);
+const authContextGlobal = globalThis as typeof globalThis & {
+  __edufasoAuthContext?: Context<AuthState | null>;
+};
+
+// Reuse the same Context across Vite HMR so useAuth doesn't go blank mid-session.
+const AuthContext =
+  authContextGlobal.__edufasoAuthContext ??
+  createContext<AuthState | null>(null);
+authContextGlobal.__edufasoAuthContext = AuthContext;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

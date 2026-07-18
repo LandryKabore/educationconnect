@@ -16,6 +16,7 @@ import {
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import { fetchProgrammeCountsByClass } from "@/lib/programmeCounts";
 import { cn } from "@/lib/utils";
 import {
   Button,
@@ -82,18 +83,16 @@ export default function Classes() {
     },
   });
 
-  const { data: classesWithProg = new Set<string>() } = useQuery({
-    queryKey: ["classes-with-programme", schoolId],
-    enabled: !!schoolId && classes.length > 0,
-    queryFn: async () => {
-      const ids = classes.map((c) => c.id);
-      const { data } = await supabase
-        .from("programme_classe")
-        .select("class_section_id")
-        .in("class_section_id", ids);
-      return new Set((data ?? []).map((r) => r.class_section_id as string));
-    },
+  const { data: programmeCounts = {} } = useQuery({
+    queryKey: ["classes-with-programme", schoolId, "v4"],
+    enabled: !!schoolId,
+    queryFn: () => fetchProgrammeCountsByClass(schoolId!),
   });
+
+  const classesWithProg = useMemo(
+    () => new Set(Object.keys(programmeCounts)),
+    [programmeCounts],
+  );
 
   const classesForYear = useMemo(
     () =>
@@ -538,7 +537,9 @@ export default function Classes() {
                       hasProg ? "text-emerald-700" : "text-amber-700",
                     )}
                   >
-                    {hasProg ? "Programme" : "À faire"}
+                    {hasProg
+                      ? `${programmeCounts[c.id] ?? 0} matière(s)`
+                      : "À faire"}
                   </span>
                 </Link>
               );

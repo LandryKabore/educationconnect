@@ -30,6 +30,8 @@ type MessageContact = {
   first_name: string;
   last_name: string;
   role: ContactRole;
+  class_name: string | null;
+  date_of_birth: string | null;
 };
 
 type InboxMessage = MessageRow & {
@@ -96,6 +98,7 @@ function pushContact(
   profile: Profile | null | undefined,
   role: ContactRole,
   selfId?: string,
+  className?: string | null,
 ) {
   if (!profile?.id || profile.id === selfId) return;
   if (map.has(profile.id)) return;
@@ -104,7 +107,28 @@ function pushContact(
     first_name: profile.first_name,
     last_name: profile.last_name,
     role,
+    class_name: className ?? null,
+    date_of_birth: profile.date_of_birth ?? null,
   });
+}
+
+function formatContactDob(iso: string | null | undefined) {
+  if (!iso) return null;
+  try {
+    return format(new Date(iso), "dd/MM/yyyy");
+  } catch {
+    return null;
+  }
+}
+
+function contactDisplayName(c: MessageContact) {
+  const name = fullName(c.first_name, c.last_name);
+  const parts: string[] = [];
+  if (c.role === "student" && c.class_name) parts.push(c.class_name);
+  parts.push(name);
+  const dob = formatContactDob(c.date_of_birth);
+  if (c.role === "student" && dob) parts.push(dob);
+  return parts.join(" · ");
 }
 
 export default function Messages() {
@@ -366,12 +390,41 @@ export default function Messages() {
         }
       }
 
-      return [...map.values()].sort((a, b) =>
-        fullName(a.first_name, a.last_name).localeCompare(
+      const studentIds = [...map.values()]
+        .filter((c) => c.role === "student")
+        .map((c) => c.id);
+      if (studentIds.length > 0) {
+        const { data: enrollments } = await supabase
+          .from("inscriptions")
+          .select("student_id, classes(name)")
+          .eq("status", "active")
+          .in("student_id", studentIds);
+        for (const row of enrollments ?? []) {
+          const r = row as unknown as {
+            student_id: string;
+            classes?: { name: string } | null;
+          };
+          const existing = map.get(r.student_id);
+          if (existing && r.classes?.name) {
+            map.set(r.student_id, {
+              ...existing,
+              class_name: r.classes.name,
+            });
+          }
+        }
+      }
+
+      return [...map.values()].sort((a, b) => {
+        const classCmp = (a.class_name ?? "").localeCompare(
+          b.class_name ?? "",
+          "fr",
+        );
+        if (classCmp !== 0) return classCmp;
+        return fullName(a.first_name, a.last_name).localeCompare(
           fullName(b.first_name, b.last_name),
           "fr",
-        ),
-      );
+        );
+      });
     },
   });
 
@@ -409,6 +462,8 @@ export default function Messages() {
           contactSearch,
           c.first_name,
           c.last_name,
+          c.class_name,
+          formatContactDob(c.date_of_birth),
           ROLE_LABELS[c.role as AppRole],
         ),
     );
@@ -543,6 +598,7 @@ export default function Messages() {
     if (!user) return;
     void qc.invalidateQueries({ queryKey: ["messages-inbox", user.id] });
     void qc.invalidateQueries({ queryKey: ["messages-sent", user.id] });
+    void qc.invalidateQueries({ queryKey: ["messages-unread-count", user.id] });
   };
 
   const openChat = (otherId: string) => {
@@ -568,6 +624,9 @@ export default function Messages() {
         () => {
           void qc.invalidateQueries({ queryKey: ["messages-inbox", user.id] });
           void qc.invalidateQueries({ queryKey: ["messages-sent", user.id] });
+          void qc.invalidateQueries({
+            queryKey: ["messages-unread-count", user.id],
+          });
         },
       )
       .on(
@@ -581,6 +640,9 @@ export default function Messages() {
         () => {
           void qc.invalidateQueries({ queryKey: ["messages-inbox", user.id] });
           void qc.invalidateQueries({ queryKey: ["messages-sent", user.id] });
+          void qc.invalidateQueries({
+            queryKey: ["messages-unread-count", user.id],
+          });
         },
       )
       .subscribe();
@@ -623,6 +685,9 @@ export default function Messages() {
             unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m,
           ),
       );
+      void qc.invalidateQueries({
+        queryKey: ["messages-unread-count", user.id],
+      });
     })();
   }, [tab, selectedOtherId, user, selectedConversation, inboxLoading, qc]);
 
@@ -653,6 +718,9 @@ export default function Messages() {
             unreadIds.includes(m.id) ? { ...m, read_at: readAt } : m,
           ),
       );
+      void qc.invalidateQueries({
+        queryKey: ["messages-unread-count", user.id],
+      });
     })();
   }, [tab, user, announcementInbox, inboxLoading, qc]);
 
@@ -911,7 +979,7 @@ export default function Messages() {
       />
 
       {tab === "announce" && canAnnounce ? (
-        <Card className="max-w-lg">
+        <Card className="max-w-4xl">
           <form onSubmit={(e) => void handleAnnounce(e)} className="space-y-4">
             <div>
               <p className="text-sm font-medium text-slate-800">
@@ -1012,7 +1080,7 @@ export default function Messages() {
           </form>
         </Card>
       ) : tab === "compose" ? (
-        <Card className="max-w-lg">
+        <Card className="max-w-4xl">
           <form onSubmit={(e) => void handleSend(e)} className="space-y-4">
             <div>
               <Label>Type de destinataire</Label>
@@ -1063,7 +1131,7 @@ export default function Messages() {
                         key={c.id}
                         className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs text-brand-950"
                       >
-                        {fullName(c.first_name, c.last_name)}
+                        {contactDisplayName(c)}
                         <button
                           type="button"
                           className="font-medium text-brand-700 hover:text-brand-900"
@@ -1092,7 +1160,7 @@ export default function Messages() {
                         key={c.id}
                         className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800"
                       >
-                        {fullName(c.first_name, c.last_name)}
+                        {contactDisplayName(c)}
                         <button
                           type="button"
                           className="font-medium text-slate-600 hover:text-slate-900"
@@ -1122,7 +1190,7 @@ export default function Messages() {
                 className="mb-2"
                 disabled={contactsLoading || filteredContacts.length === 0}
               />
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200">
                 {contactsLoading ? (
                   <p className="px-3 py-2 text-sm text-slate-500">Chargement…</p>
                 ) : searchedContacts.length === 0 ? (
@@ -1149,11 +1217,11 @@ export default function Messages() {
                             : "hover:bg-slate-50",
                         )}
                       >
-                        <span>{fullName(c.first_name, c.last_name)}</span>
+                        <span className="min-w-0 truncate">
+                          {contactDisplayName(c)}
+                        </span>
                         <span className="shrink-0 text-xs text-slate-500">
-                          {selected
-                            ? "✓ "
-                            : ""}
+                          {selected ? "✓ " : ""}
                           {ROLE_LABELS[c.role as AppRole] ?? c.role}
                         </span>
                       </button>

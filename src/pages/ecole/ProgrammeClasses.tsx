@@ -12,6 +12,7 @@ import {
   resolveSubjectCategory,
 } from "@/lib/subjectCatalog";
 import { sortClassesByProgression } from "@/lib/classCatalog";
+import { fetchProgrammeCountsByClass } from "@/lib/programmeCounts";
 import {
   Button,
   Card,
@@ -111,18 +112,30 @@ export default function ProgrammeClasses() {
     [subjectsByCategory],
   );
 
-  const { data: classesWithProg = new Set<string>() } = useQuery({
-    queryKey: ["classes-with-programme", schoolId],
-    enabled: !!schoolId && classes.length > 0,
-    queryFn: async () => {
-      const ids = classes.map((c) => c.id);
-      const { data } = await supabase
-        .from("programme_classe")
-        .select("class_section_id")
-        .in("class_section_id", ids);
-      return new Set((data ?? []).map((r) => r.class_section_id as string));
-    },
+  const {
+    data: programmeCounts = {},
+    isError: programmeCountsError,
+    error: programmeCountsErr,
+    refetch: refetchProgrammeCounts,
+  } = useQuery({
+    queryKey: ["classes-with-programme", schoolId, "v4"],
+    enabled: !!schoolId,
+    queryFn: () => fetchProgrammeCountsByClass(schoolId!),
   });
+
+  useEffect(() => {
+    if (!programmeCountsError) return;
+    const msg =
+      programmeCountsErr instanceof Error
+        ? programmeCountsErr.message
+        : "Impossible de charger les programmes.";
+    toast.error(msg);
+  }, [programmeCountsError, programmeCountsErr]);
+
+  const classesWithProg = useMemo(
+    () => new Set(Object.keys(programmeCounts)),
+    [programmeCounts],
+  );
 
   const ensureCoef = (id: string) => {
     setSubjectCoefs((prev) =>
@@ -252,7 +265,7 @@ export default function ProgrammeClasses() {
         </p>
       </Card>
 
-      <Card className="mb-6 max-w-lg">
+      <Card className="mb-6 max-w-5xl">
         <Label htmlFor="prog-annee">Année scolaire</Label>
         {years.length === 0 ? (
           <p className="mt-1 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -288,11 +301,26 @@ export default function ProgrammeClasses() {
       ) : classesForYear.length === 0 ? (
         <EmptyState message="Créez d’abord des classes pour cette année." />
       ) : (
-        <Card className="mb-6">
+        <Card className="mb-6 max-w-5xl">
           <p className="mb-5 text-sm text-slate-500">
             Progression : {doneCount}/{classesForYear.length} classe(s) avec
             programme
+            {doneCount > 0
+              ? " — ouvrez une classe ci-dessous pour voir les matières et coefficients."
+              : ""}
           </p>
+          {programmeCountsError ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              Impossible de charger les programmes enregistrés.{" "}
+              <button
+                type="button"
+                className="font-medium underline"
+                onClick={() => void refetchProgrammeCounts()}
+              >
+                Réessayer
+              </button>
+            </div>
+          ) : null}
 
           <div className="space-y-6">
             <div>
@@ -466,7 +494,8 @@ export default function ProgrammeClasses() {
               <div className="max-h-56 grid gap-1 overflow-y-auto rounded-xl border border-slate-200 p-2 sm:grid-cols-2 lg:grid-cols-3">
                 {classesForYear.map((c) => {
                   const checked = progClasses.has(c.id);
-                  const hasProg = classesWithProg.has(c.id);
+                  const subjectCount = programmeCounts[c.id] ?? 0;
+                  const hasProg = subjectCount > 0;
                   return (
                     <label
                       key={c.id}
@@ -483,9 +512,13 @@ export default function ProgrammeClasses() {
                       />
                       <span className="min-w-0 flex-1 font-medium">{c.name}</span>
                       {hasProg ? (
-                        <span className="text-xs text-emerald-700">OK</span>
+                        <span className="shrink-0 text-xs text-emerald-700">
+                          OK · {subjectCount}
+                        </span>
                       ) : (
-                        <span className="text-xs text-amber-700">À faire</span>
+                        <span className="shrink-0 text-xs text-amber-700">
+                          À faire
+                        </span>
                       )}
                     </label>
                   );
@@ -517,7 +550,7 @@ export default function ProgrammeClasses() {
       )}
 
       {classesForYear.length > 0 ? (
-        <Card className="mb-6">
+        <Card className="mb-6 max-w-5xl">
           <h3 className="font-semibold text-slate-900">
             Ajuster une classe
           </h3>
@@ -527,7 +560,8 @@ export default function ProgrammeClasses() {
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {classesForYear.map((c) => {
-              const hasProg = classesWithProg.has(c.id);
+              const subjectCount = programmeCounts[c.id] ?? 0;
+              const hasProg = subjectCount > 0;
               return (
                 <Link
                   key={c.id}
@@ -537,11 +571,11 @@ export default function ProgrammeClasses() {
                   <span className="font-medium text-slate-900">{c.name}</span>
                   <span
                     className={cn(
-                      "text-xs font-medium",
+                      "shrink-0 text-xs font-medium",
                       hasProg ? "text-emerald-700" : "text-amber-700",
                     )}
                   >
-                    {hasProg ? "Ouvrir" : "À faire"}
+                    {hasProg ? `${subjectCount} matière(s)` : "À faire"}
                   </span>
                 </Link>
               );

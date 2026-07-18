@@ -2,13 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
+import { fetchEnrollmentsByStudent } from "@/lib/programmeCounts";
+
 /** Students in the school with no active class enrollment. */
 export function useStudentsWithoutClassCount() {
   const { schoolId, role } = useAuth();
   const enabled = !!schoolId && role === "school_admin";
 
   return useQuery({
-    queryKey: ["eleves-sans-classe", schoolId],
+    queryKey: ["eleves-sans-classe", schoolId, "v4"],
     enabled,
     queryFn: async () => {
       const { data: roles, error } = await supabase
@@ -21,16 +23,7 @@ export function useStudentsWithoutClassCount() {
       const ids = (roles ?? []).map((r) => r.user_id as string);
       if (ids.length === 0) return 0;
 
-      const { data: enrollments, error: enrErr } = await supabase
-        .from("inscriptions")
-        .select("student_id")
-        .eq("status", "active")
-        .in("student_id", ids);
-      if (enrErr) throw enrErr;
-
-      const enrolled = new Set(
-        (enrollments ?? []).map((e) => e.student_id as string),
-      );
+      const enrolled = await fetchEnrollmentsByStudent(schoolId!);
       return ids.filter((id) => !enrolled.has(id)).length;
     },
     staleTime: 30_000,

@@ -1,0 +1,36 @@
+---
+description: Prevent Supabase RLS recursion and silent empty UI in EduFaso
+globs: supabase/migrations/**/*.sql
+alwaysApply: false
+---
+
+# Supabase RLS — no cross-table policy recursion
+
+## What broke production UI
+
+Policies on `inscriptions` and `affectations_enseignement` used `EXISTS` into each other. Postgres then raised `infinite recursion detected in policy`, PostgREST returned HTTP 500, and the app treated failed loads as “no data” (0/45 programmes, élèves sans classe, etc.). **Data was intact.**
+
+## Rules for new / edited policies
+
+1. **Never** put `EXISTS (SELECT … FROM inscriptions …)` inside an `affectations_enseignement` policy, or the reverse, unless the subquery goes through a **`SECURITY DEFINER`** helper that sets `search_path = public`.
+2. Prefer existing helpers:
+   - `ef_user_teaches_class(class_id)`
+   - `ef_user_enrolled_in_class(class_id)`
+   - `ef_user_parent_of_student_in_class(class_id)`
+   - `ef_user_teaches_student(student_id)`
+   - `ef_is_school_admin()`, `ef_is_super_admin()`, `ef_user_school_ids()`
+3. After applying RLS migrations, verify with a real authenticated session (school admin) that key GETs succeed: `programme_classe`, `inscriptions`, `affectations_enseignement`. Watch Postgres logs for `infinite recursion`.
+4. UI loaders must **surface query errors** (toast / banner), not default empty arrays when `error` is set.
+
+## Safe pattern
+
+```sql
+-- Helper bypasses RLS → no recursion
+create or replace function public.ef_user_teaches_class(_class_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.affectations_enseignement a
+    where a.class_section_id = _class_id and a.teacher_id = auth.uid()
+  );
+$$;
+```

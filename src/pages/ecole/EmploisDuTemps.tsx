@@ -115,35 +115,48 @@ export default function EmploisDuTemps() {
   });
 
   const { data: assignments = [] } = useQuery({
-    queryKey: ["affectations", schoolId],
-    enabled: !!schoolId && classes.length > 0,
+    queryKey: ["affectations", schoolId, "v2"],
+    enabled: !!schoolId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("affectations_enseignement")
-        .select("teacher_id, class_section_id, subject_id")
-        .in(
-          "class_section_id",
-          classes.map((c) => c.id),
-        );
-      return (data ?? []) as {
+      const { data, error } = await supabase
+        .from("classes")
+        .select(
+          "id, affectations_enseignement(teacher_id, class_section_id, subject_id)",
+        )
+        .eq("school_id", schoolId!);
+      if (error) throw error;
+      const rows: {
         teacher_id: string;
         class_section_id: string;
         subject_id: string;
-      }[];
+      }[] = [];
+      for (const cls of data ?? []) {
+        const affs = (
+          cls as {
+            affectations_enseignement?: {
+              teacher_id: string;
+              class_section_id: string;
+              subject_id: string;
+            }[] | null;
+          }
+        ).affectations_enseignement;
+        if (!Array.isArray(affs)) continue;
+        for (const a of affs) rows.push(a);
+      }
+      return rows;
     },
   });
 
   const { data: slots = [], isLoading } = useQuery({
-    queryKey: ["creneaux", schoolId, classes.map((c) => c.id).join(",")],
-    enabled: !!schoolId && classes.length > 0,
+    queryKey: ["creneaux", schoolId],
+    enabled: !!schoolId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creneaux_edt")
-        .select("*, classes(name), matieres(name), profils(first_name, last_name)")
-        .in(
-          "class_section_id",
-          classes.map((c) => c.id),
+        .select(
+          "*, classes!inner(name, school_id), matieres(name), profils(first_name, last_name)",
         )
+        .eq("classes.school_id", schoolId!)
         .order("day_of_week")
         .order("start_time");
       if (error) throw error;
