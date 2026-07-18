@@ -149,6 +149,25 @@ export interface AttendanceRow {
   recorded_by: string | null;
 }
 
+export type EvaluationType =
+  | "interrogation"
+  | "devoir"
+  | "composition"
+  | "examen";
+
+export interface Evaluation {
+  id: string;
+  class_section_id: string;
+  subject_id: string;
+  teacher_id: string;
+  period_label: string;
+  type: EvaluationType;
+  title: string;
+  max_score: number;
+  eval_date: string | null;
+  created_at: string;
+}
+
 export interface GradeRow {
   id: string;
   student_id: string;
@@ -159,6 +178,10 @@ export interface GradeRow {
   max_score: number;
   comment: string | null;
   recorded_by: string | null;
+  /** Links a grade to an evaluation (null for legacy grades). */
+  evaluation_id: string | null;
+  /** Absent for this evaluation — excluded from averages. */
+  is_absent: boolean;
 }
 
 export interface Assignment {

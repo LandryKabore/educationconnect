@@ -491,11 +491,11 @@ export default function ClassDetail() {
                   <ClipboardList className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Notes</h3>
+                  <h3 className="font-semibold">Notes & évaluations</h3>
                   <p className="text-sm text-slate-500">
                     {isAdmin
-                      ? "Consulter / saisir les notes"
-                      : "Saisir les notes des élèves"}
+                      ? "Créer des évaluations et saisir les notes"
+                      : "Créer une évaluation et noter la classe"}
                   </p>
                 </div>
               </Card>

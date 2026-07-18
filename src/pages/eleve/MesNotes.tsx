@@ -7,7 +7,8 @@ import {
   formatAverage,
   programmeToCoefMap,
 } from "@/lib/averages";
-import type { GradeRow, Subject } from "@/lib/types";
+import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
+import { evaluationTypeLabel } from "@/lib/evaluationTypes";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 
 export default function MesNotes() {
@@ -45,16 +46,19 @@ export default function MesNotes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes")
-        .select("*, matieres(*)")
+        .select("*, matieres(*), evaluations(type, title)")
         .eq("student_id", user!.id)
         .order("period_label");
       if (error) throw error;
-      return data as (GradeRow & { matieres: Subject })[];
+      return data as (GradeRow & {
+        matieres: Subject;
+        evaluations: { type: EvaluationType; title: string } | null;
+      })[];
     },
   });
 
   const byPeriod = useMemo(() => {
-    const map = new Map<string, (GradeRow & { matieres: Subject })[]>();
+    const map = new Map<string, typeof grades>();
     for (const g of grades) {
       const list = map.get(g.period_label) ?? [];
       list.push(g);
@@ -98,6 +102,9 @@ export default function MesNotes() {
                         : "—";
                     const coef =
                       coefMap[g.subject_id] ?? g.matieres?.coefficient ?? 1;
+                    const evalLabel = g.evaluations
+                      ? `${evaluationTypeLabel(g.evaluations.type)} · ${g.evaluations.title}`
+                      : null;
                     return (
                       <Card
                         key={g.id}
@@ -105,16 +112,25 @@ export default function MesNotes() {
                       >
                         <div>
                           <p className="font-medium">{g.matieres?.name ?? "—"}</p>
+                          {evalLabel ? (
+                            <p className="text-xs text-slate-500">{evalLabel}</p>
+                          ) : null}
                           <p className="text-sm text-slate-500">Coef. {coef}</p>
                           {g.comment ? (
                             <p className="mt-1 text-xs text-slate-400">{g.comment}</p>
                           ) : null}
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-brand-700">
-                            {g.score} / {g.max_score}
-                          </p>
-                          <Badge>{on20} / 20</Badge>
+                          {g.is_absent ? (
+                            <Badge tone="warning">Absent</Badge>
+                          ) : (
+                            <>
+                              <p className="text-lg font-bold text-brand-700">
+                                {g.score} / {g.max_score}
+                              </p>
+                              <Badge>{on20} / 20</Badge>
+                            </>
+                          )}
                         </div>
                       </Card>
                     );

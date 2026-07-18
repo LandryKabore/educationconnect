@@ -68,6 +68,8 @@ export function computeWeightedAverage(
   >();
 
   for (const g of grades) {
+    // Absent grades don't count toward the average.
+    if ((g as { is_absent?: boolean }).is_absent) continue;
     const sub = resolveSubject(g);
     const subjectId = g.subject_id || sub?.id;
     if (!subjectId) continue;

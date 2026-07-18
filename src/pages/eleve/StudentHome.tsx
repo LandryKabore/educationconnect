@@ -73,7 +73,9 @@ export default function StudentHome() {
 
       const { data: notesData } = await supabase
         .from("notes")
-        .select("id, score, max_score, period_label, created_at, matieres(name)")
+        .select(
+          "id, score, max_score, period_label, created_at, is_absent, matieres(name)",
+        )
         .eq("student_id", uid)
         .order("created_at", { ascending: false })
         .limit(40);
@@ -89,10 +91,12 @@ export default function StudentHome() {
         max_score: number;
         period_label: string;
         created_at: string;
+        is_absent: boolean;
         matieres: { name: string } | null;
       }[];
 
       const scored = notes
+        .filter((n) => !n.is_absent)
         .map((n) => on20(n.score, n.max_score))
         .filter((v): v is number => v != null);
       const average =

@@ -105,10 +105,12 @@ export default function ParentHome() {
 
         const { data: recentNotes } = await supabase
           .from("notes")
-          .select("id, score, max_score, period_label, created_at, matieres(name)")
+          .select(
+            "id, score, max_score, period_label, created_at, is_absent, matieres(name)",
+          )
           .eq("student_id", child.id)
           .order("created_at", { ascending: false })
-          .limit(3);
+          .limit(5);
 
         const notes = (recentNotes ?? []) as {
           id: string;
@@ -116,6 +118,7 @@ export default function ParentHome() {
           max_score: number;
           period_label: string;
           created_at: string;
+          is_absent: boolean;
           matieres: { name: string } | null;
         }[];
 
@@ -124,7 +127,7 @@ export default function ParentHome() {
         totalAbsences += abs;
         totalNotes += nCount;
 
-        const latest = notes[0];
+        const latest = notes.find((n) => !n.is_absent);
         const scoreOn20 = (score: number, max: number) =>
           max > 0 ? ((score / max) * 20).toFixed(1) : "—";
 

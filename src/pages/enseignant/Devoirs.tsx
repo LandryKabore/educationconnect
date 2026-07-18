@@ -130,6 +130,12 @@ export default function Devoirs({ kind }: Props) {
         }
       />
 
+      <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+        {kind === "examen"
+          ? "Annoncez ici la date des examens (visible par les élèves). Pour saisir les notes, ouvrez la classe → Notes et créez une évaluation « Examen »."
+          : "Indiquez ici les exercices à faire à la maison. Les élèves les consultent, mais ne rendent rien en ligne."}
+      </p>
+
       {showForm ? (
         <Card className="mb-6 max-w-lg">
           <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">

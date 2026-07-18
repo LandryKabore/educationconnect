@@ -62,8 +62,12 @@ export function generateBulletinPdf(data: BulletinData): jsPDF {
   doc.text(`Période : ${data.periodLabel}`, 14, 60);
 
   const detailRows = data.grades.map((g) => {
-    const on20 =
-      g.max_score > 0 ? ((g.score / g.max_score) * 20).toFixed(2) : "—";
+    const absent = (g as { is_absent?: boolean }).is_absent;
+    const on20 = absent
+      ? "—"
+      : g.max_score > 0
+        ? ((g.score / g.max_score) * 20).toFixed(2)
+        : "—";
     const coef = effectiveCoef(
       g.subject_id ?? g.subject?.id,
       g.subject?.coefficient,
@@ -72,7 +76,7 @@ export function generateBulletinPdf(data: BulletinData): jsPDF {
     return [
       g.subject?.name ?? "—",
       String(coef),
-      `${g.score} / ${g.max_score}`,
+      absent ? "Absent" : `${g.score} / ${g.max_score}`,
       on20,
       g.comment ?? "",
     ];
