@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
+import { SaveButton, isFormDirty } from "@/components/SaveButton";
 import {
   emptySchoolForm,
   formToSchoolPayload,
@@ -13,10 +13,10 @@ import {
 } from "@/lib/schoolForm";
 import { supabase } from "@/lib/supabase";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
-import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState, PageHeader } from "@/components/ui";
 
 function formSnapshot(form: SchoolFormFields) {
-  return JSON.stringify(formToSchoolPayload(form));
+  return formToSchoolPayload(form);
 }
 
 export default function ParametresEcole() {
@@ -31,11 +31,12 @@ export default function ParametresEcole() {
   }, [school]);
 
   const savedSnapshot = useMemo(
-    () => (school ? formSnapshot(schoolToForm(school)) : ""),
+    () => (school ? formSnapshot(schoolToForm(school)) : null),
     [school],
   );
-  const isUpToDate = formSnapshot(form) === savedSnapshot;
-  const canSave = isSchoolFormComplete(form) && !isUpToDate;
+  const dirty = savedSnapshot
+    ? isFormDirty(formSnapshot(form), savedSnapshot)
+    : false;
 
   if (!schoolId || !school) {
     return <EmptyState message="Aucune école associée à votre compte." />;
@@ -47,7 +48,7 @@ export default function ParametresEcole() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isUpToDate) return;
+    if (!dirty) return;
     if (!isSchoolFormComplete(form)) {
       toast.error("Remplissez tous les champs obligatoires");
       return;
@@ -78,25 +79,21 @@ export default function ParametresEcole() {
 
       <Card className="max-w-2xl">
         <form onSubmit={(e) => void handleSave(e)} className="space-y-6">
-          <SchoolFieldsForm form={form} onChange={onChange} idPrefix="ecole-settings" />
+          <SchoolFieldsForm
+            form={form}
+            onChange={onChange}
+            idPrefix="ecole-settings"
+          />
           <div className="flex flex-wrap items-center gap-3">
-            {isUpToDate ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled
-                className="border-emerald-200 bg-emerald-50 text-emerald-800 disabled:opacity-100"
-              >
-                <Check className="h-4 w-4" />
-                À jour
-              </Button>
-            ) : (
-              <Button type="submit" disabled={saving || !canSave}>
-                {saving ? "Enregistrement…" : "Enregistrer"}
-              </Button>
-            )}
-            {!isUpToDate ? (
-              <span className="text-sm text-amber-700">Modifications non enregistrées</span>
+            <SaveButton
+              saving={saving}
+              dirty={dirty}
+              disabled={!isSchoolFormComplete(form)}
+            />
+            {dirty ? (
+              <span className="text-sm text-amber-700">
+                Modifications non enregistrées
+              </span>
             ) : (
               <span className="text-sm text-slate-500">Aucune modification</span>
             )}
@@ -114,8 +111,8 @@ export default function ParametresEcole() {
               : ""}
           </p>
           <p className="mt-2 text-xs text-slate-400">
-            La gestion de l’abonnement est effectuée par EduFaso. Contactez le support pour toute
-            modification.
+            La gestion de l’abonnement est effectuée par EduFaso. Contactez le
+            support pour toute modification.
           </p>
         </Card>
       )}

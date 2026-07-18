@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -9,9 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus, Profile } from "@/lib/types";
 import { fullName } from "@/lib/utils";
+import { SaveButton } from "@/components/SaveButton";
 import {
-  Badge,
-  Button,
   Card,
   EmptyState,
   Input,
@@ -63,16 +62,36 @@ export default function Presences() {
 
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({});
 
+  useEffect(() => {
+    setStatuses({});
+  }, [date, id]);
+
+  const savedByStudent = useMemo(() => {
+    const map = new Map<string, AttendanceStatus>();
+    for (const a of attendance) {
+      const row = a as { student_id: string; status: AttendanceStatus };
+      map.set(row.student_id, row.status);
+    }
+    return map;
+  }, [attendance]);
+
   const getStatus = (studentId: string): AttendanceStatus => {
-    if (statuses[studentId]) return statuses[studentId];
-    const existing = attendance.find(
-      (a) => (a as { student_id: string }).student_id === studentId
-    );
-    return (existing as { status: AttendanceStatus } | undefined)?.status ?? "present";
+    if (Object.prototype.hasOwnProperty.call(statuses, studentId)) {
+      return statuses[studentId];
+    }
+    return savedByStudent.get(studentId) ?? "present";
   };
 
+  const dirty = students.some((s) => {
+    const current = Object.prototype.hasOwnProperty.call(statuses, s.id)
+      ? statuses[s.id]
+      : (savedByStudent.get(s.id) ?? "present");
+    const saved = savedByStudent.get(s.id) ?? "present";
+    return current !== saved;
+  });
+
   const handleSave = async () => {
-    if (!id || !user) return;
+    if (!id || !user || !dirty) return;
     setSaving(true);
     for (const student of students) {
       const status = getStatus(student.id);
@@ -84,10 +103,11 @@ export default function Presences() {
           status,
           recorded_by: user.id,
         },
-        { onConflict: "class_section_id,student_id,date" }
+        { onConflict: "class_section_id,student_id,date" },
       );
     }
     toast.success("Présences enregistrées");
+    setStatuses({});
     void qc.invalidateQueries({ queryKey: ["presences", id, date] });
     setSaving(false);
   };
@@ -105,9 +125,12 @@ export default function Presences() {
       <PageHeader
         title="Présences"
         actions={
-          <Button onClick={() => void handleSave()} disabled={saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Button>
+          <SaveButton
+            type="button"
+            saving={saving}
+            dirty={dirty}
+            onClick={() => void handleSave()}
+          />
         }
       />
 

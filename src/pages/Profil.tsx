@@ -10,8 +10,8 @@ import {
   type ProfileFieldKey,
 } from "@/lib/profileCompletion";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { SaveButton, isFormDirty } from "@/components/SaveButton";
 import {
-  Button,
   Card,
   DateInputFr,
   Input,
@@ -56,14 +56,20 @@ export default function Profil() {
   );
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!profile) return;
+  const baseline = useMemo(() => {
+    if (!profile) return {} as Partial<Record<ProfileFieldKey, string>>;
     const next: Partial<Record<ProfileFieldKey, string>> = {};
     for (const f of fieldDefs) {
       next[f.key] = getProfileFieldValue(profile, f.key);
     }
-    setValues(next);
+    return next;
   }, [profile, fieldDefs]);
+
+  useEffect(() => {
+    setValues(baseline);
+  }, [baseline]);
+
+  const dirty = isFormDirty(values, baseline);
 
   const setField = (key: ProfileFieldKey, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -71,7 +77,7 @@ export default function Profil() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || !dirty) return;
 
     for (const f of fieldDefs) {
       if (f.required && !values[f.key]?.trim()) {
@@ -165,9 +171,16 @@ export default function Profil() {
               )}
             </div>
           ))}
-          <Button type="submit" disabled={saving}>
-            {saving ? t("loading") : t("save")}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <SaveButton saving={saving} dirty={dirty} />
+            {dirty ? (
+              <span className="text-sm text-amber-700">
+                Modifications non enregistrées
+              </span>
+            ) : (
+              <span className="text-sm text-slate-500">Aucune modification</span>
+            )}
+          </div>
         </form>
       </Card>
     </div>

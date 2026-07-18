@@ -170,6 +170,8 @@ export interface Assignment {
   description: string | null;
   due_date: string | null;
   max_score: number;
+  /** exercice_maison | examen */
+  kind: "exercice_maison" | "examen";
 }
 
 export interface AssignmentSubmission {

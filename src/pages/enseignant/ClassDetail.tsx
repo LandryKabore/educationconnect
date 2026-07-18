@@ -234,8 +234,8 @@ export default function ClassDetail() {
     return (
       <div>
         <BackLink
-          to={isAdmin ? "/classes" : "/tableau-de-bord"}
-          label={isAdmin ? "Retour aux classes" : "Retour"}
+          to={isAdmin ? "/classes" : "/mes-classes"}
+          label={isAdmin ? "Retour aux classes" : "Retour aux classes"}
         />
         <EmptyState message="Classe introuvable." />
       </div>
@@ -245,8 +245,8 @@ export default function ClassDetail() {
   return (
     <div>
       <BackLink
-        to={isAdmin ? "/classes" : "/tableau-de-bord"}
-        label={isAdmin ? "Retour aux classes" : "Retour"}
+        to={isAdmin ? "/classes" : "/mes-classes"}
+        label={isAdmin ? "Retour aux classes" : "Retour aux classes"}
       />
       <PageHeader
         title={cls.name}

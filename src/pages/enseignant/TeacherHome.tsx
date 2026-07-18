@@ -20,6 +20,11 @@ import {
   snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import { ClassColorDot } from "@/components/ClassColor";
+import {
+  CLASS_COLOR_SURFACE,
+  classColorVars,
+} from "@/lib/classColors";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
@@ -44,7 +49,7 @@ export default function TeacherHome() {
         .eq("teacher_id", uid);
       if (error) throw error;
 
-      const classes = (aff ?? []).map((a) => {
+      const assignments = (aff ?? []).map((a) => {
         const row = a as {
           id: string;
           class_section_id: string;
@@ -64,7 +69,38 @@ export default function TeacherHome() {
         };
       });
 
-      const uniqueClassIds = [...new Set(classes.map((c) => c.classId))];
+      const byClass = new Map<
+        string,
+        {
+          classId: string;
+          className: string;
+          gradeLevel: string | null;
+          subjects: string[];
+        }
+      >();
+      for (const a of assignments) {
+        const existing = byClass.get(a.classId);
+        if (existing) {
+          if (!existing.subjects.includes(a.subjectName)) {
+            existing.subjects.push(a.subjectName);
+          }
+        } else {
+          byClass.set(a.classId, {
+            classId: a.classId,
+            className: a.className,
+            gradeLevel: a.gradeLevel,
+            subjects: [a.subjectName],
+          });
+        }
+      }
+      const classes = [...byClass.values()].map((c) => ({
+        ...c,
+        subjects: [...c.subjects].sort((x, y) =>
+          x.localeCompare(y, "fr", { sensitivity: "base" }),
+        ),
+      }));
+
+      const uniqueClassIds = classes.map((c) => c.classId);
 
       let studentsCount = 0;
       if (uniqueClassIds.length > 0) {
@@ -76,14 +112,21 @@ export default function TeacherHome() {
         studentsCount = count ?? 0;
       }
 
-      const { count: devoirsCount } = await supabase
+      const { count: exercicesCount } = await supabase
         .from("devoirs")
         .select("id", { count: "exact", head: true })
-        .eq("teacher_id", uid);
+        .eq("teacher_id", uid)
+        .eq("kind", "exercice_maison");
+
+      const { count: examensCount } = await supabase
+        .from("devoirs")
+        .select("id", { count: "exact", head: true })
+        .eq("teacher_id", uid)
+        .eq("kind", "examen");
 
       const { data: recentDevoirs } = await supabase
         .from("devoirs")
-        .select("id, title, due_date, classes(name), matieres(name)")
+        .select("id, title, due_date, kind, classes(name), matieres(name)")
         .eq("teacher_id", uid)
         .order("created_at", { ascending: false })
         .limit(4);
@@ -101,13 +144,16 @@ export default function TeacherHome() {
 
       return {
         classes,
+        assignmentCount: assignments.length,
         uniqueClasses: uniqueClassIds.length,
         studentsCount,
-        devoirsCount: devoirsCount ?? 0,
+        exercicesCount: exercicesCount ?? 0,
+        examensCount: examensCount ?? 0,
         recentDevoirs: (recentDevoirs ?? []) as {
           id: string;
           title: string;
           due_date: string | null;
+          kind: "exercice_maison" | "examen";
           classes: { name: string } | null;
           matieres: { name: string } | null;
         }[],
@@ -136,27 +182,34 @@ export default function TeacherHome() {
         unreadMessages={unreadMessages}
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
           label="Classes"
           value={String(data.uniqueClasses)}
-          hint={`${data.classes.length} affectation${data.classes.length > 1 ? "s" : ""}`}
+          hint={`${data.assignmentCount} affectation${data.assignmentCount > 1 ? "s" : ""}`}
           valueClass="text-brand-600"
-          to="/devoirs"
+          to="/mes-classes"
         />
         <MetricCard
           label="Élèves"
           value={String(data.studentsCount)}
           hint="Dans vos classes"
           valueClass="text-sky-600"
-          to="/devoirs"
+          to="/mes-eleves"
         />
         <MetricCard
-          label="Devoirs"
-          value={String(data.devoirsCount)}
-          hint="Créés au total"
+          label="Exercices"
+          value={String(data.exercicesCount)}
+          hint="De maison"
           valueClass="text-amber-600"
-          to="/devoirs"
+          to="/exercices-maison"
+        />
+        <MetricCard
+          label="Examens"
+          value={String(data.examensCount)}
+          hint="Créés au total"
+          valueClass="text-violet-600"
+          to="/examens"
         />
         <MetricCard
           label="Messages"
@@ -173,8 +226,8 @@ export default function TeacherHome() {
           title="Mes classes"
           subtitle="Classes et matières assignées"
           action={
-            <Link to="/devoirs" className="block">
-              <Button className="w-full">Gérer les devoirs</Button>
+            <Link to="/mes-classes" className="block">
+              <Button className="w-full">Voir mes classes</Button>
             </Link>
           }
         >
@@ -182,21 +235,41 @@ export default function TeacherHome() {
             <PanelEmpty message="Aucune affectation pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {data.classes.slice(0, 5).map((c) => (
-                <li key={c.id}>
+              {data.classes.slice(0, 6).map((c) => (
+                <li key={c.classId}>
                   <Link
                     to={`/classes/${c.classId}`}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 transition hover:bg-brand-50/60"
+                    data-class-color
+                    style={classColorVars({
+                      id: c.classId,
+                      name: c.className,
+                    })}
+                    className={cn(
+                      "flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
+                      CLASS_COLOR_SURFACE,
+                    )}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {c.className}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {[c.subjectName, c.gradeLevel].filter(Boolean).join(" · ")}
-                      </p>
+                    <div className="flex min-w-0 items-start gap-2">
+                      <ClassColorDot
+                        id={c.classId}
+                        name={c.className}
+                        className="mt-1.5"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {c.className}
+                          {c.gradeLevel ? (
+                            <span className="ml-1.5 text-xs font-normal opacity-70">
+                              {c.gradeLevel}
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 text-xs leading-snug opacity-80">
+                          {c.subjects.join(" · ")}
+                        </p>
+                      </div>
                     </div>
-                    <span className="shrink-0 text-xs font-medium text-brand-700">
+                    <span className="mt-0.5 shrink-0 text-xs font-medium opacity-90">
                       Ouvrir →
                     </span>
                   </Link>
@@ -208,16 +281,16 @@ export default function TeacherHome() {
 
         <Panel
           icon={ClipboardList}
-          title="Derniers devoirs"
-          subtitle="Les plus récemment créés"
+          title="Derniers travaux"
+          subtitle="Exercices et examens récents"
           action={
-            <Link to="/devoirs" className="block">
-              <Button className="w-full">Voir tous les devoirs</Button>
+            <Link to="/exercices-maison" className="block">
+              <Button className="w-full">Voir les exercices</Button>
             </Link>
           }
         >
           {data.recentDevoirs.length === 0 ? (
-            <PanelEmpty message="Aucun devoir créé pour le moment." />
+            <PanelEmpty message="Aucun exercice ni examen pour le moment." />
           ) : (
             <ul className="space-y-2">
               {data.recentDevoirs.map((d) => (
@@ -230,7 +303,11 @@ export default function TeacherHome() {
                       {d.title}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {[d.classes?.name, d.matieres?.name]
+                      {[
+                        d.kind === "examen" ? "Examen" : "Exercice",
+                        d.classes?.name,
+                        d.matieres?.name,
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -343,8 +420,9 @@ export default function TeacherHome() {
         </Panel>
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <QuickLink to="/devoirs" label="Devoirs" icon={ClipboardList} />
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickLink to="/exercices-maison" label="Exercices" icon={BookOpen} />
+        <QuickLink to="/examens" label="Examens" icon={ClipboardList} />
         <QuickLink to="/messages" label="Messages" icon={MessageSquare} />
         <QuickLink to="/profil" label="Mon profil" icon={User} />
       </section>

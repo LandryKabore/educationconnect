@@ -120,6 +120,7 @@ export default function StudentHome() {
         id: string;
         title: string;
         due_date: string | null;
+        kind: "exercice_maison" | "examen";
         matieres: { name: string } | null;
       }[] = [];
       let todaySlots: {
@@ -134,7 +135,7 @@ export default function StudentHome() {
         const { data: devoirsData } = await supabase
           .from("devoirs")
           .select(
-            "id, title, due_date, matieres(name), rendus_devoirs!left(id)",
+            "id, title, due_date, kind, matieres(name), rendus_devoirs!left(id)",
           )
           .eq("class_section_id", classId)
           .eq("rendus_devoirs.student_id", uid)
@@ -146,6 +147,7 @@ export default function StudentHome() {
             id: string;
             title: string;
             due_date: string | null;
+            kind: "exercice_maison" | "examen";
             matieres: { name: string } | null;
             rendus_devoirs: { id: string }[];
           }[]
@@ -280,13 +282,13 @@ export default function StudentHome() {
         <MetricCard
           label="À rendre"
           value={String(data.pendingDevoirs.length)}
-          hint="Devoirs en attente"
+          hint="Exercices / examens"
           valueClass={
             data.pendingDevoirs.length > 0
               ? "text-rose-600"
               : "text-slate-500 dark:text-slate-300"
           }
-          to="/mes-devoirs"
+          to="/mes-exercices"
         />
       </section>
 
@@ -336,7 +338,7 @@ export default function StudentHome() {
         <Panel
           icon={Calendar}
           title={`Aujourd’hui · ${data.todayLabel}`}
-          subtitle="Cours du jour et devoirs à rendre"
+          subtitle="Cours du jour et travaux à rendre"
           action={
             <div className="grid gap-2 sm:grid-cols-2">
               <Link to="/mon-emploi-du-temps" className="block">
@@ -344,8 +346,8 @@ export default function StudentHome() {
                   Emploi du temps
                 </Button>
               </Link>
-              <Link to="/mes-devoirs" className="block">
-                <Button className="w-full">Mes devoirs</Button>
+              <Link to="/mes-exercices" className="block">
+                <Button className="w-full">Exercices</Button>
               </Link>
             </div>
           }
@@ -380,7 +382,7 @@ export default function StudentHome() {
               {data.pendingDevoirs.length > 0 ? (
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Devoirs à rendre
+                    À rendre
                   </p>
                   <ul className="space-y-2">
                     {data.pendingDevoirs.map((d) => (
@@ -393,7 +395,10 @@ export default function StudentHome() {
                             {d.title}
                           </p>
                           <p className="text-xs text-slate-500">
-                            {d.matieres?.name ?? "Matière"}
+                            {[
+                              d.kind === "examen" ? "Examen" : "Exercice",
+                              d.matieres?.name ?? "Matière",
+                            ].join(" · ")}
                           </p>
                         </div>
                         {d.due_date ? (
@@ -511,9 +516,10 @@ export default function StudentHome() {
         </Panel>
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <QuickLink to="/mes-notes" label="Mes notes" icon={BookOpen} />
-        <QuickLink to="/mes-devoirs" label="Mes devoirs" icon={ClipboardList} />
+        <QuickLink to="/mes-exercices" label="Exercices" icon={ClipboardList} />
+        <QuickLink to="/mes-examens" label="Examens" icon={GraduationCap} />
         <QuickLink to="/mes-presences" label="Présences" icon={CheckCircle2} />
         <QuickLink to="/mon-bulletin" label="Mon bulletin" icon={GraduationCap} />
       </section>

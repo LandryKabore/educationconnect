@@ -7,6 +7,12 @@ import { supabase } from "@/lib/supabase";
 import type { AcademicYear, ClassSection, Subject } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import { ClassColorDot } from "@/components/ClassColor";
+import {
+  CLASS_COLOR_SOFT,
+  CLASS_COLOR_SURFACE,
+  classColorVars,
+} from "@/lib/classColors";
 import { cn } from "@/lib/utils";
 import {
   SUBJECT_CATEGORIES,
@@ -791,9 +797,13 @@ export default function ProgrammeClasses() {
                 return (
                   <label
                     key={c.id}
+                    data-class-color
+                    style={classColorVars({ id: c.id, name: c.name })}
                     className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
-                      checked ? "bg-brand-50" : "hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
+                      "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-sm transition",
+                      checked
+                        ? CLASS_COLOR_SURFACE
+                        : cn(CLASS_COLOR_SOFT, "hover:brightness-[0.98] dark:hover:brightness-110"),
                     )}
                   >
                     <input
@@ -802,15 +812,14 @@ export default function ProgrammeClasses() {
                       checked={checked}
                       onChange={() => toggleClass(c.id)}
                     />
-                    <span className="min-w-0 flex-1 font-medium">
-                      {c.name}
-                    </span>
+                    <ClassColorDot id={c.id} name={c.name} />
+                    <span className="min-w-0 flex-1 font-medium">{c.name}</span>
                     {hasProg ? (
-                      <span className="shrink-0 text-xs text-emerald-700">
+                      <span className="shrink-0 text-xs font-medium opacity-80">
                         OK · {subjectCount}
                       </span>
                     ) : (
-                      <span className="shrink-0 text-xs text-amber-700">
+                      <span className="shrink-0 text-xs font-medium opacity-80">
                         À faire
                       </span>
                     )}

@@ -24,6 +24,7 @@ import {
 } from "@/lib/studentCsv";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
 import {
   Badge,
   Button,
@@ -1087,6 +1088,34 @@ export default function Eleves() {
                 </option>
               ))}
             </Select>
+            {selectedClassId && selectedClassId !== "__none__" ? (
+              <div className="mt-3">
+                <ClassColorBadge
+                  id={selectedClassId}
+                  name={selectedClassLabel || "Classe"}
+                />
+              </div>
+            ) : null}
+            {classes.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {classes.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedClassId(c.id);
+                      setSelectedStudentIds([]);
+                      setBulkClassId("");
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-xs text-slate-600 transition hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]"
+                    title={c.name}
+                  >
+                    <ClassColorDot id={c.id} name={c.name} />
+                    <span className="max-w-[5.5rem] truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </Card>
 
           {!selectedClassId ? (

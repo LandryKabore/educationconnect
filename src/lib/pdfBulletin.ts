@@ -10,7 +10,9 @@ import autoTable from "jspdf-autotable";
 const DAYS = ["", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
 export function formatDay(day: number) {
-  return DAYS[day] ?? `Jour ${day}`;
+  const n = Number(day);
+  if (!Number.isFinite(n) || n < 1 || n > 7) return "Jour inconnu";
+  return DAYS[n] ?? `Jour ${n}`;
 }
 
 export interface BulletinData {

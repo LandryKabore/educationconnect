@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { logAudit } from "@/lib/audit";
 import type { School } from "@/lib/types";
-import { Badge, Button, Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
+import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { Badge, Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 
 const PLANS = [
   { value: "essai", label: "Essai" },
@@ -143,6 +144,14 @@ export default function AdminBilling() {
                 {schools.map((school) => {
                   const draft = getDraft(school);
                   const saving = savingId === school.id;
+                  const baseline: BillingDraft = {
+                    plan: school.plan ?? "essai",
+                    billing_status: school.billing_status ?? "trial",
+                    subscription_ends_at: toDateInputValue(
+                      school.subscription_ends_at,
+                    ),
+                  };
+                  const dirty = isFormDirty(draft, baseline);
 
                   return (
                     <tr key={school.id} className="border-b border-slate-100 align-middle">
@@ -212,14 +221,13 @@ export default function AdminBilling() {
                         />
                       </td>
                       <td className="py-3">
-                        <Button
+                        <SaveButton
                           type="button"
                           size="sm"
-                          disabled={saving}
+                          saving={saving}
+                          dirty={dirty}
                           onClick={() => void saveSchool(school)}
-                        >
-                          {saving ? "…" : "Enregistrer"}
-                        </Button>
+                        />
                       </td>
                     </tr>
                   );

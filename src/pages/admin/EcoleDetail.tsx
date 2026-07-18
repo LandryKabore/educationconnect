@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import {
   type SchoolFormFields,
 } from "@/lib/schoolForm";
 import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
+import { SaveButton, isFormDirty } from "@/components/SaveButton";
 import {
   Badge,
   Button,
@@ -186,6 +187,13 @@ export default function EcoleDetail() {
     e.preventDefault();
     if (!id || !editForm || !isSchoolFormComplete(editForm)) {
       toast.error("Tous les champs sont obligatoires");
+      return;
+    }
+    if (
+      school &&
+      !isFormDirty(formToSchoolPayload(editForm), formToSchoolPayload(schoolToForm(school)))
+    ) {
+      setEditing(false);
       return;
     }
     setSaving(true);
@@ -360,10 +368,19 @@ export default function EcoleDetail() {
                 onChange={setEditField}
                 idPrefix="edit"
               />
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? "Enregistrement…" : "Enregistrer"}
-                </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <SaveButton
+                  size="sm"
+                  saving={saving}
+                  dirty={
+                    !!school &&
+                    isFormDirty(
+                      formToSchoolPayload(editForm),
+                      formToSchoolPayload(schoolToForm(school)),
+                    )
+                  }
+                  disabled={!isSchoolFormComplete(editForm)}
+                />
                 <Button
                   type="button"
                   variant="ghost"

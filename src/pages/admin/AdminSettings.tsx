@@ -1,14 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { logAudit } from "@/lib/audit";
 import type { PlatformSettings } from "@/lib/types";
-import { Button, Card, Input, Label, PageHeader } from "@/components/ui";
+import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { Card, Input, Label, PageHeader } from "@/components/ui";
+
+type SettingsForm = {
+  invite_site_url: string;
+  app_name: string;
+  support_email: string;
+  default_year_label: string;
+};
+
+function toForm(settings: PlatformSettings): SettingsForm {
+  return {
+    invite_site_url: settings.invite_site_url ?? "",
+    app_name: settings.app_name ?? "",
+    support_email: settings.support_email ?? "",
+    default_year_label: settings.default_year_label ?? "",
+  };
+}
 
 export default function AdminSettings() {
   const qc = useQueryClient();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SettingsForm>({
     invite_site_url: "",
     app_name: "",
     support_email: "",
@@ -29,22 +46,24 @@ export default function AdminSettings() {
     },
   });
 
-  useEffect(() => {
-    if (!settings) return;
-    setForm({
-      invite_site_url: settings.invite_site_url ?? "",
-      app_name: settings.app_name ?? "",
-      support_email: settings.support_email ?? "",
-      default_year_label: settings.default_year_label ?? "",
-    });
-  }, [settings]);
+  const baseline = useMemo(
+    () => (settings ? toForm(settings) : null),
+    [settings],
+  );
 
-  const setField = (key: keyof typeof form, value: string) => {
+  useEffect(() => {
+    if (baseline) setForm(baseline);
+  }, [baseline]);
+
+  const dirty = baseline ? isFormDirty(form, baseline) : false;
+
+  const setField = (key: keyof SettingsForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dirty) return;
     if (!form.invite_site_url.trim() || !form.app_name.trim()) {
       toast.error("URL d'invitation et nom de l'application sont obligatoires");
       return;
@@ -117,7 +136,9 @@ export default function AdminSettings() {
             />
           </div>
           <div>
-            <Label htmlFor="default_year_label">Libellé d'année scolaire par défaut</Label>
+            <Label htmlFor="default_year_label">
+              Libellé d'année scolaire par défaut
+            </Label>
             <Input
               id="default_year_label"
               value={form.default_year_label}
@@ -125,9 +146,16 @@ export default function AdminSettings() {
               placeholder="2025-2026"
             />
           </div>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <SaveButton saving={saving} dirty={dirty} />
+            {dirty ? (
+              <span className="text-sm text-amber-700">
+                Modifications non enregistrées
+              </span>
+            ) : (
+              <span className="text-sm text-slate-500">Aucune modification</span>
+            )}
+          </div>
         </form>
       </Card>
     </div>

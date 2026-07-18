@@ -26,12 +26,23 @@ function storageKey(userId: string) {
   return `edufaso:edt-pending:${userId}`;
 }
 
+function isBrokenLabel(label: string) {
+  return /undefined|\?\?/.test(label);
+}
+
 function readPending(userId: string): EdtPendingChange[] {
   try {
     const raw = localStorage.getItem(storageKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as EdtPendingChange[];
-    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+    if (!Array.isArray(parsed)) return [];
+    const cleaned = parsed
+      .filter((c) => c && typeof c.label === "string" && !isBrokenLabel(c.label))
+      .slice(0, 20);
+    if (cleaned.length !== parsed.length) {
+      writePending(userId, cleaned);
+    }
+    return cleaned;
   } catch {
     return [];
   }
@@ -41,28 +52,69 @@ function writePending(userId: string, items: EdtPendingChange[]) {
   localStorage.setItem(storageKey(userId), JSON.stringify(items.slice(0, 20)));
 }
 
-type CreneauPayload = {
+type CreneauSnapshot = {
   id: string;
-  class_section_id: string;
-  subject_id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
+  class_section_id?: string;
+  subject_id?: string | null;
+  day_of_week?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
   room?: string | null;
+  subjectName?: string | null;
 };
 
-async function describeCreneau(row: CreneauPayload): Promise<string> {
-  const { data } = await supabase
-    .from("matieres")
-    .select("name")
-    .eq("id", row.subject_id)
-    .maybeSingle();
-  const subject = (data as { name?: string } | null)?.name ?? "Cours";
-  const day = formatDay(row.day_of_week);
-  const start = row.start_time?.slice(0, 5) ?? "??";
-  const end = row.end_time?.slice(0, 5) ?? "??";
+/** Last-known créneaux — DELETE realtime often only sends the id. */
+const slotSnapshots = new Map<string, CreneauSnapshot>();
+
+function rememberSlot(row: CreneauSnapshot) {
+  if (!row?.id) return;
+  const prev = slotSnapshots.get(row.id);
+  slotSnapshots.set(row.id, {
+    ...prev,
+    ...row,
+    subjectName: row.subjectName ?? prev?.subjectName ?? null,
+  });
+}
+
+function rememberSlots(rows: CreneauSnapshot[]) {
+  for (const row of rows) rememberSlot(row);
+}
+
+function normalizeTime(t: string | null | undefined) {
+  if (!t) return null;
+  return t.slice(0, 5);
+}
+
+function dayLabel(day: number | null | undefined) {
+  if (day == null || Number.isNaN(Number(day))) return null;
+  const n = Number(day);
+  if (n < 1 || n > 7) return null;
+  return formatDay(n);
+}
+
+async function describeCreneau(row: CreneauSnapshot): Promise<string> {
+  let subject = row.subjectName?.trim() || null;
+  if (!subject && row.subject_id) {
+    const { data } = await supabase
+      .from("matieres")
+      .select("name")
+      .eq("id", row.subject_id)
+      .maybeSingle();
+    subject = (data as { name?: string } | null)?.name ?? null;
+  }
+
+  const day = dayLabel(row.day_of_week);
+  const start = normalizeTime(row.start_time);
+  const end = normalizeTime(row.end_time);
   const room = row.room?.trim() ? ` · salle ${row.room.trim()}` : "";
-  return `${subject} · ${day} ${start}–${end}${room}`;
+
+  const parts: string[] = [subject || "Cours"];
+  if (day && start && end) parts.push(`${day} ${start}–${end}`);
+  else if (day && start) parts.push(`${day} ${start}`);
+  else if (day) parts.push(day);
+  else if (start && end) parts.push(`${start}–${end}`);
+
+  return `${parts.join(" · ")}${room}`;
 }
 
 function kindFromEvent(eventType: string): EdtChangeKind {
@@ -75,6 +127,78 @@ function kindLabel(kind: EdtChangeKind) {
   if (kind === "added") return "Ajouté";
   if (kind === "removed") return "Supprimé";
   return "Modifié";
+}
+
+function asSnapshot(raw: Record<string, unknown> | undefined): CreneauSnapshot | null {
+  if (!raw || typeof raw.id !== "string") return null;
+  return {
+    id: raw.id,
+    class_section_id:
+      typeof raw.class_section_id === "string" ? raw.class_section_id : undefined,
+    subject_id: typeof raw.subject_id === "string" ? raw.subject_id : null,
+    day_of_week:
+      typeof raw.day_of_week === "number"
+        ? raw.day_of_week
+        : raw.day_of_week != null
+          ? Number(raw.day_of_week)
+          : null,
+    start_time: typeof raw.start_time === "string" ? raw.start_time : null,
+    end_time: typeof raw.end_time === "string" ? raw.end_time : null,
+    room: typeof raw.room === "string" ? raw.room : null,
+  };
+}
+
+function mergeWithCache(
+  qc: ReturnType<typeof useQueryClient>,
+  userId: string,
+  partial: CreneauSnapshot,
+): CreneauSnapshot {
+  const cached = qc.getQueryData(["mon-edt", userId]) as
+    | {
+        id: string;
+        subject_id?: string;
+        day_of_week?: number;
+        start_time?: string;
+        end_time?: string;
+        room?: string | null;
+        matieres?: { name: string } | null;
+      }[]
+    | undefined;
+
+  const fromQuery = cached?.find((s) => s.id === partial.id);
+  const fromMap = slotSnapshots.get(partial.id);
+
+  const merged: CreneauSnapshot = {
+    ...fromMap,
+    ...fromQuery,
+    ...partial,
+    subjectName:
+      partial.subjectName ||
+      fromQuery?.matieres?.name ||
+      fromMap?.subjectName ||
+      null,
+    subject_id:
+      partial.subject_id ||
+      fromQuery?.subject_id ||
+      fromMap?.subject_id ||
+      null,
+    day_of_week:
+      partial.day_of_week ??
+      fromQuery?.day_of_week ??
+      fromMap?.day_of_week ??
+      null,
+    start_time:
+      partial.start_time ||
+      fromQuery?.start_time ||
+      fromMap?.start_time ||
+      null,
+    end_time:
+      partial.end_time || fromQuery?.end_time || fromMap?.end_time || null,
+    room: partial.room ?? fromQuery?.room ?? fromMap?.room ?? null,
+  };
+
+  rememberSlot(merged);
+  return merged;
 }
 
 /** Pending EDT changes + mark as seen (safe to use on multiple screens). */
@@ -135,6 +259,44 @@ export function useStudentTimetableRealtime() {
     staleTime: 60_000,
   });
 
+  // Seed snapshots so DELETE events still know day/time/subject.
+  useEffect(() => {
+    if (!enabled || !classId) return;
+
+    void (async () => {
+      const { data } = await supabase
+        .from("creneaux_edt")
+        .select(
+          "id, class_section_id, subject_id, day_of_week, start_time, end_time, room, matieres(name)",
+        )
+        .eq("class_section_id", classId);
+      rememberSlots(
+        (data ?? []).map((row) => {
+          const r = row as {
+            id: string;
+            class_section_id: string;
+            subject_id: string;
+            day_of_week: number;
+            start_time: string;
+            end_time: string;
+            room: string | null;
+            matieres: { name: string } | null;
+          };
+          return {
+            id: r.id,
+            class_section_id: r.class_section_id,
+            subject_id: r.subject_id,
+            day_of_week: r.day_of_week,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            room: r.room,
+            subjectName: r.matieres?.name ?? null,
+          };
+        }),
+      );
+    })();
+  }, [enabled, classId]);
+
   useEffect(() => {
     if (!enabled || !userId || !classId) return;
 
@@ -150,16 +312,25 @@ export function useStudentTimetableRealtime() {
         },
         (payload) => {
           void (async () => {
+            const kind = kindFromEvent(payload.eventType);
+            const raw = (
+              payload.eventType === "DELETE" ? payload.old : payload.new
+            ) as Record<string, unknown> | undefined;
+            const partial = asSnapshot(raw);
+            if (!partial?.id) return;
+
+            // Merge cache/snapshot BEFORE invalidate (DELETE old may be id-only).
+            const merged = mergeWithCache(qc, userId, partial);
+            const label = await describeCreneau(merged);
+
+            if (payload.eventType === "DELETE") {
+              slotSnapshots.delete(partial.id);
+            } else {
+              rememberSlot(merged);
+            }
+
             void qc.invalidateQueries({ queryKey: ["mon-edt", userId] });
             void qc.invalidateQueries({ queryKey: ["student-home", userId] });
-
-            const kind = kindFromEvent(payload.eventType);
-            const row = (
-              payload.eventType === "DELETE" ? payload.old : payload.new
-            ) as CreneauPayload | undefined;
-            if (!row?.id) return;
-
-            const label = await describeCreneau(row);
 
             if (onEdtPage) {
               toast.message("Emploi du temps mis à jour", {
@@ -171,12 +342,12 @@ export function useStudentTimetableRealtime() {
             const next: EdtPendingChange[] = [
               {
                 id: crypto.randomUUID(),
-                slotId: row.id,
+                slotId: partial.id,
                 kind,
                 label,
                 at: new Date().toISOString(),
               },
-              ...readPending(userId).filter((c) => c.slotId !== row.id),
+              ...readPending(userId).filter((c) => c.slotId !== partial.id),
             ].slice(0, 20);
 
             writePending(userId, next);

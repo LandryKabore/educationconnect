@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,8 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Profile, Subject } from "@/lib/types";
 import { fullName } from "@/lib/utils";
+import { SaveButton } from "@/components/SaveButton";
 import {
-  Button,
   Card,
   EmptyState,
   Input,
@@ -25,6 +25,11 @@ export default function Notes() {
   const [period, setPeriod] = useState("Trimestre 1");
   const [scores, setScores] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  const dirty = useMemo(
+    () => Object.values(scores).some((v) => v.trim() !== ""),
+    [scores],
+  );
 
   const { data: subjects = [] } = useQuery({
     queryKey: ["class-subjects", id],
@@ -62,6 +67,7 @@ export default function Notes() {
       toast.error("Sélectionnez une matière");
       return;
     }
+    if (!dirty) return;
     setSaving(true);
     for (const student of students) {
       const raw = scores[student.id];
@@ -97,9 +103,13 @@ export default function Notes() {
       <PageHeader
         title="Notes"
         actions={
-          <Button onClick={() => void handleSave()} disabled={saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
-          </Button>
+          <SaveButton
+            type="button"
+            saving={saving}
+            dirty={dirty}
+            disabled={!subjectId}
+            onClick={() => void handleSave()}
+          />
         }
       />
 

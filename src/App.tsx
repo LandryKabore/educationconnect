@@ -33,10 +33,18 @@ import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
 import Presences from "@/pages/enseignant/Presences";
 import Notes from "@/pages/enseignant/Notes";
-import Devoirs from "@/pages/enseignant/Devoirs";
+import {
+  ExamensPage,
+  ExercicesMaisonPage,
+} from "@/pages/enseignant/Devoirs";
+import MesClasses from "@/pages/enseignant/MesClasses";
+import MesEleves from "@/pages/enseignant/MesEleves";
 import Messages from "@/pages/Messages";
 import MesNotes from "@/pages/eleve/MesNotes";
-import MesDevoirs from "@/pages/eleve/MesDevoirs";
+import {
+  MesExamensPage,
+  MesExercicesPage,
+} from "@/pages/eleve/MesDevoirs";
 import MesPresences from "@/pages/eleve/MesPresences";
 import MonEmploiDuTemps from "@/pages/eleve/MonEmploiDuTemps";
 import MonBulletin from "@/pages/eleve/MonBulletin";
@@ -303,10 +311,38 @@ function AppRoutes() {
         />
 
         <Route
-          path="/devoirs"
+          path="/exercices-maison"
           element={
             <RequireAuth roles={["teacher"]}>
-              <Devoirs />
+              <ExercicesMaisonPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/examens"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <ExamensPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/devoirs"
+          element={<Navigate to="/exercices-maison" replace />}
+        />
+        <Route
+          path="/mes-classes"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <MesClasses />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mes-eleves"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <MesEleves />
             </RequireAuth>
           }
         />
@@ -321,12 +357,24 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/mes-devoirs"
+          path="/mes-exercices"
           element={
             <RequireAuth roles={["student"]}>
-              <MesDevoirs />
+              <MesExercicesPage />
             </RequireAuth>
           }
+        />
+        <Route
+          path="/mes-examens"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesExamensPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mes-devoirs"
+          element={<Navigate to="/mes-exercices" replace />}
         />
         <Route
           path="/mes-presences"

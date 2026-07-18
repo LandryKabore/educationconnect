@@ -218,6 +218,11 @@ textarea {
   color: #7dd3fc !important;
 }
 
+.dark .text-violet-600,
+.dark .text-violet-700 {
+  color: #c4b5fd !important;
+}
+
 .dark .bg-red-50 {
   background-color: rgba(239, 68, 68, 0.18) !important;
 }
@@ -271,6 +276,36 @@ textarea {
 .dark [data-edt-slot].bg-teal-50,
 .dark [data-edt-slot].dark\:\!bg-teal-900 {
   background-color: #134e4a !important;
+}
+
+/* Per-class colors: pastel + dark ink (light) / solid + light ink (dark) */
+[data-class-color].class-color-surface {
+  border-color: hsl(var(--class-h) 52% 58%);
+  background-color: hsl(var(--class-h) 70% 93%);
+  color: hsl(var(--class-h) 48% 18%);
+}
+.dark [data-class-color].class-color-surface {
+  border-color: hsl(var(--class-h) 45% 48%);
+  background-color: hsl(var(--class-h) 40% 22%);
+  color: hsl(var(--class-h) 20% 96%);
+}
+
+[data-class-color].class-color-soft {
+  border-color: hsl(var(--class-h) 40% 78%);
+  background-color: hsl(var(--class-h) 55% 96%);
+  color: hsl(var(--class-h) 40% 22%);
+}
+.dark [data-class-color].class-color-soft {
+  border-color: hsl(var(--class-h) 32% 32%);
+  background-color: hsl(var(--class-h) 28% 14%);
+  color: hsl(var(--class-h) 18% 92%);
+}
+
+[data-class-color].class-color-dot {
+  background-color: hsl(var(--class-h) 58% 46%);
+}
+.dark [data-class-color].class-color-dot {
+  background-color: hsl(var(--class-h) 55% 62%);
 }
 
 .dark .from-brand-50 {

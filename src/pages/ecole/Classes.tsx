@@ -13,9 +13,15 @@ import {
   sortClassesByProgression,
   type CatalogClass,
 } from "@/lib/classCatalog";
+import { ClassColorDot } from "@/components/ClassColor";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import {
+  CLASS_COLOR_SOFT,
+  CLASS_COLOR_SURFACE,
+  classColorVars,
+} from "@/lib/classColors";
 import { cn } from "@/lib/utils";
 import {
   Button,
@@ -444,13 +450,13 @@ export default function Classes() {
                     return (
                       <label
                         key={item.id}
+                        data-class-color
+                        style={classColorVars({ name: item.name })}
                         className={cn(
-                          "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
-                          already
-                            ? "bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
-                            : checked
-                              ? "bg-brand-50 text-brand-950"
-                              : "hover:bg-slate-50",
+                          "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition",
+                          already || checked
+                            ? CLASS_COLOR_SURFACE
+                            : cn(CLASS_COLOR_SOFT, "hover:brightness-[0.98] dark:hover:brightness-110"),
                           !yearId ? "pointer-events-none opacity-50" : "",
                         )}
                       >
@@ -463,12 +469,12 @@ export default function Classes() {
                         />
                         <span className="min-w-0 flex-1 font-medium">
                           {item.name}
-                          <span className="ml-1.5 text-xs font-normal text-slate-400">
+                          <span className="ml-1.5 text-xs font-normal opacity-70">
                             {item.gradeLevel}
                           </span>
                         </span>
                         {already ? (
-                          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-700">
+                          <span className="inline-flex items-center gap-0.5 text-xs font-semibold opacity-90">
                             <Check className="h-3.5 w-3.5" />
                             Créée
                           </span>
@@ -497,17 +503,21 @@ export default function Classes() {
               <Link
                 key={c.id}
                 to={`/classes/${c.id}`}
-                className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
+                data-class-color
+                style={classColorVars({ id: c.id, name: c.name })}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
+                  CLASS_COLOR_SURFACE,
+                )}
               >
-                <span className="min-w-0">
-                  <span className="block font-medium text-slate-900">
-                    {c.name}
+                <span className="flex min-w-0 items-center gap-2">
+                  <ClassColorDot id={c.id} name={c.name} />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{c.name}</span>
+                    {c.grade_level ? (
+                      <span className="text-xs opacity-70">{c.grade_level}</span>
+                    ) : null}
                   </span>
-                  {c.grade_level ? (
-                    <span className="text-xs text-slate-500">
-                      {c.grade_level}
-                    </span>
-                  ) : null}
                 </span>
               </Link>
             ))}

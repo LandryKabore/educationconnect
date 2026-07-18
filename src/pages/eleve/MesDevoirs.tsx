@@ -4,6 +4,13 @@ import { format, isPast, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  assignmentKindEmpty,
+  assignmentKindLabel,
+  assignmentKindSubmitLabel,
+  assignmentKindSubmittedToast,
+  type AssignmentKind,
+} from "@/lib/assignmentKinds";
 import { supabase } from "@/lib/supabase";
 import type { Assignment } from "@/lib/types";
 import {
@@ -25,14 +32,18 @@ type DevoirRow = Assignment & {
   }[];
 };
 
-export default function MesDevoirs() {
+type Props = {
+  kind: AssignmentKind;
+};
+
+export default function MesDevoirs({ kind }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const { data: assignments = [], isLoading } = useQuery({
-    queryKey: ["mes-devoirs", user?.id],
+    queryKey: ["mes-devoirs", user?.id, kind],
     enabled: !!user?.id,
     queryFn: async () => {
       const { data: enrollment } = await supabase
@@ -53,6 +64,7 @@ export default function MesDevoirs() {
           "class_section_id",
           (enrollment as { class_section_id: string }).class_section_id,
         )
+        .eq("kind", kind)
         .eq("rendus_devoirs.student_id", user!.id)
         .order("due_date", { ascending: true });
       if (error) throw error;
@@ -89,8 +101,8 @@ export default function MesDevoirs() {
         });
         if (error) throw error;
       }
-      toast.success("Devoir rendu");
-      void qc.invalidateQueries({ queryKey: ["mes-devoirs", user.id] });
+      toast.success(assignmentKindSubmittedToast(kind));
+      void qc.invalidateQueries({ queryKey: ["mes-devoirs", user.id, kind] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Envoi impossible");
     } finally {
@@ -101,14 +113,22 @@ export default function MesDevoirs() {
   return (
     <div>
       <PageHeader
-        title="Mes devoirs"
-        subtitle="Consultez et rendez vos devoirs"
+        title={
+          kind === "examen"
+            ? "Mes examens"
+            : "Mes exercices de maison"
+        }
+        subtitle={
+          kind === "examen"
+            ? "Consultez et rendez vos examens"
+            : "Consultez et rendez vos exercices"
+        }
       />
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
       ) : assignments.length === 0 ? (
-        <EmptyState message="Aucun devoir assigné." />
+        <EmptyState message={assignmentKindEmpty(kind)} />
       ) : (
         <div className="space-y-3">
           {assignments.map((a) => {
@@ -117,7 +137,13 @@ export default function MesDevoirs() {
             const overdue =
               !done &&
               a.due_date &&
-              isPast(parseISO(a.due_date.length === 10 ? `${a.due_date}T23:59:59` : a.due_date));
+              isPast(
+                parseISO(
+                  a.due_date.length === 10
+                    ? `${a.due_date}T23:59:59`
+                    : a.due_date,
+                ),
+              );
             const busy = busyId === a.id;
             return (
               <Card key={a.id}>
@@ -127,12 +153,12 @@ export default function MesDevoirs() {
                     <p className="text-sm text-slate-500">
                       {a.matieres?.name ?? "—"}
                       {a.max_score ? ` · / ${a.max_score}` : ""}
+                      {" · "}
+                      {assignmentKindLabel(kind)}
                     </p>
                   </div>
                   <Badge
-                    tone={
-                      done ? "success" : overdue ? "danger" : "warning"
-                    }
+                    tone={done ? "success" : overdue ? "danger" : "warning"}
                   >
                     {done ? "Rendu" : overdue ? "En retard" : "À faire"}
                   </Badge>
@@ -142,7 +168,7 @@ export default function MesDevoirs() {
                 ) : null}
                 {a.due_date ? (
                   <p className="mt-1 text-xs text-slate-400">
-                    Échéance :{" "}
+                    {kind === "examen" ? "Date : " : "Échéance : "}
                     {format(new Date(a.due_date), "d MMMM yyyy", {
                       locale: fr,
                     })}
@@ -205,7 +231,11 @@ export default function MesDevoirs() {
                     <textarea
                       id={`rendu-${a.id}`}
                       className="mt-1 min-h-[100px] w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
-                      placeholder="Écrivez votre devoir ici…"
+                      placeholder={
+                        kind === "examen"
+                          ? "Écrivez votre examen ici…"
+                          : "Écrivez votre exercice ici…"
+                      }
                       value={drafts[a.id] ?? ""}
                       onChange={(e) =>
                         setDrafts((prev) => ({
@@ -219,7 +249,7 @@ export default function MesDevoirs() {
                       disabled={busy}
                       onClick={() => void submit(a)}
                     >
-                      {busy ? "Envoi…" : "Rendre le devoir"}
+                      {busy ? "Envoi…" : assignmentKindSubmitLabel(kind)}
                     </Button>
                   </div>
                 )}
@@ -230,4 +260,12 @@ export default function MesDevoirs() {
       )}
     </div>
   );
+}
+
+export function MesExercicesPage() {
+  return <MesDevoirs kind="exercice_maison" />;
+}
+
+export function MesExamensPage() {
+  return <MesDevoirs kind="examen" />;
 }

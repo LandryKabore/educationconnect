@@ -12,6 +12,12 @@ import type { Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
+import {
+  CLASS_COLOR_SURFACE,
+  classColorVars,
+} from "@/lib/classColors";
+import { cn } from "@/lib/utils";
 import {
   TimetableGrid,
   type TimetableGridSlot,
@@ -457,6 +463,39 @@ export default function EmploisDuTemps() {
                 ))
               )}
             </Select>
+            {filterClassId ? (
+              <div className="mt-2">
+                <ClassColorBadge
+                  id={filterClassId}
+                  name={classNameById.get(filterClassId) ?? "Classe"}
+                />
+              </div>
+            ) : null}
+            {classes.length > 1 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {classes.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setFilterClassId(c.id);
+                      setFilterTeacherId("");
+                    }}
+                    style={classColorVars({ id: c.id, name: c.name })}
+                    data-class-color
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium transition",
+                      filterClassId === c.id
+                        ? CLASS_COLOR_SURFACE
+                        : "border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
+                    )}
+                  >
+                    <ClassColorDot id={c.id} name={c.name} />
+                    <span className="max-w-[5.5rem] truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div>
             <Label>Filtrer par enseignant</Label>
