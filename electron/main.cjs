@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session } = require("electron");
+const { app, BrowserWindow, shell, session, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
@@ -13,6 +13,21 @@ if (instance) {
   app.setPath("userData", dir);
 }
 
+function appEntryUrl(win) {
+  if (isDev) {
+    return process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
+  }
+  return path.join(__dirname, "..", "dist", "index.html");
+}
+
+function loadApp(win) {
+  if (isDev) {
+    void win.loadURL(appEntryUrl(win));
+  } else {
+    void win.loadFile(appEntryUrl(win));
+  }
+}
+
 function createWindow() {
   const index = Number(instance) || 1;
   const offset = (index - 1) * 40;
@@ -25,7 +40,9 @@ function createWindow() {
     x: 40 + offset,
     y: 40 + offset,
     title: instance ? `EduFaso (${instance})` : "EduFaso",
-    backgroundColor: "#0f766e",
+    // Soft slate — avoids a harsh black flash if the renderer stalls
+    backgroundColor: "#1a2030",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -34,19 +51,66 @@ function createWindow() {
     },
   });
 
+  win.once("ready-to-show", () => {
+    win.show();
+  });
+
+  loadApp(win);
+
   if (isDev) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL || "http://localhost:5173");
     // Avoid opening 3 DevTools when multi-instancing
     if (!instance || process.env.EDUFASO_DEVTOOLS === "1") {
       win.webContents.openDevTools({ mode: "detach" });
     }
-  } else {
-    win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  // Renderer crash (OOM, GPU, etc.) → reload instead of a blank window
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[EduFaso] render-process-gone", details);
+    const choice = dialog.showMessageBoxSync(win, {
+      type: "error",
+      title: "EduFaso — plantage",
+      message: "L’application a planté.",
+      detail:
+        "Le moteur d’affichage s’est arrêté. Vous pouvez recharger pour continuer.",
+      buttons: ["Recharger", "Fermer"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) loadApp(win);
+    else win.close();
+  });
+
+  win.webContents.on("unresponsive", () => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: "warning",
+      title: "EduFaso — ne répond plus",
+      message: "L’application ne répond plus.",
+      detail: "Voulez-vous recharger la fenêtre ?",
+      buttons: ["Recharger", "Attendre"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) loadApp(win);
+  });
+
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    if (errorCode === -3) return; // aborted
+    console.error("[EduFaso] did-fail-load", errorCode, errorDescription);
+    dialog.showMessageBox(win, {
+      type: "error",
+      title: "EduFaso — chargement impossible",
+      message: "Impossible de charger l’application.",
+      detail: `${errorDescription} (${errorCode})`,
+      buttons: ["Recharger"],
+    }).then(({ response }) => {
+      if (response === 0) loadApp(win);
+    });
   });
 }
 

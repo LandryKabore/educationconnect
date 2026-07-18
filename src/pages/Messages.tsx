@@ -612,7 +612,7 @@ export default function Messages() {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel(`messages-live:${user.id}`)
+      .channel(`messages-live:${user.id}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {

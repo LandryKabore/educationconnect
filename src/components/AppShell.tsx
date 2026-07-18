@@ -24,6 +24,7 @@ import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { useStudentTimetableRealtime, useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui";
 import { cn, fullName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
@@ -312,7 +313,13 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <Outlet />
+          <ErrorBoundary
+            scope="page"
+            compact
+            resetKeys={[location.pathname, location.search]}
+          >
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
