@@ -10,8 +10,8 @@ import {
   isPasswordStrong,
   passwordStrengthError,
 } from "@/lib/passwordRules";
-import { cn } from "@/lib/utils";
-import { Button, Card, Label, PasswordInput } from "@/components/ui";
+import { cn, fromAuthEmail } from "@/lib/utils";
+import { Badge, Button, Card, Label, PasswordInput } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function PremiereConnexion() {
@@ -31,6 +31,11 @@ export default function PremiereConnexion() {
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const effectiveRole = role ?? realRole;
+  const identifiant = fromAuthEmail(session?.user?.email);
+  const displayName = [profile?.first_name, profile?.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 
   if (!loading && !session) {
     return <Navigate to="/connexion" replace />;
@@ -75,6 +80,19 @@ export default function PremiereConnexion() {
       <Card className="w-full max-w-md">
         <h1 className="text-xl font-bold text-slate-900">{t("premiere.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("premiere.subtitle")}</p>
+        {identifiant || displayName ? (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            {displayName ? (
+              <p className="text-sm font-medium text-slate-900">{displayName}</p>
+            ) : null}
+            {identifiant ? (
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span>Identifiant</span>
+                <Badge>{identifiant}</Badge>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-4">
           <div>

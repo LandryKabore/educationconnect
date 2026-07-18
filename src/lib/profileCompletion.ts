@@ -24,7 +24,6 @@ export const PROFILE_FIELDS_BY_ROLE: Partial<
     { key: "last_name", label: "Nom", required: true, type: "text" },
     { key: "phone", label: "Téléphone", required: true, type: "tel" },
     { key: "gender", label: "Sexe", required: true, type: "gender" },
-    { key: "address", label: "Adresse", required: false, type: "text" },
   ],
   student: [
     { key: "first_name", label: "Prénom", required: true, type: "text" },
@@ -37,13 +36,11 @@ export const PROFILE_FIELDS_BY_ROLE: Partial<
     },
     { key: "gender", label: "Sexe", required: true, type: "gender" },
     { key: "phone", label: "Téléphone", required: true, type: "tel" },
-    { key: "address", label: "Adresse", required: true, type: "text" },
   ],
   parent: [
     { key: "first_name", label: "Prénom", required: true, type: "text" },
     { key: "last_name", label: "Nom", required: true, type: "text" },
     { key: "phone", label: "Téléphone", required: true, type: "tel" },
-    { key: "address", label: "Adresse", required: true, type: "text" },
     { key: "gender", label: "Sexe", required: false, type: "gender" },
   ],
 };

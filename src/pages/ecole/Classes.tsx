@@ -16,7 +16,6 @@ import {
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
-import { fetchProgrammeCountsByClass } from "@/lib/programmeCounts";
 import { cn } from "@/lib/utils";
 import {
   Button,
@@ -82,17 +81,6 @@ export default function Classes() {
       return data as (ClassSection & { annees_scolaires: { label: string } })[];
     },
   });
-
-  const { data: programmeCounts = {} } = useQuery({
-    queryKey: ["classes-with-programme", schoolId, "v4"],
-    enabled: !!schoolId,
-    queryFn: () => fetchProgrammeCountsByClass(schoolId!),
-  });
-
-  const classesWithProg = useMemo(
-    () => new Set(Object.keys(programmeCounts)),
-    [programmeCounts],
-  );
 
   const classesForYear = useMemo(
     () =>
@@ -501,49 +489,28 @@ export default function Classes() {
         <EmptyState message="Aucune classe pour cette année. Cochez la liste ci-dessus." />
       ) : (
         <Card>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-slate-900">
-                {classesForYear.length} classe(s) pour cette année
-              </p>
-              <p className="text-sm text-slate-500">
-                {classesForYear.filter((c) => classesWithProg.has(c.id)).length}/
-                {classesForYear.length} avec programme — ouvrez une classe pour
-                corriger les coefs ou voir les enseignants
-              </p>
-            </div>
-            <Link to="/programmes">
-              <Button type="button">Définir les programmes →</Button>
-            </Link>
-          </div>
+          <p className="mb-4 font-semibold text-slate-900">
+            {classesForYear.length} classe(s) pour cette année
+          </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {classesForYear.map((c) => {
-              const hasProg = classesWithProg.has(c.id);
-              return (
-                <Link
-                  key={c.id}
-                  to={`/classes/${c.id}?tab=programme`}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
-                >
-                  <span className="min-w-0">
-                    <span className="block font-medium text-slate-900">{c.name}</span>
-                    {c.grade_level ? (
-                      <span className="text-xs text-slate-500">{c.grade_level}</span>
-                    ) : null}
+            {classesForYear.map((c) => (
+              <Link
+                key={c.id}
+                to={`/classes/${c.id}`}
+                className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium text-slate-900">
+                    {c.name}
                   </span>
-                  <span
-                    className={cn(
-                      "shrink-0 text-xs font-medium",
-                      hasProg ? "text-emerald-700" : "text-amber-700",
-                    )}
-                  >
-                    {hasProg
-                      ? `${programmeCounts[c.id] ?? 0} matière(s)`
-                      : "À faire"}
-                  </span>
-                </Link>
-              );
-            })}
+                  {c.grade_level ? (
+                    <span className="text-xs text-slate-500">
+                      {c.grade_level}
+                    </span>
+                  ) : null}
+                </span>
+              </Link>
+            ))}
           </div>
         </Card>
       )}

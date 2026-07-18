@@ -47,7 +47,13 @@ import { useAuth } from "@/contexts/AuthContext";
 
 function HomeRedirect() {
   const { homePath, loading } = useAuth();
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-slate-500">
+        Chargement…
+      </div>
+    );
+  }
   return <Navigate to={homePath} replace />;
 }
 

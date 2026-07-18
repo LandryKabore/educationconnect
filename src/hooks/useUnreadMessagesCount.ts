@@ -30,8 +30,10 @@ export function useUnreadMessagesCount() {
   useEffect(() => {
     if (!userId) return;
 
+    // Unique channel name per mount — AppShell + pages may use this hook
+    // together, and Strict Mode remounts; reusing a subscribed channel throws.
     const channel = supabase
-      .channel(`messages-unread-badge:${userId}`)
+      .channel(`messages-unread-badge:${userId}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {

@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { useStudentTimetableRealtime, useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui";
@@ -32,7 +33,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
-  badgeKey?: "eleves-sans-classe" | "messages-unread";
+  badgeKey?: "eleves-sans-classe" | "messages-unread" | "edt-updates";
 }
 
 const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -80,7 +81,7 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/mes-notes", label: "Mes notes", icon: <BookOpen className="h-4 w-4" /> },
     { to: "/mes-devoirs", label: "Mes devoirs", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/mes-presences", label: "Mes présences", icon: <CheckCircle2 className="h-4 w-4" /> },
-    { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <Calendar className="h-4 w-4" /> },
+    { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <Calendar className="h-4 w-4" />, badgeKey: "edt-updates" },
     { to: "/mon-bulletin", label: "Mon bulletin", icon: <GraduationCap className="h-4 w-4" /> },
     { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
@@ -139,8 +140,10 @@ export function AppShell() {
 
   const { data: sansClasseCount = 0 } = useStudentsWithoutClassCount();
   const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
+  useStudentTimetableRealtime();
+  const { pendingCount: edtUpdatesCount = 0 } = useEdtPendingChanges();
 
-  const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" } | null => {
+  const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" | "brand" } | null => {
     if (item.badgeKey === "eleves-sans-classe" && sansClasseCount > 0) {
       return {
         count: sansClasseCount,
@@ -153,6 +156,13 @@ export function AppShell() {
         count: unreadMessagesCount,
         title: `${unreadMessagesCount} message(s) non lu(s)`,
         tone: "rose",
+      };
+    }
+    if (item.badgeKey === "edt-updates" && edtUpdatesCount > 0) {
+      return {
+        count: edtUpdatesCount,
+        title: `${edtUpdatesCount} modification(s) de l’emploi du temps`,
+        tone: "brand",
       };
     }
     return null;
@@ -243,7 +253,9 @@ export function AppShell() {
                   <span
                     className={cn(
                       "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white",
-                      badge.tone === "rose" ? "bg-rose-500" : "bg-amber-500",
+                      badge.tone === "rose" && "bg-rose-500",
+                      badge.tone === "amber" && "bg-amber-500",
+                      badge.tone === "brand" && "bg-brand-600",
                     )}
                     title={badge.title}
                   >

@@ -388,6 +388,11 @@ export default function Matieres() {
               type="button"
               size="sm"
               disabled={saving || selected.size === 0}
+              className={
+                selected.size === 0
+                  ? "dark:bg-slate-600 dark:text-slate-200 dark:opacity-100"
+                  : undefined
+              }
               onClick={() => void handleAddSelected()}
             >
               {saving
@@ -446,10 +451,10 @@ export default function Matieres() {
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
                           already
-                            ? "cursor-default bg-emerald-50 text-emerald-900"
+                            ? "cursor-default border border-slate-200 bg-slate-100"
                             : checked
-                              ? "cursor-pointer bg-brand-50 text-brand-950"
-                              : "cursor-pointer hover:bg-slate-50",
+                              ? "cursor-pointer border border-brand-200 bg-brand-50 text-slate-900"
+                              : "cursor-pointer border border-transparent hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
                         )}
                       >
                         <input
@@ -459,14 +464,24 @@ export default function Matieres() {
                           disabled={already}
                           onChange={() => toggleCatalog(item)}
                         />
-                        <span className="min-w-0 flex-1 font-medium">
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 font-medium",
+                            already && "text-emerald-600",
+                          )}
+                        >
                           {item.name}
-                          <span className="ml-1.5 text-xs font-normal text-slate-400">
+                          <span
+                            className={cn(
+                              "ml-1.5 text-xs font-normal",
+                              already ? "text-emerald-600/70" : "text-slate-500",
+                            )}
+                          >
                             {item.code}
                           </span>
                         </span>
                         {already ? (
-                          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-700">
+                          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-emerald-600">
                             <Check className="h-3.5 w-3.5" />
                             Ajoutée
                           </span>

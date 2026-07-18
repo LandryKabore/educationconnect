@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -90,6 +90,36 @@ export default function Eleves() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const selectedClassId = searchParams.get("classe") ?? "";
+  const search = searchParams.get("q") ?? "";
+
+  const setSelectedClassId = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set("classe", value);
+        else next.delete("classe");
+        next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const setSearch = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        const trimmed = value.trimStart();
+        if (trimmed) next.set("q", value);
+        else next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -114,10 +144,7 @@ export default function Eleves() {
   const [importFailed, setImportFailed] = useState<
     { line: number | null; firstName: string; lastName: string; error: string }[]
   >([]);
-  const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  /** Selected class id, or `__none__` for students without a class */
-  const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [bulkClassId, setBulkClassId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -1044,7 +1071,6 @@ export default function Eleves() {
               value={selectedClassId}
               onChange={(e) => {
                 setSelectedClassId(e.target.value);
-                setSearch("");
                 setSelectedStudentIds([]);
                 setBulkClassId("");
               }}
@@ -1189,6 +1215,11 @@ export default function Eleves() {
                             ) : null}
                             <Link
                               to={`/eleves/${s.id}`}
+                              state={{
+                                elevesList: searchParams.toString()
+                                  ? `/eleves?${searchParams.toString()}`
+                                  : "/eleves",
+                              }}
                               className="flex min-w-0 flex-1 items-start gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
                             >
                               <ProfileAvatar

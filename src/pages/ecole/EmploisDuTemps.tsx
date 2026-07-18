@@ -16,6 +16,7 @@ import {
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
+import { useSchoolTimetableRealtime } from "@/hooks/useStudentTimetableUpdates";
 import {
   Button,
   Card,
@@ -48,7 +49,9 @@ const TIMETABLE_TIME_OPTIONS = (() => {
 export default function EmploisDuTemps() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
+  useSchoolTimetableRealtime(schoolId);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [filterClassId, setFilterClassId] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
   const [classId, setClassId] = useState("");
@@ -177,9 +180,10 @@ export default function EmploisDuTemps() {
         .filter((a) => a.class_section_id === classId)
         .map((a) => a.teacher_id),
     );
+    if (teacherId) ids.add(teacherId);
     if (ids.size === 0) return teachers;
     return teachers.filter((t) => ids.has(t.id));
-  }, [teachers, assignments, classId]);
+  }, [teachers, assignments, classId, teacherId]);
 
   const filterTeachers = useMemo(() => {
     if (!filterClassId) return teachers;
@@ -209,10 +213,12 @@ export default function EmploisDuTemps() {
         )
         .map((a) => a.subject_id),
     );
+    // Keep current subject visible when editing even if affectation changed.
+    if (subjectId) subjectIds.add(subjectId);
     return subjects
       .filter((s) => subjectIds.has(s.id))
       .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-  }, [assignments, teacherId, classId, subjects]);
+  }, [assignments, teacherId, classId, subjects, subjectId]);
 
   const describeSlot = useMemo(() => {
     return (slot: {
@@ -239,6 +245,7 @@ export default function EmploisDuTemps() {
     const teacher = teachers.find((t) => t.id === teacherId);
     return findTimetableConflicts(
       {
+        id: editingId ?? undefined,
         class_section_id: classId,
         teacher_id: teacherId,
         room: room.trim() || null,
@@ -258,6 +265,7 @@ export default function EmploisDuTemps() {
   }, [
     classId,
     showForm,
+    editingId,
     teacherId,
     room,
     dayOfWeek,
@@ -296,12 +304,40 @@ export default function EmploisDuTemps() {
 
   const resetForm = () => {
     setShowForm(false);
+    setEditingId(null);
     setSubjectId("");
     setTeacherId("");
     setRoom("");
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openCreate = () => {
+    setEditingId(null);
+    setSubjectId("");
+    setTeacherId("");
+    setDayOfWeek("1");
+    setStartTime("08:00");
+    setEndTime("09:00");
+    setRoom("");
+    setClassId(filterClassId || classId || "");
+    setShowForm(true);
+  };
+
+  const openEdit = (id: string) => {
+    const slot = slots.find((s) => s.id === id);
+    if (!slot) return;
+    setEditingId(slot.id);
+    setClassId(slot.class_section_id);
+    setTeacherId(slot.teacher_id ?? "");
+    setSubjectId(slot.subject_id);
+    setDayOfWeek(String(slot.day_of_week));
+    setStartTime(slot.start_time.slice(0, 5));
+    setEndTime(slot.end_time.slice(0, 5));
+    setRoom(slot.room ?? "");
+    setFilterClassId(slot.class_section_id);
+    setShowForm(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!classId || !subjectId || !teacherId) {
       toast.error("Choisissez classe, enseignant et matière");
@@ -311,6 +347,7 @@ export default function EmploisDuTemps() {
     const teacher = teachers.find((t) => t.id === teacherId);
     const conflicts = findTimetableConflicts(
       {
+        id: editingId ?? undefined,
         class_section_id: classId,
         teacher_id: teacherId,
         room: room.trim() || null,
@@ -333,8 +370,7 @@ export default function EmploisDuTemps() {
       return;
     }
 
-    setSaving(true);
-    const { error } = await supabase.from("creneaux_edt").insert({
+    const payload = {
       class_section_id: classId,
       subject_id: subjectId,
       teacher_id: teacherId,
@@ -342,14 +378,22 @@ export default function EmploisDuTemps() {
       start_time: startTime,
       end_time: endTime,
       room: room.trim() || null,
-    });
+    };
+
+    setSaving(true);
+    const { error } = editingId
+      ? await supabase.from("creneaux_edt").update(payload).eq("id", editingId)
+      : await supabase.from("creneaux_edt").insert(payload);
     setSaving(false);
 
     if (error) {
-      toast.error(error.message || "Erreur lors de l'ajout");
+      toast.error(
+        error.message ||
+          (editingId ? "Erreur lors de la modification" : "Erreur lors de l'ajout"),
+      );
       return;
     }
-    toast.success("Créneau ajouté");
+    toast.success(editingId ? "Créneau modifié" : "Créneau ajouté");
     setFilterClassId(classId);
     resetForm();
     void qc.invalidateQueries({ queryKey: ["creneaux", schoolId] });
@@ -357,6 +401,20 @@ export default function EmploisDuTemps() {
   };
 
   const removeSlot = async (id: string) => {
+    const slot = slots.find((s) => s.id === id);
+    const subject = slot?.matieres?.name ?? "ce créneau";
+    const day = slot ? formatDay(slot.day_of_week) : "";
+    const time =
+      slot?.start_time && slot?.end_time
+        ? `${slot.start_time.slice(0, 5)}–${slot.end_time.slice(0, 5)}`
+        : "";
+    const detail = [subject, day, time].filter(Boolean).join(" · ");
+
+    const ok = window.confirm(
+      `Supprimer ce créneau ?\n\n${detail}\n\nCette action est définitive.`,
+    );
+    if (!ok) return;
+
     const { error } = await supabase.from("creneaux_edt").delete().eq("id", id);
     if (error) toast.error("Suppression impossible");
     else {
@@ -371,16 +429,9 @@ export default function EmploisDuTemps() {
       <SetupGuideBar />
       <PageHeader
         title="Emplois du temps"
-        subtitle="Par classe, avec contrôle des conflits (classe, prof, salle)"
+        subtitle="Lundi à samedi · conflits classe, enseignant et salle"
         actions={
-          <Button
-            onClick={() => {
-              setShowForm(true);
-              if (!classId && filterClassId) setClassId(filterClassId);
-            }}
-          >
-            Ajouter un créneau
-          </Button>
+          <Button onClick={openCreate}>Ajouter un créneau</Button>
         }
       />
 
@@ -427,11 +478,11 @@ export default function EmploisDuTemps() {
       {showForm ? (
         <Modal
           open={showForm}
-          title="Ajouter un créneau"
+          title={editingId ? "Modifier le créneau" : "Ajouter un créneau"}
           onClose={resetForm}
           closeDisabled={saving}
         >
-          <form onSubmit={(e) => void handleCreate(e)} className="space-y-4">
+          <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
             <div>
               <Label>Classe</Label>
               <Select
@@ -581,7 +632,11 @@ export default function EmploisDuTemps() {
                   !subjectId
                 }
               >
-                {saving ? "Ajout…" : "Ajouter"}
+                {saving
+                  ? "Enregistrement…"
+                  : editingId
+                    ? "Enregistrer"
+                    : "Ajouter"}
               </Button>
               <Button type="button" variant="ghost" onClick={resetForm}>
                 Annuler
@@ -603,6 +658,7 @@ export default function EmploisDuTemps() {
           <TimetableGrid
             slots={gridSlots}
             title={`Emploi du temps — ${classNameById.get(filterClassId) ?? "classe"}`}
+            onSelect={openEdit}
             onRemove={(id) => void removeSlot(id)}
           />
         </div>

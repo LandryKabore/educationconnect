@@ -33,7 +33,7 @@ export function Button({
         variant === "secondary" &&
           "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
         variant === "outline" &&
-          "border border-slate-300 bg-white hover:bg-slate-50 dark:border-slate-600 dark:bg-[var(--surface)] dark:hover:bg-[var(--surface-2)]",
+          "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-100 dark:hover:bg-[#323a4f]",
         variant === "ghost" &&
           "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
         variant === "danger" && "bg-red-600 text-white hover:bg-red-700",
@@ -491,14 +491,7 @@ export function BackLink({
   return (
     <button
       type="button"
-      onClick={() => {
-        const idx = (window.history.state as { idx?: number } | null)?.idx;
-        if (typeof idx === "number" && idx > 0) {
-          navigate(-1);
-        } else {
-          navigate(to);
-        }
-      }}
+      onClick={() => navigate(to)}
       className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
     >
       <ArrowLeft className="h-4 w-4" />
@@ -509,7 +502,7 @@ export function BackLink({
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-100 px-4 py-10 text-center text-sm font-medium text-slate-600 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-200">
       {message}
     </div>
   );

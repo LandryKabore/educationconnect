@@ -75,10 +75,22 @@ textarea {
   background-color: var(--surface) !important;
 }
 .dark .bg-slate-50 {
-  background-color: var(--bg) !important;
+  background-color: var(--surface-2) !important;
+}
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/80 {
+  background-color: var(--surface-2) !important;
+}
+.dark .hover\:bg-slate-50:hover {
+  background-color: #323a4f !important;
 }
 .dark .bg-slate-100 {
   background-color: var(--surface-2) !important;
+}
+.dark .hover\:bg-slate-100:hover {
+  background-color: #323a4f !important;
 }
 .dark .bg-slate-200 {
   background-color: #364156 !important;
@@ -96,52 +108,76 @@ textarea {
   color: #cbd5e1 !important;
 }
 .dark .text-slate-500 {
-  color: #a8b4c4 !important;
+  color: #b6c2d4 !important;
 }
 .dark .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #a8b4c4 !important;
 }
 .dark .text-slate-300 {
-  color: #9aa6b8 !important;
+  color: #c5cedc !important;
 }
 
 .dark .border-slate-100 {
   border-color: #323c4e !important;
 }
-.dark .border-slate-200 {
+.dark .border-slate-200,
+.dark .border-slate-200\/80 {
   border-color: var(--border) !important;
 }
 .dark .border-slate-300 {
-  border-color: #4a556b !important;
+  border-color: #5a657a !important;
 }
-.dark .border-dashed.border-slate-300 {
-  border-color: #4a556b !important;
+.dark .border-dashed.border-slate-300,
+.dark .border-dashed.border-slate-200 {
+  border-color: #6b778c !important;
+}
+.dark .border-slate-500 {
+  border-color: #7a879c !important;
 }
 
 .dark .bg-brand-50 {
+  background-color: rgba(45, 212, 191, 0.14) !important;
+}
+.dark .bg-brand-50\/40 {
   background-color: rgba(45, 212, 191, 0.12) !important;
 }
-.dark .bg-brand-100 {
-  background-color: rgba(45, 212, 191, 0.18) !important;
+.dark .bg-brand-50\/60 {
+  background-color: rgba(45, 212, 191, 0.16) !important;
 }
+.dark .hover\:bg-brand-50\/60:hover {
+  background-color: rgba(45, 212, 191, 0.2) !important;
+}
+.dark .bg-brand-100 {
+  background-color: rgba(45, 212, 191, 0.2) !important;
+}
+.dark .border-brand-100,
 .dark .border-brand-200 {
-  border-color: rgba(45, 212, 191, 0.35) !important;
+  border-color: rgba(45, 212, 191, 0.45) !important;
+}
+.dark .ring-brand-100 {
+  --tw-ring-color: rgba(45, 212, 191, 0.35) !important;
 }
 .dark .text-brand-950 {
-  color: #ccfbf1 !important;
+  color: #f0fdfa !important;
 }
 .dark .text-brand-900 {
-  color: #99f6e4 !important;
+  color: #ccfbf1 !important;
 }
 .dark .text-brand-800 {
-  color: #5eead4 !important;
+  color: #99f6e4 !important;
 }
-.dark .text-brand-700 {
-  color: #2dd4bf !important;
+.dark .text-brand-700,
+.dark .text-brand-600,
+.dark .hover\:text-brand-800:hover,
+.dark .hover\:text-brand-300:hover {
+  color: #5eead4 !important;
 }
 
 .dark .bg-amber-50 {
   background-color: rgba(245, 158, 11, 0.18) !important;
+}
+.dark .bg-amber-50\/80 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
 }
 .dark .bg-amber-100 {
   background-color: #b45309 !important;
@@ -152,8 +188,9 @@ textarea {
 .dark .text-amber-950,
 .dark .text-amber-900,
 .dark .text-amber-800,
-.dark .text-amber-700 {
-  color: #ffedd5 !important;
+.dark .text-amber-700,
+.dark .text-amber-600 {
+  color: #fde68a !important;
 }
 
 .dark .bg-emerald-50 {
@@ -162,9 +199,11 @@ textarea {
 .dark .bg-emerald-100 {
   background-color: #047857 !important;
 }
+.dark .text-emerald-600,
+.dark .text-emerald-700,
 .dark .text-emerald-800,
 .dark .text-emerald-900 {
-  color: #ecfdf5 !important;
+  color: #34d399 !important;
 }
 
 .dark .bg-sky-50 {
@@ -173,9 +212,10 @@ textarea {
 .dark .bg-sky-100 {
   background-color: #0369a1 !important;
 }
-.dark .text-sky-800,
-.dark .text-sky-700 {
-  color: #f0f9ff !important;
+.dark .text-sky-600,
+.dark .text-sky-700,
+.dark .text-sky-800 {
+  color: #7dd3fc !important;
 }
 
 .dark .bg-red-50 {
@@ -185,8 +225,52 @@ textarea {
   background-color: #b91c1c !important;
 }
 .dark .text-red-800,
-.dark .text-red-700 {
-  color: #fef2f2 !important;
+.dark .text-red-700,
+.dark .text-rose-600,
+.dark .text-rose-700 {
+  color: #fda4af !important;
+}
+
+/* Emploi du temps slots: dark fills + light ink (beat global slate remaps) */
+.dark [data-edt-slot] {
+  color: #f8fafc;
+}
+.dark [data-edt-slot] .edt-slot-title,
+.dark [data-edt-slot] .edt-slot-title.text-slate-900 {
+  color: #ffffff !important;
+}
+.dark [data-edt-slot] .edt-slot-body,
+.dark [data-edt-slot] .edt-slot-body.text-slate-700,
+.dark [data-edt-slot] .edt-slot-body.text-slate-600 {
+  color: #e2e8f0 !important;
+}
+.dark [data-edt-slot] .edt-slot-muted,
+.dark [data-edt-slot] .edt-slot-muted.text-slate-500 {
+  color: #cbd5e1 !important;
+}
+.dark [data-edt-slot].bg-sky-50,
+.dark [data-edt-slot].dark\:\!bg-sky-900 {
+  background-color: #0c4a6e !important;
+}
+.dark [data-edt-slot].bg-emerald-50,
+.dark [data-edt-slot].dark\:\!bg-emerald-900 {
+  background-color: #064e3b !important;
+}
+.dark [data-edt-slot].bg-amber-50,
+.dark [data-edt-slot].dark\:\!bg-amber-900 {
+  background-color: #78350f !important;
+}
+.dark [data-edt-slot].bg-rose-50,
+.dark [data-edt-slot].dark\:\!bg-rose-900 {
+  background-color: #881337 !important;
+}
+.dark [data-edt-slot].bg-violet-50,
+.dark [data-edt-slot].dark\:\!bg-violet-900 {
+  background-color: #4c1d95 !important;
+}
+.dark [data-edt-slot].bg-teal-50,
+.dark [data-edt-slot].dark\:\!bg-teal-900 {
+  background-color: #134e4a !important;
 }
 
 .dark .from-brand-50 {
@@ -212,4 +296,70 @@ textarea {
 }
 .dark ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@keyframes greeting-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes greeting-name-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-greeting {
+  animation: greeting-in 0.5s ease-out both;
+}
+
+.animate-greeting-name {
+  animation: greeting-name-in 0.55s ease-out 0.12s both;
+}
+
+@keyframes greeting-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  15% {
+    transform: rotate(14deg);
+  }
+  30% {
+    transform: rotate(-8deg);
+  }
+  45% {
+    transform: rotate(14deg);
+  }
+  60% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+
+.animate-greeting-wave {
+  display: inline-block;
+  transform-origin: 70% 70%;
+  animation: greeting-wave 1.2s ease-in-out 0.35s 2 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-greeting,
+  .animate-greeting-name,
+  .animate-greeting-wave {
+    animation: none;
+  }
 }

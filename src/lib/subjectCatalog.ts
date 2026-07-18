@@ -20,7 +20,7 @@ export type SubjectCategory = (typeof SUBJECT_CATEGORIES)[number];
 export const SUBJECT_CATALOG: CatalogSubject[] = [
   // Primaire — curricula Burkina (champs disciplinaires)
   { name: "Français", code: "FR", category: "Primaire" },
-  { name: "Mathématiques", code: "MATH", category: "Primaire" },
+  { name: "Calcul", code: "CAL", category: "Primaire" },
   { name: "Anglais", code: "ANG", category: "Primaire" },
   { name: "Exercices d’observation", code: "OBS", category: "Primaire" },
   { name: "Histoire", code: "HIST", category: "Primaire" },
@@ -47,7 +47,6 @@ export const SUBJECT_CATALOG: CatalogSubject[] = [
   { name: "Lecture", code: "LEC", category: "Primaire" },
   { name: "Écriture", code: "ECR", category: "Primaire" },
   { name: "Expression orale", code: "EO", category: "Primaire" },
-  { name: "Calcul", code: "CAL", category: "Primaire" },
   { name: "Éveil scientifique", code: "EVEIL", category: "Primaire" },
 
   // Langues — collège / lycée
@@ -158,7 +157,7 @@ export function catalogKey(item: Pick<CatalogSubject, "name" | "code">): string 
 
 /**
  * Map a school subject to a catalog section.
- * Prefers Primaire when the subject exists there (shared codes like FR/MATH).
+ * Prefers Primaire when the subject exists there (shared codes like FR/ANG).
  */
 export function resolveSubjectCategory(s: {
   name: string;

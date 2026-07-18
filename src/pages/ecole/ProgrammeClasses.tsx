@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AcademicYear, ClassSection, Subject } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { Modal } from "@/components/Modal";
 import { cn } from "@/lib/utils";
 import {
   SUBJECT_CATEGORIES,
@@ -13,6 +14,13 @@ import {
 } from "@/lib/subjectCatalog";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { fetchProgrammeCountsByClass } from "@/lib/programmeCounts";
+import {
+  PROGRAMME_TEMPLATES,
+  classMatchesTemplate,
+  getTemplate,
+  matchTemplateToSchoolSubjects,
+  type ProgrammeTemplateId,
+} from "@/lib/programmeTemplates";
 import {
   Button,
   Card,
@@ -22,15 +30,84 @@ import {
   Select,
 } from "@/components/ui";
 
+function SubjectRow({
+  subject,
+  checked,
+  coef,
+  onToggle,
+  onCoefChange,
+}: {
+  subject: Subject;
+  checked: boolean;
+  coef: string;
+  onToggle: () => void;
+  onCoefChange: (value: string) => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition",
+        checked ? "bg-brand-50" : "hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
+      )}
+    >
+      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+          checked={checked}
+          onChange={onToggle}
+        />
+        <span className="min-w-0 flex-1 font-medium leading-snug">
+          {subject.name}
+          {subject.code ? (
+            <span className="ml-1 text-xs font-normal text-slate-400">
+              ({subject.code})
+            </span>
+          ) : null}
+        </span>
+      </label>
+      <input
+        type="number"
+        min="0.5"
+        step="0.5"
+        title={`Coefficient ${subject.name}`}
+        aria-label={`Coefficient ${subject.name}`}
+        disabled={!checked}
+        value={checked ? coef : ""}
+        placeholder="Coef"
+        onChange={(e) => {
+          if (!checked) return;
+          onCoefChange(e.target.value);
+        }}
+        className={cn(
+          "h-8 w-14 shrink-0 rounded-lg border px-1.5 text-center text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100",
+          checked
+            ? "border-slate-300 bg-white"
+            : "border-slate-200 bg-slate-50 text-slate-300",
+        )}
+      />
+    </div>
+  );
+}
+
 export default function ProgrammeClasses() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
 
   const [yearId, setYearId] = useState("");
-  const [progSubjects, setProgSubjects] = useState<Set<string>>(() => new Set());
-  const [progClasses, setProgClasses] = useState<Set<string>>(() => new Set());
+  const [templateId, setTemplateId] = useState<ProgrammeTemplateId | "">("");
+  const [progSubjects, setProgSubjects] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [progClasses, setProgClasses] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [subjectCoefs, setSubjectCoefs] = useState<Record<string, string>>({});
   const [applying, setApplying] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [showAllClasses, setShowAllClasses] = useState(false);
+  const [showExtraSubjects, setShowExtraSubjects] = useState(false);
+  const [adjustClassId, setAdjustClassId] = useState("");
 
   const { data: years = [] } = useQuery({
     queryKey: ["annees", schoolId],
@@ -104,14 +181,6 @@ export default function ProgrammeClasses() {
       .map((cat) => ({ category: cat, items: map.get(cat)! }));
   }, [subjects]);
 
-  const primarySubjectIds = useMemo(
-    () =>
-      subjectsByCategory.find((g) => g.category === "Primaire")?.items.map(
-        (s) => s.id,
-      ) ?? [],
-    [subjectsByCategory],
-  );
-
   const {
     data: programmeCounts = {},
     isError: programmeCountsError,
@@ -137,10 +206,69 @@ export default function ProgrammeClasses() {
     [programmeCounts],
   );
 
-  const ensureCoef = (id: string) => {
-    setSubjectCoefs((prev) =>
-      prev[id] != null && prev[id] !== "" ? prev : { ...prev, [id]: "1" },
+  const selectedTemplate = templateId ? getTemplate(templateId) : null;
+  const isCustom = templateId === "custom";
+
+  const templateMatch = useMemo(() => {
+    if (!selectedTemplate || selectedTemplate.id === "custom") {
+      return { matched: [], missing: [] as ReturnType<
+        typeof matchTemplateToSchoolSubjects
+      >["missing"] };
+    }
+    return matchTemplateToSchoolSubjects(subjects, selectedTemplate);
+  }, [subjects, selectedTemplate]);
+
+  const suggestedClasses = useMemo(() => {
+    if (!selectedTemplate || selectedTemplate.id === "custom") {
+      return classesForYear;
+    }
+    return classesForYear.filter((c) =>
+      classMatchesTemplate(c, selectedTemplate),
     );
+  }, [classesForYear, selectedTemplate]);
+
+  const classesToShow = useMemo(() => {
+    if (isCustom || showAllClasses || suggestedClasses.length === 0) {
+      return classesForYear;
+    }
+    return suggestedClasses;
+  }, [isCustom, showAllClasses, suggestedClasses, classesForYear]);
+
+  const matchedSubjectIds = useMemo(
+    () => new Set(templateMatch.matched.map((m) => m.subject.id)),
+    [templateMatch],
+  );
+
+  const extraSchoolSubjects = useMemo(() => {
+    if (isCustom) return [];
+    return subjects.filter((s) => !matchedSubjectIds.has(s.id));
+  }, [subjects, matchedSubjectIds, isCustom]);
+
+  const applyTemplateSelection = (id: ProgrammeTemplateId) => {
+    setTemplateId(id);
+    setShowAllClasses(false);
+    setShowExtraSubjects(false);
+    const template = getTemplate(id);
+    if (id === "custom") {
+      setProgSubjects(new Set());
+      setSubjectCoefs({});
+      setProgClasses(new Set());
+      setModalOpen(true);
+      return;
+    }
+    const { matched } = matchTemplateToSchoolSubjects(subjects, template);
+    setProgSubjects(new Set(matched.map((m) => m.subject.id)));
+    const coefs: Record<string, string> = {};
+    for (const m of matched) coefs[m.subject.id] = String(m.coefficient);
+    setSubjectCoefs(coefs);
+    // Classes are already filtered to the template — leave selection empty
+    setProgClasses(new Set());
+    setModalOpen(true);
+    if (matched.length === 0) {
+      toast.message(
+        "Aucune matière de votre école ne correspond à ce modèle. Ajoutez-en dans Matières, ou choisissez Personnalisé.",
+      );
+    }
   };
 
   const toggleSubject = (id: string) => {
@@ -155,26 +283,13 @@ export default function ProgrammeClasses() {
         });
       } else {
         next.add(id);
-        ensureCoef(id);
+        setSubjectCoefs((coefs) => ({
+          ...coefs,
+          [id]: coefs[id] && coefs[id] !== "" ? coefs[id] : "1",
+        }));
       }
       return next;
     });
-  };
-
-  const selectSubjects = (ids: string[]) => {
-    setProgSubjects(new Set(ids));
-    setSubjectCoefs((prev) => {
-      const next: Record<string, string> = {};
-      for (const id of ids) {
-        next[id] = prev[id] && prev[id] !== "" ? prev[id] : "1";
-      }
-      return next;
-    });
-  };
-
-  const clearSubjects = () => {
-    setProgSubjects(new Set());
-    setSubjectCoefs({});
   };
 
   const setCoef = (id: string, value: string) => {
@@ -191,6 +306,10 @@ export default function ProgrammeClasses() {
   };
 
   const handleApply = async () => {
+    if (!templateId) {
+      toast.error("Choisissez d’abord un modèle de programme.");
+      return;
+    }
     if (progSubjects.size === 0) {
       toast.error("Cochez au moins une matière.");
       return;
@@ -230,42 +349,46 @@ export default function ProgrammeClasses() {
     }
 
     toast.success(
-      `${progSubjects.size} matière(s) → ${progClasses.size} classe(s)`,
+      `Programme appliqué : ${progSubjects.size} matière(s) → ${progClasses.size} classe(s)`,
     );
-    clearSubjects();
     setProgClasses(new Set());
-    void qc.invalidateQueries({ queryKey: ["classes-with-programme", schoolId] });
+    setModalOpen(false);
+    void qc.invalidateQueries({
+      queryKey: ["classes-with-programme", schoolId],
+    });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     void qc.invalidateQueries({ queryKey: ["programme-classe"] });
   };
 
   const isLoading = loadingSubjects || loadingClasses;
-  const doneCount = classesForYear.filter((c) => classesWithProg.has(c.id)).length;
+  const doneCount = classesForYear.filter((c) =>
+    classesWithProg.has(c.id),
+  ).length;
+  const todoCount = classesForYear.length - doneCount;
 
   return (
     <div>
       <SetupGuideBar />
       <PageHeader
         title="Programme par classe"
-        subtitle="Appliquez des matières à plusieurs classes en une fois"
+        subtitle="Appliquez un modèle à plusieurs classes, ou ajustez une classe en particulier"
       />
 
-      <Card className="mb-6 border-brand-100 bg-brand-50/60">
+      <Card className="mb-6 border-brand-200 bg-brand-50">
         <p className="font-semibold text-brand-950">Comment ça marche</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-brand-900">
-          <li>Cochez les matières et réglez le coefficient de chacune.</li>
-          <li>Cochez les classes qui reçoivent ces matières (ex. toutes les 6èmes).</li>
           <li>
-            Cliquez sur <strong>Appliquer</strong>.
+            <strong>Appliquer un modèle</strong> — Primaire, Collège, Série
+            A/C/D… pour plusieurs classes d’un coup.
+          </li>
+          <li>
+            <strong>Ajuster une classe</strong> — en bas de la page, pour
+            peaufiner une seule classe.
           </li>
         </ol>
-        <p className="mt-3 text-sm text-brand-800">
-          Pour corriger un coefficient ou voir qui enseigne quoi, ouvrez la
-          classe → onglet Programme.
-        </p>
       </Card>
 
-      <Card className="mb-6 max-w-5xl">
+      <Card className="mb-6">
         <Label htmlFor="prog-annee">Année scolaire</Label>
         {years.length === 0 ? (
           <p className="mt-1 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -282,6 +405,7 @@ export default function ProgrammeClasses() {
             onChange={(e) => {
               setYearId(e.target.value);
               setProgClasses(new Set());
+              setAdjustClassId("");
             }}
           >
             {years.map((y) => (
@@ -301,46 +425,171 @@ export default function ProgrammeClasses() {
       ) : classesForYear.length === 0 ? (
         <EmptyState message="Créez d’abord des classes pour cette année." />
       ) : (
-        <Card className="mb-6 max-w-5xl">
-          <p className="mb-5 text-sm text-slate-500">
-            Progression : {doneCount}/{classesForYear.length} classe(s) avec
-            programme
-            {doneCount > 0
-              ? " — ouvrez une classe ci-dessous pour voir les matières et coefficients."
-              : ""}
-          </p>
-          {programmeCountsError ? (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              Impossible de charger les programmes enregistrés.{" "}
-              <button
-                type="button"
-                className="font-medium underline"
-                onClick={() => void refetchProgrammeCounts()}
-              >
-                Réessayer
-              </button>
-            </div>
-          ) : null}
+        <>
+          <Card className="mb-6">
+            <p className="mb-5 text-sm text-slate-500">
+              Progression : {doneCount}/{classesForYear.length} classe(s) avec
+              programme
+              {todoCount > 0 ? ` — ${todoCount} encore à faire` : ""}
+            </p>
+            {programmeCountsError ? (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                Impossible de charger les programmes enregistrés.{" "}
+                <button
+                  type="button"
+                  className="font-medium underline"
+                  onClick={() => void refetchProgrammeCounts()}
+                >
+                  Réessayer
+                </button>
+              </div>
+            ) : null}
 
-          <div className="space-y-6">
             <div>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Label className="mb-0">1. Matières</Label>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-400">Sélection rapide :</span>
-                  {primarySubjectIds.length > 0 ? (
+              <Label className="mb-2">Appliquer un modèle</Label>
+              <p className="mb-3 text-xs text-slate-500">
+                Choisissez un modèle : une fenêtre s’ouvre avec uniquement les
+                matières et les classes qui lui correspondent.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {PROGRAMME_TEMPLATES.map((t) => {
+                  const active = templateId === t.id;
+                  const matching =
+                    t.id === "custom"
+                      ? []
+                      : classesForYear.filter((c) =>
+                          classMatchesTemplate(c, t),
+                        );
+                  const sansProg = matching.filter(
+                    (c) => !classesWithProg.has(c.id),
+                  ).length;
+                  return (
                     <button
+                      key={t.id}
                       type="button"
-                      className="font-medium text-brand-700 hover:underline"
-                      onClick={() => selectSubjects(primarySubjectIds)}
+                      onClick={() => applyTemplateSelection(t.id)}
+                      className={cn(
+                        "rounded-xl border px-3 py-3 text-left transition",
+                        active
+                          ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
+                          : "border-slate-200 hover:border-brand-300 hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
+                      )}
                     >
-                      Cocher le primaire
+                      <p className="font-semibold text-slate-900">{t.label}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {t.description}
+                      </p>
+                      {t.id !== "custom" && matching.length > 0 ? (
+                        <p className="mt-2 text-xs font-medium text-brand-700">
+                          {matching.length} classe(s) typique(s)
+                        </p>
+                      ) : null}
+                      {t.id !== "custom" && sansProg > 0 ? (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          {sansProg} classe(s) sans programme
+                        </p>
+                      ) : t.id !== "custom" && matching.length > 0 ? (
+                        <p className="mt-1 text-xs font-medium text-emerald-700">
+                          Toutes ont un programme
+                        </p>
+                      ) : null}
                     </button>
-                  ) : null}
+                  );
+                })}
+              </div>
+              {templateId ? (
+                <button
+                  type="button"
+                  className="mt-3 text-xs font-medium text-brand-700 hover:underline"
+                  onClick={() => setModalOpen(true)}
+                >
+                  Rouvrir « {selectedTemplate?.label} »
+                </button>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="mb-6">
+            <h3 className="font-semibold text-slate-900">Ajuster une classe</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Corrigez un coefficient, ajoutez une matière ou voyez qui enseigne
+              quoi.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div className="min-w-[12rem] flex-1">
+                <Label htmlFor="adjust-classe">Classe</Label>
+                <Select
+                  id="adjust-classe"
+                  value={adjustClassId}
+                  onChange={(e) => setAdjustClassId(e.target.value)}
+                >
+                  <option value="">Choisir une classe…</option>
+                  {classesForYear.map((c) => {
+                    const count = programmeCounts[c.id] ?? 0;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {count > 0
+                          ? ` — ${count} matière(s)`
+                          : " — À faire"}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </div>
+              {adjustClassId ? (
+                <Link
+                  to={`/classes/${adjustClassId}?tab=programme`}
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-700 px-4 text-sm font-medium text-white transition hover:bg-brand-800"
+                >
+                  Ouvrir le programme
+                </Link>
+              ) : (
+                <Button type="button" disabled>
+                  Ouvrir le programme
+                </Button>
+              )}
+            </div>
+            {todoCount > 0 ? (
+              <p className="mt-2 text-xs text-amber-700">
+                {todoCount} classe(s) sans programme encore.
+              </p>
+            ) : null}
+          </Card>
+        </>
+      )}
+
+      <Modal
+        open={modalOpen && !!templateId}
+        onClose={() => setModalOpen(false)}
+        title={selectedTemplate ? selectedTemplate.label : "Programme"}
+        size="lg"
+      >
+        <p className="mb-4 text-sm text-slate-500">
+          {isCustom
+            ? "Choisissez librement les matières et les classes."
+            : `${classesToShow.length} classe(s) correspondent à ce modèle. Décochez les matières ou classes à exclure.`}
+        </p>
+
+        <div className="space-y-6">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <Label className="mb-0">Matières</Label>
+              {isCustom ? (
+                <div className="flex flex-wrap gap-2 text-xs">
                   <button
                     type="button"
                     className="font-medium text-brand-700 hover:underline"
-                    onClick={() => selectSubjects(subjects.map((s) => s.id))}
+                    onClick={() => {
+                      setProgSubjects(new Set(subjects.map((s) => s.id)));
+                      setSubjectCoefs((prev) => {
+                        const next = { ...prev };
+                        for (const s of subjects) {
+                          if (!next[s.id]) next[s.id] = "1";
+                        }
+                        return next;
+                      });
+                    }}
                   >
                     Tout cocher
                   </button>
@@ -348,241 +597,250 @@ export default function ProgrammeClasses() {
                     <button
                       type="button"
                       className="font-medium text-slate-500 hover:underline"
-                      onClick={clearSubjects}
+                      onClick={() => {
+                        setProgSubjects(new Set());
+                        setSubjectCoefs({});
+                      }}
                     >
                       Tout décocher
                     </button>
                   ) : null}
                 </div>
-              </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  {progSubjects.size} cochée(s)
+                </p>
+              )}
+            </div>
+            <p className="mb-2 text-xs text-slate-500">
+              {isCustom
+                ? "Catalogue de votre école — cochez celles à appliquer."
+                : "Matières du modèle déjà présentes dans votre école."}
+            </p>
 
-              <div className="max-h-80 space-y-4 overflow-y-auto rounded-xl border border-slate-200 p-3">
-                {subjectsByCategory.map(({ category, items }) => (
+            <div className="max-h-52 space-y-4 overflow-y-auto rounded-xl border border-slate-200 p-3">
+              {isCustom ? (
+                subjectsByCategory.map(({ category, items }) => (
                   <div key={category}>
-                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">
-                          {category}
-                        </p>
-                        {category === "Primaire" ? (
-                          <p className="text-xs text-slate-500">
-                            Curriculum CP–CM — Histoire et Géographie séparées
-                          </p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-brand-700 hover:underline"
-                        onClick={() => {
-                          const ids = items.map((s) => s.id);
-                          setProgSubjects((prev) => {
-                            const next = new Set(prev);
-                            for (const id of ids) next.add(id);
-                            return next;
-                          });
-                          setSubjectCoefs((prev) => {
-                            const next = { ...prev };
-                            for (const id of ids) {
-                              if (next[id] == null || next[id] === "") {
-                                next[id] = "1";
-                              }
-                            }
-                            return next;
-                          });
-                        }}
-                      >
-                        Tout cocher
-                      </button>
-                    </div>
-                    <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                      {items.map((s) => {
-                        const checked = progSubjects.has(s.id);
-                        return (
-                          <div
-                            key={s.id}
-                            className={cn(
-                              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition",
-                              checked ? "bg-brand-50" : "hover:bg-slate-50",
-                            )}
-                          >
-                            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
-                                checked={checked}
-                                onChange={() => toggleSubject(s.id)}
-                              />
-                              <span className="min-w-0 flex-1 font-medium leading-snug">
-                                {s.name}
-                                {s.code ? (
-                                  <span className="ml-1 text-xs font-normal text-slate-400">
-                                    ({s.code})
-                                  </span>
-                                ) : null}
-                              </span>
-                            </label>
-                            <input
-                              type="number"
-                              min="0.5"
-                              step="0.5"
-                              title={`Coefficient ${s.name}`}
-                              aria-label={`Coefficient ${s.name}`}
-                              disabled={!checked}
-                              value={checked ? (subjectCoefs[s.id] ?? "1") : ""}
-                              placeholder="Coef"
-                              onChange={(e) => {
-                                if (!checked) return;
-                                setCoef(s.id, e.target.value);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className={cn(
-                                "h-8 w-14 shrink-0 rounded-lg border px-1.5 text-center text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100",
-                                checked
-                                  ? "border-slate-300 bg-white"
-                                  : "border-slate-200 bg-slate-50 text-slate-300",
-                              )}
-                            />
-                          </div>
-                        );
-                      })}
+                    <p className="mb-1.5 text-sm font-medium text-slate-700">
+                      {category}
+                    </p>
+                    <div className="grid gap-1 sm:grid-cols-2">
+                      {items.map((s) => (
+                        <SubjectRow
+                          key={s.id}
+                          subject={s}
+                          checked={progSubjects.has(s.id)}
+                          coef={subjectCoefs[s.id] ?? "1"}
+                          onToggle={() => toggleSubject(s.id)}
+                          onCoefChange={(v) => setCoef(s.id, v)}
+                        />
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : matchedSubjectIds.size === 0 &&
+                !extraSchoolSubjects.some((s) => progSubjects.has(s.id)) ? (
+                <p className="text-sm text-slate-500">
+                  Aucune matière du modèle dans votre école pour l’instant.
+                  Ajoutez-en via le bouton ci-dessous, ou dans{" "}
+                  <Link
+                    to="/matieres"
+                    className="font-medium text-brand-700 underline"
+                    onClick={() => setModalOpen(false)}
+                  >
+                    Matières
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <div className="grid gap-1 sm:grid-cols-2">
+                  {subjects
+                    .filter(
+                      (s) =>
+                        matchedSubjectIds.has(s.id) || progSubjects.has(s.id),
+                    )
+                    .map((s) => (
+                      <SubjectRow
+                        key={s.id}
+                        subject={s}
+                        checked={progSubjects.has(s.id)}
+                        coef={subjectCoefs[s.id] ?? "1"}
+                        onToggle={() => toggleSubject(s.id)}
+                        onCoefChange={(v) => setCoef(s.id, v)}
+                      />
+                    ))}
+                </div>
+              )}
             </div>
 
-            <div>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Label className="mb-0">2. Classes</Label>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-400">Sélection rapide :</span>
-                  <button
-                    type="button"
-                    className="font-medium text-brand-700 hover:underline"
-                    onClick={() =>
-                      setProgClasses(new Set(classesForYear.map((c) => c.id)))
-                    }
-                  >
-                    Tout cocher
-                  </button>
-                  <button
-                    type="button"
-                    className="font-medium text-brand-700 hover:underline"
-                    onClick={() =>
-                      setProgClasses(
-                        new Set(
-                          classesForYear
-                            .filter((c) => !classesWithProg.has(c.id))
-                            .map((c) => c.id),
-                        ),
-                      )
-                    }
-                  >
-                    Cocher sans programme
-                  </button>
-                  {progClasses.size > 0 ? (
+            {!isCustom ? (
+              <div className="mt-2">
+                {extraSchoolSubjects.some((s) => !progSubjects.has(s.id)) ? (
+                  <>
                     <button
                       type="button"
-                      className="font-medium text-slate-500 hover:underline"
-                      onClick={() => setProgClasses(new Set())}
+                      className="text-xs font-medium text-brand-700 hover:underline"
+                      onClick={() => setShowExtraSubjects((v) => !v)}
                     >
-                      Tout décocher
+                        {showExtraSubjects
+                          ? "Masquer le catalogue"
+                          : `Ajouter une autre matière du catalogue (${extraSchoolSubjects.filter((s) => !progSubjects.has(s.id)).length})`}
                     </button>
-                  ) : null}
-                </div>
+                    {showExtraSubjects ? (
+                      <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-dashed border-slate-200 p-2">
+                        <div className="grid gap-1 sm:grid-cols-2">
+                          {extraSchoolSubjects
+                            .filter((s) => !progSubjects.has(s.id))
+                            .map((s) => (
+                              <SubjectRow
+                                key={s.id}
+                                subject={s}
+                                checked={false}
+                                coef={subjectCoefs[s.id] ?? "1"}
+                                onToggle={() => toggleSubject(s.id)}
+                                onCoefChange={(v) => setCoef(s.id, v)}
+                              />
+                            ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Pas encore dans l’école ? Créez-la d’abord dans{" "}
+                  <Link
+                    to="/matieres"
+                    className="font-medium text-brand-700 underline"
+                    onClick={() => setModalOpen(false)}
+                  >
+                    Matières
+                  </Link>
+                  .
+                </p>
               </div>
-              <div className="max-h-56 grid gap-1 overflow-y-auto rounded-xl border border-slate-200 p-2 sm:grid-cols-2 lg:grid-cols-3">
-                {classesForYear.map((c) => {
-                  const checked = progClasses.has(c.id);
-                  const subjectCount = programmeCounts[c.id] ?? 0;
-                  const hasProg = subjectCount > 0;
-                  return (
-                    <label
-                      key={c.id}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
-                        checked ? "bg-brand-50" : "hover:bg-slate-50",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
-                        checked={checked}
-                        onChange={() => toggleClass(c.id)}
-                      />
-                      <span className="min-w-0 flex-1 font-medium">{c.name}</span>
-                      {hasProg ? (
-                        <span className="shrink-0 text-xs text-emerald-700">
-                          OK · {subjectCount}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-xs text-amber-700">
-                          À faire
-                        </span>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-              <p className="text-xs text-slate-500">
-                Chaque matière utilise son propre coefficient (modifiable à
-                droite).
-              </p>
-              <Button
-                type="button"
-                disabled={
-                  applying || progSubjects.size === 0 || progClasses.size === 0
-                }
-                onClick={() => void handleApply()}
-              >
-                {applying
-                  ? "Application…"
-                  : progSubjects.size === 0 || progClasses.size === 0
-                    ? "Appliquer"
-                    : `Appliquer (${progSubjects.size} × ${progClasses.size})`}
-              </Button>
-            </div>
+            ) : null}
           </div>
-        </Card>
-      )}
 
-      {classesForYear.length > 0 ? (
-        <Card className="mb-6 max-w-5xl">
-          <h3 className="font-semibold text-slate-900">
-            Ajuster une classe
-          </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Ouvrez une classe pour corriger un coefficient ou voir qui enseigne
-            chaque matière.
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {classesForYear.map((c) => {
-              const subjectCount = programmeCounts[c.id] ?? 0;
-              const hasProg = subjectCount > 0;
-              return (
-                <Link
-                  key={c.id}
-                  to={`/classes/${c.id}?tab=programme`}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 transition hover:border-brand-300 hover:bg-brand-50/40"
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <Label className="mb-0">
+                Classes{" "}
+                <span className="font-normal text-slate-400">
+                  ({classesToShow.length})
+                </span>
+              </Label>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {!isCustom && suggestedClasses.length > 0 ? (
+                  <button
+                    type="button"
+                    className="font-medium text-brand-700 hover:underline"
+                    onClick={() => setShowAllClasses((v) => !v)}
+                  >
+                    {showAllClasses
+                      ? `Voir seulement les ${suggestedClasses.length} classe(s) du modèle`
+                      : `Voir toutes les classes (${classesForYear.length})`}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="font-medium text-brand-700 hover:underline"
+                  onClick={() =>
+                    setProgClasses(
+                      new Set(
+                        classesToShow
+                          .filter((c) => !classesWithProg.has(c.id))
+                          .map((c) => c.id),
+                      ),
+                    )
+                  }
                 >
-                  <span className="font-medium text-slate-900">{c.name}</span>
-                  <span
+                  Sans programme
+                </button>
+                <button
+                  type="button"
+                  className="font-medium text-brand-700 hover:underline"
+                  onClick={() =>
+                    setProgClasses(new Set(classesToShow.map((c) => c.id)))
+                  }
+                >
+                  Toutes
+                </button>
+                {progClasses.size > 0 ? (
+                  <button
+                    type="button"
+                    className="font-medium text-slate-500 hover:underline"
+                    onClick={() => setProgClasses(new Set())}
+                  >
+                    Aucune
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {!isCustom && suggestedClasses.length === 0 ? (
+              <p className="mb-2 text-xs text-amber-700">
+                Aucune classe ne correspond automatiquement à ce modèle —
+                toutes les classes sont affichées, sélectionnez les vôtres.
+              </p>
+            ) : null}
+            <div className="max-h-56 grid gap-1 overflow-y-auto rounded-xl border border-slate-200 p-2 sm:grid-cols-2">
+              {classesToShow.map((c) => {
+                const checked = progClasses.has(c.id);
+                const subjectCount = programmeCounts[c.id] ?? 0;
+                const hasProg = subjectCount > 0;
+                return (
+                  <label
+                    key={c.id}
                     className={cn(
-                      "shrink-0 text-xs font-medium",
-                      hasProg ? "text-emerald-700" : "text-amber-700",
+                      "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm transition",
+                      checked ? "bg-brand-50" : "hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
                     )}
                   >
-                    {hasProg ? `${subjectCount} matière(s)` : "À faire"}
-                  </span>
-                </Link>
-              );
-            })}
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
+                      checked={checked}
+                      onChange={() => toggleClass(c.id)}
+                    />
+                    <span className="min-w-0 flex-1 font-medium">
+                      {c.name}
+                    </span>
+                    {hasProg ? (
+                      <span className="shrink-0 text-xs text-emerald-700">
+                        OK · {subjectCount}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-amber-700">
+                        À faire
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
           </div>
-        </Card>
-      ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <p className="text-xs text-slate-500">
+              Ajoute ou met à jour les matières (sans effacer les autres déjà
+              présentes).
+            </p>
+            <Button
+              type="button"
+              disabled={
+                applying || progSubjects.size === 0 || progClasses.size === 0
+              }
+              onClick={() => void handleApply()}
+            >
+              {applying
+                ? "Application…"
+                : progSubjects.size === 0 || progClasses.size === 0
+                  ? "Appliquer"
+                  : `Appliquer (${progSubjects.size} × ${progClasses.size})`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {subjects.length === 0 ? (
         <p className="text-sm text-slate-500">

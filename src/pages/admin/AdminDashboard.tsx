@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { schoolTypeLabel } from "@/lib/schoolForm";
 import type { School as SchoolRow } from "@/lib/types";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
+import { PortalGreeting } from "@/components/PortalGreeting";
 
 const ADMIN_LINKS = [
   {
@@ -120,6 +121,7 @@ export default function AdminDashboard() {
 
   return (
     <div>
+      <PortalGreeting />
       <PageHeader
         title="Tableau de bord"
         subtitle="Super administration EduFaso"

@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
 import { supabase } from "@/lib/supabase";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { PortalGreeting } from "@/components/PortalGreeting";
 import { enterSetupGuide } from "@/components/SetupGuideBar";
 
 export default function EcoleOverview() {
@@ -82,6 +83,7 @@ export default function EcoleOverview() {
 
   return (
     <div>
+      <PortalGreeting />
       <PageHeader
         title={school?.name ?? "Mon école"}
         subtitle={

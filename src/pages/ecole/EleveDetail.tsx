@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -63,11 +63,18 @@ type EnrollmentRow = {
 
 export default function EleveDetail() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { schoolId } = useAuth();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [assignClassId, setAssignClassId] = useState("");
   const [assigning, setAssigning] = useState(false);
+
+  const backTo =
+    typeof (location.state as { elevesList?: unknown } | null)?.elevesList ===
+    "string"
+      ? (location.state as { elevesList: string }).elevesList
+      : "/eleves";
 
   const { data: student, isLoading } = useQuery({
     queryKey: ["eleve-detail", id, schoolId],
@@ -346,7 +353,7 @@ export default function EleveDetail() {
   if (!student) {
     return (
       <div>
-        <BackLink to="/eleves" label="Retour aux élèves" />
+        <BackLink to={backTo} label="Retour aux élèves" />
         <EmptyState message="Élève introuvable." />
       </div>
     );
@@ -354,7 +361,7 @@ export default function EleveDetail() {
 
   return (
     <div>
-      <BackLink to="/eleves" label="Retour aux élèves" />
+      <BackLink to={backTo} label="Retour aux élèves" />
 
       <PageHeader
         title={fullName(student.first_name, student.last_name)}
