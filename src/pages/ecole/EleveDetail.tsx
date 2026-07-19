@@ -8,8 +8,10 @@ import { KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
+  computeAnnualAverage,
   computeWeightedAverage,
   formatAverage,
+  formatPassDecision,
   programmeToCoefMap,
 } from "@/lib/averages";
 import { sortClassesByProgression } from "@/lib/classCatalog";
@@ -196,12 +198,14 @@ export default function EleveDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("presences")
-        .select("*")
+        .select("*, matieres(name)")
         .eq("student_id", id!)
         .order("date", { ascending: false })
         .limit(15);
       if (error) throw error;
-      return (data ?? []) as AttendanceRow[];
+      return (data ?? []) as (AttendanceRow & {
+        matieres: { name: string } | null;
+      })[];
     },
   });
 
@@ -214,6 +218,14 @@ export default function EleveDetail() {
     }
     return [...map.entries()];
   }, [grades]);
+
+  const annual = useMemo(
+    () =>
+      computeAnnualAverage(grades, {
+        coefficientBySubject: coefMap,
+      }),
+    [grades, coefMap],
+  );
 
   const username =
     credential?.username ?? fromAuthEmail(student?.email) ?? "—";
@@ -578,6 +590,10 @@ export default function EleveDetail() {
                 >
                   <span>
                     {format(new Date(row.date), "d MMM yyyy", { locale: fr })}
+                    {(row as { matieres?: { name: string } | null }).matieres
+                      ?.name
+                      ? ` · ${(row as { matieres: { name: string } }).matieres.name}`
+                      : ""}
                   </span>
                   <Badge
                     tone={
@@ -609,6 +625,27 @@ export default function EleveDetail() {
           </p>
         ) : (
           <div className="mt-4 space-y-6">
+            {annual.annualAverage !== null ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3 dark:border-brand-800 dark:bg-brand-900/20">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Moyenne annuelle
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    (T1 + T2 + T3) / {annual.trimesterCount || 3}
+                    {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-brand-700">
+                    {formatAverage(annual.annualAverage)} / 20
+                  </p>
+                  <Badge tone={annual.passed ? "success" : "warning"}>
+                    {formatPassDecision(annual)}
+                  </Badge>
+                </div>
+              </div>
+            ) : null}
             {byPeriod.map(([period, periodGrades]) => {
               const avg = computeWeightedAverage(periodGrades, {
                 coefficientBySubject: coefMap,

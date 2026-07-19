@@ -5,6 +5,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { generateBulletinPdf } from "@/lib/pdfBulletin";
+import {
+  ANNUAL_PERIOD_LABEL,
+  TRIMESTER_PERIODS,
+} from "@/lib/averages";
 import type { GradeRow, Profile, School, Subject } from "@/lib/types";
 import {
   Button,
@@ -18,7 +22,7 @@ import {
 export default function MonBulletin() {
   const { user, profile, schoolId, schools } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const [period, setPeriod] = useState("Trimestre 1");
+  const [period, setPeriod] = useState<string>(TRIMESTER_PERIODS[0]);
   const [generating, setGenerating] = useState(false);
 
   const { data: enrollment, isLoading } = useQuery({
@@ -49,9 +53,19 @@ export default function MonBulletin() {
       const set = new Set(
         (data ?? []).map((r) => r.period_label as string).filter(Boolean),
       );
-      const defaults = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
-      for (const d of defaults) set.add(d);
-      return [...set];
+      for (const d of TRIMESTER_PERIODS) set.add(d);
+      set.add(ANNUAL_PERIOD_LABEL);
+      // Keep trimesters first, then Année, then any custom labels.
+      const ordered = [
+        ...TRIMESTER_PERIODS.filter((p) => set.has(p)),
+        ANNUAL_PERIOD_LABEL,
+        ...[...set].filter(
+          (p) =>
+            !(TRIMESTER_PERIODS as readonly string[]).includes(p) &&
+            p !== ANNUAL_PERIOD_LABEL,
+        ),
+      ];
+      return ordered;
     },
   });
 
@@ -62,11 +76,23 @@ export default function MonBulletin() {
     }
     setGenerating(true);
     try {
-      const { data: grades } = await supabase
+      const { data: allGradesRaw } = await supabase
         .from("notes")
         .select("*, matieres(*)")
         .eq("student_id", user.id)
-        .eq("period_label", period);
+        .in("period_label", [...TRIMESTER_PERIODS]);
+
+      const allGrades = (
+        (allGradesRaw ?? []) as (GradeRow & { matieres: Subject })[]
+      ).map((g) => ({
+        ...g,
+        subject: g.matieres,
+      }));
+
+      const grades =
+        period === ANNUAL_PERIOD_LABEL
+          ? []
+          : allGrades.filter((g) => g.period_label === period);
 
       let coefficientBySubject: Record<string, number> = {};
       if (enrollment?.class_section_id) {
@@ -81,8 +107,12 @@ export default function MonBulletin() {
         }
       }
 
-      if (!grades?.length) {
+      if (period !== ANNUAL_PERIOD_LABEL && !grades.length) {
         toast.message("Aucune note pour cette période");
+        return;
+      }
+      if (period === ANNUAL_PERIOD_LABEL && !allGrades.length) {
+        toast.message("Aucune note sur l’année");
         return;
       }
 
@@ -92,14 +122,16 @@ export default function MonBulletin() {
         className: enrollment?.classes?.name ?? "—",
         periodLabel: period,
         coefficientBySubject,
-        grades: (grades as (GradeRow & { matieres: Subject })[]).map((g) => ({
-          ...g,
-          subject: g.matieres,
-        })),
+        grades,
+        allGrades,
       });
 
+      const filePeriod =
+        period === ANNUAL_PERIOD_LABEL
+          ? "annee"
+          : period.replace(/\s+/g, "-");
       doc.save(
-        `bulletin-${profile.last_name ?? "eleve"}-${period.replace(/\s+/g, "-")}.pdf`,
+        `bulletin-${profile.last_name ?? "eleve"}-${filePeriod}.pdf`,
       );
       toast.success("Bulletin téléchargé");
     } catch (err) {
@@ -133,10 +165,16 @@ export default function MonBulletin() {
             <Select value={period} onChange={(e) => setPeriod(e.target.value)}>
               {periods.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {p === ANNUAL_PERIOD_LABEL
+                    ? "Année (moyenne annuelle)"
+                    : p}
                 </option>
               ))}
             </Select>
+            <p className="mt-1 text-xs text-slate-500">
+              Moyenne annuelle = (T1 + T2 + T3) / 3. Admission à partir de
+              10 / 20.
+            </p>
           </div>
           <Button
             onClick={() => void handleGenerate()}

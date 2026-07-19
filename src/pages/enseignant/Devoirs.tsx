@@ -29,6 +29,7 @@ import {
   PageHeader,
   Select,
   Textarea,
+  TimeInput24,
 } from "@/components/ui";
 
 type Props = {
@@ -104,10 +105,60 @@ export default function Devoirs({ kind }: Props) {
     },
   });
 
+  /** Other exams already scheduled in this class (any teacher). */
+  const { data: classExams = [] } = useQuery({
+    queryKey: ["examen-jours-classe", classId],
+    enabled: isExam && !!classId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("devoirs")
+        .select("id, title, due_date, start_time, end_time, matieres(name)")
+        .eq("kind", "examen")
+        .eq("class_section_id", classId)
+        .not("due_date", "is", null)
+        .order("due_date");
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        title: string;
+        due_date: string;
+        start_time: string | null;
+        end_time: string | null;
+        matieres: { name: string } | null;
+      }[];
+    },
+  });
+
+  const bookedDays = useMemo(() => {
+    return classExams.filter((e) => e.id !== editingId);
+  }, [classExams, editingId]);
+
+  const dayConflict = useMemo(() => {
+    if (!isExam || !dueDate) return null;
+    return bookedDays.find((e) => e.due_date === dueDate) ?? null;
+  }, [isExam, dueDate, bookedDays]);
+
   const filtered = useMemo(() => {
     if (!filterClassId) return assignments;
     return assignments.filter((a) => a.class_section_id === filterClassId);
   }, [assignments, filterClassId]);
+
+  const examConflictMessage = (conflict: {
+    title: string;
+    matieres: { name: string } | null;
+    start_time: string | null;
+    end_time: string | null;
+  }) => {
+    const subject = conflict.matieres?.name ?? "une autre matière";
+    const schedule = formatExamSchedule({
+      due_date: dueDate || null,
+      start_time: conflict.start_time,
+      end_time: conflict.end_time,
+    });
+    return `Un examen est déjà prévu ce jour pour cette classe (${subject}${
+      schedule ? ` · ${schedule}` : ""
+    }). Choisissez une autre date.`;
+  };
 
   const resetForm = () => {
     setEditingId(null);
@@ -165,6 +216,35 @@ export default function Devoirs({ kind }: Props) {
         toast.error("L’heure de fin doit être après l’heure de début");
         return;
       }
+
+      // One exam per class per day — check before write (DB also enforces).
+      let conflictQuery = supabase
+        .from("devoirs")
+        .select("id, title, due_date, start_time, end_time, matieres(name)")
+        .eq("kind", "examen")
+        .eq("class_section_id", classId)
+        .eq("due_date", dueDate)
+        .limit(1);
+      if (editingId) {
+        conflictQuery = conflictQuery.neq("id", editingId);
+      }
+      const { data: conflicts, error: conflictError } = await conflictQuery;
+      if (conflictError) {
+        toast.error(conflictError.message || "Vérification impossible");
+        return;
+      }
+      const conflict = conflicts?.[0] as
+        | {
+            title: string;
+            matieres: { name: string } | null;
+            start_time: string | null;
+            end_time: string | null;
+          }
+        | undefined;
+      if (conflict) {
+        toast.error(examConflictMessage(conflict));
+        return;
+      }
     }
 
     setSaving(true);
@@ -200,6 +280,19 @@ export default function Devoirs({ kind }: Props) {
       }
     }
 
+    const handleWriteError = (error: { code?: string; message?: string }) => {
+      if (isExam && error.code === "23505") {
+        toast.error(
+          "Un examen est déjà prévu ce jour pour cette classe. Choisissez une autre date.",
+        );
+        return;
+      }
+      toast.error(
+        error.message ||
+          (editingId ? "Modification impossible" : "Erreur lors de la création"),
+      );
+    };
+
     if (editingId) {
       const { error } = await supabase
         .from("devoirs")
@@ -208,7 +301,7 @@ export default function Devoirs({ kind }: Props) {
         .eq("teacher_id", user.id);
       setSaving(false);
       if (error) {
-        toast.error(error.message || "Modification impossible");
+        handleWriteError(error);
         return;
       }
       toast.success(
@@ -225,7 +318,7 @@ export default function Devoirs({ kind }: Props) {
       });
       setSaving(false);
       if (error) {
-        toast.error(error.message || "Erreur lors de la création");
+        handleWriteError(error);
         return;
       }
       toast.success(
@@ -237,9 +330,11 @@ export default function Devoirs({ kind }: Props) {
 
     resetForm();
     void qc.invalidateQueries({ queryKey: ["devoirs", user.id, kind] });
+    void qc.invalidateQueries({ queryKey: ["examen-jours-classe"] });
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
     void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
     void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
+    void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
   };
 
   const handleDelete = async (a: DevoirRow) => {
@@ -260,9 +355,11 @@ export default function Devoirs({ kind }: Props) {
     toast.success(isExam ? "Examen supprimé" : "Exercice supprimé");
     if (editingId === a.id) resetForm();
     void qc.invalidateQueries({ queryKey: ["devoirs", user.id, kind] });
+    void qc.invalidateQueries({ queryKey: ["examen-jours-classe"] });
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
     void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
     void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
+    void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
   };
 
   return (
@@ -290,8 +387,8 @@ export default function Devoirs({ kind }: Props) {
 
       <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
         {isExam
-          ? "Indiquez la date et le créneau horaire. L’examen n’est officiel pour les élèves qu’après confirmation par l’administration. Pour noter, ouvrez la classe → Notes et créez une évaluation « Examen »."
-          : "Indiquez ici les exercices à faire à la maison. Les élèves les consultent, mais ne rendent rien en ligne."}
+          ? "Indiquez la date et le créneau horaire. Un seul examen par classe et par jour (tous professeurs confondus). L’examen n’est officiel pour les élèves qu’après confirmation par l’administration. Pour noter, ouvrez la classe → Notes et créez une évaluation « Examen »."
+          : "Indiquez ici les exercices à faire à la maison. Les élèves les apportent / présentent en classe à la date indiquée."}
       </p>
 
       <div className="mb-6 max-w-xs">
@@ -367,6 +464,11 @@ export default function Devoirs({ kind }: Props) {
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                placeholder={
+                  isExam
+                    ? "Ex. : 2ème devoir du 1er trimestre, composition écrite…"
+                    : "Ex. : Exercices page 42, à présenter en classe…"
+                }
               />
             </div>
             <div>
@@ -377,33 +479,62 @@ export default function Devoirs({ kind }: Props) {
                 onChange={(e) => setDueDate(e.target.value)}
                 required={isExam}
               />
+              {isExam && dayConflict ? (
+                <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+                  {examConflictMessage(dayConflict)}
+                </p>
+              ) : null}
+              {isExam && classId && bookedDays.length > 0 ? (
+                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                  <p className="font-medium text-slate-700 dark:text-slate-200">
+                    Jours déjà pris dans cette classe
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {bookedDays.map((e) => {
+                      const slot = formatExamSchedule({
+                        due_date: e.due_date,
+                        start_time: e.start_time,
+                        end_time: e.end_time,
+                      });
+                      return (
+                        <li key={e.id}>
+                          {formatDateSafe(e.due_date, "d MMM yyyy", {
+                            locale: fr,
+                          })}
+                          {" — "}
+                          {e.matieres?.name ?? "Matière"}
+                          {slot ? ` · ${slot}` : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
             {isExam ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="exam-start">Heure de début</Label>
-                  <Input
+                  <TimeInput24
                     id="exam-start"
-                    type="time"
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={setStartTime}
                     required
                   />
                 </div>
                 <div>
                   <Label htmlFor="exam-end">Heure de fin</Label>
-                  <Input
+                  <TimeInput24
                     id="exam-end"
-                    type="time"
                     value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
+                    onChange={setEndTime}
                     required
                   />
                 </div>
               </div>
             ) : null}
             <div className="flex gap-2">
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving || !!dayConflict}>
                 {saving
                   ? "Enregistrement…"
                   : editingId
@@ -478,7 +609,7 @@ export default function Devoirs({ kind }: Props) {
                     ) : null}
                     {a.due_date ? (
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {isExam ? "Le " : "À rendre avant le "}
+                        {isExam ? "Le " : "À rendre le "}
                         {formatDateSafe(a.due_date, "d MMMM yyyy", {
                           locale: fr,
                         })}

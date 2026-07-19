@@ -330,7 +330,7 @@ export function useStudentTimetableRealtime() {
             }
 
             void qc.invalidateQueries({ queryKey: ["mon-edt", userId] });
-            void qc.invalidateQueries({ queryKey: ["student-home", userId] });
+            void qc.invalidateQueries({ queryKey: ["student-home"] });
 
             if (onEdtPage) {
               toast.message("Emploi du temps mis à jour", {

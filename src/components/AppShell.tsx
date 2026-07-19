@@ -21,6 +21,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
+import {
+  useSchoolExamsRealtime,
+  useStudentExamsRealtime,
+  useTeacherExamsRealtime,
+} from "@/hooks/useExamRealtime";
 import { useStudentTimetableRealtime, useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
@@ -36,7 +42,11 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
-  badgeKey?: "eleves-sans-classe" | "messages-unread" | "edt-updates";
+  badgeKey?:
+    | "eleves-sans-classe"
+    | "messages-unread"
+    | "edt-updates"
+    | "examens-en-attente";
 }
 
 const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
@@ -72,7 +82,7 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/parents", label: "Parents", icon: <Users className="h-4 w-4" /> },
     { to: "/emplois-du-temps", label: "Emplois du temps", icon: <Calendar className="h-4 w-4" /> },
     { to: "/presences-ecole", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" /> },
-    { to: "/examens-ecole", label: "Examens", icon: <FileText className="h-4 w-4" /> },
+    { to: "/examens-ecole", label: "Examens", icon: <FileText className="h-4 w-4" />, badgeKey: "examens-en-attente" },
     { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
@@ -150,7 +160,11 @@ export function AppShell() {
 
   const { data: sansClasseCount = 0 } = useStudentsWithoutClassCount();
   const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
+  const { data: pendingExamsCount = 0 } = usePendingExamsCount();
   useStudentTimetableRealtime();
+  useStudentExamsRealtime();
+  useTeacherExamsRealtime();
+  useSchoolExamsRealtime();
   const { pendingCount: edtUpdatesCount = 0 } = useEdtPendingChanges();
 
   const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" | "brand" } | null => {
@@ -173,6 +187,13 @@ export function AppShell() {
         count: edtUpdatesCount,
         title: `${edtUpdatesCount} modification(s) de l’emploi du temps`,
         tone: "brand",
+      };
+    }
+    if (item.badgeKey === "examens-en-attente" && pendingExamsCount > 0) {
+      return {
+        count: pendingExamsCount,
+        title: `${pendingExamsCount} examen(s) à confirmer`,
+        tone: "amber",
       };
     }
     return null;

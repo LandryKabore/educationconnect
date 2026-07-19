@@ -41,6 +41,7 @@ type PresenceRow = {
   note: string | null;
   profils: { first_name: string; last_name: string } | null;
   classes: { id: string; name: string } | null;
+  matieres: { name: string } | null;
 };
 
 export default function PresencesEcole() {
@@ -74,7 +75,7 @@ export default function PresencesEcole() {
       let q = supabase
         .from("presences")
         .select(
-          "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey(id, name)",
+          "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey(id, name), matieres(name)",
         )
         .eq("date", date)
         .in("class_section_id", classId ? [classId] : classIds)
@@ -228,6 +229,9 @@ export default function PresencesEcole() {
                           ) : (
                             "Classe"
                           )}
+                          {row.matieres?.name
+                            ? ` · ${row.matieres.name}`
+                            : ""}
                         </p>
                       </div>
                       <Badge tone="danger">Absent</Badge>
@@ -303,6 +307,7 @@ export default function PresencesEcole() {
                       </p>
                       <p className="text-sm text-slate-500">
                         {row.classes?.name ?? "Classe"}
+                        {row.matieres?.name ? ` · ${row.matieres.name}` : ""}
                         {row.note ? ` · ${row.note}` : ""}
                       </p>
                     </div>

@@ -41,7 +41,7 @@ export function assignmentKindCreatedToast(kind: AssignmentKind) {
 }
 
 export function assignmentKindDueLabel(kind: AssignmentKind) {
-  return kind === "examen" ? "Date de l’examen" : "Date limite";
+  return kind === "examen" ? "Date de l’examen" : "À rendre le";
 }
 
 export function assignmentKindSubmitLabel(kind: AssignmentKind) {

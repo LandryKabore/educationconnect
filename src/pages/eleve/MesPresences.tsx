@@ -24,6 +24,15 @@ const STATUS_TONE: Record<
   excused: "info",
 };
 
+type PresenceRow = {
+  id: string;
+  date: string;
+  status: AttendanceStatus;
+  note: string | null;
+  subject_id: string;
+  matieres: { name: string } | null;
+};
+
 export default function MesPresences() {
   const { user } = useAuth();
 
@@ -33,17 +42,12 @@ export default function MesPresences() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("presences")
-        .select("*")
+        .select("id, date, status, note, subject_id, matieres(name)")
         .eq("student_id", user!.id)
         .order("date", { ascending: false })
-        .limit(60);
+        .limit(120);
       if (error) throw error;
-      return data as {
-        id: string;
-        date: string;
-        status: AttendanceStatus;
-        note: string | null;
-      }[];
+      return (data ?? []) as unknown as PresenceRow[];
     },
   });
 
@@ -60,11 +64,32 @@ export default function MesPresences() {
     return counts;
   }, [attendance]);
 
+  const bySubject = useMemo(() => {
+    const map = new Map<
+      string,
+      { subjectId: string; subjectName: string; rows: PresenceRow[] }
+    >();
+    for (const a of attendance) {
+      const name = a.matieres?.name ?? "Matière";
+      const key = a.subject_id || name;
+      const cur = map.get(key) ?? {
+        subjectId: a.subject_id,
+        subjectName: name,
+        rows: [],
+      };
+      cur.rows.push(a);
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) =>
+      a.subjectName.localeCompare(b.subjectName, "fr"),
+    );
+  }, [attendance]);
+
   return (
     <div>
       <PageHeader
         title="Mes présences"
-        subtitle="Historique — les absences justifiées par l’école ne comptent pas comme absences"
+        subtitle="Par matière — les absences justifiées par l’école ne comptent pas comme absences"
       />
 
       {isLoading ? (
@@ -74,39 +99,76 @@ export default function MesPresences() {
       ) : (
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {(Object.keys(STATUS_LABELS) as AttendanceStatus[]).map((status) => (
-              <Card key={status} className="py-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  {STATUS_LABELS[status]}
-                </p>
-                <p className="mt-1 text-2xl font-bold text-slate-900">
-                  {summary[status]}
-                </p>
-              </Card>
-            ))}
+            {(Object.keys(STATUS_LABELS) as AttendanceStatus[]).map(
+              (status) => (
+                <Card key={status} className="py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {STATUS_LABELS[status]}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-900">
+                    {summary[status]}
+                  </p>
+                </Card>
+              ),
+            )}
           </div>
 
-          <div className="space-y-2">
-            {attendance.map((a) => (
-              <Card
-                key={a.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium capitalize">
-                    {format(new Date(a.date), "EEEE d MMMM yyyy", {
-                      locale: fr,
-                    })}
-                  </p>
-                  {a.note ? (
-                    <p className="mt-0.5 text-xs text-slate-500">{a.note}</p>
-                  ) : null}
-                </div>
-                <Badge tone={STATUS_TONE[a.status]}>
-                  {STATUS_LABELS[a.status]}
-                </Badge>
-              </Card>
-            ))}
+          <div className="space-y-8">
+            {bySubject.map((group) => {
+              const counts: Record<AttendanceStatus, number> = {
+                present: 0,
+                absent: 0,
+                late: 0,
+                excused: 0,
+              };
+              for (const r of group.rows) counts[r.status] += 1;
+              return (
+                <section key={group.subjectId}>
+                  <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {group.subjectName}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {counts.present} présent
+                      {counts.present !== 1 ? "s" : ""}
+                      {" · "}
+                      {counts.absent} absent
+                      {counts.absent !== 1 ? "s" : ""}
+                      {" · "}
+                      {counts.late} retard
+                      {counts.late !== 1 ? "s" : ""}
+                      {counts.excused > 0
+                        ? ` · ${counts.excused} justifié${counts.excused !== 1 ? "s" : ""}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {group.rows.map((a) => (
+                      <Card
+                        key={a.id}
+                        className="flex flex-wrap items-center justify-between gap-3 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium capitalize">
+                            {format(new Date(a.date), "EEEE d MMMM yyyy", {
+                              locale: fr,
+                            })}
+                          </p>
+                          {a.note ? (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {a.note}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Badge tone={STATUS_TONE[a.status]}>
+                          {STATUS_LABELS[a.status]}
+                        </Badge>
+                      </Card>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       )}

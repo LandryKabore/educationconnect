@@ -71,7 +71,7 @@ export default function MesDevoirs({ kind }: Props) {
       <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
         {isExam
           ? "Seuls les examens confirmés par l’administration apparaissent ici, avec leur date et créneau. Les notes sont dans « Mes notes »."
-          : "Cette page vous rappelle ce qui est à faire et pour quand. Rien n’est à rendre en ligne."}
+          : "Cette page vous rappelle ce qui est à faire et pour quand. Apportez / présentez l’exercice en classe à la date indiquée — rien n’est à rendre en ligne."}
       </p>
 
       {isLoading ? (
@@ -118,7 +118,7 @@ export default function MesDevoirs({ kind }: Props) {
                 ) : null}
                 {a.due_date ? (
                   <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                    {isExam ? "Date : " : "À faire pour le "}
+                    {isExam ? "Date : " : "À rendre le "}
                     {formatDateSafe(a.due_date, "EEEE d MMMM yyyy", {
                       locale: fr,
                     })}

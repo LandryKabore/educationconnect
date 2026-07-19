@@ -444,6 +444,100 @@ export function Select({
   );
 }
 
+/**
+ * 24-hour time picker (HH:MM) — Burkina Faso / military time.
+ * Avoids the OS native AM/PM clock UI.
+ */
+export function TimeInput24({
+  value,
+  onChange,
+  id,
+  required,
+  disabled,
+  className,
+  minuteStep = 5,
+}: {
+  /** "HH:MM" or "" */
+  value: string;
+  onChange: (hhmm: string) => void;
+  id?: string;
+  required?: boolean;
+  disabled?: boolean;
+  className?: string;
+  /** Minute increment (1–30). Default 5. */
+  minuteStep?: number;
+}) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  const hour = match ? Math.min(23, Math.max(0, Number(match[1]))) : "";
+  const minute = match ? Math.min(59, Math.max(0, Number(match[2]))) : "";
+
+  const step = Math.min(30, Math.max(1, Math.round(minuteStep)));
+  const minuteOptions = Array.from(
+    { length: Math.floor(60 / step) },
+    (_, i) => i * step,
+  );
+  if (typeof minute === "number" && !minuteOptions.includes(minute)) {
+    minuteOptions.push(minute);
+    minuteOptions.sort((a, b) => a - b);
+  }
+
+  const emit = (h: number | "", m: number | "") => {
+    if (h === "" || m === "") {
+      onChange("");
+      return;
+    }
+    onChange(
+      `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+    );
+  };
+
+  return (
+    <div className={cn("flex items-center gap-2", className)}>
+      <select
+        id={id}
+        aria-label="Heure"
+        required={required}
+        disabled={disabled}
+        value={hour === "" ? "" : hour}
+        onChange={(e) => {
+          const h = e.target.value === "" ? "" : Number(e.target.value);
+          emit(h, minute === "" ? 0 : minute);
+        }}
+        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 dark:border-slate-500 dark:bg-[var(--surface-2)]"
+      >
+        <option value="">--</option>
+        {Array.from({ length: 24 }, (_, h) => (
+          <option key={h} value={h}>
+            {String(h).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <span className="text-sm font-semibold text-slate-500" aria-hidden>
+        :
+      </span>
+      <select
+        aria-label="Minutes"
+        required={required}
+        disabled={disabled}
+        value={minute === "" ? "" : minute}
+        onChange={(e) => {
+          const m = e.target.value === "" ? "" : Number(e.target.value);
+          emit(hour === "" ? 8 : hour, m);
+        }}
+        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 dark:border-slate-500 dark:bg-[var(--surface-2)]"
+      >
+        <option value="">--</option>
+        {minuteOptions.map((m) => (
+          <option key={m} value={m}>
+            {String(m).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <span className="shrink-0 text-xs text-slate-500">24 h</span>
+    </div>
+  );
+}
+
 export function Card({
   className,
   ...props

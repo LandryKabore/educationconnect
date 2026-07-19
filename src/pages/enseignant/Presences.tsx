@@ -12,7 +12,7 @@ import {
   attendanceToggleClass,
 } from "@/lib/attendance";
 import { supabase } from "@/lib/supabase";
-import type { AttendanceStatus, Profile } from "@/lib/types";
+import type { AttendanceStatus, Profile, Subject } from "@/lib/types";
 import { formatDateSafe } from "@/lib/dateFr";
 import { cn, fullName } from "@/lib/utils";
 import { SaveButton } from "@/components/SaveButton";
@@ -24,6 +24,7 @@ import {
   Input,
   Label,
   PageHeader,
+  Select,
 } from "@/components/ui";
 
 /** Empty until the teacher picks a status — never default to present. */
@@ -41,6 +42,10 @@ export default function Presences() {
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
   const [date, setDate] = useState(() => initialDate(searchParams.get("date")));
+  /** Only used when the teacher teaches several subjects in this class (or admin). */
+  const [subjectOverride, setSubjectOverride] = useState(
+    () => searchParams.get("matiere") ?? "",
+  );
   const [saving, setSaving] = useState(false);
 
   const onDateChange = (next: string) => {
@@ -54,6 +59,42 @@ export default function Presences() {
       { replace: true },
     );
   };
+
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
+    queryKey: ["presence-subjects", id, user?.id, isAdmin],
+    enabled: !!id && !!user?.id,
+    queryFn: async () => {
+      let q = supabase
+        .from("affectations_enseignement")
+        .select("matieres(*)")
+        .eq("class_section_id", id!);
+      // Teacher → only their matière(s) for this class.
+      if (!isAdmin) q = q.eq("teacher_id", user!.id);
+      const { data, error } = await q;
+      if (error) throw error;
+      const map = new Map<string, Subject>();
+      for (const row of data ?? []) {
+        const sub = (row as unknown as { matieres: Subject | null }).matieres;
+        if (sub) map.set(sub.id, sub);
+      }
+      return [...map.values()].sort((a, b) =>
+        a.name.localeCompare(b.name, "fr"),
+      );
+    },
+  });
+
+  // Auto: the subject this teacher teaches here (no picker when only one).
+  const needsSubjectPicker = isAdmin || subjects.length > 1;
+  const subjectId = needsSubjectPicker
+    ? subjectOverride || subjects[0]?.id || ""
+    : subjects[0]?.id || "";
+
+  useEffect(() => {
+    if (!needsSubjectPicker) return;
+    if (!subjectOverride && subjects[0]?.id) {
+      setSubjectOverride(subjects[0].id);
+    }
+  }, [needsSubjectPicker, subjectOverride, subjects]);
 
   const { data: students = [], isLoading } = useQuery({
     queryKey: ["class-roster", id],
@@ -78,14 +119,15 @@ export default function Presences() {
   });
 
   const { data: attendance = [] } = useQuery({
-    queryKey: ["presences", id, date],
-    enabled: !!id,
+    queryKey: ["presences", id, date, subjectId],
+    enabled: !!id && !!subjectId,
     queryFn: async () => {
       const { data } = await supabase
         .from("presences")
         .select("*")
         .eq("class_section_id", id!)
-        .eq("date", date);
+        .eq("date", date)
+        .eq("subject_id", subjectId);
       return data ?? [];
     },
   });
@@ -94,7 +136,7 @@ export default function Presences() {
 
   useEffect(() => {
     setStatuses({});
-  }, [date, id]);
+  }, [date, id, subjectId]);
 
   const savedByStudent = useMemo(() => {
     const map = new Map<
@@ -148,7 +190,6 @@ export default function Presences() {
   const markAll = (status: AttendanceStatus) => {
     const next: Record<string, StatusValue> = {};
     for (const s of students) {
-      // Don't overwrite admin justifications with "mark all".
       const current = getStatus(s.id);
       next[s.id] = current === "excused" ? "excused" : status;
     }
@@ -157,6 +198,14 @@ export default function Presences() {
 
   const handleSave = async () => {
     if (!id || !user || !dirty) return;
+    if (!subjectId) {
+      toast.error(
+        isAdmin
+          ? "Choisissez une matière"
+          : "Aucune matière assignée pour cette classe",
+      );
+      return;
+    }
 
     const stillUnset = students.filter((s) => getStatus(s.id) === "");
     if (stillUnset.length > 0) {
@@ -173,9 +222,9 @@ export default function Presences() {
       return {
         class_section_id: id,
         student_id: student.id,
+        subject_id: subjectId,
         date,
         status,
-        // Keep justification note when still excused.
         note:
           status === "excused"
             ? (prev?.note ?? null)
@@ -185,9 +234,9 @@ export default function Presences() {
         recorded_by: user.id,
       };
     });
-    const { error } = await supabase
-      .from("presences")
-      .upsert(rows, { onConflict: "class_section_id,student_id,date" });
+    const { error } = await supabase.from("presences").upsert(rows, {
+      onConflict: "class_section_id,student_id,date,subject_id",
+    });
     if (error) {
       toast.error(error.message || "Enregistrement impossible");
       setSaving(false);
@@ -195,12 +244,17 @@ export default function Presences() {
     }
     toast.success("Présences enregistrées");
     setStatuses({});
-    await qc.invalidateQueries({ queryKey: ["presences", id, date] });
+    await qc.invalidateQueries({
+      queryKey: ["presences", id, date, subjectId],
+    });
     void qc.invalidateQueries({ queryKey: ["teacher-mes-presences"] });
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
     void qc.invalidateQueries({ queryKey: ["ecole-presences"] });
+    void qc.invalidateQueries({ queryKey: ["mes-presences"] });
     setSaving(false);
   };
+
+  const selectedSubject = subjects.find((s) => s.id === subjectId);
 
   return (
     <div>
@@ -220,6 +274,7 @@ export default function Presences() {
             type="button"
             saving={saving}
             dirty={dirty}
+            disabled={!subjectId}
             onClick={() => void handleSave()}
           />
         }
@@ -235,11 +290,57 @@ export default function Presences() {
         />
         <p className="mt-1 text-xs text-slate-500">
           {formatDateSafe(date, "EEEE d MMMM yyyy", { locale: fr })}
+          {selectedSubject && !needsSubjectPicker
+            ? ` · ${selectedSubject.name}`
+            : ""}
         </p>
       </Card>
 
-      {isLoading ? (
+      {needsSubjectPicker && subjects.length > 0 ? (
+        <Card className="mb-6 max-w-xs">
+          <Label htmlFor="presence-matiere">Matière</Label>
+          <Select
+            id="presence-matiere"
+            value={subjectId}
+            onChange={(e) => {
+              setSubjectOverride(e.target.value);
+              setSearchParams(
+                (prev) => {
+                  const p = new URLSearchParams(prev);
+                  if (e.target.value) p.set("matiere", e.target.value);
+                  else p.delete("matiere");
+                  return p;
+                },
+                { replace: true },
+              );
+            }}
+          >
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+          {!isAdmin ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Vous enseignez plusieurs matières dans cette classe.
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {subjectsLoading || isLoading ? (
         <p className="text-slate-500">Chargement…</p>
+      ) : subjects.length === 0 ? (
+        <EmptyState
+          message={
+            isAdmin
+              ? "Aucune matière enseignée dans cette classe."
+              : "Vous n’avez pas de matière assignée dans cette classe."
+          }
+        />
+      ) : !subjectId ? (
+        <EmptyState message="Choisissez une matière pour prendre les présences." />
       ) : students.length === 0 ? (
         <EmptyState message="Aucun élève dans cette classe." />
       ) : (
@@ -356,10 +457,7 @@ export default function Presences() {
                         <button
                           key={st}
                           type="button"
-                          className={attendanceToggleClass(
-                            st,
-                            value === st,
-                          )}
+                          className={attendanceToggleClass(st, value === st)}
                           onClick={() =>
                             setStatuses((prev) => ({
                               ...prev,

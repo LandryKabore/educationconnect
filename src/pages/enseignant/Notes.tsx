@@ -35,6 +35,16 @@ type GradeState = {
 
 const EMPTY_GRADE: GradeState = { score: "", absent: false, comment: "" };
 
+/** Stable empty defaults — inline `= []` creates a new array every render and can loop useEffects. */
+const EMPTY_OPEN_GRADES: {
+  id: string;
+  student_id: string;
+  score: number;
+  max_score: number;
+  comment: string | null;
+  is_absent: boolean;
+}[] = [];
+
 export default function Notes() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -120,7 +130,7 @@ export default function Notes() {
   });
 
   // Grades for whatever evaluation is currently open in the grid.
-  const { data: openGrades = [] } = useQuery({
+  const { data: openGrades = EMPTY_OPEN_GRADES } = useQuery({
     queryKey: ["eval-grades", openId],
     enabled: !!openId && openId !== "new",
     queryFn: async () => {
@@ -168,7 +178,7 @@ export default function Notes() {
   // Seed the grid when the open evaluation's grades load.
   useEffect(() => {
     if (!openId || openId === "new") {
-      setGrades({});
+      setGrades((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
     const next: Record<string, GradeState> = {};
@@ -179,7 +189,9 @@ export default function Notes() {
         comment: g.comment ?? "",
       };
     }
-    setGrades(next);
+    setGrades((prev) =>
+      JSON.stringify(prev) === JSON.stringify(next) ? prev : next,
+    );
   }, [openId, openGrades]);
 
   const getGrade = (studentId: string): GradeState =>

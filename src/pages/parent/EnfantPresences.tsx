@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -16,11 +17,23 @@ const STATUS_LABELS: Record<AttendanceStatus, string> = {
   excused: "Justifié",
 };
 
-const STATUS_TONE: Record<AttendanceStatus, "success" | "danger" | "warning" | "info"> = {
+const STATUS_TONE: Record<
+  AttendanceStatus,
+  "success" | "danger" | "warning" | "info"
+> = {
   present: "success",
   absent: "danger",
   late: "warning",
   excused: "info",
+};
+
+type PresenceRow = {
+  id: string;
+  date: string;
+  status: AttendanceStatus;
+  note: string | null;
+  subject_id: string;
+  matieres: { name: string } | null;
 };
 
 export default function EnfantPresences() {
@@ -41,7 +54,9 @@ export default function EnfantPresences() {
     },
   });
 
-  const child = (link as { profils?: { first_name: string; last_name: string } } | null)?.profils;
+  const child = (
+    link as { profils?: { first_name: string; last_name: string } } | null
+  )?.profils;
 
   const { data: attendance = [], isLoading } = useQuery({
     queryKey: ["enfant-presences", id],
@@ -49,14 +64,35 @@ export default function EnfantPresences() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("presences")
-        .select("*")
+        .select("id, date, status, note, subject_id, matieres(name)")
         .eq("student_id", id!)
         .order("date", { ascending: false })
-        .limit(30);
+        .limit(120);
       if (error) throw error;
-      return data as { id: string; date: string; status: AttendanceStatus; note: string | null }[];
+      return (data ?? []) as unknown as PresenceRow[];
     },
   });
+
+  const bySubject = useMemo(() => {
+    const map = new Map<
+      string,
+      { subjectId: string; subjectName: string; rows: PresenceRow[] }
+    >();
+    for (const a of attendance) {
+      const name = a.matieres?.name ?? "Matière";
+      const key = a.subject_id || name;
+      const cur = map.get(key) ?? {
+        subjectId: a.subject_id,
+        subjectName: name,
+        rows: [],
+      };
+      cur.rows.push(a);
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) =>
+      a.subjectName.localeCompare(b.subjectName, "fr"),
+    );
+  }, [attendance]);
 
   if (!link && !isLoading) {
     return <EmptyState message="Accès non autorisé à cet élève." />;
@@ -78,6 +114,7 @@ export default function EnfantPresences() {
             ? `Présences — ${fullName(child.first_name, child.last_name)}`
             : "Présences"
         }
+        subtitle="Par matière"
       />
 
       {isLoading ? (
@@ -85,14 +122,30 @@ export default function EnfantPresences() {
       ) : attendance.length === 0 ? (
         <EmptyState message="Aucune présence enregistrée." />
       ) : (
-        <div className="space-y-2">
-          {attendance.map((a) => (
-            <Card key={a.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-              <span className="text-sm font-medium">
-                {format(new Date(a.date), "EEEE d MMMM yyyy", { locale: fr })}
-              </span>
-              <Badge tone={STATUS_TONE[a.status]}>{STATUS_LABELS[a.status]}</Badge>
-            </Card>
+        <div className="space-y-8">
+          {bySubject.map((group) => (
+            <section key={group.subjectId}>
+              <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                {group.subjectName}
+              </h2>
+              <div className="space-y-2">
+                {group.rows.map((a) => (
+                  <Card
+                    key={a.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <span className="text-sm font-medium capitalize">
+                      {format(new Date(a.date), "EEEE d MMMM yyyy", {
+                        locale: fr,
+                      })}
+                    </span>
+                    <Badge tone={STATUS_TONE[a.status]}>
+                      {STATUS_LABELS[a.status]}
+                    </Badge>
+                  </Card>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

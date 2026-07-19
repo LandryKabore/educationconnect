@@ -5,8 +5,10 @@ import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
+  computeAnnualAverage,
   computeWeightedAverage,
   formatAverage,
+  formatPassDecision,
   programmeToCoefMap,
 } from "@/lib/averages";
 import type { GradeRow, Subject } from "@/lib/types";
@@ -83,6 +85,14 @@ export default function EnfantNotes() {
     return [...map.entries()];
   }, [grades]);
 
+  const annual = useMemo(
+    () =>
+      computeAnnualAverage(grades, {
+        coefficientBySubject: coefMap,
+      }),
+    [grades, coefMap],
+  );
+
   if (!link && !isLoading) {
     return <EmptyState message="Accès non autorisé à cet élève." />;
   }
@@ -107,6 +117,28 @@ export default function EnfantNotes() {
         <EmptyState message="Aucune note disponible." />
       ) : (
         <div className="space-y-8">
+          {annual.annualAverage !== null ? (
+            <Card className="flex flex-wrap items-center justify-between gap-3 border-brand-200 bg-brand-50/50 dark:border-brand-800 dark:bg-brand-900/20">
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Moyenne annuelle
+                </p>
+                <p className="text-xs text-slate-500">
+                  (T1 + T2 + T3) / {annual.trimesterCount || 3}
+                  {!annual.complete ? " · provisoire" : ""}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-brand-700">
+                  {formatAverage(annual.annualAverage)} / 20
+                </p>
+                <Badge tone={annual.passed ? "success" : "warning"}>
+                  {formatPassDecision(annual)}
+                </Badge>
+              </div>
+            </Card>
+          ) : null}
+
           {byPeriod.map(([period, periodGrades]) => {
             const avg = computeWeightedAverage(periodGrades, {
               coefficientBySubject: coefMap,

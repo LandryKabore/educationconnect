@@ -140,10 +140,13 @@ export function QuickLink({
   to,
   label,
   icon: Icon,
+  badge,
 }: {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Optional count bubble (e.g. pending exams). */
+  badge?: number;
 }) {
   return (
     <Link
@@ -153,7 +156,15 @@ export function QuickLink({
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
         <Icon className="h-4 w-4" />
       </span>
-      {label}
+      <span className="min-w-0 flex-1">{label}</span>
+      {badge != null && badge > 0 ? (
+        <span
+          className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+          title={`${badge} en attente`}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

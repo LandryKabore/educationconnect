@@ -1,12 +1,15 @@
 import { Link } from "react-router-dom";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import {
   Bell,
   BookOpen,
   Calendar,
+  CalendarClock,
   CheckCircle2,
   ClipboardList,
+  FileText,
   GraduationCap,
   MessageSquare,
   TrendingUp,
@@ -25,12 +28,21 @@ import {
   isAttendancePositive,
   isUnjustifiedAbsence,
 } from "@/lib/attendance";
+import {
+  computeAnnualAverage,
+  formatAverage,
+  formatPassDecision,
+  programmeToCoefMap,
+  TRIMESTER_PERIODS,
+} from "@/lib/averages";
+import { timeToMinutes } from "@/lib/timetableConflicts";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName } from "@/lib/utils";
-import type { AttendanceStatus } from "@/lib/types";
+import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
 
 const WEEKDAY_LABELS: Record<number, string> = {
   1: "Lundi",
@@ -55,10 +67,12 @@ function on20(score: number, max: number) {
 export default function StudentHome() {
   const { user, profile } = useAuth();
   const { data: unreadMessages = 0 } = useUnreadMessagesCount();
+  const { pending: edtPending, pendingCount: edtPendingCount, markSeen } =
+    useEdtPendingChanges();
   const name = fullName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["student-home", user?.id],
+    queryKey: ["student-home", "v4", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const uid = user!.id;
@@ -79,35 +93,32 @@ export default function StudentHome() {
       const { data: notesData } = await supabase
         .from("notes")
         .select(
-          "id, score, max_score, period_label, created_at, is_absent, matieres(name)",
+          "id, score, max_score, period_label, subject_id, created_at, is_absent, matieres(id, name, coefficient)",
         )
         .eq("student_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(40);
+        .order("created_at", { ascending: false });
 
       const { count: notesCountExact } = await supabase
         .from("notes")
         .select("id", { count: "exact", head: true })
         .eq("student_id", uid);
 
-      const notes = (notesData ?? []) as {
-        id: string;
-        score: number;
-        max_score: number;
-        period_label: string;
-        created_at: string;
-        is_absent: boolean;
-        matieres: { name: string } | null;
-      }[];
+      const notes = (notesData ?? []) as (GradeRow & {
+        matieres: Subject | null;
+      })[];
 
-      const scored = notes
-        .filter((n) => !n.is_absent)
-        .map((n) => on20(n.score, n.max_score))
-        .filter((v): v is number => v != null);
-      const average =
-        scored.length > 0
-          ? scored.reduce((a, b) => a + b, 0) / scored.length
-          : null;
+      let coefMap: Record<string, number> = {};
+      if (classId) {
+        const { data: programme } = await supabase
+          .from("programme_classe")
+          .select("subject_id, coefficient")
+          .eq("class_section_id", classId);
+        coefMap = programmeToCoefMap(programme ?? []);
+      }
+
+      const annual = computeAnnualAverage(notes, {
+        coefficientBySubject: coefMap,
+      });
 
       const { data: presenceData } = await supabase
         .from("presences")
@@ -127,38 +138,48 @@ export default function StudentHome() {
         isUnjustifiedAbsence(p.status),
       ).length;
 
-      let pendingDevoirs: {
+      let pendingExercices: {
         id: string;
         title: string;
         due_date: string | null;
-        kind: "exercice_maison" | "examen";
         matieres: { name: string } | null;
+      }[] = [];
+      let upcomingExamens: {
+        id: string;
+        title: string;
+        due_date: string | null;
+        start_time: string | null;
+        end_time: string | null;
+        matieres: { name: string } | null;
+        admin_confirmed: boolean;
       }[] = [];
       let todaySlots: {
         id: string;
+        day_of_week: number;
         start_time: string;
         end_time: string;
         room: string | null;
         matieres: { name: string } | null;
       }[] = [];
+      let weekSlots: typeof todaySlots = [];
 
       if (classId) {
-        const { data: devoirsData } = await supabase
+        const { data: exercicesData } = await supabase
           .from("devoirs")
           .select(
-            "id, title, due_date, kind, matieres(name), rendus_devoirs!left(id)",
+            "id, title, due_date, matieres(name), rendus_devoirs!left(id)",
           )
           .eq("class_section_id", classId)
+          .eq("kind", "exercice_maison")
           .eq("rendus_devoirs.student_id", uid)
           .order("due_date", { ascending: true })
-          .limit(12);
+          .limit(8);
 
-        pendingDevoirs = (
-          (devoirsData ?? []) as {
+        pendingExercices = (
+          (exercicesData ?? []) as {
             id: string;
             title: string;
             due_date: string | null;
-            kind: "exercice_maison" | "examen";
             matieres: { name: string } | null;
             rendus_devoirs: { id: string }[];
           }[]
@@ -166,13 +187,41 @@ export default function StudentHome() {
           .filter((d) => (d.rendus_devoirs?.length ?? 0) === 0)
           .slice(0, 4);
 
+        const { data: examensData } = await supabase
+          .from("devoirs")
+          .select(
+            "id, title, due_date, start_time, end_time, admin_confirmed, matieres(name)",
+          )
+          .eq("class_section_id", classId)
+          .eq("kind", "examen")
+          .eq("admin_confirmed", true)
+          .order("due_date", { ascending: true })
+          .limit(6);
+
+        const todayIso = new Date().toISOString().slice(0, 10);
+        upcomingExamens = (
+          (examensData ?? []) as {
+            id: string;
+            title: string;
+            due_date: string | null;
+            start_time: string | null;
+            end_time: string | null;
+            admin_confirmed: boolean;
+            matieres: { name: string } | null;
+          }[]
+        )
+          .filter((e) => !e.due_date || e.due_date >= todayIso)
+          .slice(0, 4);
+
+        const todayDow = dbDayOfWeek();
         const { data: slots } = await supabase
           .from("creneaux_edt")
-          .select("id, start_time, end_time, room, matieres(name)")
+          .select("id, day_of_week, start_time, end_time, room, matieres(name)")
           .eq("class_section_id", classId)
-          .eq("day_of_week", dbDayOfWeek())
+          .order("day_of_week")
           .order("start_time");
-        todaySlots = (slots ?? []) as typeof todaySlots;
+        weekSlots = (slots ?? []) as typeof weekSlots;
+        todaySlots = weekSlots.filter((s) => s.day_of_week === todayDow);
       }
 
       const { data: msgData } = await supabase
@@ -205,19 +254,92 @@ export default function StudentHome() {
       return {
         className: row?.classes?.name ?? null,
         gradeLevel: row?.classes?.grade_level ?? null,
-        average,
+        annual,
         attendanceRate,
         absencesCount,
         notesCount: notesCountExact ?? notes.length,
-        recentNotes: notes.slice(0, 4),
-        pendingDevoirs,
+        recentNotes: notes.slice(0, 4).map((n) => ({
+          id: n.id,
+          score: n.score,
+          max_score: n.max_score,
+          period_label: n.period_label,
+          matieres: n.matieres
+            ? { name: n.matieres.name }
+            : null,
+        })),
+        pendingExercices,
+        upcomingExamens,
         todaySlots,
+        weekSlots,
         announcements,
         recentMessages,
         todayLabel: WEEKDAY_LABELS[dbDayOfWeek()] ?? "Aujourd’hui",
       };
     },
   });
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayDow = dbDayOfWeek();
+
+  /** Current/next today, or first class on a later day (e.g. Monday after Saturday). */
+  const scheduleFocus = useMemo(() => {
+    const week = data?.weekSlots ?? [];
+    if (week.length === 0) return null;
+
+    const todayList = week
+      .filter((s) => s.day_of_week === todayDow)
+      .sort(
+        (a, b) =>
+          timeToMinutes(a.start_time) - timeToMinutes(b.start_time),
+      );
+
+    const current = todayList.find((s) => {
+      const start = timeToMinutes(s.start_time);
+      const end = timeToMinutes(s.end_time);
+      return start <= nowMinutes && nowMinutes < end;
+    });
+    if (current) {
+      return {
+        slot: current,
+        kind: "current" as const,
+        dayLabel: WEEKDAY_LABELS[todayDow] ?? "Aujourd’hui",
+        isLaterDay: false,
+      };
+    }
+
+    const nextToday = todayList.find(
+      (s) => timeToMinutes(s.start_time) > nowMinutes,
+    );
+    if (nextToday) {
+      return {
+        slot: nextToday,
+        kind: "next" as const,
+        dayLabel: WEEKDAY_LABELS[todayDow] ?? "Aujourd’hui",
+        isLaterDay: false,
+      };
+    }
+
+    for (let offset = 1; offset <= 7; offset++) {
+      const day = ((todayDow - 1 + offset) % 7) + 1;
+      const dayList = week
+        .filter((s) => s.day_of_week === day)
+        .sort(
+          (a, b) =>
+            timeToMinutes(a.start_time) - timeToMinutes(b.start_time),
+        );
+      const first = dayList[0];
+      if (!first) continue;
+      return {
+        slot: first,
+        kind: "next" as const,
+        dayLabel: WEEKDAY_LABELS[day] ?? "Prochain jour",
+        isLaterDay: true,
+      };
+    }
+
+    return null;
+  }, [data?.weekSlots, todayDow, nowMinutes]);
 
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;
@@ -236,6 +358,15 @@ export default function StudentHome() {
     .filter(Boolean)
     .join(" · ");
 
+  const pendingExercices = data.pendingExercices ?? [];
+  const upcomingExamens = data.upcomingExamens ?? [];
+  const recentNotes = data.recentNotes ?? [];
+  const todaySlots = data.todaySlots ?? [];
+  const announcements = data.announcements ?? [];
+  const recentMessages = data.recentMessages ?? [];
+  const annual = data.annual;
+  const trimesterShort = ["T1", "T2", "T3"] as const;
+
   return (
     <div className="space-y-6">
       <PortalHomeHeader
@@ -245,24 +376,66 @@ export default function StudentHome() {
         unreadMessages={unreadMessages}
       />
 
+      {edtPendingCount > 0 ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-brand-500/40 dark:bg-brand-950/30">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/60">
+              <CalendarClock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+                Emploi du temps modifié
+              </p>
+              <p className="mt-0.5 text-xs text-brand-800/90 dark:text-brand-200/90">
+                {edtPendingCount} modification
+                {edtPendingCount > 1 ? "s" : ""}
+                {edtPending[0]?.label
+                  ? ` · ${edtPending[0].label}`
+                  : ""}
+                {edtPendingCount > 1 ? "…" : ""}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
+            <Link to="/mon-emploi-du-temps">
+              <Button size="sm">Voir l’emploi du temps</Button>
+            </Link>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => markSeen()}
+            >
+              Marquer comme vu
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Key metrics */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Moyenne"
-          value={data.average != null ? data.average.toFixed(1) : "—"}
+          label="Moyenne annuelle"
+          value={
+            annual?.annualAverage != null
+              ? formatAverage(annual.annualAverage, 1)
+              : "—"
+          }
           hint={
-            data.average != null
-              ? "Sur 20 · toutes notes"
+            annual?.annualAverage != null
+              ? `${formatPassDecision(annual)}${
+                  !annual.complete ? " · provisoire" : ""
+                }`
               : "Pas encore de notes"
           }
           valueClass={
-            data.average == null
+            annual?.annualAverage == null
               ? "text-slate-500 dark:text-slate-300"
-              : data.average >= 10
+              : annual.annualAverage >= 10
                 ? "text-brand-600"
                 : "text-amber-600"
           }
-          to="/mes-notes"
+          to="/mon-bulletin"
         />
         <MetricCard
           label="Présence"
@@ -291,16 +464,82 @@ export default function StudentHome() {
           to="/mes-notes"
         />
         <MetricCard
-          label="À rendre"
-          value={String(data.pendingDevoirs.length)}
-          hint="Exercices / examens"
+          label="Exercices"
+          value={String(pendingExercices.length)}
+          hint="À rendre en classe"
           valueClass={
-            data.pendingDevoirs.length > 0
+            pendingExercices.length > 0
               ? "text-rose-600"
               : "text-slate-500 dark:text-slate-300"
           }
           to="/mes-exercices"
         />
+      </section>
+
+      {/* Bulletin snapshot */}
+      <section>
+        <Panel
+          icon={FileText}
+          title="Bulletin · moyennes"
+          subtitle="Trimestres et moyenne annuelle"
+          action={
+            <Link to="/mon-bulletin" className="block">
+              <Button className="w-full">Voir mon bulletin</Button>
+            </Link>
+          }
+        >
+          <div className="grid gap-2 sm:grid-cols-4">
+            {TRIMESTER_PERIODS.map((period, i) => {
+              const t = annual?.trimesters?.[i];
+              const value = t?.generalAverage ?? null;
+              return (
+                <div
+                  key={period}
+                  className="rounded-xl bg-slate-50 px-3 py-3 text-center dark:bg-[var(--surface-2)]"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {trimesterShort[i]}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-xl font-bold tabular-nums",
+                      value == null
+                        ? "text-slate-400"
+                        : value >= 10
+                          ? "text-brand-700"
+                          : "text-amber-600",
+                    )}
+                  >
+                    {formatAverage(value, 1)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">/ 20</p>
+                </div>
+              );
+            })}
+            <div className="rounded-xl bg-brand-50 px-3 py-3 text-center ring-1 ring-brand-100 dark:bg-brand-950/40 dark:ring-brand-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                Année
+              </p>
+              <p
+                className={cn(
+                  "mt-1 text-xl font-bold tabular-nums",
+                  annual?.annualAverage == null
+                    ? "text-slate-400"
+                    : annual.annualAverage >= 10
+                      ? "text-brand-700"
+                      : "text-amber-600",
+                )}
+              >
+                {formatAverage(annual?.annualAverage ?? null, 1)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-brand-600/80 dark:text-brand-300/80">
+                {annual?.annualAverage != null
+                  ? formatPassDecision(annual)
+                  : "/ 20"}
+              </p>
+            </div>
+          </div>
+        </Panel>
       </section>
 
       {/* Academic row */}
@@ -315,11 +554,11 @@ export default function StudentHome() {
             </Link>
           }
         >
-          {data.recentNotes.length === 0 ? (
+          {recentNotes.length === 0 ? (
             <PanelEmpty message="Aucune note disponible pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {data.recentNotes.map((n) => {
+              {recentNotes.map((n) => {
                 const v = on20(n.score, n.max_score);
                 return (
                   <li
@@ -349,82 +588,212 @@ export default function StudentHome() {
         <Panel
           icon={Calendar}
           title={`Aujourd’hui · ${data.todayLabel}`}
-          subtitle="Cours du jour et travaux à rendre"
+          subtitle={
+            scheduleFocus?.kind === "current"
+              ? "Cours en cours mis en avant"
+              : scheduleFocus?.isLaterDay
+                ? `Pas de cours aujourd’hui · prochain : ${scheduleFocus.dayLabel}`
+                : scheduleFocus?.kind === "next"
+                  ? "Prochain cours mis en avant"
+                  : "Tes cours du jour"
+          }
           action={
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Link to="/mon-emploi-du-temps" className="block">
-                <Button variant="outline" className="w-full">
-                  Emploi du temps
-                </Button>
-              </Link>
-              <Link to="/mes-exercices" className="block">
-                <Button className="w-full">Exercices</Button>
-              </Link>
-            </div>
+            <Link to="/mon-emploi-du-temps" className="block">
+              <Button className="w-full">Emploi du temps</Button>
+            </Link>
           }
         >
-          {data.todaySlots.length === 0 && data.pendingDevoirs.length === 0 ? (
-            <PanelEmpty message="Rien de prévu pour aujourd’hui." />
+          {todaySlots.length === 0 && !scheduleFocus ? (
+            <PanelEmpty message="Pas de cours prévu cette semaine." />
           ) : (
             <div className="space-y-3">
-              {data.todaySlots.length > 0 ? (
+              {todaySlots.length === 0 && scheduleFocus?.isLaterDay ? (
+                <p className="text-xs font-medium text-slate-500">
+                  Aucun cours aujourd’hui — voici le prochain.
+                </p>
+              ) : null}
+
+              {todaySlots.length > 0 ? (
                 <ul className="space-y-2">
-                  {data.todaySlots.slice(0, 3).map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5"
-                    >
-                      <span className="w-20 shrink-0 text-xs font-semibold tabular-nums text-brand-700">
-                        {s.start_time?.slice(0, 5)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {s.matieres?.name ?? "Cours"}
-                        </p>
-                        {s.room ? (
-                          <p className="text-xs text-slate-500">Salle {s.room}</p>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
+                  {todaySlots.slice(0, 5).map((s) => {
+                    const isFocus =
+                      !scheduleFocus?.isLaterDay &&
+                      scheduleFocus?.slot.id === s.id;
+                    const badge =
+                      isFocus
+                        ? scheduleFocus.kind === "current"
+                          ? "En cours"
+                          : "Prochain"
+                        : null;
+                    return (
+                      <li
+                        key={s.id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5",
+                          isFocus
+                            ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700"
+                            : "bg-slate-50",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "w-24 shrink-0 text-xs font-semibold tabular-nums",
+                            isFocus ? "text-brand-800" : "text-brand-700",
+                          )}
+                        >
+                          {s.start_time?.slice(0, 5)}
+                          {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {s.matieres?.name ?? "Cours"}
+                            </p>
+                            {badge ? (
+                              <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                {badge}
+                              </span>
+                            ) : null}
+                          </div>
+                          {s.room ? (
+                            <p className="text-xs text-slate-500">
+                              Salle {s.room}
+                            </p>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : null}
 
-              {data.pendingDevoirs.length > 0 ? (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    À rendre
-                  </p>
-                  <ul className="space-y-2">
-                    {data.pendingDevoirs.map((d) => (
-                      <li
-                        key={d.id}
-                        className="flex items-start justify-between gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">
-                            {d.title}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {[
-                              d.kind === "examen" ? "Examen" : "Exercice",
-                              d.matieres?.name ?? "Matière",
-                            ].join(" · ")}
-                          </p>
-                        </div>
-                        {d.due_date ? (
-                          <span className="shrink-0 text-xs font-medium text-amber-800">
-                            {formatDateSafe(d.due_date, "d MMM", {
-                              locale: fr,
-                            })}
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {scheduleFocus?.isLaterDay ? (
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-3 rounded-xl bg-brand-50 px-3 py-2.5 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700">
+                    <span className="w-24 shrink-0 text-xs font-semibold tabular-nums text-brand-800">
+                      {scheduleFocus.slot.start_time?.slice(0, 5)}
+                      {scheduleFocus.slot.end_time
+                        ? `–${scheduleFocus.slot.end_time.slice(0, 5)}`
+                        : ""}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {scheduleFocus.slot.matieres?.name ?? "Cours"}
+                        </p>
+                        <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          {scheduleFocus.dayLabel}
+                        </span>
+                      </div>
+                      {scheduleFocus.slot.room ? (
+                        <p className="text-xs text-slate-500">
+                          Salle {scheduleFocus.slot.room}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                </ul>
+              ) : null}
+
+              {todaySlots.length > 0 &&
+              !scheduleFocus &&
+              todaySlots.every(
+                (s) => timeToMinutes(s.end_time) <= nowMinutes,
+              ) ? (
+                <p className="text-xs text-slate-500">
+                  Journée terminée — aucun autre cours cette semaine.
+                </p>
               ) : null}
             </div>
+          )}
+        </Panel>
+      </section>
+
+      {/* Travaux scolaires */}
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          icon={ClipboardList}
+          title="Exercices de maison"
+          subtitle="À apporter / présenter en classe"
+          action={
+            <Link to="/mes-exercices" className="block">
+              <Button className="w-full">Voir les exercices</Button>
+            </Link>
+          }
+        >
+          {pendingExercices.length === 0 ? (
+            <PanelEmpty message="Aucun exercice à rendre pour le moment." />
+          ) : (
+            <ul className="space-y-2">
+              {pendingExercices.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-start justify-between gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {d.title}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {d.matieres?.name ?? "Matière"}
+                    </p>
+                  </div>
+                  {d.due_date ? (
+                    <span className="shrink-0 text-xs font-medium text-amber-800">
+                      {formatDateSafe(d.due_date, "d MMM", { locale: fr })}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel
+          icon={BookOpen}
+          title="Prochains examens"
+          subtitle="Confirmés par l’administration"
+          action={
+            <Link to="/mes-examens" className="block">
+              <Button className="w-full">Voir les examens</Button>
+            </Link>
+          }
+        >
+          {upcomingExamens.length === 0 ? (
+            <PanelEmpty message="Aucun examen confirmé pour le moment." />
+          ) : (
+            <ul className="space-y-2">
+              {upcomingExamens.map((e) => {
+                const start = e.start_time?.slice(0, 5);
+                const end = e.end_time?.slice(0, 5);
+                const slot =
+                  start && end ? `${start}–${end}` : start ? start : null;
+                return (
+                  <li
+                    key={e.id}
+                    className="flex items-start justify-between gap-2 rounded-xl bg-sky-50/80 px-3 py-2.5 dark:bg-sky-950/30"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {e.title}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {[e.matieres?.name ?? "Matière", slot]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    {e.due_date ? (
+                      <span className="shrink-0 text-xs font-medium text-sky-800 dark:text-sky-300">
+                        {formatDateSafe(e.due_date, "EEEE d MMMM yyyy", {
+                          locale: fr,
+                        })}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </Panel>
       </section>
@@ -444,11 +813,11 @@ export default function StudentHome() {
             </Link>
           }
         >
-          {data.announcements.length === 0 ? (
+          {announcements.length === 0 ? (
             <PanelEmpty message="Aucune annonce pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {data.announcements.map((m) => (
+              {announcements.map((m) => (
                 <li
                   key={m.id}
                   className="rounded-xl bg-slate-50 px-3 py-2.5"
@@ -483,11 +852,11 @@ export default function StudentHome() {
             </Link>
           }
         >
-          {data.recentMessages.length === 0 ? (
+          {recentMessages.length === 0 ? (
             <PanelEmpty message="Aucun message pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {data.recentMessages.map((m) => {
+              {recentMessages.map((m) => {
                 const sender = m.sender
                   ? fullName(m.sender.first_name, m.sender.last_name)
                   : "Expéditeur";

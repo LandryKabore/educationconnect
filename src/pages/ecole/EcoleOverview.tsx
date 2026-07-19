@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle2,
   ClipboardList,
+  FileText,
   GraduationCap,
   MessageSquare,
   School,
@@ -23,10 +24,9 @@ import {
   type InboxPreview,
 } from "@/components/PortalHomeKit";
 import { formatDateSafe } from "@/lib/dateFr";
-import { enterSetupGuide } from "@/components/SetupGuideBar";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
+import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
@@ -35,9 +35,9 @@ import { cn, fullName } from "@/lib/utils";
 export default function EcoleOverview() {
   const { schoolId, schools, user, profile } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const { progress, nextStep, steps } = useSchoolSetupProgress();
   const { data: unreadMessages = 0 } = useUnreadMessagesCount();
   const { data: sansClasse = 0 } = useStudentsWithoutClassCount();
+  const { data: pendingExams = 0 } = usePendingExamsCount();
   const name = fullName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading } = useQuery({
@@ -111,7 +111,6 @@ export default function EcoleOverview() {
     return <p className="text-slate-500">Chargement…</p>;
   }
 
-  const setupIncomplete = progress && !progress.complete;
   const context = [
     school?.name,
     data.yearLabel ? `Année ${data.yearLabel}` : null,
@@ -136,83 +135,31 @@ export default function EcoleOverview() {
               Paramètres
             </Button>
           </Link>
-          <Link to="/ecole/configuration">
-            <Button size="sm">
-              {setupIncomplete ? "Continuer la config." : "Configuration"}
-            </Button>
-          </Link>
+          {pendingExams > 0 ? (
+            <Link to="/examens-ecole">
+              <Button size="sm">
+                <FileText className="h-4 w-4" />
+                {pendingExams} examen{pendingExams > 1 ? "s" : ""} à confirmer
+              </Button>
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      {setupIncomplete ? (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-500/40">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold text-amber-950">
-                Mise en place de l’école
-              </p>
-              <p className="mt-1 text-sm text-amber-900">
-                {progress.doneRequired} / {progress.totalRequired} étapes
-                obligatoires · {progress.percent} %
-              </p>
-              {nextStep ? (
-                <p className="mt-2 text-sm text-amber-800">
-                  Prochaine étape : <strong>{nextStep.title}</strong>
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {nextStep ? (
-                <Link
-                  to={`${nextStep.to}?setup=1`}
-                  onClick={() => enterSetupGuide()}
-                >
-                  <Button size="sm">Continuer</Button>
-                </Link>
-              ) : null}
-              <Link to="/ecole/configuration">
-                <Button size="sm" variant="outline">
-                  Voir le guide
-                </Button>
-              </Link>
-            </div>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-amber-100">
-            <div
-              className="h-full rounded-full bg-amber-500 transition-all"
-              style={{ width: `${progress.percent}%` }}
-            />
-          </div>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {steps
-              .filter((s) => !s.optional)
-              .map((s) => (
-                <li key={s.id} className="flex items-center gap-2 text-sm">
-                  {s.status === "done" ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <span className="h-4 w-4 rounded-full border-2 border-amber-400" />
-                  )}
-                  <span
-                    className={
-                      s.status === "done" ? "text-slate-600" : "text-amber-950"
-                    }
-                  >
-                    {s.title}
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ) : progress?.complete ? (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-500/40">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-700" />
-            <p className="font-medium text-emerald-900">
-              Configuration de base terminée
+      {pendingExams > 0 ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/40">
+          <div>
+            <p className="font-semibold text-amber-950">
+              Examens en attente de confirmation
+            </p>
+            <p className="mt-1 text-sm text-amber-900">
+              {pendingExams} proposition{pendingExams > 1 ? "s" : ""} des
+              enseignants à valider
             </p>
           </div>
-          <Badge tone="success">Prêt</Badge>
+          <Link to="/examens-ecole">
+            <Button size="sm">Voir les examens</Button>
+          </Link>
         </section>
       ) : null}
 
@@ -236,18 +183,24 @@ export default function EcoleOverview() {
           to="/eleves"
         />
         <MetricCard
-          label="Enseignants"
-          value={String(data.teachers)}
-          hint="Comptes actifs"
-          valueClass="text-violet-600"
-          to="/enseignants"
+          label="Examens"
+          value={String(pendingExams)}
+          hint={
+            pendingExams > 0
+              ? "À confirmer"
+              : "Aucune demande en attente"
+          }
+          valueClass={
+            pendingExams > 0 ? "text-amber-600" : "text-emerald-600"
+          }
+          to="/examens-ecole"
         />
         <MetricCard
-          label="Matières"
-          value={String(data.subjects)}
-          hint={`${data.parents} parent(s)`}
-          valueClass="text-emerald-600"
-          to="/matieres"
+          label="Enseignants"
+          value={String(data.teachers)}
+          hint={`${data.subjects} matière(s)`}
+          valueClass="text-violet-600"
+          to="/enseignants"
         />
       </section>
 
@@ -257,15 +210,28 @@ export default function EcoleOverview() {
           title="Pilotage"
           subtitle="Accès rapides à l’essentiel"
           action={
-            <Link to="/ecole/configuration" className="block">
+            <Link to="/examens-ecole" className="block">
               <Button className="w-full" variant="outline">
-                Guide de configuration
+                <FileText className="h-4 w-4" />
+                Examens
+                {pendingExams > 0 ? (
+                  <Badge tone="warning">{pendingExams}</Badge>
+                ) : null}
               </Button>
             </Link>
           }
         >
           <ul className="space-y-2">
             {[
+              {
+                to: "/examens-ecole",
+                label: "Examens",
+                hint:
+                  pendingExams > 0
+                    ? `${pendingExams} à confirmer`
+                    : "Dates proposées par les profs",
+                icon: FileText,
+              },
               {
                 to: "/eleves",
                 label: "Élèves",
@@ -280,12 +246,6 @@ export default function EcoleOverview() {
                 label: "Emplois du temps",
                 hint: "Lundi → samedi",
                 icon: Calendar,
-              },
-              {
-                to: "/enseignants",
-                label: "Enseignants",
-                hint: `${data.teachers} compte(s)`,
-                icon: Users,
               },
               {
                 to: "/bulletins",
@@ -429,7 +389,12 @@ export default function EcoleOverview() {
         <QuickLink to="/parents" label="Parents" icon={Users} />
         <QuickLink to="/emplois-du-temps" label="Emplois du temps" icon={Calendar} />
         <QuickLink to="/presences-ecole" label="Présences" icon={CheckCircle2} />
-        <QuickLink to="/examens-ecole" label="Examens" icon={ClipboardList} />
+        <QuickLink
+          to="/examens-ecole"
+          label="Examens"
+          icon={FileText}
+          badge={pendingExams}
+        />
         <QuickLink to="/bulletins" label="Bulletins" icon={ClipboardList} />
         <QuickLink to="/messages" label="Messages" icon={MessageSquare} />
         <QuickLink to="/ecole/parametres" label="Paramètres" icon={Settings} />

@@ -98,8 +98,10 @@ export default function ExamensEcole() {
         : "Confirmation retirée",
     );
     void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
+    void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
     void qc.invalidateQueries({ queryKey: ["devoirs"] });
     void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
+    void qc.invalidateQueries({ queryKey: ["student-home"] });
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
   };
 

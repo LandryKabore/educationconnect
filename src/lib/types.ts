@@ -143,6 +143,8 @@ export interface AttendanceRow {
   id: string;
   class_section_id: string;
   student_id: string;
+  /** Matière du cours pour lequel la présence a été prise. */
+  subject_id: string;
   date: string;
   status: AttendanceStatus;
   note: string | null;
