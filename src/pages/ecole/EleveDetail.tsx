@@ -7,17 +7,12 @@ import { toast } from "sonner";
 import { KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import {
-  computeAnnualAverage,
-  computeWeightedAverage,
-  formatAverage,
-  formatPassDecision,
-  programmeToCoefMap,
-} from "@/lib/averages";
+import { programmeToCoefMap } from "@/lib/averages";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import type {
   AttendanceRow,
   ClassSection,
+  EvaluationType,
   GradeRow,
   ParentStudentLink,
   Profile,
@@ -25,6 +20,7 @@ import type {
 } from "@/lib/types";
 import { fromAuthEmail, fullName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
+import { NotesPeriodTables } from "@/components/NotesPeriodTables";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import {
   BackLink,
@@ -50,7 +46,10 @@ const ATTENDANCE_LABEL: Record<string, string> = {
   excused: "Justifié",
 };
 
-type GradeWithSubject = GradeRow & { matieres: Subject | null };
+type GradeWithSubject = GradeRow & {
+  matieres: Subject | null;
+  evaluations: { type: EvaluationType; title: string } | null;
+};
 
 type ParentLinkRow = ParentStudentLink & {
   profils: Profile | null;
@@ -179,12 +178,12 @@ export default function EleveDetail() {
   });
 
   const { data: grades = [], isLoading: gradesLoading } = useQuery({
-    queryKey: ["eleve-notes", id],
+    queryKey: ["eleve-notes", "v2", id],
     enabled: !!id && !!student,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes")
-        .select("*, matieres(*)")
+        .select("*, matieres(*), evaluations(type, title)")
         .eq("student_id", id!)
         .order("period_label");
       if (error) throw error;
@@ -208,24 +207,6 @@ export default function EleveDetail() {
       })[];
     },
   });
-
-  const byPeriod = useMemo(() => {
-    const map = new Map<string, GradeWithSubject[]>();
-    for (const g of grades) {
-      const list = map.get(g.period_label) ?? [];
-      list.push(g);
-      map.set(g.period_label, list);
-    }
-    return [...map.entries()];
-  }, [grades]);
-
-  const annual = useMemo(
-    () =>
-      computeAnnualAverage(grades, {
-        coefficientBySubject: coefMap,
-      }),
-    [grades, coefMap],
-  );
 
   const username =
     credential?.username ?? fromAuthEmail(student?.email) ?? "—";
@@ -616,7 +597,9 @@ export default function EleveDetail() {
       </div>
 
       <Card className="mt-6">
-        <h3 className="font-semibold text-slate-900">Notes</h3>
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+          Notes
+        </h3>
         {gradesLoading ? (
           <p className="mt-3 text-sm text-slate-500">Chargement…</p>
         ) : grades.length === 0 ? (
@@ -624,74 +607,12 @@ export default function EleveDetail() {
             Aucune note enregistrée pour le moment.
           </p>
         ) : (
-          <div className="mt-4 space-y-6">
-            {annual.annualAverage !== null ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3 dark:border-brand-800 dark:bg-brand-900/20">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    Moyenne annuelle
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    (T1 + T2 + T3) / {annual.trimesterCount || 3}
-                    {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-brand-700">
-                    {formatAverage(annual.annualAverage)} / 20
-                  </p>
-                  <Badge tone={annual.passed ? "success" : "warning"}>
-                    {formatPassDecision(annual)}
-                  </Badge>
-                </div>
-              </div>
-            ) : null}
-            {byPeriod.map(([period, periodGrades]) => {
-              const avg = computeWeightedAverage(periodGrades, {
-                coefficientBySubject: coefMap,
-              });
-              return (
-                <div key={period}>
-                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                      {period}
-                    </h4>
-                    <p className="text-sm font-medium text-slate-800">
-                      Moyenne :{" "}
-                      {avg.generalAverage !== null
-                        ? `${formatAverage(avg.generalAverage)} / 20`
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2">Matière</th>
-                          <th className="px-3 py-2">Note</th>
-                          <th className="px-3 py-2">Commentaire</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {periodGrades.map((g) => (
-                          <tr key={g.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2">
-                              {g.matieres?.name ?? "—"}
-                            </td>
-                            <td className="px-3 py-2 font-medium">
-                              {g.score}/{g.max_score}
-                            </td>
-                            <td className="px-3 py-2 text-slate-500">
-                              {g.comment || "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mt-4">
+            <NotesPeriodTables
+              grades={grades}
+              coefficientBySubject={coefMap}
+              showEvaluation
+            />
           </div>
         )}
       </Card>

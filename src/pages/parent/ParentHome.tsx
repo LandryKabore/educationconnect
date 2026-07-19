@@ -22,7 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
-import { cn, fullName } from "@/lib/utils";
+import { cn, fullName, personName } from "@/lib/utils";
 
 type ChildCard = {
   id: string;
@@ -40,7 +40,7 @@ type ChildCard = {
 export default function ParentHome() {
   const { user, profile, schools, schoolId } = useAuth();
   const { data: unreadMessages = 0 } = useUnreadMessagesCount();
-  const name = fullName(profile?.first_name, profile?.last_name);
+  const name = personName(profile?.first_name, profile?.last_name);
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
   const { data, isLoading } = useQuery({

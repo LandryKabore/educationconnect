@@ -9,6 +9,11 @@ export function fullName(first?: string | null, last?: string | null) {
   return [first, last].filter(Boolean).join(" ").trim() || "Utilisateur";
 }
 
+/** Real display name only — empty when profile is still loading or incomplete. */
+export function personName(first?: string | null, last?: string | null) {
+  return [first, last].filter(Boolean).join(" ").trim();
+}
+
 /** Identifiant local → email technique Auth */
 export function toAuthEmail(identifiant: string) {
   const value = identifiant.trim().toLowerCase();

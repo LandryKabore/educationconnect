@@ -7,8 +7,8 @@ import {
   BookOpen,
   CheckCircle2,
   ClipboardList,
+  FileText,
   MessageSquare,
-  User,
   Users,
 } from "lucide-react";
 import {
@@ -16,7 +16,6 @@ import {
   Panel,
   PanelEmpty,
   PortalHomeHeader,
-  QuickLink,
   relativeFr,
   snippet,
   type InboxPreview,
@@ -26,21 +25,22 @@ import {
   CLASS_COLOR_SURFACE,
   classColorVars,
 } from "@/lib/classColors";
+import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
-import { cn, fullName } from "@/lib/utils";
+import { cn, fullName, personName } from "@/lib/utils";
 
 export default function TeacherHome() {
   const { user, profile, schools, schoolId } = useAuth();
   const { data: unreadMessages = 0 } = useUnreadMessagesCount();
-  const name = fullName(profile?.first_name, profile?.last_name);
+  const name = personName(profile?.first_name, profile?.last_name);
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["teacher-home", user?.id],
+    queryKey: ["teacher-home", "v2", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const uid = user!.id;
@@ -201,8 +201,21 @@ export default function TeacherHome() {
         .from("devoirs")
         .select("id, title, due_date, kind, classes(name), matieres(name)")
         .eq("teacher_id", uid)
+        .eq("kind", "exercice_maison")
         .order("created_at", { ascending: false })
         .limit(4);
+
+      const { data: upcomingExamens } = await supabase
+        .from("devoirs")
+        .select(
+          "id, title, due_date, start_time, end_time, admin_confirmed, classes(name), matieres(name)",
+        )
+        .eq("teacher_id", uid)
+        .eq("kind", "examen")
+        .gte("due_date", today)
+        .order("due_date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .limit(6);
 
       const { data: msgData } = await supabase
         .from("messages")
@@ -231,6 +244,16 @@ export default function TeacherHome() {
           title: string;
           due_date: string | null;
           kind: "exercice_maison" | "examen";
+          classes: { name: string } | null;
+          matieres: { name: string } | null;
+        }[],
+        upcomingExamens: (upcomingExamens ?? []) as {
+          id: string;
+          title: string;
+          due_date: string | null;
+          start_time: string | null;
+          end_time: string | null;
+          admin_confirmed: boolean;
           classes: { name: string } | null;
           matieres: { name: string } | null;
         }[],
@@ -316,81 +339,158 @@ export default function TeacherHome() {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      {/* Asymmetric: présences wide + prochains examens rail */}
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Panel
+            icon={CheckCircle2}
+            title="Présences du jour"
+            subtitle={formatDateSafe(data.today, "EEEE d MMMM", { locale: fr })}
+            action={
+              <Link to="/presences" className="block">
+                <Button className="w-full">
+                  <ClipboardList className="h-4 w-4" />
+                  Prendre les présences
+                </Button>
+              </Link>
+            }
+          >
+            {data.attendanceToday.length === 0 ? (
+              <PanelEmpty message="Aucune classe pour l’appel du jour." />
+            ) : (
+              <ul className="space-y-2">
+                {data.attendanceToday.slice(0, 6).map((c) => (
+                  <li key={c.classId}>
+                    <Link
+                      to={`/classes/${c.classId}/presences`}
+                      data-class-color
+                      style={classColorVars({
+                        id: c.classId,
+                        name: c.className,
+                      })}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
+                        CLASS_COLOR_SURFACE,
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <ClassColorDot
+                          id={c.classId}
+                          name={c.className}
+                          className="shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {c.className}
+                          </p>
+                          <p className="text-xs opacity-80">
+                            {c.recorded === 0
+                              ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
+                              : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
+                                  c.late > 0
+                                    ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
+                                    : ""
+                                }`}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        tone={
+                          c.status === "done"
+                            ? "success"
+                            : c.status === "partial"
+                              ? "warning"
+                              : "info"
+                        }
+                      >
+                        {c.status === "done"
+                          ? "Fait"
+                          : c.status === "partial"
+                            ? "En cours"
+                            : "À faire"}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+
         <Panel
-          icon={CheckCircle2}
-          title="Présences du jour"
-          subtitle={formatDateSafe(data.today, "EEEE d MMMM", { locale: fr })}
+          icon={FileText}
+          title="Prochains examens"
+          subtitle="Vos dates à venir"
           action={
-            <Link to="/presences" className="block">
-              <Button className="w-full">
-                <ClipboardList className="h-4 w-4" />
-                Prendre les présences
-              </Button>
+            <Link to="/examens" className="block">
+              <Button className="w-full">Gérer les examens</Button>
             </Link>
           }
         >
-          {data.attendanceToday.length === 0 ? (
-            <PanelEmpty message="Aucune classe pour l’appel du jour." />
+          {data.upcomingExamens.length === 0 ? (
+            <PanelEmpty message="Aucun examen à venir." />
           ) : (
             <ul className="space-y-2">
-              {data.attendanceToday.slice(0, 6).map((c) => (
-                <li key={c.classId}>
-                  <Link
-                    to={`/classes/${c.classId}/presences`}
-                    data-class-color
-                    style={classColorVars({
-                      id: c.classId,
-                      name: c.className,
-                    })}
+              {data.upcomingExamens.map((e, index) => {
+                const slot = formatExamSchedule(e);
+                const isNext = index === 0;
+                return (
+                  <li
+                    key={e.id}
                     className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                      CLASS_COLOR_SURFACE,
+                      "rounded-xl px-3 py-2.5",
+                      isNext
+                        ? "bg-violet-50 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:ring-violet-700"
+                        : "bg-slate-50",
                     )}
                   >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <ClassColorDot
-                        id={c.classId}
-                        name={c.className}
-                        className="shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {c.className}
-                        </p>
-                        <p className="text-xs opacity-80">
-                          {c.recorded === 0
-                            ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
-                            : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
-                                c.late > 0
-                                  ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
-                                  : ""
-                              }`}
-                        </p>
-                      </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {e.title}
+                      </p>
+                      {isNext ? (
+                        <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          Prochain
+                        </span>
+                      ) : null}
                     </div>
-                    <Badge
-                      tone={
-                        c.status === "done"
-                          ? "success"
-                          : c.status === "partial"
-                            ? "warning"
-                            : "info"
-                      }
-                    >
-                      {c.status === "done"
-                        ? "Fait"
-                        : c.status === "partial"
-                          ? "En cours"
-                          : "À faire"}
-                    </Badge>
-                  </Link>
-                </li>
-              ))}
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {[e.classes?.name, e.matieres?.name]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {e.due_date ? (
+                        <span
+                          className={cn(
+                            "text-xs font-medium",
+                            isNext
+                              ? "text-violet-800 dark:text-violet-200"
+                              : "text-slate-600",
+                          )}
+                        >
+                          {formatDateSafe(e.due_date, "EEEE d MMMM yyyy", {
+                            locale: fr,
+                          })}
+                          {slot ? ` · ${slot}` : ""}
+                        </span>
+                      ) : null}
+                      <Badge
+                        tone={e.admin_confirmed ? "success" : "warning"}
+                      >
+                        {e.admin_confirmed ? "Confirmé" : "En attente"}
+                      </Badge>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Panel>
+      </section>
 
+      {/* Asymmetric: classes narrow + exercices wide */}
+      <section className="grid gap-4 lg:grid-cols-3">
         <Panel
           icon={Users}
           title="Mes classes"
@@ -448,156 +548,150 @@ export default function TeacherHome() {
             </ul>
           )}
         </Panel>
-      </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          icon={ClipboardList}
-          title="Derniers travaux"
-          subtitle="Exercices et examens récents"
-          action={
-            <Link to="/exercices-maison" className="block">
-              <Button className="w-full">Voir les exercices</Button>
-            </Link>
-          }
-        >
-          {data.recentDevoirs.length === 0 ? (
-            <PanelEmpty message="Aucun exercice ni examen pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.recentDevoirs.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900">
-                      {d.title}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {[
-                        d.kind === "examen" ? "Examen" : "Exercice",
-                        d.classes?.name,
-                        d.matieres?.name,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  {d.due_date ? (
-                    <span className="shrink-0 text-xs font-medium text-amber-800">
-                      {formatDateSafe(d.due_date, "d MMM", { locale: fr })}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel
-          icon={Bell}
-          title="Annonces de l’école"
-          subtitle="Infos officielles de l’administration"
-          action={
-            <Link to="/messages" className="block">
-              <Button className="w-full">
-                <Bell className="h-4 w-4" />
-                Voir les annonces
-              </Button>
-            </Link>
-          }
-        >
-          {data.announcements.length === 0 ? (
-            <PanelEmpty message="Aucune annonce pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.announcements.map((m) => (
-                <li key={m.id} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {m.subject?.trim() || "Annonce"}
-                    </p>
-                    <span className="shrink-0 text-[11px] text-slate-400">
-                      {formatDateSafe(m.created_at, "d/MM/yyyy")}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    {snippet(m.body, 110)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          icon={MessageSquare}
-          title="Messages récents"
-          subtitle="Parents, admin et collègues"
-          action={
-            <Link to="/messages" className="block">
-              <Button className="w-full">
-                <MessageSquare className="h-4 w-4" />
-                Voir tous les messages
-              </Button>
-            </Link>
-          }
-        >
-          {data.recentMessages.length === 0 ? (
-            <PanelEmpty message="Aucun message pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.recentMessages.map((m) => {
-                const sender = m.sender
-                  ? fullName(m.sender.first_name, m.sender.last_name)
-                  : "Expéditeur";
-                const unread = !m.read_at;
-                return (
-                  <li key={m.id}>
-                    <Link
-                      to="/messages"
-                      className={cn(
-                        "block rounded-xl px-3 py-2.5 transition hover:bg-brand-50/60",
-                        unread
-                          ? "bg-brand-50/40 ring-1 ring-brand-100"
-                          : "bg-slate-50",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {sender}
-                          {unread ? (
-                            <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand-500 align-middle" />
-                          ) : null}
-                        </p>
-                        <span className="shrink-0 text-[11px] text-slate-400">
-                          {relativeFr(m.created_at)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-sm font-medium text-slate-700">
-                        {m.subject?.trim() || "Sans objet"}
+        <div className="lg:col-span-2">
+          <Panel
+            icon={ClipboardList}
+            title="Derniers exercices"
+            subtitle="Travaux de maison récents"
+            action={
+              <Link to="/exercices-maison" className="block">
+                <Button className="w-full">Voir les exercices</Button>
+              </Link>
+            }
+          >
+            {data.recentDevoirs.length === 0 ? (
+              <PanelEmpty message="Aucun exercice de maison pour le moment." />
+            ) : (
+              <ul className="space-y-2">
+                {data.recentDevoirs.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {d.title}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {snippet(m.body)}
+                      <p className="text-xs text-slate-500">
+                        {[d.classes?.name, d.matieres?.name]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
-                    </Link>
+                    </div>
+                    {d.due_date ? (
+                      <span className="shrink-0 text-xs font-medium text-amber-800">
+                        {formatDateSafe(d.due_date, "d MMMM yyyy", {
+                          locale: fr,
+                        })}
+                      </span>
+                    ) : null}
                   </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <QuickLink to="/presences" label="Présences" icon={CheckCircle2} />
-        <QuickLink to="/exercices-maison" label="Exercices" icon={BookOpen} />
-        <QuickLink to="/examens" label="Examens" icon={ClipboardList} />
-        <QuickLink to="/messages" label="Messages" icon={MessageSquare} />
-        <QuickLink to="/profil" label="Mon profil" icon={User} />
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <Panel
+            icon={Bell}
+            title="Annonces de l’école"
+            subtitle="Infos officielles"
+            action={
+              <Link to="/messages" className="block">
+                <Button className="w-full">
+                  <Bell className="h-4 w-4" />
+                  Voir les annonces
+                </Button>
+              </Link>
+            }
+          >
+            {data.announcements.length === 0 ? (
+              <PanelEmpty message="Aucune annonce pour le moment." />
+            ) : (
+              <ul className="space-y-2">
+                {data.announcements.map((m) => (
+                  <li key={m.id} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {m.subject?.trim() || "Annonce"}
+                      </p>
+                      <span className="shrink-0 text-[11px] text-slate-400">
+                        {formatDateSafe(m.created_at, "d/MM/yyyy")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                      {snippet(m.body, 110)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+
+        <div className="lg:col-span-2">
+          <Panel
+            icon={MessageSquare}
+            title="Messages récents"
+            subtitle="Parents, admin et collègues"
+            action={
+              <Link to="/messages" className="block">
+                <Button className="w-full">
+                  <MessageSquare className="h-4 w-4" />
+                  Voir tous les messages
+                </Button>
+              </Link>
+            }
+          >
+            {data.recentMessages.length === 0 ? (
+              <PanelEmpty message="Aucun message pour le moment." />
+            ) : (
+              <ul className="space-y-2">
+                {data.recentMessages.map((m) => {
+                  const sender = m.sender
+                    ? fullName(m.sender.first_name, m.sender.last_name)
+                    : "Expéditeur";
+                  const unread = !m.read_at;
+                  return (
+                    <li key={m.id}>
+                      <Link
+                        to="/messages"
+                        className={cn(
+                          "block rounded-xl px-3 py-2.5 transition hover:bg-brand-50/60",
+                          unread
+                            ? "bg-brand-50/40 ring-1 ring-brand-100"
+                            : "bg-slate-50",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {sender}
+                            {unread ? (
+                              <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand-500 align-middle" />
+                            ) : null}
+                          </p>
+                          <span className="shrink-0 text-[11px] text-slate-400">
+                            {relativeFr(m.created_at)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-sm font-medium text-slate-700">
+                          {m.subject?.trim() || "Sans objet"}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {snippet(m.body)}
+                        </p>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+        </div>
       </section>
     </div>
   );

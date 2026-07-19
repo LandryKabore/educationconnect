@@ -57,10 +57,16 @@ export function SetupGuideBar() {
     if (setupFlag !== "1") return;
     enterSetupGuide();
     setGuideOn(true);
-    const next = new URLSearchParams(params);
-    next.delete("setup");
-    setParams(next, { replace: true });
-  }, [setupFlag, params, setParams]);
+    setParams(
+      (prev) => {
+        if (!prev.get("setup")) return prev;
+        const next = new URLSearchParams(prev);
+        next.delete("setup");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setupFlag, setParams]);
 
   let stepId = stepFromPath(location.pathname);
 

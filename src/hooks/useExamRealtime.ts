@@ -191,6 +191,7 @@ export function useSchoolExamsRealtime() {
           });
           void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
           void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
+          void qc.invalidateQueries({ queryKey: ["ecole-home"] });
         },
       )
       .subscribe();

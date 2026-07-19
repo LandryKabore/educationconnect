@@ -41,7 +41,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
-import { cn, fullName } from "@/lib/utils";
+import { cn, fullName, personName } from "@/lib/utils";
 import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
 
 const WEEKDAY_LABELS: Record<number, string> = {
@@ -69,7 +69,7 @@ export default function StudentHome() {
   const { data: unreadMessages = 0 } = useUnreadMessagesCount();
   const { pending: edtPending, pendingCount: edtPendingCount, markSeen } =
     useEdtPendingChanges();
-  const name = fullName(profile?.first_name, profile?.last_name);
+  const name = personName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading } = useQuery({
     queryKey: ["student-home", "v4", user?.id],

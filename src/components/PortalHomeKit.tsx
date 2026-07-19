@@ -73,7 +73,9 @@ export function Panel({
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {title}
+          </h2>
           <p className="text-xs text-slate-600 dark:text-slate-300">{subtitle}</p>
         </div>
       </div>
@@ -102,6 +104,7 @@ export function PortalHomeHeader({
   context: string;
   unreadMessages: number;
 }) {
+  const displayName = name.trim();
   return (
     <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-4">
@@ -115,8 +118,10 @@ export function PortalHomeHeader({
               👋
             </span>
           </p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            {name}
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+            {displayName || (
+              <span className="inline-block h-8 w-40 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+            )}
           </h1>
           <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
             {context}

@@ -65,7 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loadUserData = useCallback(async (userId: string) => {
-    const [{ data: profil }, { data: roleRows }] = await Promise.all([
+    const [
+      { data: profil, error: profilError },
+      { data: roleRows, error: rolesError },
+    ] = await Promise.all([
       supabase.from("profils").select("*").eq("id", userId).maybeSingle(),
       supabase
         .from("roles_utilisateurs")
@@ -74,7 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("active", true),
     ]);
 
-    setProfile((profil as Profile) ?? null);
+    // Keep the previous profile on transient fetch errors (avoids "Utilisateur" flash).
+    if (!profilError) {
+      setProfile((profil as Profile) ?? null);
+    }
+
+    if (rolesError) return;
+
     const list = (roleRows as UserRoleRow[]) ?? [];
     setRoles(list);
 
@@ -100,26 +109,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      if (data.session?.user) {
-        await loadUserData(data.session.user.id);
-      }
-      setLoading(false);
-    });
+    let loadGen = 0;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const clearUserState = () => {
+      setProfile(null);
+      setRoles([]);
+      setSchools([]);
+      setSupportSchoolId(null);
+      sessionStorage.removeItem(SUPPORT_KEY);
+    };
+
+    const applySession = async (
+      sess: Session | null,
+      { blockUi }: { blockUi: boolean },
+    ) => {
+      const gen = ++loadGen;
+      if (blockUi) setLoading(true);
       setSession(sess);
       if (sess?.user) {
-        void loadUserData(sess.user.id);
+        await loadUserData(sess.user.id);
       } else {
-        setProfile(null);
-        setRoles([]);
-        setSchools([]);
-        setSupportSchoolId(null);
-        sessionStorage.removeItem(SUPPORT_KEY);
+        clearUserState();
       }
+      if (mounted && gen === loadGen) setLoading(false);
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      void applySession(data.session, { blockUi: true });
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (!mounted) return;
+
+      // Silent refresh: keep showing the current name; don't blank the UI.
+      if (event === "TOKEN_REFRESHED") {
+        setSession(sess);
+        if (sess?.user) void loadUserData(sess.user.id);
+        else clearUserState();
+        return;
+      }
+
+      // INITIAL_SESSION is covered by getSession(); avoid a double loading flash.
+      if (event === "INITIAL_SESSION") return;
+
+      void applySession(sess, {
+        blockUi: event === "SIGNED_IN" || event === "SIGNED_OUT",
+      });
     });
 
     return () => {
@@ -153,17 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return withSchool?.school_id ?? schools[0]?.id ?? null;
   }, [roles, schools, inSupport, supportSchoolId]);
 
-  const enterSupportMode = (id: string) => {
+  const enterSupportMode = useCallback((id: string) => {
     sessionStorage.setItem(SUPPORT_KEY, id);
     setSupportSchoolId(id);
-  };
+  }, []);
 
-  const exitSupportMode = () => {
+  const exitSupportMode = useCallback(() => {
     sessionStorage.removeItem(SUPPORT_KEY);
     setSupportSchoolId(null);
-  };
+  }, []);
 
-  const signIn = async (identifiant: string, password: string) => {
+  const signIn = useCallback(async (identifiant: string, password: string) => {
     const email = toAuthEmail(identifiant);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -176,36 +212,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .update({ last_login_at: new Date().toISOString() })
         .eq("id", data.user.id);
     }
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
     setRoles([]);
     setSchools([]);
-    exitSupportMode();
-  };
+    sessionStorage.removeItem(SUPPORT_KEY);
+    setSupportSchoolId(null);
+  }, []);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (session?.user) await loadUserData(session.user.id);
-  };
+  }, [session?.user, loadUserData]);
 
-  const completePasswordChange = async (newPassword: string) => {
-    if (!isPasswordStrong(newPassword)) {
-      throw new Error(
-        "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial",
-      );
-    }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) throw error;
-    if (session?.user) {
-      await supabase
-        .from("profils")
-        .update({ must_change_password: false })
-        .eq("id", session.user.id);
-      await loadUserData(session.user.id);
-    }
-  };
+  const completePasswordChange = useCallback(
+    async (newPassword: string) => {
+      if (!isPasswordStrong(newPassword)) {
+        throw new Error(
+          "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial",
+        );
+      }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      if (session?.user) {
+        await supabase
+          .from("profils")
+          .update({ must_change_password: false })
+          .eq("id", session.user.id);
+        await loadUserData(session.user.id);
+      }
+    },
+    [session?.user, loadUserData],
+  );
 
   const homePath = inSupport
     ? "/ecole"
@@ -213,25 +253,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? ROLE_HOME[primaryRole]
       : "/connexion";
 
-  const value: AuthState = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    role,
-    realRole: primaryRole,
-    roles,
-    schoolId,
-    schools,
-    loading,
-    supportSchoolId: inSupport ? supportSchoolId : null,
-    enterSupportMode,
-    exitSupportMode,
-    signIn,
-    signOut,
-    refreshProfile,
-    completePasswordChange,
-    homePath,
-  };
+  const value = useMemo<AuthState>(
+    () => ({
+      session,
+      user: session?.user ?? null,
+      profile,
+      role,
+      realRole: primaryRole,
+      roles,
+      schoolId,
+      schools,
+      loading,
+      supportSchoolId: inSupport ? supportSchoolId : null,
+      enterSupportMode,
+      exitSupportMode,
+      signIn,
+      signOut,
+      refreshProfile,
+      completePasswordChange,
+      homePath,
+    }),
+    [
+      session,
+      profile,
+      role,
+      primaryRole,
+      roles,
+      schoolId,
+      schools,
+      loading,
+      inSupport,
+      supportSchoolId,
+      enterSupportMode,
+      exitSupportMode,
+      signIn,
+      signOut,
+      refreshProfile,
+      completePasswordChange,
+      homePath,
+    ],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

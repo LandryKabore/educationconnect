@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { getTimeGreeting } from "@/lib/greeting";
-import { cn, fullName } from "@/lib/utils";
+import { cn, personName } from "@/lib/utils";
 
 type Props = {
   className?: string;
@@ -8,12 +8,7 @@ type Props = {
 
 export function PortalGreeting({ className }: Props) {
   const { profile } = useAuth();
-  const hasName = Boolean(
-    profile?.first_name?.trim() || profile?.last_name?.trim(),
-  );
-  const name = hasName
-    ? fullName(profile?.first_name, profile?.last_name)
-    : "";
+  const name = personName(profile?.first_name, profile?.last_name);
   const greeting = getTimeGreeting();
 
   return (
@@ -24,11 +19,13 @@ export function PortalGreeting({ className }: Props) {
           👋
         </span>
       </p>
-      {hasName ? (
-        <h2 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900 animate-greeting-name">
+      {name ? (
+        <h2 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900 animate-greeting-name dark:text-slate-100">
           {name}
         </h2>
-      ) : null}
+      ) : (
+        <span className="mt-1 inline-block h-7 w-40 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+      )}
     </div>
   );
 }

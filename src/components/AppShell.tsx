@@ -33,7 +33,7 @@ import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui";
-import { cn, fullName } from "@/lib/utils";
+import { cn, personName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { isDesktopApp } from "@/lib/platform";
@@ -303,8 +303,10 @@ export function AppShell() {
 
         <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]">
           <div className="mb-3">
-            <p className="text-sm font-medium text-slate-900">
-              {fullName(profile?.first_name, profile?.last_name)}
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {personName(profile?.first_name, profile?.last_name) || (
+                <span className="inline-block h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+              )}
             </p>
             {role ? (
               <p className="text-xs text-slate-500">{ROLE_LABELS[role]}</p>
