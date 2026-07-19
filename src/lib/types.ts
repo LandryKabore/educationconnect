@@ -192,6 +192,13 @@ export interface Assignment {
   title: string;
   description: string | null;
   due_date: string | null;
+  /** Exam window (HH:MM or HH:MM:SS). */
+  start_time: string | null;
+  end_time: string | null;
+  /** School admin must confirm exam date/time before it is official. */
+  admin_confirmed: boolean;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
   max_score: number;
   /** exercice_maison | examen */
   kind: "exercice_maison" | "examen";

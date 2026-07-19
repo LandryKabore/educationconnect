@@ -17,7 +17,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "icons/icon-192.png", "icons/icon-512.png"],
+      includeAssets: [
+        "favicon.png",
+        "edufaso-logo.png",
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+      ],
       manifest: {
         name: "EduFaso",
         short_name: "EduFaso",

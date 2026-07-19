@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { useStudentTimetableRealtime, useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
+import { BrandLogo } from "@/components/BrandLogo";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -70,6 +71,8 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "eleves-sans-classe" },
     { to: "/parents", label: "Parents", icon: <Users className="h-4 w-4" /> },
     { to: "/emplois-du-temps", label: "Emplois du temps", icon: <Calendar className="h-4 w-4" /> },
+    { to: "/presences-ecole", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" /> },
+    { to: "/examens-ecole", label: "Examens", icon: <FileText className="h-4 w-4" /> },
     { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
   ],
@@ -77,6 +80,7 @@ const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
     { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
     { to: "/mes-classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
     { to: "/mes-eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
+    { to: "/presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" /> },
     { to: "/exercices-maison", label: "Exercices de maison", icon: <BookOpen className="h-4 w-4" /> },
     { to: "/examens", label: "Examens", icon: <ClipboardList className="h-4 w-4" /> },
     { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
@@ -212,16 +216,19 @@ export function AppShell() {
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-[var(--border)]">
-          <div>
-            <p className="text-lg font-bold text-brand-700">EduFaso</p>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-[var(--border)]">
+          <div className="min-w-0 flex-1">
+            <BrandLogo
+              className="h-14 w-auto max-w-[11rem] rounded-lg"
+              imgClassName="h-14"
+            />
             {schoolName ? (
-              <p className="text-xs text-slate-500">{schoolName}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">{schoolName}</p>
             ) : null}
           </div>
           <button
             type="button"
-            className="rounded-lg p-2 hover:bg-slate-100 lg:hidden"
+            className="shrink-0 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
             onClick={() => setOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -303,12 +310,12 @@ export function AppShell() {
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
           <button
             type="button"
-            className="rounded-lg p-2 hover:bg-slate-100"
+            className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
             onClick={() => setOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </button>
-          <span className="flex-1 font-semibold text-brand-700">EduFaso</span>
+          <BrandLogo className="h-9 w-auto max-w-[9rem] flex-1 rounded-md" />
           <ThemeToggle compact />
         </header>
 

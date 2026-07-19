@@ -29,6 +29,8 @@ import Enseignants from "@/pages/ecole/Enseignants";
 import Parents from "@/pages/ecole/Parents";
 import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
 import Bulletins from "@/pages/ecole/Bulletins";
+import PresencesEcole from "@/pages/ecole/PresencesEcole";
+import ExamensEcole from "@/pages/ecole/ExamensEcole";
 import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
 import Presences from "@/pages/enseignant/Presences";
@@ -39,6 +41,7 @@ import {
 } from "@/pages/enseignant/Devoirs";
 import MesClasses from "@/pages/enseignant/MesClasses";
 import MesEleves from "@/pages/enseignant/MesEleves";
+import MesPresencesProf from "@/pages/enseignant/MesPresencesProf";
 import Messages from "@/pages/Messages";
 import MesNotes from "@/pages/eleve/MesNotes";
 import {
@@ -282,6 +285,22 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
+        <Route
+          path="/presences-ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <PresencesEcole />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/examens-ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <ExamensEcole />
+            </RequireAuth>
+          }
+        />
 
         <Route path="/tableau-de-bord" element={<Dashboard />} />
 
@@ -343,6 +362,14 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["teacher"]}>
               <MesEleves />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/presences"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <MesPresencesProf />
             </RequireAuth>
           }
         />

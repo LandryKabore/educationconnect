@@ -64,7 +64,7 @@ export default function MesPresences() {
     <div>
       <PageHeader
         title="Mes présences"
-        subtitle="Historique des présences et absences"
+        subtitle="Historique — les absences justifiées par l’école ne comptent pas comme absences"
       />
 
       {isLoading ? (

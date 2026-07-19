@@ -21,11 +21,16 @@ import {
   snippet,
 } from "@/components/PortalHomeKit";
 import { formatDateSafe } from "@/lib/dateFr";
+import {
+  isAttendancePositive,
+  isUnjustifiedAbsence,
+} from "@/lib/attendance";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName } from "@/lib/utils";
+import type { AttendanceStatus } from "@/lib/types";
 
 const WEEKDAY_LABELS: Record<number, string> = {
   1: "Lundi",
@@ -110,15 +115,17 @@ export default function StudentHome() {
         .eq("student_id", uid)
         .limit(120);
 
-      const presences = (presenceData ?? []) as { status: string }[];
-      const presentish = presences.filter(
-        (p) => p.status === "present" || p.status === "late" || p.status === "excused",
+      const presences = (presenceData ?? []) as { status: AttendanceStatus }[];
+      const presentish = presences.filter((p) =>
+        isAttendancePositive(p.status),
       ).length;
       const attendanceRate =
         presences.length > 0
           ? Math.round((presentish / presences.length) * 100)
           : null;
-      const absencesCount = presences.filter((p) => p.status === "absent").length;
+      const absencesCount = presences.filter((p) =>
+        isUnjustifiedAbsence(p.status),
+      ).length;
 
       let pendingDevoirs: {
         id: string;

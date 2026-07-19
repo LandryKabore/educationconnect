@@ -523,19 +523,24 @@ export default function ClassDetail() {
               <ul className="space-y-1 text-sm text-slate-600">
                 {programme.map((p) => {
                   const teachers = teachersBySubject.get(p.subject_id) ?? [];
+                  const teacherNames = teachers
+                    .map((t) =>
+                      t.profils
+                        ? fullName(t.profils.first_name, t.profils.last_name)
+                        : null,
+                    )
+                    .filter(Boolean);
                   return (
                     <li key={p.id}>
                       {p.matieres?.name ?? "—"} · coef. {p.coefficient}
-                      {teachers.length > 0
-                        ? ` · ${teachers
-                            .map((t) =>
-                              t.profils
-                                ? fullName(t.profils.first_name, t.profils.last_name)
-                                : null,
-                            )
-                            .filter(Boolean)
-                            .join(", ")}`
-                        : ""}
+                      {" · "}
+                      {teacherNames.length > 0 ? (
+                        teacherNames.join(", ")
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-400">
+                          Non affecté
+                        </span>
+                      )}
                     </li>
                   );
                 })}

@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   Bell,
   BookOpen,
+  CheckCircle2,
   ClipboardList,
   MessageSquare,
   User,
@@ -25,7 +27,7 @@ import {
   classColorVars,
 } from "@/lib/classColors";
 import { formatDateSafe } from "@/lib/dateFr";
-import { Button } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
@@ -101,16 +103,87 @@ export default function TeacherHome() {
       }));
 
       const uniqueClassIds = classes.map((c) => c.classId);
+      const today = format(new Date(), "yyyy-MM-dd");
 
       let studentsCount = 0;
+      const studentCountByClass = new Map<string, number>();
       if (uniqueClassIds.length > 0) {
-        const { count } = await supabase
+        const { data: insc } = await supabase
           .from("inscriptions")
-          .select("id", { count: "exact", head: true })
+          .select("class_section_id")
           .in("class_section_id", uniqueClassIds)
           .eq("status", "active");
-        studentsCount = count ?? 0;
+        for (const row of insc ?? []) {
+          const id = (row as { class_section_id: string }).class_section_id;
+          studentCountByClass.set(id, (studentCountByClass.get(id) ?? 0) + 1);
+        }
+        studentsCount = [...studentCountByClass.values()].reduce(
+          (a, b) => a + b,
+          0,
+        );
       }
+
+      type StatusCounts = {
+        present: number;
+        absent: number;
+        late: number;
+        excused: number;
+        total: number;
+      };
+      const byStatus = new Map<string, StatusCounts>();
+      if (uniqueClassIds.length > 0) {
+        const { data: pres } = await supabase
+          .from("presences")
+          .select("class_section_id, status")
+          .in("class_section_id", uniqueClassIds)
+          .eq("date", today);
+        for (const row of pres ?? []) {
+          const r = row as {
+            class_section_id: string;
+            status: "present" | "absent" | "late" | "excused";
+          };
+          const cur = byStatus.get(r.class_section_id) ?? {
+            present: 0,
+            absent: 0,
+            late: 0,
+            excused: 0,
+            total: 0,
+          };
+          cur[r.status] += 1;
+          cur.total += 1;
+          byStatus.set(r.class_section_id, cur);
+        }
+      }
+
+      const attendanceToday = classes.map((c) => {
+        const studentCount = studentCountByClass.get(c.classId) ?? 0;
+        const st = byStatus.get(c.classId);
+        const recorded = st?.total ?? 0;
+        const status: "done" | "partial" | "todo" =
+          studentCount > 0 && recorded >= studentCount
+            ? "done"
+            : recorded > 0
+              ? "partial"
+              : "todo";
+        return {
+          classId: c.classId,
+          className: c.className,
+          studentCount,
+          recorded,
+          present: st?.present ?? 0,
+          absent: st?.absent ?? 0,
+          late: st?.late ?? 0,
+          excused: st?.excused ?? 0,
+          status,
+        };
+      });
+
+      const attendancePending = attendanceToday.filter(
+        (c) => c.status !== "done" && c.studentCount > 0,
+      ).length;
+      const attendanceDone = attendanceToday.filter(
+        (c) => c.status === "done",
+      ).length;
 
       const { count: exercicesCount } = await supabase
         .from("devoirs")
@@ -149,6 +222,10 @@ export default function TeacherHome() {
         studentsCount,
         exercicesCount: exercicesCount ?? 0,
         examensCount: examensCount ?? 0,
+        attendanceToday,
+        attendancePending,
+        attendanceDone,
+        today,
         recentDevoirs: (recentDevoirs ?? []) as {
           id: string;
           title: string;
@@ -182,7 +259,7 @@ export default function TeacherHome() {
         unreadMessages={unreadMessages}
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MetricCard
           label="Classes"
           value={String(data.uniqueClasses)}
@@ -196,6 +273,25 @@ export default function TeacherHome() {
           hint="Dans vos classes"
           valueClass="text-sky-600"
           to="/mes-eleves"
+        />
+        <MetricCard
+          label="Présences"
+          value={
+            data.attendancePending > 0
+              ? String(data.attendancePending)
+              : String(data.attendanceDone)
+          }
+          hint={
+            data.attendancePending > 0
+              ? `classe${data.attendancePending > 1 ? "s" : ""} à faire aujourd’hui`
+              : data.uniqueClasses > 0
+                ? "Appel du jour à jour"
+                : "Aucune classe"
+          }
+          valueClass={
+            data.attendancePending > 0 ? "text-amber-600" : "text-emerald-600"
+          }
+          to="/presences"
         />
         <MetricCard
           label="Exercices"
@@ -221,6 +317,80 @@ export default function TeacherHome() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          icon={CheckCircle2}
+          title="Présences du jour"
+          subtitle={formatDateSafe(data.today, "EEEE d MMMM", { locale: fr })}
+          action={
+            <Link to="/presences" className="block">
+              <Button className="w-full">
+                <ClipboardList className="h-4 w-4" />
+                Prendre les présences
+              </Button>
+            </Link>
+          }
+        >
+          {data.attendanceToday.length === 0 ? (
+            <PanelEmpty message="Aucune classe pour l’appel du jour." />
+          ) : (
+            <ul className="space-y-2">
+              {data.attendanceToday.slice(0, 6).map((c) => (
+                <li key={c.classId}>
+                  <Link
+                    to={`/classes/${c.classId}/presences`}
+                    data-class-color
+                    style={classColorVars({
+                      id: c.classId,
+                      name: c.className,
+                    })}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
+                      CLASS_COLOR_SURFACE,
+                    )}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <ClassColorDot
+                        id={c.classId}
+                        name={c.className}
+                        className="shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">
+                          {c.className}
+                        </p>
+                        <p className="text-xs opacity-80">
+                          {c.recorded === 0
+                            ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
+                            : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
+                                c.late > 0
+                                  ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
+                                  : ""
+                              }`}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge
+                      tone={
+                        c.status === "done"
+                          ? "success"
+                          : c.status === "partial"
+                            ? "warning"
+                            : "info"
+                      }
+                    >
+                      {c.status === "done"
+                        ? "Fait"
+                        : c.status === "partial"
+                          ? "En cours"
+                          : "À faire"}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
         <Panel
           icon={Users}
           title="Mes classes"
@@ -278,7 +448,9 @@ export default function TeacherHome() {
             </ul>
           )}
         </Panel>
+      </section>
 
+      <section className="grid gap-4 lg:grid-cols-2">
         <Panel
           icon={ClipboardList}
           title="Derniers travaux"
@@ -322,9 +494,7 @@ export default function TeacherHome() {
             </ul>
           )}
         </Panel>
-      </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
         <Panel
           icon={Bell}
           title="Annonces de l’école"
@@ -360,7 +530,9 @@ export default function TeacherHome() {
             </ul>
           )}
         </Panel>
+      </section>
 
+      <section className="grid gap-4 lg:grid-cols-2">
         <Panel
           icon={MessageSquare}
           title="Messages récents"
@@ -420,7 +592,8 @@ export default function TeacherHome() {
         </Panel>
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <QuickLink to="/presences" label="Présences" icon={CheckCircle2} />
         <QuickLink to="/exercices-maison" label="Exercices" icon={BookOpen} />
         <QuickLink to="/examens" label="Examens" icon={ClipboardList} />
         <QuickLink to="/messages" label="Messages" icon={MessageSquare} />

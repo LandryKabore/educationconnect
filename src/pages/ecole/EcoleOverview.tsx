@@ -428,6 +428,8 @@ export default function EcoleOverview() {
         <QuickLink to="/programmes" label="Programmes" icon={BookOpen} />
         <QuickLink to="/parents" label="Parents" icon={Users} />
         <QuickLink to="/emplois-du-temps" label="Emplois du temps" icon={Calendar} />
+        <QuickLink to="/presences-ecole" label="Présences" icon={CheckCircle2} />
+        <QuickLink to="/examens-ecole" label="Examens" icon={ClipboardList} />
         <QuickLink to="/bulletins" label="Bulletins" icon={ClipboardList} />
         <QuickLink to="/messages" label="Messages" icon={MessageSquare} />
         <QuickLink to="/ecole/parametres" label="Paramètres" icon={Settings} />
