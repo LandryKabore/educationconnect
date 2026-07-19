@@ -16,7 +16,7 @@
     "title": "Connexion",
     "identifiant": "Identifiant ou e-mail",
     "password": "Mot de passe",
-    "submit": "Se connecter",
+    "submit": "Connect",
     "error": "Identifiants incorrects",
     "hint": "Compte créé par votre établissement. Pas d'inscription libre.",
     "installHint": "Installez EduFaso sur votre téléphone pour un accès rapide.",
