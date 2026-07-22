@@ -11,6 +11,8 @@
     "build": "tsc -b && vite build",
     "build:electron": "cross-env ELECTRON=true npm run build",
     "lint": "oxlint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron:multi": "wait-on http://localhost:5173 && concurrently -k \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=1 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=2 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=3 electron .\"",
@@ -62,13 +64,17 @@
     "typescript": "~5.9.3",
     "vite": "^8.1.1",
     "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.10",
     "wait-on": "^8.0.5"
   },
   "build": {
     "appId": "bf.edufaso.desktop",
     "productName": "EduFaso",
     "compression": "maximum",
-    "electronLanguages": ["fr", "en-US"],
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "directories": {
       "output": "release"
     },

@@ -262,7 +262,7 @@ export default function ExamensEcole() {
       toast.error(conflictError.message || "Vérification impossible");
       return;
     }
-    const conflict = conflicts?.[0] as
+    const conflict = conflicts?.[0] as unknown as
       | {
           title: string;
           matieres: { name: string } | null;

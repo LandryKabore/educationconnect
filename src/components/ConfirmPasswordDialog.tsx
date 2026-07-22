@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { fromAuthEmail } from "@/lib/utils";
-import { Button, Input, Label, PasswordInput } from "@/components/ui";
+import { Button, Label, PasswordInput } from "@/components/ui";
 
 type Props = {
   open: boolean;

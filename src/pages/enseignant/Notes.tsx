@@ -256,7 +256,7 @@ export default function Notes() {
         .not("eval_date", "is", null)
         .order("eval_date");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         title: string;
         eval_date: string;
@@ -506,7 +506,7 @@ export default function Notes() {
         toast.error(conflictError.message || "Vérification impossible");
         return;
       }
-      const conflict = conflicts?.[0] as
+      const conflict = conflicts?.[0] as unknown as
         | {
             title: string;
             matieres: { name: string } | null;

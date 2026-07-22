@@ -13,7 +13,7 @@ if (instance) {
   app.setPath("userData", dir);
 }
 
-function appEntryUrl(win) {
+function appEntryUrl() {
   if (isDev) {
     return process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   }
@@ -22,9 +22,9 @@ function appEntryUrl(win) {
 
 function loadApp(win) {
   if (isDev) {
-    void win.loadURL(appEntryUrl(win));
+    void win.loadURL(appEntryUrl());
   } else {
-    void win.loadFile(appEntryUrl(win));
+    void win.loadFile(appEntryUrl());
   }
 }
 
@@ -57,15 +57,21 @@ function createWindow() {
 
   loadApp(win);
 
-  if (isDev) {
-    // Avoid opening 3 DevTools when multi-instancing
-    if (!instance || process.env.EDUFASO_DEVTOOLS === "1") {
-      win.webContents.openDevTools({ mode: "detach" });
-    }
+  // DevTools only on explicit request (never auto-open with the app)
+  if (isDev && process.env.EDUFASO_DEVTOOLS === "1") {
+    win.webContents.openDevTools({ mode: "detach" });
   }
 
+  // Only ever hand off https:// links to the OS browser — blocks abuse of
+  // javascript:/file:/data: URIs reaching shell.openExternal from web content.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      if (new URL(url).protocol === "https:") {
+        void shell.openExternal(url);
+      }
+    } catch {
+      // Malformed URL — ignore.
+    }
     return { action: "deny" };
   });
 
@@ -116,6 +122,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
   const allowed = new Set([
+    // Used by the home-screen weather widget (LiveClockWeather), with an
+    // IP-based fallback if the user/OS denies this.
     "geolocation",
     "clipboard-sanitized-write",
     "clipboard-read",
@@ -129,6 +137,30 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(
     (_webContents, permission) => allowed.has(permission),
   );
+
+  // Packaged builds load from a bundled file:// index.html with a known,
+  // static set of origins it ever needs (itself + Supabase). Dev mode is
+  // left unrestricted so Vite's HMR (inline scripts, websocket) keeps working.
+  if (!isDev) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; " +
+              "script-src 'self'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              "img-src 'self' data: blob: https:; " +
+              "font-src 'self' data:; " +
+              "connect-src 'self' https: wss:; " +
+              "worker-src 'self' blob:; " +
+              "object-src 'none'; " +
+              "base-uri 'self';",
+          ],
+        },
+      });
+    });
+  }
 
   createWindow();
   app.on("activate", () => {

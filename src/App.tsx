@@ -1,61 +1,80 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
-import Connexion from "@/pages/Connexion";
-import PremiereConnexion from "@/pages/PremiereConnexion";
-import CompleterProfil from "@/pages/CompleterProfil";
-import Profil from "@/pages/Profil";
-import Telecharger from "@/pages/Telecharger";
-import EcolesList from "@/pages/admin/EcolesList";
-import EcoleDetail from "@/pages/admin/EcoleDetail";
-import AdminDashboard from "@/pages/admin/AdminDashboard";
-import AdminUsers from "@/pages/admin/AdminUsers";
-import AdminInvites from "@/pages/admin/AdminInvites";
-import AdminSettings from "@/pages/admin/AdminSettings";
-import AdminReports from "@/pages/admin/AdminReports";
-import AdminAudit from "@/pages/admin/AdminAudit";
-import AdminBilling from "@/pages/admin/AdminBilling";
-import AdminSuperAdmins from "@/pages/admin/AdminSuperAdmins";
-import EcoleOverview from "@/pages/ecole/EcoleOverview";
-import ConfigurationEcole from "@/pages/ecole/ConfigurationEcole";
-import ParametresEcole from "@/pages/ecole/ParametresEcole";
-import Annees from "@/pages/ecole/Annees";
-import Classes from "@/pages/ecole/Classes";
-import ProgrammeClasses from "@/pages/ecole/ProgrammeClasses";
-import Matieres from "@/pages/ecole/Matieres";
-import Eleves from "@/pages/ecole/Eleves";
-import EleveDetail from "@/pages/ecole/EleveDetail";
-import Enseignants from "@/pages/ecole/Enseignants";
-import Parents from "@/pages/ecole/Parents";
-import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
-import Bulletins from "@/pages/ecole/Bulletins";
-import PresencesEcole from "@/pages/ecole/PresencesEcole";
-import ExamensEcole from "@/pages/ecole/ExamensEcole";
-import CompositionsEcole from "@/pages/ecole/CompositionsEcole";
-import SaisieEnseignant from "@/pages/ecole/SaisieEnseignant";
-import Dashboard from "@/pages/Dashboard";
-import ClassDetail from "@/pages/enseignant/ClassDetail";
-import Presences from "@/pages/enseignant/Presences";
-import Notes from "@/pages/enseignant/Notes";
-import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
-import MesClasses from "@/pages/enseignant/MesClasses";
-import MesEleves from "@/pages/enseignant/MesEleves";
-import MesPresencesProf from "@/pages/enseignant/MesPresencesProf";
-import Messages from "@/pages/Messages";
-import MesNotes from "@/pages/eleve/MesNotes";
-import {
-  MesExamensPage,
-  MesExercicesPage,
-} from "@/pages/eleve/MesDevoirs";
-import MesPresences from "@/pages/eleve/MesPresences";
-import MesCompositions from "@/pages/eleve/MesCompositions";
-import MesProfs from "@/pages/eleve/MesProfs";
-import MonEmploiDuTempsPage from "@/pages/MonEmploiDuTempsPage";
-import MonBulletin from "@/pages/eleve/MonBulletin";
-import Enfants from "@/pages/parent/Enfants";
-import EnfantNotes from "@/pages/parent/EnfantNotes";
-import EnfantPresences from "@/pages/parent/EnfantPresences";
 import { useAuth } from "@/contexts/AuthContext";
+
+// Route-level code splitting: ~48 pages were previously bundled eagerly, so
+// a student loaded the same ~2 MB JS chunk as a super_admin. Each persona
+// now only downloads the pages it can actually reach.
+const Connexion = lazy(() => import("@/pages/Connexion"));
+const PremiereConnexion = lazy(() => import("@/pages/PremiereConnexion"));
+const CompleterProfil = lazy(() => import("@/pages/CompleterProfil"));
+const Profil = lazy(() => import("@/pages/Profil"));
+const Telecharger = lazy(() => import("@/pages/Telecharger"));
+const EcolesList = lazy(() => import("@/pages/admin/EcolesList"));
+const EcoleDetail = lazy(() => import("@/pages/admin/EcoleDetail"));
+const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
+const AdminUsers = lazy(() => import("@/pages/admin/AdminUsers"));
+const AdminInvites = lazy(() => import("@/pages/admin/AdminInvites"));
+const AdminSettings = lazy(() => import("@/pages/admin/AdminSettings"));
+const AdminReports = lazy(() => import("@/pages/admin/AdminReports"));
+const AdminAudit = lazy(() => import("@/pages/admin/AdminAudit"));
+const AdminBilling = lazy(() => import("@/pages/admin/AdminBilling"));
+const AdminSuperAdmins = lazy(() => import("@/pages/admin/AdminSuperAdmins"));
+const EcoleOverview = lazy(() => import("@/pages/ecole/EcoleOverview"));
+const ConfigurationEcole = lazy(() => import("@/pages/ecole/ConfigurationEcole"));
+const ParametresEcole = lazy(() => import("@/pages/ecole/ParametresEcole"));
+const Annees = lazy(() => import("@/pages/ecole/Annees"));
+const Classes = lazy(() => import("@/pages/ecole/Classes"));
+const ProgrammeClasses = lazy(() => import("@/pages/ecole/ProgrammeClasses"));
+const Matieres = lazy(() => import("@/pages/ecole/Matieres"));
+const Eleves = lazy(() => import("@/pages/ecole/Eleves"));
+const EleveDetail = lazy(() => import("@/pages/ecole/EleveDetail"));
+const Enseignants = lazy(() => import("@/pages/ecole/Enseignants"));
+const Parents = lazy(() => import("@/pages/ecole/Parents"));
+const EmploisDuTemps = lazy(() => import("@/pages/ecole/EmploisDuTemps"));
+const Bulletins = lazy(() => import("@/pages/ecole/Bulletins"));
+const PresencesEcole = lazy(() => import("@/pages/ecole/PresencesEcole"));
+const ExamensEcole = lazy(() => import("@/pages/ecole/ExamensEcole"));
+const CompositionsEcole = lazy(() => import("@/pages/ecole/CompositionsEcole"));
+const SaisieEnseignant = lazy(() => import("@/pages/ecole/SaisieEnseignant"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const ClassDetail = lazy(() => import("@/pages/enseignant/ClassDetail"));
+const Presences = lazy(() => import("@/pages/enseignant/Presences"));
+const Notes = lazy(() => import("@/pages/enseignant/Notes"));
+const MesDevoirsProf = lazy(() => import("@/pages/enseignant/MesDevoirsProf"));
+const MesClasses = lazy(() => import("@/pages/enseignant/MesClasses"));
+const MesEleves = lazy(() => import("@/pages/enseignant/MesEleves"));
+const MesPresencesProf = lazy(() => import("@/pages/enseignant/MesPresencesProf"));
+const Messages = lazy(() => import("@/pages/Messages"));
+const MesNotes = lazy(() => import("@/pages/eleve/MesNotes"));
+const MesExercicesPage = lazy(() =>
+  import("@/pages/eleve/MesDevoirs").then((m) => ({
+    default: m.MesExercicesPage,
+  })),
+);
+const MesExamensPage = lazy(() =>
+  import("@/pages/eleve/MesDevoirs").then((m) => ({
+    default: m.MesExamensPage,
+  })),
+);
+const MesPresences = lazy(() => import("@/pages/eleve/MesPresences"));
+const MesCompositions = lazy(() => import("@/pages/eleve/MesCompositions"));
+const MesProfs = lazy(() => import("@/pages/eleve/MesProfs"));
+const MonEmploiDuTempsPage = lazy(() => import("@/pages/MonEmploiDuTempsPage"));
+const MonBulletin = lazy(() => import("@/pages/eleve/MonBulletin"));
+const Enfants = lazy(() => import("@/pages/parent/Enfants"));
+const EnfantNotes = lazy(() => import("@/pages/parent/EnfantNotes"));
+const EnfantPresences = lazy(() => import("@/pages/parent/EnfantPresences"));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center text-slate-500">
+      Chargement…
+    </div>
+  );
+}
 
 function HomeRedirect() {
   const { homePath, loading } = useAuth();
@@ -71,7 +90,8 @@ function HomeRedirect() {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
       <Route path="/connexion" element={<Connexion />} />
       <Route
         path="/premiere-connexion"
@@ -489,7 +509,8 @@ function AppRoutes() {
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 

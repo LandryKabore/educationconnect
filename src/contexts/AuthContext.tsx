@@ -237,10 +237,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       if (session?.user) {
-        await supabase
-          .from("profils")
-          .update({ must_change_password: false })
-          .eq("id", session.user.id);
+        // Server-verified: this RPC only clears the flag if Supabase Auth
+        // just recorded a real password change for this user (see
+        // supabase/migrations/20260722130000_harden_must_change_password.sql).
+        // A direct `profils` table UPDATE cannot be used to skip the change.
+        const { error: rpcError } = await supabase.rpc(
+          "ef_complete_password_change",
+        );
+        if (rpcError) throw rpcError;
         await loadUserData(session.user.id);
       }
     },

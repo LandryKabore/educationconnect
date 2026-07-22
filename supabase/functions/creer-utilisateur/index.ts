@@ -98,7 +98,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: isSuper } = await admin.rpc("ef_is_super_admin");
     // Check caller permissions via service using caller's id
     const { data: callerRoles } = await admin
       .from("roles_utilisateurs")
@@ -132,7 +131,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const base = `${slugify(firstName)}.${slugify(lastName)}` || "utilisateur";
+    const firstSlug = slugify(firstName);
+    const lastSlug = slugify(lastName);
+    // A template literal like `${a}.${b}` is never an empty string (the "."
+    // always survives), so `|| "utilisateur"` never triggered even when both
+    // names produced empty slugs (e.g. non-latin characters) — check the
+    // parts themselves instead.
+    const base =
+      firstSlug || lastSlug ? `${firstSlug}.${lastSlug}` : "utilisateur";
     const suffix = Math.floor(Math.random() * 900 + 100);
     const username = `${base}${suffix}`;
     const email = `${username}@edufaso.local`;
