@@ -23,9 +23,9 @@ export function usePendingExamsCount() {
       if (classIds.length === 0) return 0;
 
       const { count, error } = await supabase
-        .from("devoirs")
+        .from("evaluations")
         .select("id", { count: "exact", head: true })
-        .eq("kind", "examen")
+        .eq("type", "examen")
         .eq("admin_confirmed", false)
         .in("class_section_id", classIds);
       if (error) throw error;

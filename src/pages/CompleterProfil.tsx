@@ -163,6 +163,8 @@ export default function CompleterProfil() {
                   value={values[f.key] ?? ""}
                   onChange={(iso) => setField(f.key, iso)}
                   required={f.required}
+                  minYear={new Date().getFullYear() - 100}
+                  maxYear={new Date().getFullYear()}
                 />
               ) : f.type === "gender" ? (
                 <Select

@@ -16,7 +16,8 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { cn, fullName, matchesSearch } from "@/lib/utils";
+import { cn, fullName, joinProfile, matchesSearch } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
 
 type ClassTab = {
   classId: string;
@@ -108,20 +109,21 @@ export default function MesEleves() {
           const r = row as {
             id: string;
             class_section_id: string;
-            profils: {
-              id: string;
-              first_name: string;
-              last_name: string;
-            } | null;
+            profils: unknown;
           };
-          if (!r.profils) return null;
+          const profil = joinProfile<{
+            id: string;
+            first_name: string;
+            last_name: string;
+          }>(r.profils);
+          if (!profil?.id) return null;
           return {
             id: r.id,
-            studentId: r.profils.id,
+            studentId: profil.id,
             classId: r.class_section_id,
             className: nameByClass.get(r.class_section_id) ?? "Classe",
-            firstName: r.profils.first_name,
-            lastName: r.profils.last_name,
+            firstName: profil.first_name,
+            lastName: profil.last_name,
           };
         })
         .filter(Boolean) as StudentRow[];
@@ -260,7 +262,7 @@ export default function MesEleves() {
                         className="border-b border-slate-100 last:border-0 dark:border-slate-700"
                       >
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          {fullName(s.firstName, s.lastName)}
+                          <PersonName first={s.firstName} last={s.lastName} />
                         </td>
                         <td className="px-4 py-3">
                           <ClassColorBadge

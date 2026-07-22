@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { AcademicYear } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
 import {
   Badge,
@@ -28,6 +29,7 @@ export default function Annees() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<AcademicYear | null>(null);
 
   const { data: years = [], isLoading } = useQuery({
     queryKey: ["annees", schoolId],
@@ -140,7 +142,7 @@ export default function Annees() {
     }
   };
 
-  const handleDelete = async (y: AcademicYear) => {
+  const requestDelete = async (y: AcademicYear) => {
     if (!schoolId) return;
 
     const { count } = await supabase
@@ -155,10 +157,11 @@ export default function Annees() {
       return;
     }
 
-    const ok = window.confirm(
-      `Supprimer l’année scolaire « ${y.label} » ? Cette action est définitive.`,
-    );
-    if (!ok) return;
+    setPendingDelete(y);
+  };
+
+  const handleDelete = async (y: AcademicYear) => {
+    if (!schoolId) return;
 
     const { error } = await supabase
       .from("annees_scolaires")
@@ -173,11 +176,26 @@ export default function Annees() {
 
     if (editingId === y.id) resetForm();
     toast.success("Année scolaire supprimée");
+    setPendingDelete(null);
     invalidate();
   };
 
   return (
     <div>
+      <ConfirmPasswordDialog
+        open={!!pendingDelete}
+        title={
+          pendingDelete
+            ? `Supprimer « ${pendingDelete.label} » ?`
+            : "Confirmer"
+        }
+        description="Cette année scolaire sera définitivement retirée. Saisissez votre mot de passe administrateur pour confirmer."
+        confirmLabel="Supprimer l’année"
+        onCancel={() => setPendingDelete(null)}
+        onVerified={async () => {
+          if (pendingDelete) await handleDelete(pendingDelete);
+        }}
+      />
       <SetupGuideBar />
       <PageHeader
         title="Années scolaires"
@@ -284,7 +302,7 @@ export default function Annees() {
                   size="sm"
                   variant="ghost"
                   className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => void handleDelete(y)}
+                  onClick={() => void requestDelete(y)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Supprimer

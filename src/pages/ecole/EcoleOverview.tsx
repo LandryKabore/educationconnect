@@ -30,9 +30,10 @@ import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
-import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
-import { cn, fullName, personName } from "@/lib/utils";
+import { cn, fullName, joinProfile, personName } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
 import type { AttendanceStatus } from "@/lib/types";
 
 function dbDayOfWeek(date = new Date()) {
@@ -68,7 +69,7 @@ type StudentPreview = {
 export default function EcoleOverview() {
   const { schoolId, schools, user, profile } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const { data: unreadMessages = 0 } = useUnreadMessagesCount();
+  const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const { data: sansClasse = 0 } = useStudentsWithoutClassCount();
   const { data: pendingExams = 0 } = usePendingExamsCount();
   const name = personName(profile?.first_name, profile?.last_name);
@@ -167,15 +168,16 @@ export default function EcoleOverview() {
           profils: { first_name: string; last_name: string } | null;
         };
 
-        const alerts = ((presenceRows ?? []) as PresenceRow[]).map((p) => ({
-          id: p.id,
-          status: p.status,
-          studentName: p.profils
-            ? fullName(p.profils.first_name, p.profils.last_name)
-            : "Élève",
-          className: classNameById.get(p.class_section_id) ?? "Classe",
-          subjectName: p.matieres?.name ?? null,
-        }));
+        const alerts = ((presenceRows ?? []) as PresenceRow[]).map((p) => {
+          const profil = joinProfile(p.profils);
+          return {
+            id: p.id,
+            status: p.status,
+            studentName: personName(profil?.first_name, profil?.last_name),
+            className: classNameById.get(p.class_section_id) ?? "Classe",
+            subjectName: p.matieres?.name ?? null,
+          };
+        });
 
         presenceAlerts = alerts.slice(0, 6);
         presenceAbsent = alerts.filter((a) => a.status === "absent").length;
@@ -183,13 +185,13 @@ export default function EcoleOverview() {
         presenceExcused = alerts.filter((a) => a.status === "excused").length;
 
         const { data: examRows } = await supabase
-          .from("devoirs")
+          .from("evaluations")
           .select(
-            "id, title, due_date, start_time, end_time, admin_confirmed, classes(name), matieres(name), teacher:profils!devoirs_teacher_id_fkey(first_name, last_name)",
+            "id, title, due_date:eval_date, start_time, end_time, admin_confirmed, classes(name), matieres(name), teacher:profils!evaluations_teacher_id_fkey(first_name, last_name)",
           )
-          .eq("kind", "examen")
+          .eq("type", "examen")
           .in("class_section_id", classIds)
-          .order("due_date", { ascending: true, nullsFirst: false })
+          .order("eval_date", { ascending: true, nullsFirst: false })
           .limit(40);
 
         type ExamRow = {
@@ -265,12 +267,14 @@ export default function EcoleOverview() {
         }[]
       )
         .filter((r) => !enrolled.has(r.user_id))
-        .map((r) => ({
-          id: r.user_id,
-          name: r.profils
-            ? fullName(r.profils.first_name, r.profils.last_name)
-            : "Élève",
-        }))
+        .map((r) => {
+          const profil = joinProfile(r.profils);
+          return {
+            id: r.user_id,
+            name: personName(profil?.first_name, profil?.last_name),
+          };
+        })
+        .filter((r) => r.name)
         .sort((a, b) => a.name.localeCompare(b.name, "fr"))
         .slice(0, 6);
 
@@ -339,7 +343,7 @@ export default function EcoleOverview() {
           icon={School}
           name={name}
           context={context}
-          unreadMessages={unreadMessages}
+          unreadInbox={unreadInbox}
         />
         <div className="flex flex-wrap gap-2 lg:pt-2">
           <Link to="/ecole/parametres">
@@ -349,10 +353,10 @@ export default function EcoleOverview() {
             </Button>
           </Link>
           {pendingExams > 0 ? (
-            <Link to="/examens-ecole">
+            <Link to="/devoirs-ecole">
               <Button size="sm">
                 <FileText className="h-4 w-4" />
-                {pendingExams} examen{pendingExams > 1 ? "s" : ""} à confirmer
+                {pendingExams} devoir{pendingExams > 1 ? "s" : ""} à confirmer
               </Button>
             </Link>
           ) : null}
@@ -363,15 +367,15 @@ export default function EcoleOverview() {
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/40">
           <div>
             <p className="font-semibold text-amber-950">
-              Examens en attente de confirmation
+              Devoirs en attente de confirmation
             </p>
             <p className="mt-1 text-sm text-amber-900">
               {pendingExams} proposition{pendingExams > 1 ? "s" : ""} des
               enseignants à valider
             </p>
           </div>
-          <Link to="/examens-ecole">
-            <Button size="sm">Voir les examens</Button>
+          <Link to="/devoirs-ecole">
+            <Button size="sm">Voir les devoirs</Button>
           </Link>
         </section>
       ) : null}
@@ -396,7 +400,7 @@ export default function EcoleOverview() {
           to="/eleves"
         />
         <MetricCard
-          label="Examens"
+          label="Devoirs"
           value={String(pendingExams)}
           hint={
             pendingExams > 0
@@ -406,7 +410,7 @@ export default function EcoleOverview() {
           valueClass={
             pendingExams > 0 ? "text-amber-600" : "text-emerald-600"
           }
-          to="/examens-ecole"
+          to="/devoirs-ecole"
         />
         <MetricCard
           label="Enseignants"
@@ -460,7 +464,7 @@ export default function EcoleOverview() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">
-                        {p.studentName}
+                        <PersonName name={p.studentName} />
                       </p>
                       <p className="text-xs text-slate-500">
                         {[p.className, p.subjectName]
@@ -488,12 +492,12 @@ export default function EcoleOverview() {
 
         <Panel
           icon={FileText}
-          title="Examens"
+          title="Devoirs"
           subtitle="À confirmer et prochainement"
           action={
-            <Link to="/examens-ecole" className="block">
+            <Link to="/devoirs-ecole" className="block">
               <Button className="w-full">
-                Gérer les examens
+                Gérer les devoirs
                 {pendingExams > 0 ? (
                   <Badge tone="warning">{pendingExams}</Badge>
                 ) : null}
@@ -503,7 +507,7 @@ export default function EcoleOverview() {
         >
           {data.pendingExamList.length === 0 &&
           data.upcomingExamList.length === 0 ? (
-            <PanelEmpty message="Aucun examen en attente ni à venir." />
+            <PanelEmpty message="Aucun devoir en attente ni à venir." />
           ) : (
             <div className="space-y-3">
               {data.pendingExamList.length > 0 ? (
@@ -611,7 +615,7 @@ export default function EcoleOverview() {
                   className="flex items-center justify-between gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5"
                 >
                   <p className="truncate text-sm font-semibold text-slate-900">
-                    {s.name}
+                    <PersonName name={s.name} />
                   </p>
                   <span className="shrink-0 text-xs font-medium text-amber-800">
                     Sans classe
@@ -699,7 +703,7 @@ export default function EcoleOverview() {
           subtitle="Communications de l’école"
           action={
             <div className="grid gap-2 sm:grid-cols-2">
-              <Link to="/messages" className="block">
+              <Link to="/annonces" className="block">
                 <Button variant="outline" className="w-full">
                   <Bell className="h-4 w-4" />
                   Annonces
@@ -709,8 +713,8 @@ export default function EcoleOverview() {
                 <Button className="w-full">
                   <MessageSquare className="h-4 w-4" />
                   Messages
-                  {unreadMessages > 0 ? (
-                    <Badge tone="danger">{unreadMessages}</Badge>
+                  {unreadInbox.discussions > 0 ? (
+                    <Badge tone="danger">{unreadInbox.discussions}</Badge>
                   ) : null}
                 </Button>
               </Link>

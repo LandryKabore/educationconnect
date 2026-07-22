@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { KeyRound, Link2 } from "lucide-react";
+import { KeyRound, Link2, MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { programmeToCoefMap } from "@/lib/averages";
@@ -527,29 +527,47 @@ export default function EleveDetail() {
             </p>
           ) : (
             <ul className="mt-3 space-y-3">
-              {parents.map((link) => (
-                <li
-                  key={link.id}
-                  className="rounded-xl border border-slate-100 px-3 py-2"
-                >
-                  <p className="font-medium">
-                    {fullName(
-                      link.profils?.first_name,
-                      link.profils?.last_name,
-                    )}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {link.relationship || "parent"}
-                    {link.profils?.phone ? ` · ${link.profils.phone}` : ""}
-                  </p>
-                  {link.profils?.email &&
-                  !link.profils.email.endsWith("@edufaso.local") ? (
-                    <p className="text-xs text-slate-400">
-                      {link.profils.email}
-                    </p>
-                  ) : null}
-                </li>
-              ))}
+              {parents.map((link) => {
+                const parentId = link.parent_id || link.profils?.id;
+                const parentName = fullName(
+                  link.profils?.first_name,
+                  link.profils?.last_name,
+                );
+                return (
+                  <li
+                    key={link.id}
+                    className="rounded-xl border border-slate-100 px-3 py-2 dark:border-slate-700"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">{parentName}</p>
+                        <p className="text-sm text-slate-500">
+                          {link.relationship || "parent"}
+                          {link.profils?.phone
+                            ? ` · ${link.profils.phone}`
+                            : ""}
+                        </p>
+                        {link.profils?.email &&
+                        !link.profils.email.endsWith("@edufaso.local") ? (
+                          <p className="text-xs text-slate-400">
+                            {link.profils.email}
+                          </p>
+                        ) : null}
+                      </div>
+                      {parentId && id ? (
+                        <Link
+                          to={`/messages?avec=${encodeURIComponent(parentId)}&retour=${encodeURIComponent(`/eleves/${id}`)}`}
+                        >
+                          <Button type="button" size="sm" variant="outline">
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            Message
+                          </Button>
+                        </Link>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>

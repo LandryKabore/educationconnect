@@ -1,14 +1,25 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
+import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { joinProfile } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 
 export default function Enfants() {
   const { user } = useAuth();
+  const { markSeen: markNotesSeen } = useNotesPendingChanges();
+  const { markSeen: markPresenceSeen } = usePresencePendingChanges();
+
+  useEffect(() => {
+    markNotesSeen();
+    markPresenceSeen();
+  }, [markNotesSeen, markPresenceSeen]);
 
   const { data: children = [], isLoading } = useQuery({
     queryKey: ["enfants", user?.id],
@@ -19,7 +30,9 @@ export default function Enfants() {
         .select("student_id, profils:profils!liens_parent_eleve_student_id_fkey(*)")
         .eq("parent_id", user!.id);
       if (error) throw error;
-      return (data ?? []).map((r) => (r as unknown as { profils: Profile }).profils);
+      return (data ?? [])
+        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
+        .filter((p): p is Profile => !!p?.id);
     },
   });
 
@@ -36,7 +49,7 @@ export default function Enfants() {
           {children.map((child) => (
             <Card key={child.id}>
               <h3 className="text-lg font-semibold">
-                {fullName(child.first_name, child.last_name)}
+                <PersonName first={child.first_name} last={child.last_name} />
               </h3>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link to={`/enfants/${child.id}/notes`}>

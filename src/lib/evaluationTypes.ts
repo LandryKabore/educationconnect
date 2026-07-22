@@ -7,18 +7,26 @@ export const EVALUATION_TYPES: EvaluationType[] = [
   "examen",
 ];
 
+/** Types teachers create themselves — compositions & exams are admin-scheduled. */
+export const TEACHER_EVALUATION_TYPES: EvaluationType[] = [
+  "interrogation",
+  "devoir",
+];
+
 const LABELS: Record<EvaluationType, string> = {
   interrogation: "Interrogation",
-  devoir: "Devoir",
+  /** Travaux à la maison (type DB `devoir`). */
+  devoir: "Exercice de maison",
   composition: "Composition",
-  examen: "Examen",
+  /** Devoir surveillé / contrôle (type DB `examen`) — called « devoir » locally. */
+  examen: "Devoir",
 };
 
 const SHORT: Record<EvaluationType, string> = {
   interrogation: "Interro",
-  devoir: "Devoir",
+  devoir: "Exercice",
   composition: "Compo",
-  examen: "Examen",
+  examen: "Devoir",
 };
 
 export function isEvaluationType(value: string): value is EvaluationType {

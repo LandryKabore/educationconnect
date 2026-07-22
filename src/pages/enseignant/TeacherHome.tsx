@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -5,6 +6,7 @@ import { fr } from "date-fns/locale";
 import {
   Bell,
   BookOpen,
+  Calendar,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -27,15 +29,20 @@ import {
 } from "@/lib/classColors";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
+import {
+  computeScheduleFocus,
+  dbDayOfWeek,
+  WEEKDAY_LABELS,
+} from "@/lib/timetableSchedule";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, personName } from "@/lib/utils";
 
 export default function TeacherHome() {
   const { user, profile, schools, schoolId } = useAuth();
-  const { data: unreadMessages = 0 } = useUnreadMessagesCount();
+  const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const name = personName(profile?.first_name, profile?.last_name);
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
@@ -186,34 +193,36 @@ export default function TeacherHome() {
       ).length;
 
       const { count: exercicesCount } = await supabase
-        .from("devoirs")
+        .from("evaluations")
         .select("id", { count: "exact", head: true })
         .eq("teacher_id", uid)
-        .eq("kind", "exercice_maison");
+        .eq("type", "devoir");
 
       const { count: examensCount } = await supabase
-        .from("devoirs")
+        .from("evaluations")
         .select("id", { count: "exact", head: true })
         .eq("teacher_id", uid)
-        .eq("kind", "examen");
+        .eq("type", "examen");
 
       const { data: recentDevoirs } = await supabase
-        .from("devoirs")
-        .select("id, title, due_date, kind, classes(name), matieres(name)")
+        .from("evaluations")
+        .select(
+          "id, title, due_date:eval_date, classes(name), matieres(name)",
+        )
         .eq("teacher_id", uid)
-        .eq("kind", "exercice_maison")
+        .eq("type", "devoir")
         .order("created_at", { ascending: false })
         .limit(4);
 
       const { data: upcomingExamens } = await supabase
-        .from("devoirs")
+        .from("evaluations")
         .select(
-          "id, title, due_date, start_time, end_time, admin_confirmed, classes(name), matieres(name)",
+          "id, title, due_date:eval_date, start_time, end_time, admin_confirmed, classes(name), matieres(name)",
         )
         .eq("teacher_id", uid)
-        .eq("kind", "examen")
-        .gte("due_date", today)
-        .order("due_date", { ascending: true })
+        .eq("type", "examen")
+        .gte("eval_date", today)
+        .order("eval_date", { ascending: true })
         .order("start_time", { ascending: true })
         .limit(6);
 
@@ -243,7 +252,6 @@ export default function TeacherHome() {
           id: string;
           title: string;
           due_date: string | null;
-          kind: "exercice_maison" | "examen";
           classes: { name: string } | null;
           matieres: { name: string } | null;
         }[],
@@ -263,6 +271,42 @@ export default function TeacherHome() {
     },
   });
 
+  // Fetch EDT in parallel query to keep home load snappy
+  const { data: weekSlots = [] } = useQuery({
+    queryKey: ["teacher-home-edt", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("creneaux_edt")
+        .select(
+          "id, day_of_week, start_time, end_time, room, matieres(name), classes(name)",
+        )
+        .eq("teacher_id", user!.id)
+        .order("day_of_week")
+        .order("start_time");
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        day_of_week: number;
+        start_time: string;
+        end_time: string;
+        room: string | null;
+        matieres: { name: string } | null;
+        classes: { name: string } | null;
+      }[];
+    },
+  });
+
+  const todayDow = dbDayOfWeek();
+  const todaySlots = useMemo(
+    () => weekSlots.filter((s) => s.day_of_week === todayDow),
+    [weekSlots, todayDow],
+  );
+  const scheduleFocus = useMemo(
+    () => computeScheduleFocus(weekSlots),
+    [weekSlots],
+  );
+
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;
   }
@@ -279,7 +323,7 @@ export default function TeacherHome() {
         icon={BookOpen}
         name={name}
         context={[schoolName, "Enseignant"].filter(Boolean).join(" · ")}
-        unreadMessages={unreadMessages}
+        unreadInbox={unreadInbox}
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -317,26 +361,125 @@ export default function TeacherHome() {
           to="/presences"
         />
         <MetricCard
-          label="Exercices"
+          label="Devoirs"
           value={String(data.exercicesCount)}
           hint="De maison"
           valueClass="text-amber-600"
-          to="/exercices-maison"
+          to="/devoirs"
         />
         <MetricCard
-          label="Examens"
+          label="Devoirs"
           value={String(data.examensCount)}
           hint="Créés au total"
           valueClass="text-violet-600"
-          to="/examens"
+          to="/devoirs"
         />
         <MetricCard
           label="Messages"
-          value={String(unreadMessages)}
+          value={String(unreadInbox.discussions)}
           hint="Non lus"
-          valueClass={unreadMessages > 0 ? "text-rose-600" : "text-slate-500 dark:text-slate-300"}
+          valueClass={unreadInbox.discussions > 0 ? "text-rose-600" : "text-slate-500 dark:text-slate-300"}
           to="/messages"
         />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          icon={Calendar}
+          title={`Aujourd’hui · ${WEEKDAY_LABELS[todayDow]}`}
+          subtitle={
+            scheduleFocus?.kind === "current"
+              ? "Cours en cours"
+              : scheduleFocus?.isLaterDay
+                ? `Prochain : ${scheduleFocus.dayLabel}`
+                : scheduleFocus?.kind === "next"
+                  ? "Prochain cours"
+                  : "Vos cours du jour"
+          }
+          action={
+            <Link to="/mon-emploi-du-temps" className="block">
+              <Button className="w-full">Emploi du temps</Button>
+            </Link>
+          }
+        >
+          {todaySlots.length === 0 && !scheduleFocus ? (
+            <PanelEmpty message="Aucun cours planifié cette semaine." />
+          ) : (
+            <div className="space-y-3">
+              {todaySlots.length === 0 && scheduleFocus?.isLaterDay ? (
+                <p className="text-xs font-medium text-slate-500">
+                  Pas de cours aujourd’hui — prochain :{" "}
+                  {scheduleFocus.dayLabel.toLowerCase()}.
+                </p>
+              ) : null}
+              {todaySlots.length > 0 ? (
+                <ul className="space-y-2">
+                  {todaySlots.slice(0, 5).map((s) => {
+                    const isFocus =
+                      !scheduleFocus?.isLaterDay &&
+                      scheduleFocus?.slot.id === s.id;
+                    return (
+                      <li
+                        key={s.id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5",
+                          isFocus
+                            ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700"
+                            : "bg-slate-50 dark:bg-[var(--surface-2)]",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "w-24 shrink-0 text-xs font-semibold tabular-nums",
+                            isFocus ? "text-brand-800" : "text-slate-600",
+                          )}
+                        >
+                          {s.start_time?.slice(0, 5)}
+                          {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {[s.classes?.name, s.matieres?.name]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                          {s.room ? (
+                            <p className="text-xs text-slate-500">
+                              Salle {s.room}
+                            </p>
+                          ) : null}
+                        </div>
+                        {isFocus ? (
+                          <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            {scheduleFocus?.kind === "current"
+                              ? "En cours"
+                              : "Prochain"}
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : scheduleFocus?.isLaterDay ? (
+                <div className="rounded-xl bg-brand-50 px-3 py-2.5 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {[scheduleFocus.slot.classes?.name, scheduleFocus.slot.matieres?.name]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {scheduleFocus.slot.start_time?.slice(0, 5)}
+                    {scheduleFocus.slot.end_time
+                      ? `–${scheduleFocus.slot.end_time.slice(0, 5)}`
+                      : ""}
+                    {" · "}
+                    {scheduleFocus.dayLabel}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Panel>
       </section>
 
       {/* Asymmetric: présences wide + prochains examens rail */}
@@ -419,16 +562,16 @@ export default function TeacherHome() {
 
         <Panel
           icon={FileText}
-          title="Prochains examens"
+          title="Prochains devoirs"
           subtitle="Vos dates à venir"
           action={
-            <Link to="/examens" className="block">
-              <Button className="w-full">Gérer les examens</Button>
+            <Link to="/devoirs" className="block">
+              <Button className="w-full">Gérer les devoirs</Button>
             </Link>
           }
         >
           {data.upcomingExamens.length === 0 ? (
-            <PanelEmpty message="Aucun examen à venir." />
+            <PanelEmpty message="Aucun devoir à venir." />
           ) : (
             <ul className="space-y-2">
               {data.upcomingExamens.map((e, index) => {
@@ -555,7 +698,7 @@ export default function TeacherHome() {
             title="Derniers exercices"
             subtitle="Travaux de maison récents"
             action={
-              <Link to="/exercices-maison" className="block">
+              <Link to="/devoirs" className="block">
                 <Button className="w-full">Voir les exercices</Button>
               </Link>
             }
@@ -601,7 +744,7 @@ export default function TeacherHome() {
             title="Annonces de l’école"
             subtitle="Infos officielles"
             action={
-              <Link to="/messages" className="block">
+              <Link to="/annonces" className="block">
                 <Button className="w-full">
                   <Bell className="h-4 w-4" />
                   Voir les annonces

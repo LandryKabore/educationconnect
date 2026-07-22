@@ -7,7 +7,7 @@ import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
 import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { fullName, personName } from "@/lib/utils";
 import {
   TimetableGrid,
   type TimetableGridSlot,
@@ -109,7 +109,7 @@ export default function MonEmploiDuTemps() {
     setExporting(true);
     try {
       const studentName = profile
-        ? fullName(profile.first_name, profile.last_name)
+        ? personName(profile.first_name, profile.last_name) || "Élève"
         : "Élève";
       const doc = generateEmploiDuTempsPdf({
         schoolName: school?.name ?? "École",

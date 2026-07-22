@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import type { LucideIcon } from "lucide-react";
-import { MessageSquare } from "lucide-react";
+import { Megaphone, MessageSquare } from "lucide-react";
 import { parseValidDate } from "@/lib/dateFr";
 import { getTimeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/utils";
 import { Button, Card } from "@/components/ui";
+import type { UnreadInboxCounts } from "@/hooks/useUnreadMessagesCount";
+import { EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 
 export function relativeFr(iso: string | null | undefined) {
   const d = parseValidDate(iso);
@@ -97,14 +99,16 @@ export function PortalHomeHeader({
   icon: Icon,
   name,
   context,
-  unreadMessages,
+  unreadInbox = EMPTY_UNREAD_INBOX,
 }: {
   icon: LucideIcon;
   name: string;
   context: string;
-  unreadMessages: number;
+  unreadInbox?: UnreadInboxCounts;
 }) {
   const displayName = name.trim();
+  const { discussions, announcements } = unreadInbox;
+
   return (
     <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-4">
@@ -128,14 +132,27 @@ export function PortalHomeHeader({
           </p>
         </div>
       </div>
-      {unreadMessages > 0 ? (
-        <Link to="/messages">
-          <Button className="w-full sm:w-auto">
-            <MessageSquare className="h-4 w-4" />
-            {unreadMessages} message{unreadMessages > 1 ? "s" : ""} non lu
-            {unreadMessages > 1 ? "s" : ""}
-          </Button>
-        </Link>
+      {discussions > 0 || announcements > 0 ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {discussions > 0 ? (
+            <Link to="/messages">
+              <Button className="w-full sm:w-auto">
+                <MessageSquare className="h-4 w-4" />
+                {discussions} message{discussions > 1 ? "s" : ""} non lu
+                {discussions > 1 ? "s" : ""}
+              </Button>
+            </Link>
+          ) : null}
+          {announcements > 0 ? (
+            <Link to="/annonces">
+              <Button variant="secondary" className="w-full sm:w-auto">
+                <Megaphone className="h-4 w-4" />
+                {announcements} annonce{announcements > 1 ? "s" : ""} non lue
+                {announcements > 1 ? "s" : ""}
+              </Button>
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

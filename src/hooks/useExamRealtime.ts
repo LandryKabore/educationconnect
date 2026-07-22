@@ -20,7 +20,9 @@ function asDevoir(raw: Record<string, unknown> | undefined): DevoirRow | null {
   if (!raw || typeof raw.id !== "string") return null;
   return {
     id: raw.id,
-    kind: typeof raw.kind === "string" ? raw.kind : undefined,
+    // "type" on evaluations covers interrogation/devoir/composition/examen;
+    // only "devoir" and "examen" are schedule-relevant here.
+    kind: typeof raw.type === "string" ? raw.type : undefined,
     title: typeof raw.title === "string" ? raw.title : null,
     admin_confirmed:
       typeof raw.admin_confirmed === "boolean" ? raw.admin_confirmed : null,
@@ -48,7 +50,7 @@ export function useStudentExamsRealtime() {
   const location = useLocation();
   const userId = user?.id;
   const enabled = role === "student" && !!userId;
-  const onExamsPage = location.pathname.startsWith("/mes-examens");
+  const onExamsPage = location.pathname.startsWith("/mes-devoirs") || location.pathname.startsWith("/mes-examens");
 
   const { data: classId } = useQuery({
     queryKey: studentClassIdQueryKey(userId ?? ""),
@@ -72,13 +74,13 @@ export function useStudentExamsRealtime() {
     if (!enabled || !userId || !classId) return;
 
     const channel = supabase
-      .channel(`devoirs-student:${classId}:${crypto.randomUUID()}`)
+      .channel(`evaluations-student:${classId}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "devoirs",
+          table: "evaluations",
           filter: `class_section_id=eq.${classId}`,
         },
         (payload) => {
@@ -91,7 +93,7 @@ export function useStudentExamsRealtime() {
           const row = next ?? prev;
           if (!row || row.kind !== "examen") {
             // Homework changes still refresh exercise lists.
-            if (row?.kind === "exercice_maison") {
+            if (row?.kind === "devoir") {
               invalidateStudentExamQueries(qc, userId);
             }
             return;
@@ -102,8 +104,8 @@ export function useStudentExamsRealtime() {
           const wasConfirmed = prev?.admin_confirmed === true;
           const isConfirmed = next?.admin_confirmed === true;
           if (payload.eventType === "UPDATE" && !wasConfirmed && isConfirmed) {
-            toast.success("Examen confirmé", {
-              description: next?.title?.trim() || "Un examen est maintenant visible",
+            toast.success("Devoir confirmé", {
+              description: next?.title?.trim() || "Un devoir est maintenant visible",
             });
           } else if (
             payload.eventType === "UPDATE" &&
@@ -111,7 +113,7 @@ export function useStudentExamsRealtime() {
             !isConfirmed &&
             onExamsPage
           ) {
-            toast.message("Confirmation d’examen retirée", {
+            toast.message("Confirmation de devoir retirée", {
               description: prev?.title?.trim() || undefined,
             });
           }
@@ -136,17 +138,17 @@ export function useTeacherExamsRealtime() {
     if (!enabled || !userId) return;
 
     const channel = supabase
-      .channel(`devoirs-teacher:${userId}:${crypto.randomUUID()}`)
+      .channel(`evaluations-teacher:${userId}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "devoirs",
+          table: "evaluations",
           filter: `teacher_id=eq.${userId}`,
         },
         () => {
-          void qc.invalidateQueries({ queryKey: ["devoirs", userId] });
+          void qc.invalidateQueries({ queryKey: ["evaluations"] });
           void qc.invalidateQueries({ queryKey: ["teacher-home", userId] });
         },
       )
@@ -168,13 +170,13 @@ export function useSchoolExamsRealtime() {
     if (!enabled || !schoolId) return;
 
     const channel = supabase
-      .channel(`devoirs-school:${schoolId}:${crypto.randomUUID()}`)
+      .channel(`evaluations-school:${schoolId}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "devoirs",
+          table: "evaluations",
         },
         (payload) => {
           const next = asDevoir(
@@ -200,4 +202,94 @@ export function useSchoolExamsRealtime() {
       void supabase.removeChannel(channel);
     };
   }, [enabled, schoolId, qc]);
+}
+
+/** Parents: live devoirs/examens for linked children. */
+export function useParentExamsRealtime() {
+  const { user, role } = useAuth();
+  const qc = useQueryClient();
+  const location = useLocation();
+  const userId = user?.id;
+  const enabled = role === "parent" && !!userId;
+
+  const { data: childClassIds = [] } = useQuery({
+    queryKey: ["parent-child-class-ids", userId],
+    enabled,
+    queryFn: async () => {
+      const { data: links, error } = await supabase
+        .from("liens_parent_eleve")
+        .select("student_id")
+        .eq("parent_id", userId!);
+      if (error) throw error;
+      const studentIds = (links ?? []).map(
+        (r) => (r as { student_id: string }).student_id,
+      );
+      if (studentIds.length === 0) return [] as string[];
+
+      const { data: insc, error: inscError } = await supabase
+        .from("inscriptions")
+        .select("class_section_id")
+        .in("student_id", studentIds)
+        .eq("status", "active");
+      if (inscError) throw inscError;
+      return [
+        ...new Set(
+          (insc ?? [])
+            .map((r) => (r as { class_section_id: string }).class_section_id)
+            .filter(Boolean),
+        ),
+      ];
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!enabled || !userId || childClassIds.length === 0) return;
+
+    const classSet = new Set(childClassIds);
+    const channel = supabase
+      .channel(`evaluations-parent:${userId}:${crypto.randomUUID()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "evaluations",
+        },
+        (payload) => {
+          const next = asDevoir(
+            payload.new as Record<string, unknown> | undefined,
+          );
+          const prev = asDevoir(
+            payload.old as Record<string, unknown> | undefined,
+          );
+          const row = next ?? prev;
+          if (!row?.class_section_id || !classSet.has(row.class_section_id)) {
+            return;
+          }
+
+          void qc.invalidateQueries({ queryKey: ["parent-home"] });
+          void qc.invalidateQueries({ queryKey: ["enfants"] });
+
+          if (row.kind !== "examen") return;
+          const wasConfirmed = prev?.admin_confirmed === true;
+          const isConfirmed = next?.admin_confirmed === true;
+          if (
+            payload.eventType === "UPDATE" &&
+            !wasConfirmed &&
+            isConfirmed &&
+            !location.pathname.startsWith("/messages")
+          ) {
+            toast.success("Devoir confirmé", {
+              description: next?.title?.trim() || "Un devoir est maintenant visible",
+            });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [enabled, userId, childClassIds, location.pathname, qc]);
 }

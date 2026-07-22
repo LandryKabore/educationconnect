@@ -14,6 +14,7 @@ import {
 } from "@/lib/subjectCatalog";
 import { cn } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
 import {
   Button,
@@ -38,6 +39,8 @@ export default function Matieres() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [pendingDelete, setPendingDelete] = useState<Subject | null>(null);
+  const [pendingDeleteHint, setPendingDeleteHint] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -250,6 +253,27 @@ export default function Matieres() {
   const handleDelete = async (s: Subject) => {
     if (!schoolId) return;
 
+    const { error } = await supabase
+      .from("matieres")
+      .delete()
+      .eq("id", s.id)
+      .eq("school_id", schoolId);
+
+    if (error) {
+      toast.error(error.message || "Suppression impossible");
+      return;
+    }
+
+    if (editingId === s.id) resetCustomForm();
+    toast.success("Matière supprimée");
+    setPendingDelete(null);
+    setPendingDeleteHint("");
+    invalidate();
+  };
+
+  const requestDelete = async (s: Subject) => {
+    if (!schoolId) return;
+
     const [{ count: notesCount }, { count: programmeCount }, { count: affCount }] =
       await Promise.all([
         supabase
@@ -272,31 +296,36 @@ export default function Matieres() {
       (affCount ?? 0) > 0 ? `${affCount} affectation(s)` : null,
     ].filter(Boolean);
 
-    const ok = window.confirm(
+    setPendingDeleteHint(
       usage.length
-        ? `Supprimer « ${s.name} » ?\n\nAttention : cela retirera aussi ${usage.join(", ")} liés à cette matière.`
-        : `Supprimer la matière « ${s.name} » ?`,
+        ? `Attention : cela retirera aussi ${usage.join(", ")} liés à cette matière. Saisissez votre mot de passe administrateur pour confirmer.`
+        : "Cette matière sera définitivement retirée. Saisissez votre mot de passe administrateur pour confirmer.",
     );
-    if (!ok) return;
-
-    const { error } = await supabase
-      .from("matieres")
-      .delete()
-      .eq("id", s.id)
-      .eq("school_id", schoolId);
-
-    if (error) {
-      toast.error(error.message || "Suppression impossible");
-      return;
-    }
-
-    if (editingId === s.id) resetCustomForm();
-    toast.success("Matière supprimée");
-    invalidate();
+    setPendingDelete(s);
   };
 
   return (
     <div>
+      <ConfirmPasswordDialog
+        open={!!pendingDelete}
+        title={
+          pendingDelete
+            ? `Supprimer « ${pendingDelete.name} » ?`
+            : "Confirmer"
+        }
+        description={
+          pendingDeleteHint ||
+          "Saisissez votre mot de passe administrateur pour confirmer."
+        }
+        confirmLabel="Supprimer la matière"
+        onCancel={() => {
+          setPendingDelete(null);
+          setPendingDeleteHint("");
+        }}
+        onVerified={async () => {
+          if (pendingDelete) await handleDelete(pendingDelete);
+        }}
+      />
       <SetupGuideBar />
       <PageHeader
         title="Matières"
@@ -536,7 +565,7 @@ export default function Matieres() {
                   size="sm"
                   variant="ghost"
                   className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => void handleDelete(s)}
+                  onClick={() => void requestDelete(s)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Supprimer

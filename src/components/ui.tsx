@@ -96,6 +96,8 @@ export function DateInputFr({
   required,
   disabled,
   name,
+  minYear,
+  maxYear,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -104,6 +106,10 @@ export function DateInputFr({
   required?: boolean;
   disabled?: boolean;
   name?: string;
+  /** Inclusive lower bound for the year dropdown (default: current − 80). */
+  minYear?: number;
+  /** Inclusive upper bound for the year dropdown (default: current + 10). */
+  maxYear?: number;
 }) {
   const [text, setText] = React.useState(() => isoToFr(value));
   const [invalid, setInvalid] = React.useState(false);
@@ -112,6 +118,22 @@ export function DateInputFr({
 
   const selected = parseIsoParts(value);
   const today = new Date();
+  const currentYear = today.getFullYear();
+  const yearFrom = minYear ?? currentYear - 80;
+  const yearTo = maxYear ?? currentYear + 10;
+  const yearOptions = React.useMemo(() => {
+    const lo = Math.min(yearFrom, yearTo);
+    const hi = Math.max(yearFrom, yearTo);
+    const years: number[] = [];
+    for (let y = hi; y >= lo; y--) years.push(y);
+    const selectedYear = selected?.y;
+    if (selectedYear != null && !years.includes(selectedYear)) {
+      years.push(selectedYear);
+      years.sort((a, b) => b - a);
+    }
+    return years;
+  }, [yearFrom, yearTo, selected?.y]);
+
   const [viewYear, setViewYear] = React.useState(
     () => selected?.y ?? today.getFullYear(),
   );
@@ -232,7 +254,14 @@ export function DateInputFr({
               setViewYear(selected.y);
               setViewMonth(selected.m);
             } else if (!open) {
-              setViewYear(today.getFullYear());
+              const lo = Math.min(yearFrom, yearTo);
+              const hi = Math.max(yearFrom, yearTo);
+              // For birth dates (no future years), open around a typical student age.
+              const fallback =
+                hi <= currentYear
+                  ? Math.max(lo, Math.min(hi, currentYear - 12))
+                  : currentYear;
+              setViewYear(fallback);
               setViewMonth(today.getMonth() + 1);
             }
             setOpen((v) => !v);
@@ -271,13 +300,11 @@ export function DateInputFr({
               value={viewYear}
               onChange={(e) => setViewYear(Number(e.target.value))}
             >
-              {Array.from({ length: 31 }, (_, i) => today.getFullYear() - 10 + i).map(
-                (y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ),
-              )}
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </select>
             <button
               type="button"

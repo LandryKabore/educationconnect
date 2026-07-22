@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import {
   Bell,
+  BookMarked,
   BookOpen,
   Calendar,
   CalendarClock,
@@ -13,6 +14,7 @@ import {
   GraduationCap,
   MessageSquare,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import {
   MetricCard,
@@ -39,7 +41,7 @@ import { timeToMinutes } from "@/lib/timetableConflicts";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
-import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, personName } from "@/lib/utils";
 import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
@@ -66,13 +68,13 @@ function on20(score: number, max: number) {
 
 export default function StudentHome() {
   const { user, profile } = useAuth();
-  const { data: unreadMessages = 0 } = useUnreadMessagesCount();
+  const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const { pending: edtPending, pendingCount: edtPendingCount, markSeen } =
     useEdtPendingChanges();
   const name = personName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["student-home", "v4", user?.id],
+    queryKey: ["student-home", "v5", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const uid = user!.id;
@@ -93,7 +95,7 @@ export default function StudentHome() {
       const { data: notesData } = await supabase
         .from("notes")
         .select(
-          "id, score, max_score, period_label, subject_id, created_at, is_absent, matieres(id, name, coefficient)",
+          "id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, matieres(id, name, coefficient)",
         )
         .eq("student_id", uid)
         .order("created_at", { ascending: false });
@@ -106,6 +108,11 @@ export default function StudentHome() {
       const notes = (notesData ?? []) as (GradeRow & {
         matieres: Subject | null;
       })[];
+      const gradedEvalIds = new Set(
+        notes
+          .map((n) => n.evaluation_id)
+          .filter((id): id is string => !!id),
+      );
 
       let coefMap: Record<string, number> = {};
       if (classId) {
@@ -153,6 +160,14 @@ export default function StudentHome() {
         matieres: { name: string } | null;
         admin_confirmed: boolean;
       }[] = [];
+      let upcomingCompositions: {
+        id: string;
+        title: string;
+        period_label: string;
+        starts_on: string;
+        ends_on: string;
+        paperCount: number;
+      }[] = [];
       let todaySlots: {
         id: string;
         day_of_week: number;
@@ -165,15 +180,12 @@ export default function StudentHome() {
 
       if (classId) {
         const { data: exercicesData } = await supabase
-          .from("devoirs")
-          .select(
-            "id, title, due_date, matieres(name), rendus_devoirs!left(id)",
-          )
+          .from("evaluations")
+          .select("id, title, due_date:eval_date, matieres(name)")
           .eq("class_section_id", classId)
-          .eq("kind", "exercice_maison")
-          .eq("rendus_devoirs.student_id", uid)
-          .order("due_date", { ascending: true })
-          .limit(8);
+          .eq("type", "devoir")
+          .order("eval_date", { ascending: true })
+          .limit(4);
 
         pendingExercices = (
           (exercicesData ?? []) as {
@@ -181,21 +193,18 @@ export default function StudentHome() {
             title: string;
             due_date: string | null;
             matieres: { name: string } | null;
-            rendus_devoirs: { id: string }[];
           }[]
-        )
-          .filter((d) => (d.rendus_devoirs?.length ?? 0) === 0)
-          .slice(0, 4);
+        ).filter((e) => !gradedEvalIds.has(e.id));
 
         const { data: examensData } = await supabase
-          .from("devoirs")
+          .from("evaluations")
           .select(
-            "id, title, due_date, start_time, end_time, admin_confirmed, matieres(name)",
+            "id, title, due_date:eval_date, start_time, end_time, admin_confirmed, matieres(name)",
           )
           .eq("class_section_id", classId)
-          .eq("kind", "examen")
+          .eq("type", "examen")
           .eq("admin_confirmed", true)
-          .order("due_date", { ascending: true })
+          .order("eval_date", { ascending: true })
           .limit(6);
 
         const todayIso = new Date().toISOString().slice(0, 10);
@@ -210,8 +219,53 @@ export default function StudentHome() {
             matieres: { name: string } | null;
           }[]
         )
-          .filter((e) => !e.due_date || e.due_date >= todayIso)
+          .filter(
+            (e) =>
+              !gradedEvalIds.has(e.id) &&
+              (!e.due_date || e.due_date >= todayIso),
+          )
           .slice(0, 4);
+
+        const { data: sessionsData } = await supabase
+          .from("composition_sessions")
+          .select("id, title, period_label, starts_on, ends_on")
+          .eq("class_section_id", classId)
+          .gte("ends_on", todayIso)
+          .order("starts_on", { ascending: true })
+          .limit(4);
+
+        const sessions = (sessionsData ?? []) as {
+          id: string;
+          title: string;
+          period_label: string;
+          starts_on: string;
+          ends_on: string;
+        }[];
+
+        if (sessions.length > 0) {
+          const { data: papers } = await supabase
+            .from("evaluations")
+            .select("id, session_id")
+            .in(
+              "session_id",
+              sessions.map((s) => s.id),
+            )
+            .eq("type", "composition");
+          const countBySession = new Map<string, number>();
+          for (const p of (papers ?? []) as {
+            id: string;
+            session_id: string;
+          }[]) {
+            countBySession.set(
+              p.session_id,
+              (countBySession.get(p.session_id) ?? 0) + 1,
+            );
+          }
+          upcomingCompositions = sessions.map((s) => ({
+            ...s,
+            paperCount: countBySession.get(s.id) ?? 0,
+          }));
+        }
 
         const todayDow = dbDayOfWeek();
         const { data: slots } = await supabase
@@ -269,6 +323,7 @@ export default function StudentHome() {
         })),
         pendingExercices,
         upcomingExamens,
+        upcomingCompositions,
         todaySlots,
         weekSlots,
         announcements,
@@ -360,6 +415,7 @@ export default function StudentHome() {
 
   const pendingExercices = data.pendingExercices ?? [];
   const upcomingExamens = data.upcomingExamens ?? [];
+  const upcomingCompositions = data.upcomingCompositions ?? [];
   const recentNotes = data.recentNotes ?? [];
   const todaySlots = data.todaySlots ?? [];
   const announcements = data.announcements ?? [];
@@ -373,7 +429,7 @@ export default function StudentHome() {
         icon={GraduationCap}
         name={name}
         context={classLabel}
-        unreadMessages={unreadMessages}
+        unreadInbox={unreadInbox}
       />
 
       {edtPendingCount > 0 ? (
@@ -710,7 +766,7 @@ export default function StudentHome() {
       </section>
 
       {/* Travaux scolaires */}
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-3">
         <Panel
           icon={ClipboardList}
           title="Exercices de maison"
@@ -732,11 +788,11 @@ export default function StudentHome() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-900">
-                      {d.title}
+                      {[data.className, d.matieres?.name ?? "Matière"]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      {d.matieres?.name ?? "Matière"}
-                    </p>
+                    <p className="text-xs text-slate-500">{d.title}</p>
                   </div>
                   {d.due_date ? (
                     <span className="shrink-0 text-xs font-medium text-amber-800">
@@ -751,16 +807,16 @@ export default function StudentHome() {
 
         <Panel
           icon={BookOpen}
-          title="Prochains examens"
+          title="Prochains devoirs"
           subtitle="Confirmés par l’administration"
           action={
-            <Link to="/mes-examens" className="block">
-              <Button className="w-full">Voir les examens</Button>
+            <Link to="/mes-devoirs" className="block">
+              <Button className="w-full">Voir les devoirs</Button>
             </Link>
           }
         >
           {upcomingExamens.length === 0 ? (
-            <PanelEmpty message="Aucun examen confirmé pour le moment." />
+            <PanelEmpty message="Aucun devoir confirmé pour le moment." />
           ) : (
             <ul className="space-y-2">
               {upcomingExamens.map((e) => {
@@ -775,12 +831,12 @@ export default function StudentHome() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-slate-900">
-                        {e.title}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {[e.matieres?.name ?? "Matière", slot]
+                        {[data.className, e.matieres?.name ?? "Matière"]
                           .filter(Boolean)
                           .join(" · ")}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {[e.title, slot].filter(Boolean).join(" · ")}
                       </p>
                     </div>
                     {e.due_date ? (
@@ -796,6 +852,47 @@ export default function StudentHome() {
             </ul>
           )}
         </Panel>
+
+        <Panel
+          icon={BookMarked}
+          title="Compositions"
+          subtitle="Programme planifié par l’école"
+          action={
+            <Link to="/mes-compositions" className="block">
+              <Button className="w-full">Voir le programme</Button>
+            </Link>
+          }
+        >
+          {upcomingCompositions.length === 0 ? (
+            <PanelEmpty message="Aucune composition programmée pour le moment." />
+          ) : (
+            <ul className="space-y-2">
+              {upcomingCompositions.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-start justify-between gap-2 rounded-xl bg-violet-50/80 px-3 py-2.5 dark:bg-violet-950/30"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {c.title}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {c.period_label}
+                      {c.paperCount > 0
+                        ? ` · ${c.paperCount} épreuve${c.paperCount > 1 ? "s" : ""}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-medium text-violet-800 dark:text-violet-300">
+                    {formatDateSafe(c.starts_on, "d MMM", { locale: fr })}
+                    {" – "}
+                    {formatDateSafe(c.ends_on, "d MMM", { locale: fr })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </section>
 
       {/* Comms row */}
@@ -805,7 +902,7 @@ export default function StudentHome() {
           title="Annonces de l’école"
           subtitle="Infos officielles de l’administration"
           action={
-            <Link to="/messages" className="block">
+            <Link to="/annonces" className="block">
               <Button className="w-full">
                 <Bell className="h-4 w-4" />
                 Voir les annonces
@@ -899,8 +996,14 @@ export default function StudentHome() {
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <QuickLink to="/mes-notes" label="Mes notes" icon={BookOpen} />
         <QuickLink to="/mes-exercices" label="Exercices" icon={ClipboardList} />
-        <QuickLink to="/mes-examens" label="Examens" icon={GraduationCap} />
+        <QuickLink to="/mes-devoirs" label="Devoirs" icon={FileText} />
+        <QuickLink
+          to="/mes-compositions"
+          label="Compositions"
+          icon={BookMarked}
+        />
         <QuickLink to="/mes-presences" label="Présences" icon={CheckCircle2} />
+        <QuickLink to="/mes-profs" label="Mes profs" icon={Users} />
         <QuickLink to="/mon-bulletin" label="Mon bulletin" icon={GraduationCap} />
       </section>
     </div>

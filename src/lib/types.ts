@@ -165,8 +165,29 @@ export interface Evaluation {
   period_label: string;
   type: EvaluationType;
   title: string;
+  description: string | null;
   max_score: number;
   eval_date: string | null;
+  /** Exam / composition paper window (HH:MM or HH:MM:SS). */
+  start_time: string | null;
+  end_time: string | null;
+  /** School admin must confirm exam date/time before it is official. */
+  admin_confirmed: boolean;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  /** Set when this row is a paper inside an admin composition session. */
+  session_id: string | null;
+  created_at: string;
+}
+
+export interface CompositionSession {
+  id: string;
+  class_section_id: string;
+  period_label: string;
+  title: string;
+  starts_on: string;
+  ends_on: string;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -184,35 +205,6 @@ export interface GradeRow {
   evaluation_id: string | null;
   /** Absent for this evaluation — excluded from averages. */
   is_absent: boolean;
-}
-
-export interface Assignment {
-  id: string;
-  class_section_id: string;
-  subject_id: string;
-  teacher_id: string;
-  title: string;
-  description: string | null;
-  due_date: string | null;
-  /** Exam window (HH:MM or HH:MM:SS). */
-  start_time: string | null;
-  end_time: string | null;
-  /** School admin must confirm exam date/time before it is official. */
-  admin_confirmed: boolean;
-  confirmed_at: string | null;
-  confirmed_by: string | null;
-  max_score: number;
-  /** exercice_maison | examen */
-  kind: "exercice_maison" | "examen";
-}
-
-export interface AssignmentSubmission {
-  id: string;
-  assignment_id: string;
-  student_id: string;
-  content: string | null;
-  submitted_at: string | null;
-  score: number | null;
 }
 
 export interface TimetableSlot {

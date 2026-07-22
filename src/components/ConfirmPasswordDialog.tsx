@@ -104,7 +104,7 @@ export function ConfirmPasswordDialog({
 
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
           <div>
-            <Label htmlFor="confirm-admin-password">Mot de passe administrateur</Label>
+            <Label htmlFor="confirm-admin-password">Mot de passe</Label>
             <PasswordInput
               id="confirm-admin-password"
               ref={inputRef}

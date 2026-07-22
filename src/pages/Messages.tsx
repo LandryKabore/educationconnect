@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isToday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, MessageRow, Profile } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
-import { cn, fullName, matchesSearch } from "@/lib/utils";
+import { cn, fullName, joinProfile, matchesSearch } from "@/lib/utils";
 import {
   Badge,
   Button,
@@ -21,8 +22,11 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+import { AnnouncementPaper } from "@/components/AnnouncementPaper";
 
 type MessageTab = "discussions" | "announcements" | "compose" | "announce";
+
+type MessagesView = "messages" | "annonces";
 
 type ContactRole = "student" | "parent" | "teacher" | "school_admin";
 
@@ -92,7 +96,7 @@ function initials(name: string) {
 }
 
 function asProfile(raw: unknown): Profile | null {
-  return (raw as Profile | null) ?? null;
+  return joinProfile<Profile>(raw);
 }
 
 function pushContact(
@@ -130,11 +134,22 @@ function contactDisplayName(c: MessageContact) {
   return parts.join(" · ");
 }
 
-export default function Messages() {
+export default function Messages({
+  view = "messages",
+}: {
+  view?: MessagesView;
+}) {
   const { user, schoolId, role } = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<MessageTab>("discussions");
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isAnnoncesView = view === "annonces";
+  const [tab, setTab] = useState<MessageTab>(
+    isAnnoncesView ? "announcements" : "discussions",
+  );
   const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
+  /** When set, chat back arrow returns here (e.g. student profile). */
+  const [chatReturnTo, setChatReturnTo] = useState<string | null>(null);
   const [discussionsSearch, setDiscussionsSearch] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -157,11 +172,59 @@ export default function Messages() {
   const [announceSending, setAnnounceSending] = useState(false);
   const markingRead = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
+    null,
+  );
+  const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef(0);
 
   const canControlReplies =
     role === "school_admin" || role === "teacher" || role === "super_admin";
 
   const canAnnounce = canControlReplies;
+
+  useEffect(() => {
+    setTab(isAnnoncesView ? "announcements" : "discussions");
+    setSelectedOtherId(null);
+    setChatReturnTo(null);
+    setDiscussionsSearch("");
+    setListSearch("");
+  }, [isAnnoncesView]);
+
+  useEffect(() => {
+    if (isAnnoncesView) return;
+    const avec = searchParams.get("avec");
+    if (!avec) return;
+    setTab("discussions");
+    setSelectedOtherId(avec);
+    setDiscussionsSearch("");
+    const retour = searchParams.get("retour");
+    if (
+      retour &&
+      retour.startsWith("/") &&
+      !retour.startsWith("//")
+    ) {
+      setChatReturnTo(retour);
+    } else {
+      setChatReturnTo(null);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("avec");
+    next.delete("retour");
+    setSearchParams(next, { replace: true });
+  }, [isAnnoncesView, searchParams, setSearchParams]);
+
+  const leaveChat = () => {
+    if (chatReturnTo) {
+      const to = chatReturnTo;
+      setChatReturnTo(null);
+      setSelectedOtherId(null);
+      navigate(to);
+      return;
+    }
+    setSelectedOtherId(null);
+  };
 
   const { data: inbox = [], isLoading: inboxLoading } = useQuery({
     queryKey: ["messages-inbox", user?.id],
@@ -450,8 +513,10 @@ export default function Messages() {
   );
 
   const pickerExclude = useMemo(() => {
-    return new Set(pickerTarget === "to" ? ccIds : recipientIds);
-  }, [pickerTarget, ccIds, recipientIds]);
+    return new Set(
+      role === "student" || pickerTarget === "to" ? ccIds : recipientIds,
+    );
+  }, [role, pickerTarget, ccIds, recipientIds]);
 
   const searchedContacts = useMemo(() => {
     return filteredContacts.filter(
@@ -601,6 +666,10 @@ export default function Messages() {
   };
 
   const openChat = (otherId: string) => {
+    if (isAnnoncesView) {
+      navigate(`/messages?avec=${encodeURIComponent(otherId)}`);
+      return;
+    }
     setTab("discussions");
     setSelectedOtherId(otherId);
     setDiscussionsSearch("");
@@ -650,6 +719,50 @@ export default function Messages() {
       void supabase.removeChannel(channel);
     };
   }, [user?.id, qc]);
+
+  // "Is typing…" — ephemeral broadcast on a channel shared by both participants,
+  // nothing written to the DB.
+  useEffect(() => {
+    setOtherTyping(false);
+    if (typingClearRef.current) clearTimeout(typingClearRef.current);
+    if (!user?.id || !selectedOtherId) {
+      typingChannelRef.current = null;
+      return;
+    }
+
+    const pairKey = [user.id, selectedOtherId].sort().join(":");
+    const channel = supabase
+      .channel(`typing:${pairKey}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if ((payload.payload as { userId?: string })?.userId !== selectedOtherId) {
+          return;
+        }
+        setOtherTyping(true);
+        if (typingClearRef.current) clearTimeout(typingClearRef.current);
+        typingClearRef.current = setTimeout(() => setOtherTyping(false), 3000);
+      })
+      .subscribe();
+
+    typingChannelRef.current = channel;
+
+    return () => {
+      if (typingClearRef.current) clearTimeout(typingClearRef.current);
+      typingChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, selectedOtherId]);
+
+  const notifyTyping = () => {
+    if (!user?.id || !typingChannelRef.current) return;
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < 1500) return;
+    lastTypingSentRef.current = now;
+    void typingChannelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { userId: user.id },
+    });
+  };
 
   // Mark unread incoming messages as read when opening a chat thread
   useEffect(() => {
@@ -727,7 +840,19 @@ export default function Messages() {
   useEffect(() => {
     if (tab !== "discussions" || !selectedOtherId) return;
     chatEndRef.current?.scrollIntoView({ block: "end" });
-  }, [tab, selectedOtherId, selectedConversation?.messages.length]);
+  }, [
+    tab,
+    selectedOtherId,
+    selectedConversation?.messages.length,
+    otherTyping,
+  ]);
+
+  useEffect(() => {
+    if (role !== "student") return;
+    setPickerTarget("to");
+    setCcIds([]);
+    setRecipientRole("");
+  }, [role]);
 
   useEffect(() => {
     if (contacts.length === 0) return;
@@ -736,8 +861,11 @@ export default function Messages() {
     setCcIds((prev) => prev.filter((id) => known.has(id)));
   }, [contacts]);
 
+  const effectivePickerTarget =
+    role === "student" ? "to" : pickerTarget;
+
   const togglePickerId = (id: string) => {
-    if (pickerTarget === "to") {
+    if (effectivePickerTarget === "to") {
       setRecipientIds((prev) =>
         prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
       );
@@ -921,7 +1049,7 @@ export default function Messages() {
     setAnnounceSubject("");
     setAnnounceBody("");
     setAnnounceNoReplies(true);
-    setTab("discussions");
+    setTab(isAnnoncesView ? "announcements" : "discussions");
     setSelectedOtherId(null);
     setDiscussionsSearch("");
     invalidateMessages();
@@ -930,49 +1058,61 @@ export default function Messages() {
   return (
     <div>
       <PageHeader
-        title="Messages"
+        title={isAnnoncesView ? "Annonces" : "Messages"}
+        subtitle={
+          isAnnoncesView
+            ? "Informations officielles de l’établissement"
+            : undefined
+        }
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant={tab === "discussions" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTab("discussions");
-                setSelectedOtherId(null);
-                setDiscussionsSearch("");
-              }}
-            >
-              Discussions
-            </Button>
-            <Button
-              variant={tab === "announcements" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTab("announcements");
-                setListSearch("");
-              }}
-            >
-              Annonces
-            </Button>
-            <Button
-              variant={tab === "compose" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTab("compose");
-                setContactSearch("");
-              }}
-            >
-              Nouveau message
-            </Button>
-            {canAnnounce ? (
-              <Button
-                variant={tab === "announce" ? "primary" : "outline"}
-                size="sm"
-                onClick={() => setTab("announce")}
-              >
-                Envoyer une annonce
-              </Button>
-            ) : null}
+            {isAnnoncesView ? (
+              <>
+                <Button
+                  variant={tab === "announcements" ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setTab("announcements");
+                    setListSearch("");
+                  }}
+                >
+                  Liste
+                </Button>
+                {canAnnounce ? (
+                  <Button
+                    variant={tab === "announce" ? "primary" : "outline"}
+                    size="sm"
+                    onClick={() => setTab("announce")}
+                  >
+                    Envoyer une annonce
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Button
+                  variant={tab === "discussions" ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setTab("discussions");
+                    setSelectedOtherId(null);
+                    setDiscussionsSearch("");
+                  }}
+                >
+                  Discussions
+                </Button>
+                <Button
+                  variant={tab === "compose" ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setTab("compose");
+                    setContactSearch("");
+                  }}
+                >
+                  Nouveau message
+                </Button>
+              </>
+            )}
           </div>
         }
       />
@@ -1081,49 +1221,57 @@ export default function Messages() {
       ) : tab === "compose" ? (
         <Card className="max-w-4xl">
           <form onSubmit={(e) => void handleSend(e)} className="space-y-4">
-            <div>
-              <Label>Type de destinataire</Label>
-              <Select
-                value={recipientRole}
-                onChange={(e) => {
-                  setRecipientRole(e.target.value as ContactRole | "");
-                  setContactSearch("");
-                }}
-              >
-                {availableRoleFilters.map((o) => (
-                  <option key={o.value || "all"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <div className="mb-2 flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={pickerTarget === "to" ? "primary" : "outline"}
-                  onClick={() => setPickerTarget("to")}
+            {role !== "student" ? (
+              <div>
+                <Label>Type de destinataire</Label>
+                <Select
+                  value={recipientRole}
+                  onChange={(e) => {
+                    setRecipientRole(e.target.value as ContactRole | "");
+                    setContactSearch("");
+                  }}
                 >
-                  À ({recipientIds.length})
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={pickerTarget === "cc" ? "primary" : "outline"}
-                  onClick={() => setPickerTarget("cc")}
-                >
-                  Cc ({ccIds.length})
-                </Button>
+                  {availableRoleFilters.map((o) => (
+                    <option key={o.value || "all"} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
+            ) : null}
+            <div>
+              {role !== "student" ? (
+                <div className="mb-2 flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={pickerTarget === "to" ? "primary" : "outline"}
+                    onClick={() => setPickerTarget("to")}
+                  >
+                    À ({recipientIds.length})
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={pickerTarget === "cc" ? "primary" : "outline"}
+                    onClick={() => setPickerTarget("cc")}
+                  >
+                    Cc ({ccIds.length})
+                  </Button>
+                </div>
+              ) : null}
               <Label>
-                {pickerTarget === "to" ? "Destinataires" : "Cc (copie)"}
+                {role === "student" || pickerTarget === "to"
+                  ? "Destinataires"
+                  : "Cc (copie)"}
               </Label>
               {selectedRecipients.length > 0 ? (
                 <div className="mb-2">
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                    À
-                  </p>
+                  {role !== "student" ? (
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                      À
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap gap-1.5">
                     {selectedRecipients.map((c) => (
                       <span
@@ -1148,7 +1296,7 @@ export default function Messages() {
                   </div>
                 </div>
               ) : null}
-              {selectedCc.length > 0 ? (
+              {role !== "student" && selectedCc.length > 0 ? (
                 <div className="mb-2">
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                     Cc
@@ -1175,9 +1323,10 @@ export default function Messages() {
                   </div>
                 </div>
               ) : null}
-              {selectedRecipients.length === 0 && selectedCc.length === 0 ? (
+              {selectedRecipients.length === 0 &&
+              (role === "student" || selectedCc.length === 0) ? (
                 <p className="mb-2 text-xs text-slate-500">
-                  {pickerTarget === "to"
+                  {role === "student" || pickerTarget === "to"
                     ? "Sélectionnez une ou plusieurs personnes."
                     : "Optionnel — personnes en copie."}
                 </p>
@@ -1201,7 +1350,7 @@ export default function Messages() {
                 ) : (
                   searchedContacts.map((c) => {
                     const selected =
-                      pickerTarget === "to"
+                      role === "student" || pickerTarget === "to"
                         ? recipientIds.includes(c.id)
                         : ccIds.includes(c.id);
                     return (
@@ -1291,7 +1440,7 @@ export default function Messages() {
         ) : announcementInbox.length === 0 ? (
           <EmptyState message="Aucune annonce pour le moment." />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-8">
             <div className="max-w-md">
               <Label htmlFor="search-announcements">Rechercher</Label>
               <Input
@@ -1307,56 +1456,35 @@ export default function Messages() {
               filteredAnnouncements.map((m) => {
                 const canReply = m.allow_replies !== false;
                 return (
-                  <Card
+                  <AnnouncementPaper
                     key={m.id}
-                    className="border-l-4 border-l-amber-500 bg-amber-50/40"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium">
-                          {m.subject || "(Sans objet)"}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          De{" "}
-                          {fullName(m.sender?.first_name, m.sender?.last_name)}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone="warning">Annonce</Badge>
-                        {!m.read_at ? (
-                          <Badge tone="info">Nouveau</Badge>
-                        ) : (
-                          <Badge tone="default">Vu</Badge>
-                        )}
-                        <span className="text-xs text-slate-400">
-                          {formatDateSafe(m.created_at, "d MMM yyyy", {
-                            locale: fr,
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-sm text-slate-700">{m.body}</p>
-                    {m.read_at ? (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Vu le {formatSeenAt(m.read_at)}
-                      </p>
-                    ) : null}
-                    {canReply ? (
-                      <div className="mt-3 border-t border-amber-100 pt-3">
+                    title={m.subject || "(Sans objet)"}
+                    senderName={fullName(m.sender?.first_name, m.sender?.last_name)}
+                    body={m.body}
+                    dateLabel={formatDateSafe(m.created_at, "d MMM yyyy", {
+                      locale: fr,
+                    })}
+                    seenLabel={
+                      m.read_at ? `Vu le ${formatSeenAt(m.read_at)}` : undefined
+                    }
+                    isNew={!m.read_at}
+                    footer={
+                      canReply ? (
                         <Button
                           size="sm"
                           variant="outline"
+                          className="border-amber-900/30 bg-transparent text-[#2c2416] hover:bg-amber-900/5 dark:border-amber-100/20 dark:text-[#ebe3d4] dark:hover:bg-white/5"
                           onClick={() => openChat(m.sender_id)}
                         >
                           Répondre
                         </Button>
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-xs text-slate-400">
-                        Cette annonce n’accepte pas de réponse.
-                      </p>
-                    )}
-                  </Card>
+                      ) : (
+                        <p className="announcement-paper__note">
+                          Cette annonce n’accepte pas de réponse.
+                        </p>
+                      )
+                    }
+                  />
                 );
               })
             )}
@@ -1373,17 +1501,28 @@ export default function Messages() {
                     variant="ghost"
                     size="sm"
                     className="h-9 w-9 rounded-full p-0"
-                    aria-label="Retour aux discussions"
-                    onClick={() => setSelectedOtherId(null)}
+                    aria-label={
+                      chatReturnTo
+                        ? "Retour au profil élève"
+                        : "Retour aux discussions"
+                    }
+                    onClick={leaveChat}
                   >
                     <ArrowLeft className="h-5 w-5" />
                   </Button>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800">
                     {initials(chatTitle)}
                   </span>
-                  <p className="truncate font-semibold text-slate-900">
-                    {chatTitle}
-                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">
+                      {chatTitle}
+                    </p>
+                    {otherTyping ? (
+                      <p className="text-xs font-medium text-brand-600">
+                        en train d’écrire…
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100 px-3 py-4 sm:px-4">
@@ -1447,6 +1586,19 @@ export default function Messages() {
                                 <span>
                                   {formatDateSafe(m.created_at, "HH:mm")}
                                 </span>
+                                {mine ? (
+                                  m.read_at ? (
+                                    <CheckCheck
+                                      className="h-3.5 w-3.5 text-sky-300"
+                                      aria-label="Vu"
+                                    />
+                                  ) : (
+                                    <Check
+                                      className="h-3.5 w-3.5 opacity-80"
+                                      aria-label="Envoyé"
+                                    />
+                                  )
+                                ) : null}
                               </div>
                             </div>
                             {m.allow_replies === false ? (
@@ -1459,6 +1611,24 @@ export default function Messages() {
                       );
                     })
                   )}
+                  {otherTyping ? (
+                    <div className="flex justify-start">
+                      <div className="flex items-center gap-1 rounded-2xl bg-slate-200 px-4 py-3 shadow-sm">
+                        <span
+                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
+                          style={{ animationDelay: "0ms" }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
+                          style={{ animationDelay: "150ms" }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
+                          style={{ animationDelay: "300ms" }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                   <div ref={chatEndRef} />
                 </div>
 
@@ -1468,7 +1638,10 @@ export default function Messages() {
                 >
                   <Input
                     value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
+                    onChange={(e) => {
+                      setChatInput(e.target.value);
+                      notifyTyping();
+                    }}
                     placeholder="Écrivez un message…"
                     className="flex-1"
                   />

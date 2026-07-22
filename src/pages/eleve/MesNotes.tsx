@@ -1,13 +1,20 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
 import { programmeToCoefMap } from "@/lib/averages";
 import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 
 export default function MesNotes() {
   const { user } = useAuth();
+  const { markSeen } = useNotesPendingChanges();
+
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
 
   const { data: enrollment } = useQuery({
     queryKey: ["mon-inscription", user?.id],

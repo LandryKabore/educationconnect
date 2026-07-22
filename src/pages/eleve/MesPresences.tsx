@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus } from "@/lib/types";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
@@ -35,6 +36,11 @@ type PresenceRow = {
 
 export default function MesPresences() {
   const { user } = useAuth();
+  const { markSeen } = usePresencePendingChanges();
+
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
 
   const { data: attendance = [], isLoading } = useQuery({
     queryKey: ["mes-presences", user?.id],

@@ -11,7 +11,7 @@ import type { ClassSection, Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { fetchEnrollmentsByStudent, fetchByIdChunks } from "@/lib/programmeCounts";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
+import { fromAuthEmail, fullName, joinProfile, matchesSearch } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -178,9 +178,9 @@ export default function Eleves() {
         .eq("role", "student")
         .eq("active", true);
       if (error) throw error;
-      const profiles = (roles ?? []).map(
-        (r) => (r as unknown as { profils: Profile }).profils,
-      );
+      const profiles = (roles ?? [])
+        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
+        .filter((p): p is Profile => !!p?.id);
       if (!profiles.length) return [];
 
       const classByStudent = await fetchEnrollmentsByStudent(schoolId!);
@@ -979,7 +979,12 @@ export default function Eleves() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label>Date de naissance</Label>
-                <DateInputFr value={dateOfBirth} onChange={setDateOfBirth} />
+                <DateInputFr
+                  value={dateOfBirth}
+                  onChange={setDateOfBirth}
+                  minYear={new Date().getFullYear() - 100}
+                  maxYear={new Date().getFullYear()}
+                />
               </div>
               <div>
                 <Label>Sexe</Label>
@@ -1216,7 +1221,7 @@ export default function Eleves() {
                   }
                 />
               ) : (
-                <div className="space-y-3">
+                <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredStudents.map((s) => {
                     const cred = credentialFor(s);
                     const status = accountStatus(s, cred);
@@ -1231,8 +1236,8 @@ export default function Eleves() {
                             : "transition hover:border-brand-300 hover:shadow-md"
                         }
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
                             {viewingSansClasse ? (
                               <input
                                 type="checkbox"

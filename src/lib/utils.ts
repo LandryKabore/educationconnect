@@ -14,6 +14,26 @@ export function personName(first?: string | null, last?: string | null) {
   return [first, last].filter(Boolean).join(" ").trim();
 }
 
+/**
+ * Normalize a PostgREST embed: object, single-element array, or null.
+ * Bare `profils(*)` joins sometimes arrive as arrays — reading `.first_name`
+ * on those yields undefined and causes name flashes ("Élève" / "Utilisateur").
+ */
+export function joinProfile<
+  T extends { first_name?: string | null; last_name?: string | null } = {
+    first_name: string | null;
+    last_name: string | null;
+  },
+>(raw: unknown): T | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) {
+    const first = raw[0];
+    return first && typeof first === "object" ? (first as T) : null;
+  }
+  if (typeof raw === "object") return raw as T;
+  return null;
+}
+
 /** Identifiant local → email technique Auth */
 export function toAuthEmail(identifiant: string) {
   const value = identifiant.trim().toLowerCase();

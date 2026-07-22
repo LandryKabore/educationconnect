@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -39,6 +40,11 @@ type PresenceRow = {
 export default function EnfantPresences() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { markSeen } = usePresencePendingChanges();
+
+  useEffect(() => {
+    if (id) markSeen(id);
+  }, [id, markSeen]);
 
   const { data: link } = useQuery({
     queryKey: ["parent-link", user?.id, id],

@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
 import { programmeToCoefMap } from "@/lib/averages";
 import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -12,6 +14,11 @@ import { supabase } from "@/lib/supabase";
 export default function EnfantNotes() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { markSeen } = useNotesPendingChanges();
+
+  useEffect(() => {
+    if (id) markSeen(id);
+  }, [id, markSeen]);
 
   const { data: link } = useQuery({
     queryKey: ["parent-link", user?.id, id],

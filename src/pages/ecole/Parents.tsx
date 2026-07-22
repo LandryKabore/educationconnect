@@ -7,7 +7,7 @@ import { Download, KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
-import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
+import { fromAuthEmail, fullName, joinProfile, matchesSearch, personName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -94,9 +94,9 @@ export default function Parents() {
         .eq("school_id", schoolId!)
         .eq("role", "student")
         .eq("active", true);
-      const profiles = (roles ?? []).map(
-        (r) => (r as unknown as { profils: Profile }).profils,
-      );
+      const profiles = (roles ?? [])
+        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
+        .filter((p): p is Profile => !!p?.id);
       if (!profiles.length) return [] as StudentOption[];
 
       const { data: enrollments } = await supabase
@@ -138,9 +138,9 @@ export default function Parents() {
         .eq("role", "parent")
         .eq("active", true);
       if (error) throw error;
-      const profiles = (roles ?? []).map(
-        (r) => (r as unknown as { profils: Profile }).profils,
-      );
+      const profiles = (roles ?? [])
+        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
+        .filter((p): p is Profile => !!p?.id);
       if (!profiles.length) return [] as ParentRow[];
 
       const { data: links } = await supabase
@@ -155,15 +155,11 @@ export default function Parents() {
 
       const childrenByParent = new Map<string, string[]>();
       for (const link of links ?? []) {
-        const child = (
-          link as unknown as {
-            parent_id: string;
-            profils: { first_name: string; last_name: string } | null;
-          }
-        ).profils;
-        const name = child
-          ? fullName(child.first_name, child.last_name)
-          : "Élève";
+        const child = joinProfile(
+          (link as unknown as { profils: unknown }).profils,
+        );
+        const name = personName(child?.first_name, child?.last_name);
+        if (!name) continue;
         const list =
           childrenByParent.get((link as { parent_id: string }).parent_id) ??
           [];
@@ -543,14 +539,14 @@ export default function Parents() {
           {filteredParents.length === 0 ? (
             <EmptyState message="Aucun parent ne correspond à la recherche." />
           ) : (
-            <div className="space-y-3">
+            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredParents.map((p) => {
                 const cred = credentialFor(p);
                 const status = accountStatus(p, cred);
                 const busy = busyId === p.id;
                 return (
                   <Card key={p.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3">
                       <div className="min-w-0">
                         <h3 className="font-semibold">
                           {fullName(p.first_name, p.last_name)}

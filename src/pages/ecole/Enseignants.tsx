@@ -11,6 +11,7 @@ import { fromAuthEmail, fullName, matchesSearch } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
+import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import {
   Badge,
   Button,
@@ -36,6 +37,29 @@ type AssignmentRow = {
   matieres: { name: string } | null;
 };
 
+const ASSIGNMENTS_PREVIEW = 4;
+
+function groupAssignmentsByClass(assignments: AssignmentRow[]) {
+  const map = new Map<
+    string,
+    { className: string; items: AssignmentRow[] }
+  >();
+  for (const a of assignments) {
+    const key = a.class_section_id || a.classes?.name || "_";
+    const existing = map.get(key);
+    if (existing) existing.items.push(a);
+    else {
+      map.set(key, {
+        className: a.classes?.name ?? "Classe",
+        items: [a],
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) =>
+    a.className.localeCompare(b.className, "fr"),
+  );
+}
+
 export default function Enseignants() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
@@ -56,6 +80,12 @@ export default function Enseignants() {
   >({});
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedAssignments, setExpandedAssignments] = useState<
+    Record<string, boolean>
+  >({});
+  const [pendingRemove, setPendingRemove] = useState<AssignmentRow | null>(
+    null,
+  );
   const openAssign = (preselectTeacherId: string) => {
     setShowAssign(true);
     setShowForm(false);
@@ -508,14 +538,15 @@ export default function Enseignants() {
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
   };
 
-  const removeAssignment = async (id: string) => {
+  const removeAssignment = async (assignment: AssignmentRow) => {
     const { error } = await supabase
       .from("affectations_enseignement")
       .delete()
-      .eq("id", id);
+      .eq("id", assignment.id);
     if (error) toast.error("Suppression impossible");
     else {
       toast.success("Affectation retirée");
+      setPendingRemove(null);
       void qc.invalidateQueries({ queryKey: ["affectations", schoolId] });
       void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     }
@@ -524,6 +555,20 @@ export default function Enseignants() {
   return (
     <div>
       <SetupGuideBar />
+      <ConfirmPasswordDialog
+        open={!!pendingRemove}
+        title={
+          pendingRemove
+            ? `Retirer « ${pendingRemove.classes?.name ?? "classe"} · ${pendingRemove.matieres?.name ?? "matière"} » ?`
+            : "Confirmer"
+        }
+        description="Cette affectation sera retirée pour cet enseignant. Saisissez votre mot de passe administrateur pour confirmer."
+        confirmLabel="Retirer l’affectation"
+        onCancel={() => setPendingRemove(null)}
+        onVerified={async () => {
+          if (pendingRemove) await removeAssignment(pendingRemove);
+        }}
+      />
       <PageHeader
         title="Enseignants"
         subtitle="Comptes, identifiants et affectations par enseignant"
@@ -734,6 +779,14 @@ export default function Enseignants() {
                 const cred = credentialFor(t);
                 const teacherAssignments = assignmentsByTeacher.get(t.id) ?? [];
                 const busy = busyId === t.id;
+                const expanded = !!expandedAssignments[t.id];
+                const classGroups = groupAssignmentsByClass(teacherAssignments);
+                const hasMore = classGroups.length > ASSIGNMENTS_PREVIEW;
+                const visibleGroups =
+                  expanded || !hasMore
+                    ? classGroups
+                    : classGroups.slice(0, ASSIGNMENTS_PREVIEW);
+                const hiddenCount = classGroups.length - visibleGroups.length;
                 return (
                   <Card key={t.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -797,32 +850,94 @@ export default function Enseignants() {
                       </div>
                     </div>
 
-                    <div className="mt-4 border-t border-slate-100 pt-3">
+                    <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-700">
                       {teacherAssignments.length === 0 ? (
                         <p className="text-sm text-slate-400">
                           Pas encore affecté
                         </p>
                       ) : (
-                        <ul className="space-y-1.5">
-                          {teacherAssignments.map((a) => (
-                            <li
-                              key={a.id}
-                              className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                        <>
+                          <ul className="space-y-3">
+                            {visibleGroups.map((group) => {
+                              const groupKey = `${t.id}:${group.className}`;
+                              const subjectsOpen =
+                                !!expandedAssignments[groupKey] ||
+                                group.items.length <= 3;
+                              const subjects = subjectsOpen
+                                ? group.items
+                                : group.items.slice(0, 3);
+                              const moreSubjects =
+                                group.items.length - subjects.length;
+                              return (
+                                <li key={group.className}>
+                                  <p className="mb-1.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                                    {group.className}
+                                    <span className="ml-1.5 font-normal text-slate-500">
+                                      · {group.items.length} matière
+                                      {group.items.length > 1 ? "s" : ""}
+                                    </span>
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {subjects.map((a) => (
+                                      <li
+                                        key={a.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm dark:bg-slate-800/60"
+                                      >
+                                        <span className="text-slate-700 dark:text-slate-300">
+                                          {a.matieres?.name ?? "—"}
+                                        </span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="text-rose-700 hover:bg-rose-50 dark:text-rose-300"
+                                          onClick={() => setPendingRemove(a)}
+                                        >
+                                          Retirer
+                                        </Button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {group.items.length > 3 ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="mt-1 text-brand-700 dark:text-brand-300"
+                                      onClick={() =>
+                                        setExpandedAssignments((prev) => ({
+                                          ...prev,
+                                          [groupKey]: !prev[groupKey],
+                                        }))
+                                      }
+                                    >
+                                      {subjectsOpen
+                                        ? "Réduire"
+                                        : `Voir les ${moreSubjects} autres matières`}
+                                    </Button>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          {hasMore ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="mt-2 text-brand-700 dark:text-brand-300"
+                              onClick={() =>
+                                setExpandedAssignments((prev) => ({
+                                  ...prev,
+                                  [t.id]: !prev[t.id],
+                                }))
+                              }
                             >
-                              <span className="text-slate-700">
-                                {a.classes?.name ?? "—"} ·{" "}
-                                {a.matieres?.name ?? "—"}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void removeAssignment(a.id)}
-                              >
-                                Retirer
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
+                              {expanded
+                                ? "Réduire les classes"
+                                : `Voir plus de classes (${hiddenCount})`}
+                            </Button>
+                          ) : null}
+                        </>
                       )}
                     </div>
                   </Card>

@@ -19,7 +19,7 @@ import {
 } from "@/components/PortalHomeKit";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUnreadMessagesCount } from "@/hooks/useUnreadMessagesCount";
+import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, personName } from "@/lib/utils";
@@ -39,7 +39,7 @@ type ChildCard = {
 
 export default function ParentHome() {
   const { user, profile, schools, schoolId } = useAuth();
-  const { data: unreadMessages = 0 } = useUnreadMessagesCount();
+  const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const name = personName(profile?.first_name, profile?.last_name);
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
@@ -207,7 +207,7 @@ export default function ParentHome() {
         icon={Users}
         name={name}
         context={[schoolName, "Parent"].filter(Boolean).join(" · ")}
-        unreadMessages={unreadMessages}
+        unreadInbox={unreadInbox}
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -236,9 +236,9 @@ export default function ParentHome() {
         />
         <MetricCard
           label="Messages"
-          value={String(unreadMessages)}
+          value={String(unreadInbox.discussions)}
           hint="Non lus"
-          valueClass={unreadMessages > 0 ? "text-amber-600" : "text-slate-500 dark:text-slate-300"}
+          valueClass={unreadInbox.discussions > 0 ? "text-amber-600" : "text-slate-500 dark:text-slate-300"}
           to="/messages"
         />
       </section>
@@ -362,7 +362,7 @@ export default function ParentHome() {
           title="Annonces de l’école"
           subtitle="Infos officielles de l’administration"
           action={
-            <Link to="/messages" className="block">
+            <Link to="/annonces" className="block">
               <Button className="w-full">
                 <Bell className="h-4 w-4" />
                 Voir les annonces

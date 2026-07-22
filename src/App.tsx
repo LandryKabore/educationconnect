@@ -31,14 +31,13 @@ import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
 import Bulletins from "@/pages/ecole/Bulletins";
 import PresencesEcole from "@/pages/ecole/PresencesEcole";
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
+import CompositionsEcole from "@/pages/ecole/CompositionsEcole";
+import SaisieEnseignant from "@/pages/ecole/SaisieEnseignant";
 import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
 import Presences from "@/pages/enseignant/Presences";
 import Notes from "@/pages/enseignant/Notes";
-import {
-  ExamensPage,
-  ExercicesMaisonPage,
-} from "@/pages/enseignant/Devoirs";
+import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
 import MesClasses from "@/pages/enseignant/MesClasses";
 import MesEleves from "@/pages/enseignant/MesEleves";
 import MesPresencesProf from "@/pages/enseignant/MesPresencesProf";
@@ -49,7 +48,9 @@ import {
   MesExercicesPage,
 } from "@/pages/eleve/MesDevoirs";
 import MesPresences from "@/pages/eleve/MesPresences";
-import MonEmploiDuTemps from "@/pages/eleve/MonEmploiDuTemps";
+import MesCompositions from "@/pages/eleve/MesCompositions";
+import MesProfs from "@/pages/eleve/MesProfs";
+import MonEmploiDuTempsPage from "@/pages/MonEmploiDuTempsPage";
 import MonBulletin from "@/pages/eleve/MonBulletin";
 import Enfants from "@/pages/parent/Enfants";
 import EnfantNotes from "@/pages/parent/EnfantNotes";
@@ -294,10 +295,30 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/examens-ecole"
+          path="/devoirs-ecole"
           element={
             <RequireAuth roles={["school_admin"]}>
               <ExamensEcole />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/examens-ecole"
+          element={<Navigate to="/devoirs-ecole" replace />}
+        />
+        <Route
+          path="/compositions-ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <CompositionsEcole />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/saisie-enseignant"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <SaisieEnseignant />
             </RequireAuth>
           }
         />
@@ -331,23 +352,19 @@ function AppRoutes() {
 
         <Route
           path="/exercices-maison"
-          element={
-            <RequireAuth roles={["teacher"]}>
-              <ExercicesMaisonPage />
-            </RequireAuth>
-          }
+          element={<Navigate to="/devoirs" replace />}
         />
         <Route
           path="/examens"
-          element={
-            <RequireAuth roles={["teacher"]}>
-              <ExamensPage />
-            </RequireAuth>
-          }
+          element={<Navigate to="/devoirs" replace />}
         />
         <Route
           path="/devoirs"
-          element={<Navigate to="/exercices-maison" replace />}
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <MesDevoirsProf />
+            </RequireAuth>
+          }
         />
         <Route
           path="/mes-classes"
@@ -373,7 +390,16 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
-        <Route path="/messages" element={<Messages />} />
+        <Route
+          path="/mon-emploi-du-temps"
+          element={
+            <RequireAuth roles={["student", "teacher"]}>
+              <MonEmploiDuTempsPage />
+            </RequireAuth>
+          }
+        />
+        <Route path="/messages" element={<Messages view="messages" />} />
+        <Route path="/annonces" element={<Messages view="annonces" />} />
 
         <Route
           path="/mes-notes"
@@ -392,7 +418,7 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/mes-examens"
+          path="/mes-devoirs"
           element={
             <RequireAuth roles={["student"]}>
               <MesExamensPage />
@@ -400,22 +426,30 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/mes-devoirs"
-          element={<Navigate to="/mes-exercices" replace />}
+          path="/mes-examens"
+          element={<Navigate to="/mes-devoirs" replace />}
+        />
+        <Route
+          path="/mes-compositions"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesCompositions />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/mes-profs"
+          element={
+            <RequireAuth roles={["student"]}>
+              <MesProfs />
+            </RequireAuth>
+          }
         />
         <Route
           path="/mes-presences"
           element={
             <RequireAuth roles={["student"]}>
               <MesPresences />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/mon-emploi-du-temps"
-          element={
-            <RequireAuth roles={["student"]}>
-              <MonEmploiDuTemps />
             </RequireAuth>
           }
         />

@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import {
   ATTENDANCE_LABELS,
   TEACHER_ATTENDANCE_STATUSES,
@@ -14,7 +15,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus, Profile, Subject } from "@/lib/types";
 import { formatDateSafe } from "@/lib/dateFr";
-import { cn, fullName } from "@/lib/utils";
+import { cn, fullName, joinProfile } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
 import { SaveButton } from "@/components/SaveButton";
 import {
   Badge,
@@ -39,8 +41,11 @@ export default function Presences() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, role } = useAuth();
+  const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
+  /** Admin acting for a specific teacher — behave like that teacher for subjects. */
+  const asTeacher = !isAdmin || isProxy;
   const [date, setDate] = useState(() => initialDate(searchParams.get("date")));
   /** Only used when the teacher teaches several subjects in this class (or admin). */
   const [subjectOverride, setSubjectOverride] = useState(
@@ -61,15 +66,15 @@ export default function Presences() {
   };
 
   const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
-    queryKey: ["presence-subjects", id, user?.id, isAdmin],
-    enabled: !!id && !!user?.id,
+    queryKey: ["presence-subjects", id, actingTeacherId, isAdmin, isProxy],
+    enabled: !!id && !!actingTeacherId,
     queryFn: async () => {
       let q = supabase
         .from("affectations_enseignement")
         .select("matieres(*)")
         .eq("class_section_id", id!);
-      // Teacher → only their matière(s) for this class.
-      if (!isAdmin) q = q.eq("teacher_id", user!.id);
+      // Teacher or admin saisie → only that teacher's matière(s).
+      if (asTeacher) q = q.eq("teacher_id", actingTeacherId!);
       const { data, error } = await q;
       if (error) throw error;
       const map = new Map<string, Subject>();
@@ -84,7 +89,7 @@ export default function Presences() {
   });
 
   // Auto: the subject this teacher teaches here (no picker when only one).
-  const needsSubjectPicker = isAdmin || subjects.length > 1;
+  const needsSubjectPicker = (isAdmin && !isProxy) || subjects.length > 1;
   const subjectId = needsSubjectPicker
     ? subjectOverride || subjects[0]?.id || ""
     : subjects[0]?.id || "";
@@ -102,13 +107,15 @@ export default function Presences() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inscriptions")
-        .select("student_id, profils(*)")
+        .select(
+          "student_id, profils:profils!inscriptions_student_id_fkey(*)",
+        )
         .eq("class_section_id", id!)
         .eq("status", "active");
       if (error) throw error;
       return (data ?? [])
-        .map((r) => (r as unknown as { profils: Profile }).profils)
-        .filter(Boolean)
+        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
+        .filter((p): p is Profile => !!p?.id)
         .sort((a, b) =>
           fullName(a.first_name, a.last_name).localeCompare(
             fullName(b.first_name, b.last_name),
@@ -231,7 +238,7 @@ export default function Presences() {
             : status === prev?.status
               ? (prev?.note ?? null)
               : null,
-        recorded_by: user.id,
+        recorded_by: isProxy && actingTeacherId ? actingTeacherId : user.id,
       };
     });
     const { error } = await supabase.from("presences").upsert(rows, {
@@ -251,6 +258,8 @@ export default function Presences() {
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
     void qc.invalidateQueries({ queryKey: ["ecole-presences"] });
     void qc.invalidateQueries({ queryKey: ["mes-presences"] });
+    void qc.invalidateQueries({ queryKey: ["ecole-home"] });
+    void qc.invalidateQueries({ queryKey: ["student-home"] });
     setSaving(false);
   };
 
@@ -259,11 +268,21 @@ export default function Presences() {
   return (
     <div>
       <Link
-        to={isAdmin ? `/classes/${id}` : `/presences`}
+        to={
+          isProxy
+            ? `/saisie-enseignant?teacherId=${encodeURIComponent(proxyTeacherId!)}`
+            : isAdmin
+              ? `/classes/${id}`
+              : `/presences`
+        }
         className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" />
-        {isAdmin ? "Retour à la classe" : "Retour aux présences"}
+        {isProxy
+          ? "Retour à la saisie enseignant"
+          : isAdmin
+            ? "Retour à la classe"
+            : "Retour aux présences"}
       </Link>
 
       <PageHeader
@@ -436,7 +455,7 @@ export default function Presences() {
                 >
                   <div className="min-w-0">
                     <span className="font-medium">
-                      {fullName(s.first_name, s.last_name)}
+                      <PersonName first={s.first_name} last={s.last_name} />
                     </span>
                     {isJustified && note ? (
                       <p className="mt-0.5 text-xs text-sky-700 dark:text-sky-300">

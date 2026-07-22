@@ -12,8 +12,11 @@ export type EdtPdfSlot = {
 
 export type EmploiDuTempsPdfData = {
   schoolName: string;
-  studentName: string;
   className: string;
+  /** Shown as "Élève : …" when set (student / parent export). */
+  studentName?: string | null;
+  /** Extra header line (e.g. teacher filter for school admin). */
+  extraLine?: string | null;
   slots: EdtPdfSlot[];
 };
 
@@ -26,15 +29,23 @@ const DAYS = [
   { day: 6, label: "Samedi", fill: [94, 234, 212] as const, text: [19, 78, 74] as const },
 ] as const;
 
-/** Pastel fills + borders aligned with TimetableGrid subject colors. */
+/** Visible pastels for print — stronger than UI *-50 so fills read clearly on paper. */
 const SLOT_PALETTE = [
-  { fill: [240, 249, 255] as const, border: [56, 189, 248] as const },
-  { fill: [236, 253, 245] as const, border: [52, 211, 153] as const },
-  { fill: [255, 251, 235] as const, border: [251, 191, 36] as const },
-  { fill: [255, 241, 242] as const, border: [251, 113, 133] as const },
-  { fill: [245, 243, 255] as const, border: [167, 139, 250] as const },
-  { fill: [240, 253, 250] as const, border: [45, 212, 191] as const },
+  { fill: [186, 230, 253] as const, border: [14, 165, 233] as const }, // sky
+  { fill: [167, 243, 208] as const, border: [16, 185, 129] as const }, // emerald
+  { fill: [253, 230, 138] as const, border: [245, 158, 11] as const }, // amber
+  { fill: [254, 205, 211] as const, border: [244, 63, 94] as const }, // rose
+  { fill: [221, 214, 254] as const, border: [139, 92, 246] as const }, // violet
+  { fill: [153, 246, 228] as const, border: [20, 184, 166] as const }, // teal
+  { fill: [253, 186, 116] as const, border: [249, 115, 22] as const }, // orange
+  { fill: [196, 181, 253] as const, border: [124, 58, 237] as const }, // purple
+  { fill: [165, 243, 252] as const, border: [6, 182, 212] as const }, // cyan
+  { fill: [190, 242, 100] as const, border: [132, 204, 22] as const }, // lime
+  { fill: [249, 168, 212] as const, border: [236, 72, 153] as const }, // pink
+  { fill: [252, 211, 77] as const, border: [202, 138, 4] as const }, // yellow
 ] as const;
+
+type SlotColor = (typeof SLOT_PALETTE)[number];
 
 const DEFAULT_START_MIN = 7 * 60;
 const DEFAULT_END_MIN = 17 * 60;
@@ -49,10 +60,35 @@ function formatHourLabel(minutes: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function colorForSubject(name: string) {
+function subjectHash(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h + name.charCodeAt(i) * (i + 1)) % 997;
-  return SLOT_PALETTE[h % SLOT_PALETTE.length];
+  return h;
+}
+
+/** Prefer distinct colors within one PDF; same subject always keeps the same color. */
+function buildSubjectColorMap(subjectNames: string[]): Map<string, SlotColor> {
+  const unique = [
+    ...new Set(subjectNames.map((n) => (n || "Cours").trim() || "Cours")),
+  ];
+  const used = new Set<number>();
+  const map = new Map<string, SlotColor>();
+
+  for (const name of unique) {
+    let idx = subjectHash(name) % SLOT_PALETTE.length;
+    if (used.has(idx)) {
+      for (let step = 1; step < SLOT_PALETTE.length; step++) {
+        const next = (idx + step) % SLOT_PALETTE.length;
+        if (!used.has(next)) {
+          idx = next;
+          break;
+        }
+      }
+    }
+    used.add(idx);
+    map.set(name, SLOT_PALETTE[idx]);
+  }
+  return map;
 }
 
 function roundedRect(
@@ -98,8 +134,16 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
   doc.setFontSize(9);
   doc.setTextColor(30, 41, 59);
   doc.text(data.schoolName || "École", marginX, 19);
-  doc.text(`Élève : ${data.studentName || "—"}`, marginX, 25);
-  doc.text(`Classe : ${data.className || "—"}`, marginX, 31);
+  let y = 25;
+  doc.text(`Classe : ${data.className || "—"}`, marginX, y);
+  y += 6;
+  if (data.studentName) {
+    doc.text(`Élève : ${data.studentName}`, marginX, y);
+    y += 6;
+  }
+  if (data.extraLine) {
+    doc.text(data.extraLine, marginX, y);
+  }
 
   const slots = data.slots ?? [];
   if (slots.length === 0) {
@@ -201,6 +245,7 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
   }
 
   // —— Lesson cards ——
+  const subjectColors = buildSubjectColorMap(slots.map((s) => s.subjectName));
   const padX = 1.2;
   for (const slot of slots) {
     const dayIdx = DAYS.findIndex((d) => d.day === slot.day_of_week);
@@ -213,11 +258,12 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     const height = Math.max(5.5, durationMin * mmPerMin - 0.6);
     const x = gridLeft + timeColW + dayIdx * dayColW + padX;
     const w = dayColW - padX * 2;
-    const palette = colorForSubject(slot.subjectName || "Cours");
+    const subjectKey = (slot.subjectName || "Cours").trim() || "Cours";
+    const palette = subjectColors.get(subjectKey) ?? SLOT_PALETTE[0];
 
     doc.setFillColor(...palette.fill);
     doc.setDrawColor(...palette.border);
-    doc.setLineWidth(0.35);
+    doc.setLineWidth(0.45);
     roundedRect(doc, x, top, w, height, 1.2, "FD");
 
     const timeLabel = `${hhmm(slot.start_time)}–${hhmm(slot.end_time)}`;

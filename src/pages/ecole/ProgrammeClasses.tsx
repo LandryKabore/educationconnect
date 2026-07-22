@@ -803,7 +803,12 @@ export default function ProgrammeClasses() {
                       "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-sm transition",
                       checked
                         ? CLASS_COLOR_SURFACE
-                        : cn(CLASS_COLOR_SOFT, "hover:brightness-[0.98] dark:hover:brightness-110"),
+                        : cn(
+                            CLASS_COLOR_SOFT,
+                            "hover:brightness-[0.98] dark:hover:brightness-110",
+                          ),
+                      !hasProg &&
+                        "ring-1 ring-amber-400/70 dark:ring-amber-500/50",
                     )}
                   >
                     <input
@@ -815,11 +820,11 @@ export default function ProgrammeClasses() {
                     <ClassColorDot id={c.id} name={c.name} />
                     <span className="min-w-0 flex-1 font-medium">{c.name}</span>
                     {hasProg ? (
-                      <span className="shrink-0 text-xs font-medium opacity-80">
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
                         OK · {subjectCount}
                       </span>
                     ) : (
-                      <span className="shrink-0 text-xs font-medium opacity-80">
+                      <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm">
                         À faire
                       </span>
                     )}

@@ -19,7 +19,8 @@ import {
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus, ClassSection } from "@/lib/types";
-import { cn, fullName } from "@/lib/utils";
+import { cn, joinProfile } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
 import {
   Badge,
   Button,
@@ -210,12 +211,10 @@ export default function PresencesEcole() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-900 dark:text-slate-100">
-                          {row.profils
-                            ? fullName(
-                                row.profils.first_name,
-                                row.profils.last_name,
-                              )
-                            : "Élève"}
+                          <PersonName
+                            first={joinProfile(row.profils)?.first_name}
+                            last={joinProfile(row.profils)?.last_name}
+                          />
                         </p>
                         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
                           {row.classes ? (
@@ -298,12 +297,10 @@ export default function PresencesEcole() {
                   >
                     <div className="min-w-0">
                       <p className="font-medium">
-                        {row.profils
-                          ? fullName(
-                              row.profils.first_name,
-                              row.profils.last_name,
-                            )
-                          : "Élève"}
+                        <PersonName
+                          first={joinProfile(row.profils)?.first_name}
+                          last={joinProfile(row.profils)?.last_name}
+                        />
                       </p>
                       <p className="text-sm text-slate-500">
                         {row.classes?.name ?? "Classe"}
@@ -352,12 +349,10 @@ export default function PresencesEcole() {
                   >
                     <div className="min-w-0">
                       <p className="font-medium">
-                        {row.profils
-                          ? fullName(
-                              row.profils.first_name,
-                              row.profils.last_name,
-                            )
-                          : "Élève"}
+                        <PersonName
+                          first={joinProfile(row.profils)?.first_name}
+                          last={joinProfile(row.profils)?.last_name}
+                        />
                       </p>
                       <p className="text-xs opacity-80">
                         {row.classes?.name ?? "—"}

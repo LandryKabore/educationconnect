@@ -1,33 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fr } from "date-fns/locale";
-import { AlertTriangle, FileText } from "lucide-react";
+import { AlertTriangle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatExamSchedule } from "@/lib/assignmentKinds";
-import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { formatDay } from "@/lib/pdfBulletin";
+import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
 import { findTimetableConflicts } from "@/lib/timetableConflicts";
 import type { ClassSection, Subject, TimetableSlot } from "@/lib/types";
 import { fullName } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
-import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
-import {
-  CLASS_COLOR_SURFACE,
-  classColorVars,
-} from "@/lib/classColors";
-import { cn } from "@/lib/utils";
+import { ClassColorBadge } from "@/components/ClassColor";
 import {
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
 import { useSchoolTimetableRealtime } from "@/hooks/useStudentTimetableUpdates";
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -35,8 +28,6 @@ import {
   Label,
   PageHeader,
   Select,
-  Textarea,
-  TimeInput24,
 } from "@/components/ui";
 
 const EMPTY_CLASSES: ClassSection[] = [];
@@ -61,7 +52,7 @@ const TIMETABLE_TIME_OPTIONS = (() => {
 })();
 
 export default function EmploisDuTemps() {
-  const { schoolId, user } = useAuth();
+  const { schoolId, schools } = useAuth();
   const qc = useQueryClient();
   useSchoolTimetableRealtime(schoolId);
   const [showForm, setShowForm] = useState(false);
@@ -76,16 +67,11 @@ export default function EmploisDuTemps() {
   const [endTime, setEndTime] = useState("09:00");
   const [room, setRoom] = useState("");
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
-  const [showExamForm, setShowExamForm] = useState(false);
-  const [examSubjectId, setExamSubjectId] = useState("");
-  const [examTeacherId, setExamTeacherId] = useState("");
-  const [examTitle, setExamTitle] = useState("");
-  const [examDescription, setExamDescription] = useState("");
-  const [examDueDate, setExamDueDate] = useState("");
-  const [examStartTime, setExamStartTime] = useState("08:00");
-  const [examEndTime, setExamEndTime] = useState("10:00");
-  const [examSaving, setExamSaving] = useState(false);
+  const schoolName =
+    schools.find((s) => s.id === schoolId)?.name ?? "École";
 
   const { data: classesRaw } = useQuery({
     queryKey: ["classes", schoolId],
@@ -244,64 +230,6 @@ export default function EmploisDuTemps() {
       .sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }, [assignments, teacherId, classId, subjects, subjectId]);
 
-  const examTeachersForClass = useMemo(() => {
-    if (!filterClassId) return teachers;
-    const ids = new Set(
-      assignments
-        .filter((a) => a.class_section_id === filterClassId)
-        .map((a) => a.teacher_id),
-    );
-    if (examTeacherId) ids.add(examTeacherId);
-    if (ids.size === 0) return teachers;
-    return teachers.filter((t) => ids.has(t.id));
-  }, [teachers, assignments, filterClassId, examTeacherId]);
-
-  const examSubjectsForTeacher = useMemo(() => {
-    if (!examTeacherId || !filterClassId) return [];
-    const subjectIds = new Set(
-      assignments
-        .filter(
-          (a) =>
-            a.teacher_id === examTeacherId &&
-            a.class_section_id === filterClassId,
-        )
-        .map((a) => a.subject_id),
-    );
-    if (examSubjectId) subjectIds.add(examSubjectId);
-    return subjects
-      .filter((s) => subjectIds.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-  }, [assignments, examTeacherId, filterClassId, subjects, examSubjectId]);
-
-  const { data: classExams = [] } = useQuery({
-    queryKey: ["ecole-examens-classe", filterClassId],
-    enabled: !!filterClassId,
-    queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("devoirs")
-        .select(
-          "id, title, due_date, start_time, end_time, admin_confirmed, matieres(name), teacher:profils!devoirs_teacher_id_fkey(first_name, last_name)",
-        )
-        .eq("kind", "examen")
-        .eq("class_section_id", filterClassId)
-        .gte("due_date", today)
-        .order("due_date", { ascending: true })
-        .limit(12);
-      if (error) throw error;
-      return (data ?? []) as {
-        id: string;
-        title: string;
-        due_date: string | null;
-        start_time: string | null;
-        end_time: string | null;
-        admin_confirmed: boolean;
-        matieres: { name: string } | null;
-        teacher: { first_name: string; last_name: string } | null;
-      }[];
-    },
-  });
-
   const describeSlot = useMemo(() => {
     return (slot: {
       id?: string;
@@ -384,23 +312,60 @@ export default function EmploisDuTemps() {
     [filteredSlots],
   );
 
+  const handleDownloadPdf = () => {
+    if (!filterClassId) {
+      toast.message("Sélectionnez une classe");
+      return;
+    }
+    if (filteredSlots.length === 0) {
+      toast.message("Aucun créneau à exporter");
+      return;
+    }
+    setExporting(true);
+    try {
+      const className =
+        classes.find((c) => c.id === filterClassId)?.name ?? "—";
+      const teacher = filterTeacherId
+        ? teachers.find((t) => t?.id === filterTeacherId)
+        : null;
+      const teacherLabel = teacher
+        ? fullName(teacher.first_name, teacher.last_name)
+        : null;
+      const doc = generateEmploiDuTempsPdf({
+        schoolName,
+        className,
+        extraLine: teacherLabel ? `Enseignant : ${teacherLabel}` : null,
+        slots: filteredSlots.map((s) => ({
+          day_of_week: s.day_of_week,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          subjectName: s.matieres?.name ?? "Matière",
+          teacherName: s.profils
+            ? fullName(s.profils.first_name, s.profils.last_name)
+            : null,
+          room: s.room,
+        })),
+      });
+      const safeClass = className
+        .replace(/\s+/g, "-")
+        .replace(/[^\w\-àâäéèêëïîôùûüç]/gi, "");
+      doc.save(`emploi-du-temps-${safeClass || "classe"}.pdf`);
+      toast.success("Emploi du temps téléchargé");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Téléchargement impossible",
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
     setSubjectId("");
     setTeacherId("");
     setRoom("");
-  };
-
-  const resetExamForm = () => {
-    setShowExamForm(false);
-    setExamSubjectId("");
-    setExamTeacherId("");
-    setExamTitle("");
-    setExamDescription("");
-    setExamDueDate("");
-    setExamStartTime("08:00");
-    setExamEndTime("10:00");
   };
 
   const openCreate = () => {
@@ -412,24 +377,7 @@ export default function EmploisDuTemps() {
     setEndTime("09:00");
     setRoom("");
     setClassId(filterClassId || classId || "");
-    setShowExamForm(false);
     setShowForm(true);
-  };
-
-  const openCreateExam = () => {
-    if (!filterClassId) {
-      toast.error("Choisissez d’abord une classe");
-      return;
-    }
-    setShowForm(false);
-    setExamSubjectId("");
-    setExamTeacherId("");
-    setExamTitle("");
-    setExamDescription("");
-    setExamDueDate("");
-    setExamStartTime("08:00");
-    setExamEndTime("10:00");
-    setShowExamForm(true);
   };
 
   const openEdit = (id: string) => {
@@ -444,7 +392,6 @@ export default function EmploisDuTemps() {
     setEndTime(slot.end_time.slice(0, 5));
     setRoom(slot.room ?? "");
     setFilterClassId(slot.class_section_id);
-    setShowExamForm(false);
     setShowForm(true);
   };
 
@@ -512,144 +459,67 @@ export default function EmploisDuTemps() {
   };
 
   const removeSlot = async (id: string) => {
-    const slot = slots.find((s) => s.id === id);
-    const subject = slot?.matieres?.name ?? "ce créneau";
-    const day = slot ? formatDay(slot.day_of_week) : "";
-    const time =
-      slot?.start_time && slot?.end_time
-        ? `${slot.start_time.slice(0, 5)}–${slot.end_time.slice(0, 5)}`
-        : "";
-    const detail = [subject, day, time].filter(Boolean).join(" · ");
-
-    const ok = window.confirm(
-      `Supprimer ce créneau ?\n\n${detail}\n\nCette action est définitive.`,
-    );
-    if (!ok) return;
-
     const { error } = await supabase.from("creneaux_edt").delete().eq("id", id);
     if (error) toast.error("Suppression impossible");
     else {
       toast.success("Créneau retiré");
+      setPendingRemoveId(null);
       void qc.invalidateQueries({ queryKey: ["creneaux", schoolId] });
       void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     }
   };
 
-  const handleSaveExam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !filterClassId) return;
-    if (!examTeacherId || !examSubjectId) {
-      toast.error("Choisissez l’enseignant et la matière");
-      return;
-    }
-    if (!examTitle.trim()) {
-      toast.error("Indiquez un titre");
-      return;
-    }
-    if (!examDueDate) {
-      toast.error("Indiquez la date de l’examen");
-      return;
-    }
-    if (!examStartTime || !examEndTime) {
-      toast.error("Indiquez le créneau horaire (début et fin)");
-      return;
-    }
-    if (examStartTime >= examEndTime) {
-      toast.error("L’heure de fin doit être après l’heure de début");
-      return;
-    }
+  const pendingRemoveSlot = pendingRemoveId
+    ? slots.find((s) => s.id === pendingRemoveId)
+    : null;
 
-    const { data: conflicts, error: conflictError } = await supabase
-      .from("devoirs")
-      .select("id, title, start_time, end_time, matieres(name)")
-      .eq("kind", "examen")
-      .eq("class_section_id", filterClassId)
-      .eq("due_date", examDueDate)
-      .limit(1);
-    if (conflictError) {
-      toast.error(conflictError.message || "Vérification impossible");
-      return;
-    }
-    const conflict = conflicts?.[0] as
-      | {
-          title: string;
-          matieres: { name: string } | null;
-          start_time: string | null;
-          end_time: string | null;
-        }
-      | undefined;
-    if (conflict) {
-      const subject = conflict.matieres?.name ?? "Matière";
-      const slot = formatExamSchedule({
-        due_date: examDueDate,
-        start_time: conflict.start_time,
-        end_time: conflict.end_time,
-      });
-      toast.error(
-        `Un examen est déjà prévu ce jour pour cette classe (${subject}${
-          slot ? ` · ${slot}` : ""
-        }). Choisissez une autre date.`,
-      );
-      return;
-    }
-
-    setExamSaving(true);
-    const now = new Date().toISOString();
-    const { error } = await supabase.from("devoirs").insert({
-      class_section_id: filterClassId,
-      subject_id: examSubjectId,
-      teacher_id: examTeacherId,
-      title: examTitle.trim(),
-      description: examDescription.trim() || null,
-      due_date: examDueDate,
-      kind: "examen",
-      start_time: examStartTime,
-      end_time: examEndTime,
-      admin_confirmed: true,
-      confirmed_at: now,
-      confirmed_by: user.id,
-    });
-    setExamSaving(false);
-
-    if (error) {
-      if (error.code === "23505") {
-        toast.error(
-          "Un examen est déjà prévu ce jour pour cette classe. Choisissez une autre date.",
-        );
-        return;
-      }
-      toast.error(error.message || "Création impossible");
-      return;
-    }
-
-    toast.success("Examen créé et confirmé — visible pour les élèves");
-    resetExamForm();
-    void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
-    void qc.invalidateQueries({ queryKey: ["ecole-examens-classe"] });
-    void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
-    void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
-    void qc.invalidateQueries({ queryKey: ["student-home"] });
-    void qc.invalidateQueries({ queryKey: ["devoirs"] });
-    void qc.invalidateQueries({ queryKey: ["ecole-home"] });
-    void qc.invalidateQueries({ queryKey: ["examen-jours-classe"] });
-  };
+  const pendingRemoveLabel = pendingRemoveSlot
+    ? [
+        pendingRemoveSlot.matieres?.name ?? "Créneau",
+        formatDay(pendingRemoveSlot.day_of_week),
+        pendingRemoveSlot.start_time && pendingRemoveSlot.end_time
+          ? `${pendingRemoveSlot.start_time.slice(0, 5)}–${pendingRemoveSlot.end_time.slice(0, 5)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   return (
     <div>
       <SetupGuideBar />
+      <ConfirmPasswordDialog
+        open={!!pendingRemoveSlot}
+        title={
+          pendingRemoveLabel
+            ? `Retirer « ${pendingRemoveLabel} » ?`
+            : "Confirmer"
+        }
+        description="Ce créneau sera retiré de l’emploi du temps. Saisissez votre mot de passe administrateur pour confirmer."
+        confirmLabel="Retirer le créneau"
+        onCancel={() => setPendingRemoveId(null)}
+        onVerified={async () => {
+          if (pendingRemoveId) await removeSlot(pendingRemoveId);
+        }}
+      />
       <PageHeader
         title="Emplois du temps"
         subtitle="Lundi à samedi · conflits classe, enseignant et salle"
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              variant="outline"
-              onClick={openCreateExam}
-              disabled={!filterClassId}
+              variant="secondary"
+              disabled={
+                isLoading ||
+                !filterClassId ||
+                filteredSlots.length === 0 ||
+                exporting
+              }
+              onClick={handleDownloadPdf}
             >
-              <FileText className="h-4 w-4" />
-              Créer un examen
+              <Download className="h-4 w-4" />
+              {exporting ? "Export…" : "Télécharger PDF"}
             </Button>
             <Button onClick={openCreate}>Ajouter un créneau</Button>
           </div>
@@ -702,31 +572,6 @@ export default function EmploisDuTemps() {
             </Select>
           </div>
         </div>
-        {classes.length > 1 ? (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {classes.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  setFilterClassId(c.id);
-                  setFilterTeacherId("");
-                }}
-                style={classColorVars({ id: c.id, name: c.name })}
-                data-class-color
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium transition",
-                  filterClassId === c.id
-                    ? CLASS_COLOR_SURFACE
-                    : "border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
-                )}
-              >
-                <ClassColorDot id={c.id} name={c.name} />
-                <span className="max-w-[7rem] truncate">{c.name}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </Card>
 
       {showForm ? (
@@ -900,215 +745,21 @@ export default function EmploisDuTemps() {
         </Modal>
       ) : null}
 
-      {showExamForm ? (
-        <Modal
-          open={showExamForm}
-          title={`Créer un examen — ${classNameById.get(filterClassId) ?? "classe"}`}
-          onClose={resetExamForm}
-          closeDisabled={examSaving}
-        >
-          <form
-            onSubmit={(e) => void handleSaveExam(e)}
-            className="space-y-4"
-          >
-            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-              Un seul examen par classe et par jour. L’examen créé ici est
-              confirmé immédiatement et visible pour les élèves.
-            </p>
-            <div>
-              <Label>Enseignant</Label>
-              <Select
-                value={examTeacherId}
-                onChange={(e) => {
-                  setExamTeacherId(e.target.value);
-                  setExamSubjectId("");
-                }}
-                required
-              >
-                <option value="">Choisir…</option>
-                {examTeachersForClass.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {fullName(t.first_name, t.last_name)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Matière</Label>
-              <Select
-                value={examSubjectId}
-                onChange={(e) => setExamSubjectId(e.target.value)}
-                required
-                disabled={!examTeacherId}
-              >
-                <option value="">
-                  {!examTeacherId
-                    ? "Choisissez d’abord un enseignant"
-                    : examSubjectsForTeacher.length === 0
-                      ? "Aucune matière pour cet enseignant"
-                      : "Choisir…"}
-                </option>
-                {examSubjectsForTeacher.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Titre</Label>
-              <Input
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-                placeholder="ex. Contrôle de mathématiques"
-                required
-              />
-            </div>
-            <div>
-              <Label>Description (optionnel)</Label>
-              <Textarea
-                value={examDescription}
-                onChange={(e) => setExamDescription(e.target.value)}
-                rows={3}
-                placeholder="ex. Chapitres 1 à 3, calculatrice autorisée"
-              />
-            </div>
-            <div>
-              <Label>Date de l’examen</Label>
-              <Input
-                type="date"
-                value={examDueDate}
-                onChange={(e) => setExamDueDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Début</Label>
-                <TimeInput24
-                  value={examStartTime}
-                  onChange={setExamStartTime}
-                  required
-                />
-              </div>
-              <div>
-                <Label>Fin</Label>
-                <TimeInput24
-                  value={examEndTime}
-                  onChange={setExamEndTime}
-                  required
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={
-                  examSaving ||
-                  !examTeacherId ||
-                  !examSubjectId ||
-                  !examTitle.trim() ||
-                  !examDueDate
-                }
-              >
-                {examSaving ? "Création…" : "Créer et confirmer"}
-              </Button>
-              <Button type="button" variant="ghost" onClick={resetExamForm}>
-                Annuler
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
-
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
       ) : classes.length === 0 ? (
         <EmptyState message="Créez d’abord des classes pour planifier l’emploi du temps." />
       ) : (
-        <div className="space-y-6">
-          <div className="space-y-3">
-            {filteredSlots.length === 0 ? (
-              <EmptyState message="Aucun créneau pour cette classe — ajoutez-en pour remplir la grille." />
-            ) : null}
-            <TimetableGrid
-              slots={gridSlots}
-              title={`Emploi du temps — ${classNameById.get(filterClassId) ?? "classe"}`}
-              onSelect={openEdit}
-              onRemove={(id) => void removeSlot(id)}
-            />
-          </div>
-
-          <Card className="p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">
-                  Examens à venir
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {classNameById.get(filterClassId) ?? "Classe"} · dates
-                  confirmées ou en attente
-                </p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={openCreateExam}
-              >
-                <FileText className="h-4 w-4" />
-                Créer un examen
-              </Button>
-            </div>
-            {classExams.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Aucun examen à venir pour cette classe.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {classExams.map((exam) => {
-                  const slot = formatExamSchedule(exam);
-                  const teacher = exam.teacher
-                    ? fullName(
-                        exam.teacher.first_name,
-                        exam.teacher.last_name,
-                      )
-                    : null;
-                  return (
-                    <li
-                      key={exam.id}
-                      className="flex flex-wrap items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {exam.title}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {[
-                            exam.matieres?.name,
-                            teacher,
-                            exam.due_date
-                              ? formatDateSafe(exam.due_date, "EEEE d MMMM yyyy", {
-                                  locale: fr,
-                                })
-                              : null,
-                            slot,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      <Badge
-                        tone={exam.admin_confirmed ? "success" : "warning"}
-                      >
-                        {exam.admin_confirmed ? "Confirmé" : "En attente"}
-                      </Badge>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
+        <div className="space-y-3">
+          {filteredSlots.length === 0 ? (
+            <EmptyState message="Aucun créneau pour cette classe — ajoutez-en pour remplir la grille." />
+          ) : null}
+          <TimetableGrid
+            slots={gridSlots}
+            title={`Emploi du temps — ${classNameById.get(filterClassId) ?? "classe"}`}
+            onSelect={openEdit}
+            onRemove={(id) => setPendingRemoveId(id)}
+          />
         </div>
       )}
     </div>

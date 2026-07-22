@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useMemo } from "react";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import { cn } from "@/lib/utils";
 
@@ -54,24 +55,56 @@ const DAY_META = [
 ] as const;
 
 const DEFAULT_START_MIN = 7 * 60;
-const DEFAULT_END_MIN = 17 * 60;
-/** Pixels per minute — keeps short créneaux (15–30 min) readable. */
-const PX_PER_MIN = 1.7;
+/** Default end when empty — expands automatically if créneaux go later. */
+const DEFAULT_END_MIN = 15 * 60;
+/** ~81px per hour: readable créneaux without a huge empty grid. */
+const PX_PER_MIN = 1.35;
 
-/** Light pastels in light mode; solid dark fills in dark mode (readable text). */
+/** Stronger pastels so each matière reads clearly (aligned with PDF export). */
 const SLOT_COLORS = [
-  "border-sky-400 bg-sky-50 dark:!border-sky-400 dark:!bg-sky-900",
-  "border-emerald-400 bg-emerald-50 dark:!border-emerald-400 dark:!bg-emerald-900",
-  "border-amber-400 bg-amber-50 dark:!border-amber-400 dark:!bg-amber-900",
-  "border-rose-400 bg-rose-50 dark:!border-rose-400 dark:!bg-rose-900",
-  "border-violet-400 bg-violet-50 dark:!border-violet-400 dark:!bg-violet-900",
-  "border-teal-400 bg-teal-50 dark:!border-teal-400 dark:!bg-teal-900",
+  "border-sky-500 bg-sky-200 dark:!border-sky-400 dark:!bg-sky-900",
+  "border-emerald-500 bg-emerald-200 dark:!border-emerald-400 dark:!bg-emerald-900",
+  "border-amber-500 bg-amber-200 dark:!border-amber-400 dark:!bg-amber-900",
+  "border-rose-500 bg-rose-200 dark:!border-rose-400 dark:!bg-rose-900",
+  "border-violet-500 bg-violet-200 dark:!border-violet-400 dark:!bg-violet-900",
+  "border-teal-500 bg-teal-200 dark:!border-teal-400 dark:!bg-teal-900",
+  "border-orange-500 bg-orange-200 dark:!border-orange-400 dark:!bg-orange-900",
+  "border-purple-500 bg-purple-200 dark:!border-purple-400 dark:!bg-purple-900",
+  "border-cyan-500 bg-cyan-200 dark:!border-cyan-400 dark:!bg-cyan-900",
+  "border-lime-500 bg-lime-200 dark:!border-lime-400 dark:!bg-lime-900",
+  "border-pink-500 bg-pink-200 dark:!border-pink-400 dark:!bg-pink-900",
+  "border-yellow-500 bg-yellow-200 dark:!border-yellow-400 dark:!bg-yellow-800",
 ];
 
-function colorForSubject(name: string) {
+function subjectHash(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h + name.charCodeAt(i) * (i + 1)) % 997;
-  return SLOT_COLORS[h % SLOT_COLORS.length];
+  return h;
+}
+
+/** Prefer distinct colors within one grid; same subject keeps the same color. */
+function buildSubjectColorMap(subjectNames: string[]): Map<string, string> {
+  const unique = [
+    ...new Set(subjectNames.map((n) => (n || "Cours").trim() || "Cours")),
+  ];
+  const used = new Set<number>();
+  const map = new Map<string, string>();
+
+  for (const name of unique) {
+    let idx = subjectHash(name) % SLOT_COLORS.length;
+    if (used.has(idx)) {
+      for (let step = 1; step < SLOT_COLORS.length; step++) {
+        const next = (idx + step) % SLOT_COLORS.length;
+        if (!used.has(next)) {
+          idx = next;
+          break;
+        }
+      }
+    }
+    used.add(idx);
+    map.set(name, SLOT_COLORS[idx]);
+  }
+  return map;
 }
 
 function formatHourLabel(minutes: number) {
@@ -105,6 +138,10 @@ export function TimetableGrid({
     ? DAY_META
     : DAY_META.filter((d) => d.day <= 5);
   const highlight = new Set(highlightIds);
+  const subjectColors = useMemo(
+    () => buildSubjectColorMap(slots.map((s) => s.subjectName)),
+    [slots],
+  );
 
   let rangeStart = DEFAULT_START_MIN;
   let rangeEnd = DEFAULT_END_MIN;
@@ -219,6 +256,10 @@ export function TimetableGrid({
                   ]
                     .filter(Boolean)
                     .join(" · ");
+                  const subjectKey =
+                    (slot.subjectName || "Cours").trim() || "Cours";
+                  const slotColor =
+                    subjectColors.get(subjectKey) ?? SLOT_COLORS[0];
 
                   return (
                     <div
@@ -244,9 +285,9 @@ export function TimetableGrid({
                           : undefined
                       }
                       className={cn(
-                        "group/slot absolute right-1 left-1 z-[1] overflow-hidden rounded-md border shadow-sm",
+                        "group/slot absolute right-1 left-1 z-[1] overflow-hidden rounded-md border-2 shadow-sm",
                         density === "xs" ? "px-1 py-0.5" : "px-1.5 py-1",
-                        colorForSubject(slot.subjectName),
+                        slotColor,
                         onSelect &&
                           "cursor-pointer transition hover:z-20 hover:brightness-95 dark:hover:brightness-110",
                         // Expand short cards on hover so all infos become readable

@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassProgrammeRow, Subject } from "@/lib/types";
-import { cn, fullName } from "@/lib/utils";
+import { cn, fullName, joinProfile } from "@/lib/utils";
+import { PersonName } from "@/components/PersonName";
+import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import {
   BackLink,
   Button,
@@ -25,12 +27,17 @@ type AssignmentRow = {
   profils: { first_name: string; last_name: string } | null;
 };
 
+type ProgrammeRow = ClassProgrammeRow & {
+  matieres: { name: string; coefficient: number } | null;
+};
+
 export default function ClassDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { role, schoolId } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
+  const [pendingRemove, setPendingRemove] = useState<ProgrammeRow | null>(null);
 
   const tabParam = searchParams.get("tab");
   const tab: Tab =
@@ -72,14 +79,16 @@ export default function ClassDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("inscriptions")
-        .select("id, profils:profils!inscriptions_student_id_fkey(first_name, last_name)")
+        .select(
+          "id, profils:profils!inscriptions_student_id_fkey(first_name, last_name)",
+        )
         .eq("class_section_id", id!)
         .eq("status", "active");
       if (error) throw error;
-      return (data ?? []) as unknown as {
-        id: string;
-        profils: { first_name: string; last_name: string } | null;
-      }[];
+      return (data ?? []).map((row) => {
+        const r = row as { id: string; profils: unknown };
+        return { id: r.id, profils: joinProfile(r.profils) };
+      });
     },
   });
 
@@ -121,9 +130,7 @@ export default function ClassDetail() {
         .eq("class_section_id", id!)
         .order("created_at");
       if (error) throw error;
-      return (data ?? []) as (ClassProgrammeRow & {
-        matieres: { name: string; coefficient: number } | null;
-      })[];
+      return (data ?? []) as ProgrammeRow[];
     },
   });
 
@@ -205,7 +212,7 @@ export default function ClassDetail() {
     }
   };
 
-  const removeFromProgramme = async (row: ClassProgrammeRow) => {
+  const removeFromProgramme = async (row: ProgrammeRow) => {
     if (!id) return;
     const { error } = await supabase
       .from("programme_classe")
@@ -222,6 +229,7 @@ export default function ClassDetail() {
       .eq("subject_id", row.subject_id);
 
     toast.success("Matière retirée du programme");
+    setPendingRemove(null);
     void qc.invalidateQueries({ queryKey: ["programme-classe", id] });
     void qc.invalidateQueries({ queryKey: ["class-assignments", id] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
@@ -244,6 +252,20 @@ export default function ClassDetail() {
 
   return (
     <div>
+      <ConfirmPasswordDialog
+        open={!!pendingRemove}
+        title={
+          pendingRemove
+            ? `Retirer « ${pendingRemove.matieres?.name ?? "cette matière"} » du programme ?`
+            : "Confirmer"
+        }
+        description="La matière et les affectations associées seront retirées de cette classe. Saisissez votre mot de passe administrateur pour confirmer."
+        confirmLabel="Retirer du programme"
+        onCancel={() => setPendingRemove(null)}
+        onVerified={async () => {
+          if (pendingRemove) await removeFromProgramme(pendingRemove);
+        }}
+      />
       <BackLink
         to={isAdmin ? "/classes" : "/mes-classes"}
         label={isAdmin ? "Retour aux classes" : "Retour aux classes"}
@@ -370,7 +392,7 @@ export default function ClassDetail() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600"
-                              onClick={() => void removeFromProgramme(p)}
+                              onClick={() => setPendingRemove(p)}
                             >
                               Retirer
                             </Button>
@@ -491,11 +513,10 @@ export default function ClassDetail() {
                   <ClipboardList className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Notes & évaluations</h3>
+                  <h3 className="font-semibold">Devoirs & évaluations</h3>
                   <p className="text-sm text-slate-500">
-                    {isAdmin
-                      ? "Créer des évaluations et saisir les notes"
-                      : "Créer une évaluation et noter la classe"}
+                    Interrogations, exercices, compositions, devoirs — et les
+                    notes
                   </p>
                 </div>
               </Card>
@@ -559,9 +580,10 @@ export default function ClassDetail() {
                 {roster.map((row) => (
                   <Card key={row.id}>
                     <p className="font-medium">
-                      {row.profils
-                        ? fullName(row.profils.first_name, row.profils.last_name)
-                        : "Élève"}
+                      <PersonName
+                        first={row.profils?.first_name}
+                        last={row.profils?.last_name}
+                      />
                     </p>
                   </Card>
                 ))}
