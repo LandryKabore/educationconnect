@@ -229,6 +229,7 @@ export default function ExamensEcole() {
 
   const handleSaveExam = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (examSaving) return;
     if (!user || !examClassId) return;
     if (!examTeacherId || !examSubjectId) {
       toast.error("Choisissez l’enseignant et la matière");
@@ -251,80 +252,83 @@ export default function ExamensEcole() {
       return;
     }
 
-    const { data: conflicts, error: conflictError } = await supabase
-      .from("evaluations")
-      .select("id, title, start_time, end_time, matieres(name)")
-      .eq("type", "examen")
-      .eq("class_section_id", examClassId)
-      .eq("eval_date", examDueDate)
-      .limit(1);
-    if (conflictError) {
-      toast.error(conflictError.message || "Vérification impossible");
-      return;
-    }
-    const conflict = conflicts?.[0] as unknown as
-      | {
-          title: string;
-          matieres: { name: string } | null;
-          start_time: string | null;
-          end_time: string | null;
-        }
-      | undefined;
-    if (conflict) {
-      const subject = conflict.matieres?.name ?? "Matière";
-      const slot = formatExamSchedule({
-        due_date: examDueDate,
-        start_time: conflict.start_time,
-        end_time: conflict.end_time,
-      });
-      toast.error(
-        `Un devoir est déjà prévu ce jour pour cette classe (${subject}${
-          slot ? ` · ${slot}` : ""
-        }). Choisissez une autre date.`,
-      );
-      return;
-    }
-
     setExamSaving(true);
-    const now = new Date().toISOString();
-    const { error } = await supabase.from("evaluations").insert({
-      class_section_id: examClassId,
-      subject_id: examSubjectId,
-      teacher_id: examTeacherId,
-      period_label: currentPeriodLabel(),
-      title: examTitle.trim(),
-      description: examDescription.trim() || null,
-      eval_date: examDueDate,
-      type: "examen",
-      start_time: examStartTime,
-      end_time: examEndTime,
-      admin_confirmed: true,
-      confirmed_at: now,
-      confirmed_by: user.id,
-    });
-    setExamSaving(false);
-
-    if (error) {
-      if (error.code === "23505") {
+    try {
+      const { data: conflicts, error: conflictError } = await supabase
+        .from("evaluations")
+        .select("id, title, start_time, end_time, matieres(name)")
+        .eq("type", "examen")
+        .eq("class_section_id", examClassId)
+        .eq("eval_date", examDueDate)
+        .limit(1);
+      if (conflictError) {
+        toast.error(conflictError.message || "Vérification impossible");
+        return;
+      }
+      const conflict = conflicts?.[0] as unknown as
+        | {
+            title: string;
+            matieres: { name: string } | null;
+            start_time: string | null;
+            end_time: string | null;
+          }
+        | undefined;
+      if (conflict) {
+        const subject = conflict.matieres?.name ?? "Matière";
+        const slot = formatExamSchedule({
+          due_date: examDueDate,
+          start_time: conflict.start_time,
+          end_time: conflict.end_time,
+        });
         toast.error(
-          "Un devoir est déjà prévu ce jour pour cette classe. Choisissez une autre date.",
+          `Un devoir est déjà prévu ce jour pour cette classe (${subject}${
+            slot ? ` · ${slot}` : ""
+          }). Choisissez une autre date.`,
         );
         return;
       }
-      toast.error(error.message || "Création impossible");
-      return;
-    }
 
-    toast.success("Devoir créé et confirmé — visible pour les élèves");
-    resetForm();
-    void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
-    void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
-    void qc.invalidateQueries({ queryKey: ["evaluations"] });
-    void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
-    void qc.invalidateQueries({ queryKey: ["teacher-mes-devoirs"] });
-    void qc.invalidateQueries({ queryKey: ["student-home"] });
-    void qc.invalidateQueries({ queryKey: ["teacher-home"] });
-    void qc.invalidateQueries({ queryKey: ["ecole-home"] });
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("evaluations").insert({
+        class_section_id: examClassId,
+        subject_id: examSubjectId,
+        teacher_id: examTeacherId,
+        period_label: currentPeriodLabel(),
+        title: examTitle.trim(),
+        description: examDescription.trim() || null,
+        eval_date: examDueDate,
+        type: "examen",
+        start_time: examStartTime,
+        end_time: examEndTime,
+        admin_confirmed: true,
+        confirmed_at: now,
+        confirmed_by: user.id,
+      });
+
+      if (error) {
+        if (error.code === "23505") {
+          toast.error(
+            "Un devoir est déjà prévu ce jour pour cette classe. Choisissez une autre date.",
+          );
+          return;
+        }
+        toast.error(error.message || "Création impossible");
+        return;
+      }
+
+      toast.success("Devoir créé et confirmé — visible pour les élèves");
+      resetForm();
+      void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
+      void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
+      void qc.invalidateQueries({ queryKey: ["evaluations"] });
+      void qc.invalidateQueries({ queryKey: ["mes-devoirs"] });
+      void qc.invalidateQueries({ queryKey: ["teacher-mes-devoirs"] });
+      void qc.invalidateQueries({ queryKey: ["student-home"] });
+      void qc.invalidateQueries({ queryKey: ["teacher-home"] });
+      void qc.invalidateQueries({ queryKey: ["ecole-home"] });
+    } finally {
+      setExamSaving(false);
+    }
   };
 
   const setConfirmed = async (exam: ExamRow, confirmed: boolean) => {

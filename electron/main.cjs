@@ -75,6 +75,27 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // Keep the renderer on the app origin — never navigate to an arbitrary URL
+  // that a compromised page (or XSS) might try to load in-window.
+  const isAllowedNavigation = (raw) => {
+    try {
+      const u = new URL(raw);
+      if (isDev) {
+        const dev = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
+        return raw.startsWith(dev) || u.hostname === "localhost";
+      }
+      return u.protocol === "file:";
+    } catch {
+      return false;
+    }
+  };
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedNavigation(url)) event.preventDefault();
+  });
+  win.webContents.on("will-redirect", (event, url) => {
+    if (!isAllowedNavigation(url)) event.preventDefault();
+  });
+
   // Renderer crash (OOM, GPU, etc.) → reload instead of a blank window
   win.webContents.on("render-process-gone", (_event, details) => {
     console.error("[EduFaso] render-process-gone", details);

@@ -343,7 +343,14 @@ function AppRoutes() {
           }
         />
 
-        <Route path="/tableau-de-bord" element={<Dashboard />} />
+        <Route
+          path="/tableau-de-bord"
+          element={
+            <RequireAuth roles={["teacher", "student", "parent"]}>
+              <Dashboard />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="/classes/:id"
@@ -418,8 +425,26 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
-        <Route path="/messages" element={<Messages view="messages" />} />
-        <Route path="/annonces" element={<Messages view="annonces" />} />
+        <Route
+          path="/messages"
+          element={
+            <RequireAuth
+              roles={["teacher", "student", "parent", "school_admin"]}
+            >
+              <Messages view="messages" />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/annonces"
+          element={
+            <RequireAuth
+              roles={["teacher", "student", "parent", "school_admin"]}
+            >
+              <Messages view="annonces" />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="/mes-notes"

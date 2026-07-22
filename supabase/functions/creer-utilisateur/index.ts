@@ -202,14 +202,34 @@ Deno.serve(async (req) => {
     });
 
     if (role === "student" && classId) {
+      const { data: cls, error: clsErr } = await admin
+        .from("classes")
+        .select("id, school_id, academic_year_id")
+        .eq("id", classId)
+        .maybeSingle();
+      if (clsErr || !cls) {
+        return new Response(
+          JSON.stringify({ error: "Classe introuvable" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      if (schoolId && cls.school_id !== schoolId) {
+        return new Response(
+          JSON.stringify({
+            error: "Cette classe n'appartient pas à votre établissement",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       let yearId = academicYearId;
       if (!yearId) {
-        const { data: cls } = await admin
-          .from("classes")
-          .select("academic_year_id")
-          .eq("id", classId)
-          .maybeSingle();
-        yearId = (cls?.academic_year_id as string | undefined) ?? null;
+        yearId = (cls.academic_year_id as string | undefined) ?? null;
       }
       if (yearId) {
         await admin.from("inscriptions").insert({
@@ -222,6 +242,38 @@ Deno.serve(async (req) => {
     }
 
     if (role === "teacher" && classId && subjectId) {
+      const { data: cls } = await admin
+        .from("classes")
+        .select("id, school_id")
+        .eq("id", classId)
+        .maybeSingle();
+      if (!cls || (schoolId && cls.school_id !== schoolId)) {
+        return new Response(
+          JSON.stringify({
+            error: "Cette classe n'appartient pas à votre établissement",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+      const { data: sub } = await admin
+        .from("matieres")
+        .select("id, school_id")
+        .eq("id", subjectId)
+        .maybeSingle();
+      if (!sub || (schoolId && sub.school_id !== schoolId)) {
+        return new Response(
+          JSON.stringify({
+            error: "Cette matière n'appartient pas à votre établissement",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       await admin.from("affectations_enseignement").insert({
         teacher_id: newUserId,
         class_section_id: classId,
@@ -230,6 +282,26 @@ Deno.serve(async (req) => {
     }
 
     if (role === "parent" && studentId) {
+      // Parent may only be linked to a student enrolled in this school.
+      const { data: linkOk } = await admin
+        .from("inscriptions")
+        .select("id, classes!inner(school_id)")
+        .eq("student_id", studentId)
+        .eq("status", "active")
+        .eq("classes.school_id", schoolId)
+        .limit(1);
+      if (!linkOk || linkOk.length === 0) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Cet élève n'est pas inscrit dans votre établissement (ou n'a pas de classe)",
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       await admin.from("liens_parent_eleve").insert({
         parent_id: newUserId,
         student_id: studentId,

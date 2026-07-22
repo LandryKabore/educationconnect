@@ -38,7 +38,11 @@ import {
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
 import { timeToMinutes } from "@/lib/timetableConflicts";
-import { dbDayOfWeek, WEEKDAY_LABELS } from "@/lib/timetableSchedule";
+import {
+  computeScheduleFocus,
+  dbDayOfWeek,
+  WEEKDAY_LABELS,
+} from "@/lib/timetableSchedule";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
@@ -323,64 +327,12 @@ export default function StudentHome() {
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const todayDow = dbDayOfWeek();
 
-  /** Current/next today, or first class on a later day (e.g. Monday after Saturday). */
-  const scheduleFocus = useMemo(() => {
-    const week = data?.weekSlots ?? [];
-    if (week.length === 0) return null;
-
-    const todayList = week
-      .filter((s) => s.day_of_week === todayDow)
-      .sort(
-        (a, b) =>
-          timeToMinutes(a.start_time) - timeToMinutes(b.start_time),
-      );
-
-    const current = todayList.find((s) => {
-      const start = timeToMinutes(s.start_time);
-      const end = timeToMinutes(s.end_time);
-      return start <= nowMinutes && nowMinutes < end;
-    });
-    if (current) {
-      return {
-        slot: current,
-        kind: "current" as const,
-        dayLabel: WEEKDAY_LABELS[todayDow] ?? "Aujourd’hui",
-        isLaterDay: false,
-      };
-    }
-
-    const nextToday = todayList.find(
-      (s) => timeToMinutes(s.start_time) > nowMinutes,
-    );
-    if (nextToday) {
-      return {
-        slot: nextToday,
-        kind: "next" as const,
-        dayLabel: WEEKDAY_LABELS[todayDow] ?? "Aujourd’hui",
-        isLaterDay: false,
-      };
-    }
-
-    for (let offset = 1; offset <= 7; offset++) {
-      const day = ((todayDow - 1 + offset) % 7) + 1;
-      const dayList = week
-        .filter((s) => s.day_of_week === day)
-        .sort(
-          (a, b) =>
-            timeToMinutes(a.start_time) - timeToMinutes(b.start_time),
-        );
-      const first = dayList[0];
-      if (!first) continue;
-      return {
-        slot: first,
-        kind: "next" as const,
-        dayLabel: WEEKDAY_LABELS[day] ?? "Prochain jour",
-        isLaterDay: true,
-      };
-    }
-
-    return null;
-  }, [data?.weekSlots, todayDow, nowMinutes]);
+  const scheduleFocus = useMemo(
+    () => computeScheduleFocus(data?.weekSlots ?? [], now),
+    // Recompute when the wall-clock minute changes (nowMinutes) or slots load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `now` is derived each render
+    [data?.weekSlots, todayDow, nowMinutes],
+  );
 
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;
