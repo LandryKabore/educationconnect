@@ -81,7 +81,7 @@ export function CompositionSessionModal({
         .eq("class_section_id", classId)
         .order("created_at");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         subject_id: string;
         coefficient: number;
         matieres: { id: string; name: string } | null;

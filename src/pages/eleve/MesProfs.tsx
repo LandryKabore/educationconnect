@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { fullName, joinProfile } from "@/lib/utils";
+import { fullName, joinOne, joinProfile } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
 import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
 
@@ -45,8 +45,7 @@ export default function MesProfs() {
         class_section_id: string;
         classes: unknown;
       };
-      const className =
-        joinProfile<{ name: string }>(row.classes)?.name ?? null;
+      const className = joinOne<{ name: string }>(row.classes)?.name ?? null;
 
       const { data: assignments, error } = await supabase
         .from("affectations_enseignement")

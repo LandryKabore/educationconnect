@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { fromAuthEmail } from "@/lib/utils";
-import { Button, Input, Label, PasswordInput } from "@/components/ui";
+import { Button, Label, PasswordInput } from "@/components/ui";
 
 type Props = {
   open: boolean;
@@ -29,6 +29,9 @@ export function ConfirmPasswordDialog({
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
+  const descId = useId();
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!open) {
@@ -38,8 +41,15 @@ export function ConfirmPasswordDialog({
       return;
     }
     const id = window.setTimeout(() => inputRef.current?.focus(), 0);
-    return () => window.clearTimeout(id);
-  }, [open]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !checking) onCancelRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, checking]);
 
   if (!open) return null;
 
@@ -47,6 +57,7 @@ export function ConfirmPasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (checking) return;
     if (!user?.email) {
       setError("Session introuvable. Reconnectez-vous.");
       return;
@@ -83,12 +94,15 @@ export function ConfirmPasswordDialog({
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 p-4"
       role="presentation"
-      onClick={onCancel}
+      onClick={() => {
+        if (!checking) onCancel();
+      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={description ? descId : undefined}
         className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
@@ -96,7 +110,9 @@ export function ConfirmPasswordDialog({
           {title}
         </h2>
         {description ? (
-          <p className="mt-2 text-sm text-slate-600">{description}</p>
+          <p id={descId} className="mt-2 text-sm text-slate-600">
+            {description}
+          </p>
         ) : null}
         <p className="mt-3 text-xs text-slate-500">
           Compte : <span className="font-medium text-slate-700">{identifiant}</span>
@@ -117,7 +133,9 @@ export function ConfirmPasswordDialog({
               required
             />
             {error ? (
-              <p className="mt-1.5 text-sm text-red-600">{error}</p>
+              <p className="mt-1.5 text-sm text-red-600" role="alert">
+                {error}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">

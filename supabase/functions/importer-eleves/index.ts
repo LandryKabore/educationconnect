@@ -180,7 +180,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const base = `${slugify(firstName)}.${slugify(lastName)}` || "eleve";
+      const firstSlug = slugify(firstName);
+      const lastSlug = slugify(lastName);
+      const base = firstSlug || lastSlug ? `${firstSlug}.${lastSlug}` : "eleve";
       const suffix = Math.floor(Math.random() * 900 + 100);
       const username = `${base}${suffix}`;
       const email = `${username}@edufaso.local`;

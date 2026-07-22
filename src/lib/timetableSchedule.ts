@@ -7,12 +7,18 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   4: "Jeudi",
   5: "Vendredi",
   6: "Samedi",
+  7: "Dimanche",
 };
 
-/** DB day_of_week: 1 = Monday … 6 = Saturday (JS Sunday = 7 → 6 for schools). */
+/**
+ * DB `day_of_week`: 1 = Monday … 7 = Sunday (matches the
+ * `check (day_of_week between 1 and 7)` constraint on `creneaux_edt`).
+ * JS `Date#getDay()` returns 0 for Sunday, so it's remapped to 7 — never
+ * collapsed onto Saturday (6), which would show the wrong day's schedule.
+ */
 export function dbDayOfWeek(date = new Date()) {
   const js = date.getDay();
-  return js === 0 ? 6 : js;
+  return js === 0 ? 7 : js;
 }
 
 export type ScheduleSlotBase = {

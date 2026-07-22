@@ -16,15 +16,13 @@ export function personName(first?: string | null, last?: string | null) {
 
 /**
  * Normalize a PostgREST embed: object, single-element array, or null.
- * Bare `profils(*)` joins sometimes arrive as arrays — reading `.first_name`
- * on those yields undefined and causes name flashes ("Élève" / "Utilisateur").
+ * Supabase types a to-one FK join as `T[]` (it can't statically prove the
+ * relation is unique), while the actual response is a plain object — bare
+ * casts like `raw as T` fail `tsc -b` and, if the API ever *does* return an
+ * array, would silently read the wrong shape. Use this everywhere a
+ * `foreignTable(columns)` embed is expected to resolve to a single row.
  */
-export function joinProfile<
-  T extends { first_name?: string | null; last_name?: string | null } = {
-    first_name: string | null;
-    last_name: string | null;
-  },
->(raw: unknown): T | null {
+export function joinOne<T extends object>(raw: unknown): T | null {
   if (raw == null) return null;
   if (Array.isArray(raw)) {
     const first = raw[0];
@@ -32,6 +30,19 @@ export function joinProfile<
   }
   if (typeof raw === "object") return raw as T;
   return null;
+}
+
+/**
+ * Same normalization as {@link joinOne}, specialized for `profils` embeds
+ * (first/last name). Kept separate so call sites document intent.
+ */
+export function joinProfile<
+  T extends { first_name?: string | null; last_name?: string | null } = {
+    first_name: string | null;
+    last_name: string | null;
+  },
+>(raw: unknown): T | null {
+  return joinOne<T>(raw);
 }
 
 /** Identifiant local → email technique Auth */

@@ -60,7 +60,7 @@ export default function MesEleves() {
 
       const classMap = new Map<string, ClassTab>();
       for (const row of aff ?? []) {
-        const r = row as {
+        const r = row as unknown as {
           class_section_id: string;
           classes: {
             id: string;
