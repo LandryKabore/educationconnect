@@ -6,7 +6,11 @@ import {
   formatPassDecision,
   scoreOn20,
 } from "@/lib/averages";
-import { evaluationTypeLabel } from "@/lib/evaluationTypes";
+import {
+  evaluationTypeLabel,
+  evaluationTypeShort,
+  evaluationTypeTone,
+} from "@/lib/evaluationTypes";
 import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
 import { Badge, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -24,11 +28,64 @@ type Props = {
   className?: string;
 };
 
+type SubjectGroup = {
+  subjectId: string;
+  subjectName: string;
+  coefficient: number;
+  averageOn20: number | null;
+  grades: NotesPeriodGrade[];
+};
+
 function coefFor(
   g: NotesPeriodGrade,
   map?: Record<string, number>,
 ): number {
   return map?.[g.subject_id] ?? g.matieres?.coefficient ?? 1;
+}
+
+function scoreTone(on20: number | null): string {
+  if (on20 === null) return "text-slate-500";
+  if (on20 >= 14) return "text-emerald-700 dark:text-emerald-400";
+  if (on20 >= 10) return "text-brand-700";
+  return "text-amber-700 dark:text-amber-400";
+}
+
+function scoreBarWidth(on20: number | null): string {
+  if (on20 === null) return "0%";
+  return `${Math.min(100, Math.max(0, (on20 / 20) * 100))}%`;
+}
+
+function groupBySubject(
+  periodGrades: NotesPeriodGrade[],
+  coefficientBySubject: Record<string, number>,
+): SubjectGroup[] {
+  const avg = computeWeightedAverage(periodGrades, { coefficientBySubject });
+  const avgById = new Map(avg.subjects.map((s) => [s.subjectId, s]));
+
+  const map = new Map<string, NotesPeriodGrade[]>();
+  for (const g of periodGrades) {
+    const id = g.subject_id || g.matieres?.id || "unknown";
+    const list = map.get(id) ?? [];
+    list.push(g);
+    map.set(id, list);
+  }
+
+  const groups: SubjectGroup[] = [];
+  for (const [subjectId, list] of map) {
+    const summary = avgById.get(subjectId);
+    groups.push({
+      subjectId,
+      subjectName:
+        summary?.subjectName ?? list[0]?.matieres?.name ?? "Matière",
+      coefficient:
+        summary?.coefficient ?? coefFor(list[0]!, coefficientBySubject),
+      averageOn20: summary?.averageOn20 ?? null,
+      grades: list,
+    });
+  }
+
+  groups.sort((a, b) => a.subjectName.localeCompare(b.subjectName, "fr"));
+  return groups;
 }
 
 export function NotesPeriodTables({
@@ -58,21 +115,29 @@ export function NotesPeriodTables({
   if (grades.length === 0) return null;
 
   return (
-    <div className={cn("space-y-8", className)}>
+    <div className={cn("space-y-6", className)}>
       {annual.annualAverage !== null ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3 dark:border-brand-800 dark:bg-brand-900/20">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 px-5 py-4 dark:border-brand-800 dark:bg-brand-900/20">
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               Moyenne annuelle
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">
               (T1 + T2 + T3) / {annual.trimesterCount || 3}
               {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xl font-bold text-brand-700">
-              {formatAverage(annual.annualAverage)} / 20
+            <p
+              className={cn(
+                "text-2xl font-bold tabular-nums",
+                scoreTone(annual.annualAverage),
+              )}
+            >
+              {formatAverage(annual.annualAverage)}{" "}
+              <span className="text-base font-semibold text-slate-400">
+                / 20
+              </span>
             </p>
             <Badge tone={annual.passed ? "success" : "warning"}>
               {formatPassDecision(annual)}
@@ -85,131 +150,159 @@ export function NotesPeriodTables({
         const avg = computeWeightedAverage(periodGrades, {
           coefficientBySubject,
         });
+        const subjects = groupBySubject(periodGrades, coefficientBySubject);
+
         return (
           <section key={period} className="space-y-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200 pb-2 dark:border-[var(--border)]">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {period}
               </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Moyenne générale :{" "}
-                <span className="text-lg font-bold text-brand-700">
+              <p className="text-sm text-slate-500">
+                Moyenne générale{" "}
+                <span
+                  className={cn(
+                    "ml-1 text-xl font-bold tabular-nums",
+                    scoreTone(avg.generalAverage),
+                  )}
+                >
                   {avg.generalAverage !== null
-                    ? `${formatAverage(avg.generalAverage)} / 20`
+                    ? formatAverage(avg.generalAverage)
                     : "—"}
                 </span>
+                <span className="text-slate-400"> / 20</span>
               </p>
             </div>
 
-            <Card className="overflow-hidden p-0">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2.5 font-semibold">Matière</th>
-                      {showEvaluation ? (
-                        <th className="px-3 py-2.5 font-semibold">
-                          Évaluation
-                        </th>
-                      ) : null}
-                      <th className="px-3 py-2.5 font-semibold">Coef.</th>
-                      <th className="px-3 py-2.5 font-semibold">Note</th>
-                      <th className="px-3 py-2.5 font-semibold">/20</th>
-                      <th className="px-3 py-2.5 font-semibold">
-                        Commentaire
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {periodGrades.map((g) => {
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {subjects.map((subject) => (
+                <Card
+                  key={`${period}-${subject.subjectId}`}
+                  className="flex flex-col overflow-hidden p-0"
+                >
+                  <div className="border-b border-slate-100 px-4 py-3 dark:border-[var(--border)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-semibold text-slate-900 dark:text-slate-100">
+                          {subject.subjectName}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Coef. {subject.coefficient}
+                          {subject.grades.length > 1
+                            ? ` · ${subject.grades.length} notes`
+                            : " · 1 note"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p
+                          className={cn(
+                            "text-xl font-bold tabular-nums leading-none",
+                            scoreTone(subject.averageOn20),
+                          )}
+                        >
+                          {subject.averageOn20 !== null
+                            ? formatAverage(subject.averageOn20)
+                            : "—"}
+                        </p>
+                        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          / 20
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-[width]",
+                          subject.averageOn20 !== null &&
+                            subject.averageOn20 >= 14
+                            ? "bg-emerald-500"
+                            : subject.averageOn20 !== null &&
+                                subject.averageOn20 >= 10
+                              ? "bg-brand-500"
+                              : "bg-amber-500",
+                        )}
+                        style={{
+                          width: scoreBarWidth(subject.averageOn20),
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <ul className="divide-y divide-slate-100 dark:divide-[var(--border)]">
+                    {subject.grades.map((g) => {
                       const absent = Boolean(g.is_absent);
                       const on20 = absent
-                        ? "—"
+                        ? null
                         : g.max_score > 0
-                          ? scoreOn20(g.score, g.max_score).toFixed(2)
-                          : "—";
-                      const evalLabel = g.evaluations
-                        ? `${evaluationTypeLabel(g.evaluations.type)} · ${g.evaluations.title}`
-                        : "—";
+                          ? scoreOn20(g.score, g.max_score)
+                          : null;
+                      const comment = g.comment?.trim() || "";
+                      const evalType = g.evaluations?.type;
+                      const evalTitle = g.evaluations?.title?.trim();
+
                       return (
-                        <tr
-                          key={g.id}
-                          className="border-t border-slate-100 dark:border-[var(--border)]"
-                        >
-                          <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100">
-                            {g.matieres?.name ?? "—"}
-                          </td>
-                          {showEvaluation ? (
-                            <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
-                              {evalLabel}
-                            </td>
-                          ) : null}
-                          <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
-                            {coefFor(g, coefficientBySubject)}
-                          </td>
-                          <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100">
-                            {absent ? (
-                              <Badge tone="warning">Absent</Badge>
-                            ) : (
-                              `${g.score} / ${g.max_score}`
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 font-semibold text-brand-700">
-                            {on20}
-                          </td>
-                          <td className="px-3 py-2.5 text-slate-500">
-                            {g.comment?.trim() || "—"}
-                          </td>
-                        </tr>
+                        <li key={g.id} className="px-4 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              {showEvaluation && evalType ? (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge tone={evaluationTypeTone(evalType)}>
+                                    {evaluationTypeShort(evalType)}
+                                  </Badge>
+                                  {evalTitle ? (
+                                    <span className="truncate text-sm text-slate-700 dark:text-slate-200">
+                                      {evalTitle}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">
+                                      {evaluationTypeLabel(evalType)}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-600 dark:text-slate-300">
+                                  Note
+                                </p>
+                              )}
+                              {comment ? (
+                                <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                                  {comment}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="shrink-0 text-right">
+                              {absent ? (
+                                <Badge tone="warning">Absent</Badge>
+                              ) : (
+                                <>
+                                  <p
+                                    className={cn(
+                                      "text-sm font-bold tabular-nums",
+                                      scoreTone(on20),
+                                    )}
+                                  >
+                                    {on20 !== null
+                                      ? on20.toFixed(1)
+                                      : "—"}
+                                    <span className="font-medium text-slate-400">
+                                      {" "}
+                                      /20
+                                    </span>
+                                  </p>
+                                  <p className="text-[11px] tabular-nums text-slate-400">
+                                    {g.score} / {g.max_score}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </li>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-
-            {avg.subjects.length > 0 ? (
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Moyennes par matière
-                </h3>
-                <Card className="overflow-hidden p-0">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-400">
-                        <tr>
-                          <th className="px-3 py-2.5 font-semibold">
-                            Matière
-                          </th>
-                          <th className="px-3 py-2.5 font-semibold">Coef.</th>
-                          <th className="px-3 py-2.5 font-semibold">
-                            Moyenne /20
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {avg.subjects.map((s) => (
-                          <tr
-                            key={s.subjectId}
-                            className="border-t border-slate-100 dark:border-[var(--border)]"
-                          >
-                            <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100">
-                              {s.subjectName}
-                            </td>
-                            <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
-                              {s.coefficient}
-                            </td>
-                            <td className="px-3 py-2.5 font-semibold text-brand-700">
-                              {formatAverage(s.averageOn20)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  </ul>
                 </Card>
-              </div>
-            ) : null}
+              ))}
+            </div>
           </section>
         );
       })}
