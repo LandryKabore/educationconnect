@@ -8,21 +8,14 @@ import { needsProfileCompletion } from "@/lib/profileCompletion";
 import { WEBSITE_URL } from "@/lib/config";
 import { isDesktopApp } from "@/lib/platform";
 import {
-  findSavedLogin,
-  getSavedPassword,
   listSavedLogins,
   removeSavedLogin,
-  saveLogin,
+  saveIdentifiant,
   type SavedLogin,
 } from "@/lib/savedLogins";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, Input, Label, PasswordInput } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-type PendingSave = {
-  identifiant: string;
-  password: string;
-};
 
 export default function Connexion() {
   const { t } = useTranslation();
@@ -33,14 +26,13 @@ export default function Connexion() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState<SavedLogin[]>([]);
-  const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const effectiveRole = role ?? realRole;
 
   useEffect(() => {
     setSaved(listSavedLogins());
   }, []);
 
-  if (!loading && session && !pendingSave) {
+  if (!loading && session) {
     if (profile?.must_change_password) {
       return <Navigate to="/premiere-connexion" replace />;
     }
@@ -52,26 +44,16 @@ export default function Connexion() {
 
   const refreshSaved = () => setSaved(listSavedLogins());
 
-  const finishAndGo = () => {
-    setPendingSave(null);
-    navigate("/");
-  };
-
-  const attemptSignIn = async (id: string, pwd: string) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setSubmitting(true);
     try {
-      await signIn(id, pwd);
-      const already = findSavedLogin(id);
-      if (already) {
-        saveLogin(id, pwd);
-        refreshSaved();
-        navigate("/");
-      } else {
-        setPendingSave({
-          identifiant: id.trim(),
-          password: pwd,
-        });
-      }
+      await signIn(identifiant, password);
+      // Password is never persisted (see lib/savedLogins.ts) — only the
+      // identifier is remembered to speed up the next login on this device.
+      saveIdentifiant(identifiant);
+      refreshSaved();
+      navigate("/");
     } catch {
       toast.error(t("connexions.error"));
     } finally {
@@ -79,30 +61,9 @@ export default function Connexion() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await attemptSignIn(identifiant, password);
-  };
-
-  const acceptSave = () => {
-    if (!pendingSave) return;
-    saveLogin(pendingSave.identifiant, pendingSave.password);
-    refreshSaved();
-    toast.success(t("connexions.savedOk"));
-    finishAndGo();
-  };
-
-  const declineSave = () => {
-    finishAndGo();
-  };
-
   const pickSaved = (entry: SavedLogin) => {
-    const pwd = getSavedPassword(entry);
     setIdentifiant(entry.identifiant);
-    setPassword(pwd);
-    if (pwd) {
-      void attemptSignIn(entry.identifiant, pwd);
-    }
+    document.getElementById("password")?.focus();
   };
 
   const deleteSaved = (id: string) => {
@@ -145,9 +106,7 @@ export default function Connexion() {
                         {entry.identifiant}
                       </span>
                       <span className="text-xs text-slate-500">
-                        {getSavedPassword(entry)
-                          ? t("connexions.savedTapLogin")
-                          : t("connexions.savedTap")}
+                        {t("connexions.savedTap")}
                       </span>
                     </span>
                   </button>
@@ -213,45 +172,6 @@ export default function Connexion() {
           </p>
         ) : null}
       </Card>
-
-      {pendingSave ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="save-login-title"
-        >
-          <Card className="w-full max-w-sm shadow-xl">
-            <h3
-              id="save-login-title"
-              className="text-lg font-semibold text-slate-900 dark:text-slate-50"
-            >
-              {t("connexions.savePromptTitle")}
-            </h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              {t("connexions.savePromptBody", {
-                identifiant: pendingSave.identifiant,
-              })}
-            </p>
-            <p className="mt-2 text-xs text-slate-500">
-              {t("connexions.savePromptHint")}
-            </p>
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
-              <Button type="button" className="flex-1" onClick={acceptSave}>
-                {t("connexions.saveYes")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={declineSave}
-              >
-                {t("connexions.saveNo")}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
     </div>
   );
 }

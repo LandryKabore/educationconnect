@@ -6,7 +6,7 @@ import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { Evaluation } from "@/lib/types";
-import { joinProfile } from "@/lib/utils";
+import { joinOne } from "@/lib/utils";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 
 type EvalRow = Evaluation & {
@@ -37,8 +37,7 @@ export default function MesDevoirs({ isExam }: Props) {
         class_section_id: string;
         classes: unknown;
       };
-      const className =
-        joinProfile<{ name: string }>(row.classes)?.name ?? "";
+      const className = joinOne<{ name: string }>(row.classes)?.name ?? "";
 
       let q = supabase
         .from("evaluations")

@@ -1,6 +1,7 @@
-/** Student import helpers (CSV + XLSX). UTF-8 CSV: comma or semicolon. */
-
-import * as XLSX from "xlsx";
+/** Student import helpers (CSV only). UTF-8: comma or semicolon.
+ *  Excel (.xlsx) support was removed because the npm `xlsx` package ships
+ *  known high-severity CVEs with no fix on the public registry. Schools
+ *  can still export their spreadsheet as CSV from Excel / LibreOffice. */
 
 export type StudentCsvRow = {
   line: number;
@@ -188,50 +189,21 @@ export function parseStudentCsv(text: string): StudentCsvParseResult {
   return parseStudentTable(allRows, 1);
 }
 
-export function parseStudentXlsx(buffer: ArrayBuffer): StudentCsvParseResult {
-  let workbook: XLSX.WorkBook;
-  try {
-    workbook = XLSX.read(buffer, { type: "array", cellDates: false });
-  } catch {
-    return { rows: [], errors: ["Fichier Excel illisible."] };
-  }
-
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    return { rows: [], errors: ["Le fichier Excel ne contient aucune feuille."] };
-  }
-
-  const sheet = workbook.Sheets[sheetName];
-  const aoa = XLSX.utils.sheet_to_json<(string | number | null | undefined)[]>(
-    sheet,
-    {
-      header: 1,
-      defval: "",
-      raw: false,
-      blankrows: false,
-    },
-  );
-
-  if (!aoa.length) {
-    return { rows: [], errors: ["Feuille Excel vide."] };
-  }
-
-  const allRows = aoa.map((row) => (row ?? []).map((c) => cellToString(c)));
-  return parseStudentTable(allRows, 1);
-}
-
-export function isStudentImportFile(file: File): "csv" | "xlsx" | null {
+export function isStudentImportFile(file: File): "csv" | null {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".xlsx") || name.endsWith(".xls")) return "xlsx";
   if (name.endsWith(".csv") || file.type.includes("csv") || file.type === "text/plain") {
     return "csv";
   }
+  // Explicitly reject Excel so the UI can show a clear message rather than
+  // a cryptic parse error (xlsx support was removed for security reasons).
   if (
+    name.endsWith(".xlsx") ||
+    name.endsWith(".xls") ||
     file.type ===
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
     file.type === "application/vnd.ms-excel"
   ) {
-    return "xlsx";
+    return null;
   }
   return null;
 }
@@ -241,13 +213,19 @@ export async function parseStudentImportFile(
 ): Promise<StudentCsvParseResult> {
   const kind = isStudentImportFile(file);
   if (!kind) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      return {
+        rows: [],
+        errors: [
+          "Les fichiers Excel (.xlsx) ne sont plus acceptés pour des raisons de sécurité. Ouvrez le fichier dans Excel / LibreOffice et enregistrez-le en CSV (UTF-8), puis réimportez.",
+        ],
+      };
+    }
     return {
       rows: [],
-      errors: ["Format non supporté. Utilisez un fichier .csv ou .xlsx."],
+      errors: ["Format non supporté. Utilisez un fichier .csv (UTF-8)."],
     };
-  }
-  if (kind === "xlsx") {
-    return parseStudentXlsx(await file.arrayBuffer());
   }
   return parseStudentCsv(await file.text());
 }
@@ -259,22 +237,6 @@ export function studentCsvTemplate(): string {
     "Ibrahim,Sawadogo,6emeA",
     "Fatou,Kaboré,5eme B,70234567",
   ].join("\n");
-}
-
-export function studentXlsxTemplateBlob(): Blob {
-  const rows = [
-    ["prenom", "nom", "classe", "telephone"],
-    ["Awa", "Ouedraogo", "6eme A", "70123456"],
-    ["Ibrahim", "Sawadogo", "6emeA", ""],
-    ["Fatou", "Kaboré", "5eme B", "70234567"],
-  ];
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, "Eleves");
-  const out = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-  return new Blob([out], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
 }
 
 /** Match class names ignoring accents, case, and spaces (6emeA ≈ 6ème A). */

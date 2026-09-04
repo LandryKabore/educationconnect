@@ -6,7 +6,11 @@ dist-ssr
 
 # Env
 .env
+.env.local
 .env.*.local
+.env.production
+.env.development
+!.env.example
 
 # Editor
 .vscode/*

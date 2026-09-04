@@ -20,9 +20,11 @@ Ouvrez http://localhost:5173
 
 ### Compte super admin initial
 
-- Identifiant : `superadmin`
-- Mot de passe : `EduFaso2026!`
-- À la première connexion, changez le mot de passe.
+Le premier super administrateur se crée via la fonction Edge
+`bootstrap-super-admin`, protégée par le secret d’environnement
+`BOOTSTRAP_SUPER_ADMIN_SECRET` (jamais de mot de passe par défaut dans le
+code ou la doc). Après création, changez immédiatement le mot de passe à
+la première connexion.
 
 ## Rôles
 

@@ -54,7 +54,7 @@ export default function MesClasses() {
       >();
 
       for (const row of aff ?? []) {
-        const r = row as {
+        const r = row as unknown as {
           class_section_id: string;
           subject_id: string;
           classes: {

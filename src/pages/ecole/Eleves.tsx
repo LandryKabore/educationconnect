@@ -15,11 +15,9 @@ import { fromAuthEmail, fullName, joinProfile, matchesSearch } from "@/lib/utils
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
-  downloadBlob,
   downloadTextFile,
   parseStudentImportFile,
   studentCsvTemplate,
-  studentXlsxTemplateBlob,
   type StudentCsvRow,
 } from "@/lib/studentCsv";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
@@ -774,7 +772,7 @@ export default function Eleves() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".csv,text/csv,text/plain"
                 className="hidden"
                 onChange={(e) => {
                   void onFileSelected(e.target.files?.[0] ?? null);
@@ -785,14 +783,14 @@ export default function Eleves() {
           ) : (
             <>
           <p className="mt-1 text-sm text-slate-600">
-            Importez votre fichier <code className="text-xs">.csv</code> ou{" "}
-            <code className="text-xs">.xlsx</code> : colonne A = prénom, B =
-            nom, C = classe (optionnel), D = téléphone (optionnel). Avec
-            en-tête : <code className="text-xs">prenom</code>,{" "}
+            Importez un fichier <code className="text-xs">.csv</code> (UTF-8) :
+            colonne A = prénom, B = nom, C = classe (optionnel), D = téléphone
+            (optionnel). Avec en-tête :{" "}
+            <code className="text-xs">prenom</code>,{" "}
             <code className="text-xs">nom</code>,{" "}
             <code className="text-xs">classe</code>,{" "}
-            <code className="text-xs">telephone</code>. Première feuille
-            Excel. Max 200 élèves.
+            <code className="text-xs">telephone</code>. Pour Excel, enregistrez
+            d’abord en CSV. Max 200 élèves.
           </p>
 
           <div className="mt-4">
@@ -807,7 +805,7 @@ export default function Eleves() {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              accept=".csv,text/csv,text/plain"
               className="hidden"
               onChange={(e) => {
                 void onFileSelected(e.target.files?.[0] ?? null);
@@ -827,19 +825,6 @@ export default function Eleves() {
                 }
               >
                 modèle CSV
-              </button>
-              {" · "}
-              <button
-                type="button"
-                className="text-brand-700 underline underline-offset-2 hover:text-brand-800"
-                onClick={() =>
-                  downloadBlob(
-                    "modele-eleves-edufaso.xlsx",
-                    studentXlsxTemplateBlob(),
-                  )
-                }
-              >
-                modèle Excel
               </button>
             </p>
           </div>

@@ -59,7 +59,7 @@ export default function TeacherHome() {
       if (error) throw error;
 
       const assignments = (aff ?? []).map((a) => {
-        const row = a as {
+        const row = a as unknown as {
           id: string;
           class_section_id: string;
           classes: {
@@ -235,7 +235,7 @@ export default function TeacherHome() {
         .order("created_at", { ascending: false })
         .limit(30);
 
-      const allMsgs = (msgData ?? []) as InboxPreview[];
+      const allMsgs = (msgData ?? []) as unknown as InboxPreview[];
 
       return {
         classes,
@@ -248,14 +248,14 @@ export default function TeacherHome() {
         attendancePending,
         attendanceDone,
         today,
-        recentDevoirs: (recentDevoirs ?? []) as {
+        recentDevoirs: (recentDevoirs ?? []) as unknown as {
           id: string;
           title: string;
           due_date: string | null;
           classes: { name: string } | null;
           matieres: { name: string } | null;
         }[],
-        upcomingExamens: (upcomingExamens ?? []) as {
+        upcomingExamens: (upcomingExamens ?? []) as unknown as {
           id: string;
           title: string;
           due_date: string | null;
@@ -285,7 +285,7 @@ export default function TeacherHome() {
         .order("day_of_week")
         .order("start_time");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         day_of_week: number;
         start_time: string;

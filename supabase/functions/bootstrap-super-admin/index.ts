@@ -13,6 +13,32 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // This endpoint runs with `verify_jwt = false` (see supabase/config.toml)
+    // because it must be callable before any account exists. That makes it
+    // reachable by anyone with the project URL, so it MUST fail closed:
+    // - a one-time setup secret is required (never shipped in the app bundle)
+    // - no default/weak password is ever assigned
+    const bootstrapSecret = Deno.env.get("BOOTSTRAP_SUPER_ADMIN_SECRET");
+    if (!bootstrapSecret) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Bootstrap désactivé : BOOTSTRAP_SUPER_ADMIN_SECRET n'est pas configuré",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    const providedSecret = req.headers.get("x-bootstrap-secret") ?? "";
+    if (providedSecret !== bootstrapSecret) {
+      return new Response(JSON.stringify({ error: "Non autorisé" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
@@ -37,7 +63,18 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const firstName = String(body.firstName ?? "Super").trim();
     const lastName = String(body.lastName ?? "Admin").trim();
-    const password = String(body.password ?? "EduFaso2026!");
+    const password = String(body.password ?? "");
+    if (password.length < 12) {
+      return new Response(
+        JSON.stringify({
+          error: "Le mot de passe doit contenir au moins 12 caractères",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     const username = String(body.username ?? "superadmin").trim().toLowerCase();
     const email = `${username}@edufaso.local`;
 

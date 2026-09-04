@@ -112,7 +112,7 @@ export default function ParentHome() {
           .order("created_at", { ascending: false })
           .limit(5);
 
-        const notes = (recentNotes ?? []) as {
+        const notes = (recentNotes ?? []) as unknown as {
           id: string;
           score: number;
           max_score: number;
@@ -178,7 +178,7 @@ export default function ParentHome() {
         .order("created_at", { ascending: false })
         .limit(30);
 
-      const allMsgs = (msgData ?? []) as InboxPreview[];
+      const allMsgs = (msgData ?? []) as unknown as InboxPreview[];
 
       return {
         children,

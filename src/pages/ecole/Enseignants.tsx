@@ -289,7 +289,7 @@ export default function Enseignants() {
         const classSectionId = cls.id as string;
         if (!selected.has(classSectionId)) continue;
         const rows = (
-          cls as {
+          cls as unknown as {
             programme_classe?: {
               subject_id: string;
               matieres: Subject | null;
@@ -376,7 +376,8 @@ export default function Enseignants() {
             class_section_id: classId,
             subject_id: a.subject_id as string,
             classes: { name: nameById.get(classId) ?? "—" },
-            matieres: (a as { matieres: { name: string } | null }).matieres,
+            matieres: (a as unknown as { matieres: { name: string } | null })
+              .matieres,
           });
         }
       }

@@ -82,7 +82,7 @@ export default function MesCompositions() {
       if (papersError) throw papersError;
 
       const bySession = new Map<string, SessionRow["papers"]>();
-      for (const p of (papers ?? []) as Paper[]) {
+      for (const p of (papers ?? []) as unknown as Paper[]) {
         const rows = bySession.get(p.session_id) ?? [];
         rows.push({
           id: p.id,

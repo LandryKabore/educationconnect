@@ -26,6 +26,7 @@ import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";
 import { fetchEnrollmentsByStudent } from "@/lib/programmeCounts";
+import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
@@ -35,11 +36,6 @@ import { supabase } from "@/lib/supabase";
 import { cn, fullName, joinProfile, personName } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
 import type { AttendanceStatus } from "@/lib/types";
-
-function dbDayOfWeek(date = new Date()) {
-  const js = date.getDay();
-  return js === 0 ? 7 : js;
-}
 
 type PresenceAlert = {
   id: string;
@@ -168,7 +164,7 @@ export default function EcoleOverview() {
           profils: { first_name: string; last_name: string } | null;
         };
 
-        const alerts = ((presenceRows ?? []) as PresenceRow[]).map((p) => {
+        const alerts = ((presenceRows ?? []) as unknown as PresenceRow[]).map((p) => {
           const profil = joinProfile(p.profils);
           return {
             id: p.id,
@@ -206,7 +202,7 @@ export default function EcoleOverview() {
           teacher: { first_name: string; last_name: string } | null;
         };
 
-        const exams = ((examRows ?? []) as ExamRow[]).map((e) => ({
+        const exams = ((examRows ?? []) as unknown as ExamRow[]).map((e) => ({
           id: e.id,
           title: e.title,
           due_date: e.due_date,
@@ -261,7 +257,7 @@ export default function EcoleOverview() {
 
       const enrolled = await fetchEnrollmentsByStudent(sid);
       studentsWithoutClass = (
-        (studentRoles ?? []) as {
+        (studentRoles ?? []) as unknown as {
           user_id: string;
           profils: { first_name: string; last_name: string } | null;
         }[]
@@ -278,7 +274,7 @@ export default function EcoleOverview() {
         .sort((a, b) => a.name.localeCompare(b.name, "fr"))
         .slice(0, 6);
 
-      const allMsgs = (msgRes.data ?? []) as InboxPreview[];
+      const allMsgs = (msgRes.data ?? []) as unknown as InboxPreview[];
 
       return {
         classes: classesRes.count ?? 0,

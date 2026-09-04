@@ -17,10 +17,28 @@ Deno.serve(async (req) => {
     const token = String(body.token ?? "").trim();
     const password = String(body.password ?? "");
 
-    if (!token || password.length < 6) {
+    if (!token || password.length < 8) {
       return new Response(
         JSON.stringify({
-          error: "token requis et mot de passe (6 caractères min.)",
+          error:
+            "token requis et mot de passe (8 caractères min., avec majuscule, chiffre et caractère spécial)",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // Mirror client passwordRules.ts — invitations must not accept weak passwords.
+    const strong =
+      /[A-Z]/.test(password) &&
+      /[0-9]/.test(password) &&
+      /[^A-Za-z0-9]/.test(password);
+    if (!strong) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Mot de passe trop faible : majuscule, chiffre et caractère spécial requis",
         }),
         {
           status: 400,

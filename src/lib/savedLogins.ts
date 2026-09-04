@@ -1,4 +1,15 @@
-/** Device-local saved logins for quick re-entry (not a vault — convenience only). */
+/**
+ * Device-local "remember my identifier" convenience — NOT a credential vault.
+ *
+ * SECURITY NOTE: this deliberately never stores the password. Earlier
+ * versions kept a base64-"obfuscated" password in localStorage, which is
+ * trivially reversible (anyone with DevTools/localStorage access on a
+ * shared school computer could read every saved account in clear text).
+ * Browser localStorage has no OS-level encryption, so no client-side
+ * encoding here would provide real confidentiality. Only the login
+ * identifier (username/email) is remembered to speed up re-entry; the
+ * password must always be typed.
+ */
 
 const STORAGE_KEY = "edufaso-saved-logins";
 
@@ -6,37 +17,21 @@ export type SavedLogin = {
   id: string;
   /** Display / login identifier (username or email). */
   identifiant: string;
-  /** Obfuscated password; empty if user chose identifier only. */
-  passwordEnc: string;
   savedAt: string;
 };
-
-function encodePassword(password: string): string {
-  const bytes = new TextEncoder().encode(password);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary);
-}
-
-function decodePassword(enc: string): string {
-  if (!enc) return "";
-  try {
-    const binary = atob(enc);
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return "";
-  }
-}
 
 function readAll(): SavedLogin[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedLogin[];
+    const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
-      (x) => x && typeof x.identifiant === "string" && x.identifiant.trim(),
+      (x): x is SavedLogin =>
+        !!x &&
+        typeof x === "object" &&
+        typeof (x as SavedLogin).identifiant === "string" &&
+        (x as SavedLogin).identifiant.trim().length > 0,
     );
   } catch {
     return [];
@@ -58,13 +53,12 @@ export function findSavedLogin(identifiant: string): SavedLogin | null {
   );
 }
 
-export function saveLogin(identifiant: string, password: string): SavedLogin {
+export function saveIdentifiant(identifiant: string): SavedLogin {
   const trimmed = identifiant.trim();
   const existing = findSavedLogin(trimmed);
   const entry: SavedLogin = {
     id: existing?.id ?? crypto.randomUUID(),
     identifiant: trimmed,
-    passwordEnc: encodePassword(password),
     savedAt: new Date().toISOString(),
   };
   const others = readAll().filter(
@@ -76,8 +70,4 @@ export function saveLogin(identifiant: string, password: string): SavedLogin {
 
 export function removeSavedLogin(id: string) {
   writeAll(readAll().filter((x) => x.id !== id));
-}
-
-export function getSavedPassword(entry: SavedLogin): string {
-  return decodePassword(entry.passwordEnc ?? "");
 }

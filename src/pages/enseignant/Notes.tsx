@@ -123,7 +123,8 @@ export default function Notes() {
       // Admin saisie for a teacher → only that teacher's subjects.
       // Plain admin (no teacherId) still sees all class subjects.
       if (isProxy) q = q.eq("teacher_id", actingTeacherId!);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       const unique = new Map<string, Subject>();
       for (const row of data ?? []) {
         const sub = (row as unknown as { matieres: Subject }).matieres;
@@ -256,7 +257,7 @@ export default function Notes() {
         .not("eval_date", "is", null)
         .order("eval_date");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         title: string;
         eval_date: string;
@@ -506,7 +507,7 @@ export default function Notes() {
         toast.error(conflictError.message || "Vérification impossible");
         return;
       }
-      const conflict = conflicts?.[0] as
+      const conflict = conflicts?.[0] as unknown as
         | {
             title: string;
             matieres: { name: string } | null;

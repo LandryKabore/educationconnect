@@ -20,16 +20,9 @@
     "error": "Identifiants incorrects",
     "hint": "Compte créé par votre établissement. Pas d'inscription libre.",
     "installHint": "Installez EduFaso sur votre téléphone pour un accès rapide.",
-    "savePromptTitle": "Enregistrer cette connexion ?",
-    "savePromptBody": "Souhaitez-vous enregistrer « {{identifiant}} » sur cet appareil pour vous connecter plus rapidement la prochaine fois ?",
-    "savePromptHint": "L’identifiant et le mot de passe restent uniquement sur cet appareil. Vous pourrez supprimer ce compte enregistré à tout moment.",
-    "saveYes": "Oui, enregistrer",
-    "saveNo": "Non, merci",
-    "savedOk": "Connexion enregistrée sur cet appareil",
-    "savedTitle": "Comptes enregistrés",
-    "savedTap": "Appuyer pour remplir",
-    "savedTapLogin": "Appuyer pour se connecter",
-    "savedRemove": "Supprimer ce compte enregistré"
+    "savedTitle": "Identifiants enregistrés sur cet appareil",
+    "savedTap": "Appuyer pour remplir l’identifiant",
+    "savedRemove": "Supprimer cet identifiant enregistré"
   },
   "premiere": {
     "title": "Première connexion",

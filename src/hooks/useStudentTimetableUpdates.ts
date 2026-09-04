@@ -272,7 +272,7 @@ export function useStudentTimetableRealtime() {
         .eq("class_section_id", classId);
       rememberSlots(
         (data ?? []).map((row) => {
-          const r = row as {
+          const r = row as unknown as {
             id: string;
             class_section_id: string;
             subject_id: string;

@@ -239,7 +239,7 @@ export default function Messages({
         .eq("recipient_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as InboxMessage[];
+      return data as unknown as InboxMessage[];
     },
   });
 
@@ -256,7 +256,7 @@ export default function Messages({
         .eq("sender_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as SentMessage[];
+      return data as unknown as SentMessage[];
     },
   });
 

@@ -198,10 +198,10 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
 
   DAYS.forEach((d, i) => {
     const x = gridLeft + timeColW + i * dayColW;
-    doc.setFillColor(...d.fill);
+    doc.setFillColor(d.fill[0], d.fill[1], d.fill[2]);
     doc.setDrawColor(30, 41, 59);
     doc.rect(x, gridTop, dayColW, headerRowH, "FD");
-    doc.setTextColor(...d.text);
+    doc.setTextColor(d.text[0], d.text[1], d.text[2]);
     doc.text(d.label, x + dayColW / 2, gridTop + headerRowH / 2 + 1, {
       align: "center",
     });
@@ -261,8 +261,8 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     const subjectKey = (slot.subjectName || "Cours").trim() || "Cours";
     const palette = subjectColors.get(subjectKey) ?? SLOT_PALETTE[0];
 
-    doc.setFillColor(...palette.fill);
-    doc.setDrawColor(...palette.border);
+    doc.setFillColor(palette.fill[0], palette.fill[1], palette.fill[2]);
+    doc.setDrawColor(palette.border[0], palette.border[1], palette.border[2]);
     doc.setLineWidth(0.45);
     roundedRect(doc, x, top, w, height, 1.2, "FD");
 
