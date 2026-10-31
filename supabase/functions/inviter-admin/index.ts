@@ -93,6 +93,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return new Response(JSON.stringify({ error: "Adresse email invalide" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!email || !firstName || !lastName) {
       return new Response(
         JSON.stringify({

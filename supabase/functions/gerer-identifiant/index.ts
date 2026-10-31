@@ -7,12 +7,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-function randomPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let out = "";
-  const arr = crypto.getRandomValues(new Uint8Array(length));
-  for (const n of arr) out += chars[n % chars.length];
-  return out;
+function randomPassword(length = 12) {
+  // F-22: always 12+ chars with upper, lower, digit and symbol, so temporary
+  // passwords also satisfy a stricter Auth password policy.
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%*?-+";
+  const all = upper + lower + digits + symbols;
+  const n = Math.max(length, 12);
+  const pick = (set: string) => set[crypto.getRandomValues(new Uint8Array(1))[0] % set.length];
+  const out = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+  while (out.length < n) out.push(pick(all));
+  // Fisher-Yates shuffle
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint8Array(1))[0] % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out.join("");
 }
 
 Deno.serve(async (req) => {
@@ -99,6 +111,20 @@ Deno.serve(async (req) => {
       );
     }
 
+    // F-15: a school admin must not reset the credentials of administrators
+    // (peers); that stays with the super admin.
+    if (targetRole.role === "school_admin" && !canSuper) {
+      return new Response(
+        JSON.stringify({
+          error: "Seul un super administrateur peut gérer ce compte",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const { data: profil } = await admin
       .from("profils")
       .select("email")
@@ -148,6 +174,14 @@ Deno.serve(async (req) => {
           used: false,
         });
       }
+
+      await admin.from("audit_logs").insert({
+        actor_id: user.id,
+        action: "reset_password",
+        entity_type: "user",
+        entity_id: targetUserId,
+        details: { school_id: schoolId, via: "gerer-identifiant" },
+      });
 
       return new Response(
         JSON.stringify({
@@ -199,6 +233,14 @@ Deno.serve(async (req) => {
           },
         );
       }
+
+      await admin.from("audit_logs").insert({
+        actor_id: user.id,
+        action: "recovery_link",
+        entity_type: "user",
+        entity_id: targetUserId,
+        details: { school_id: schoolId, via: "gerer-identifiant" },
+      });
 
       return new Response(
         JSON.stringify({

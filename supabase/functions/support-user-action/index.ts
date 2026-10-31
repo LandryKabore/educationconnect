@@ -86,6 +86,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // B-08: a super admin cannot lock their own account (the caller is an
+    // active super admin, so locking anyone else can never remove the last one).
+    if (action === "lock" && targetUserId === user.id) {
+      return new Response(
+        JSON.stringify({ error: "Vous ne pouvez pas verrouiller votre propre compte" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     if (action === "reset_password") {
       const tempPassword = randomPassword(12);
       const { error } = await admin.auth.admin.updateUserById(targetUserId, {
@@ -97,6 +109,11 @@ Deno.serve(async (req) => {
         .from("profils")
         .update({ must_change_password: true, active: true })
         .eq("id", targetUserId);
+      // B-14: the stored hint belongs to the previous temporary password.
+      await admin
+        .from("identifiants_temporaires")
+        .update({ temp_password_hint: null })
+        .eq("user_id", targetUserId);
       await admin.from("audit_logs").insert({
         actor_id: user.id,
         action: "reset_password",
@@ -138,11 +155,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === "lock") {
-      await admin.from("profils").update({ active: false }).eq("id", targetUserId);
-      await admin.from("roles_utilisateurs").update({ active: false }).eq(
-        "user_id",
-        targetUserId,
-      );
+      const { error: profLockErr } = await admin
+        .from("profils")
+        .update({ active: false })
+        .eq("id", targetUserId);
+      if (profLockErr) throw profLockErr;
+      // Only touch roles that are active right now, and remember them with
+      // locked_at so unlock restores exactly these (not roles an admin
+      // deliberately revoked earlier, e.g. "Administrateur retiré").
+      const { error: roleLockErr } = await admin
+        .from("roles_utilisateurs")
+        .update({ active: false, locked_at: new Date().toISOString() })
+        .eq("user_id", targetUserId)
+        .eq("active", true);
+      if (roleLockErr) throw roleLockErr;
       try {
         await admin.auth.admin.updateUserById(targetUserId, {
           ban_duration: "876000h",
@@ -163,7 +189,41 @@ Deno.serve(async (req) => {
     }
 
     if (action === "unlock") {
-      await admin.from("profils").update({ active: true }).eq("id", targetUserId);
+      const { error: profUnlockErr } = await admin
+        .from("profils")
+        .update({ active: true })
+        .eq("id", targetUserId);
+      if (profUnlockErr) throw profUnlockErr;
+
+      // Restore the roles that lock deactivated.
+      const { data: restored, error: restoreErr } = await admin
+        .from("roles_utilisateurs")
+        .update({ active: true, locked_at: null })
+        .eq("user_id", targetUserId)
+        .not("locked_at", "is", null)
+        .select("id");
+      if (restoreErr) throw restoreErr;
+
+      let restoredCount = restored?.length ?? 0;
+      if (restoredCount === 0) {
+        // Legacy lock (before locked_at existed): nothing is marked. If the
+        // user would be left with no active role at all, reactivate them.
+        const { count: activeCount } = await admin
+          .from("roles_utilisateurs")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", targetUserId)
+          .eq("active", true);
+        if ((activeCount ?? 0) === 0) {
+          const { data: legacy, error: legacyErr } = await admin
+            .from("roles_utilisateurs")
+            .update({ active: true })
+            .eq("user_id", targetUserId)
+            .select("id");
+          if (legacyErr) throw legacyErr;
+          restoredCount = legacy?.length ?? 0;
+        }
+      }
+
       try {
         await admin.auth.admin.updateUserById(targetUserId, {
           ban_duration: "none",
@@ -176,8 +236,9 @@ Deno.serve(async (req) => {
         action: "unlock_user",
         entity_type: "user",
         entity_id: targetUserId,
+        details: { restored_roles: restoredCount },
       });
-      return new Response(JSON.stringify({ success: true }), {
+      return new Response(JSON.stringify({ success: true, restoredRoles: restoredCount }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

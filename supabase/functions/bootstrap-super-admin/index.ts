@@ -7,6 +7,32 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResponse(status: number, payload: unknown) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+/** Constant-time string comparison. */
+function safeEqual(a: string, b: string) {
+  const enc = new TextEncoder();
+  const x = enc.encode(a);
+  const y = enc.encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+function isStrongPassword(p: string) {
+  return (
+    p.length >= 12 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p) &&
+    /[^A-Za-z0-9]/.test(p)
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -17,27 +43,43 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
 
+    // F-17 / B-08: this endpoint is public (verify_jwt = false), so it needs a
+    // one-time setup secret.  Set it with:
+    //   supabase secrets set BOOTSTRAP_SECRET=<long random value>
+    // and unset it again once the first super admin exists.  Without the
+    // secret configured the function is disabled.
+    const expectedSecret = Deno.env.get("BOOTSTRAP_SECRET") ?? "";
+    if (expectedSecret.length < 16) {
+      return jsonResponse(403, { error: "Fonction désactivée" });
+    }
+    const provided =
+      req.headers.get("x-bootstrap-secret") ?? "";
+    if (!safeEqual(provided, expectedSecret)) {
+      return jsonResponse(403, { error: "Accès refusé" });
+    }
+
+    // Any super_admin row (active or not) closes the bootstrap, so locking the
+    // only active super admin can never re-open it.
     const { data: existing } = await admin
       .from("roles_utilisateurs")
       .select("id")
       .eq("role", "super_admin")
-      .eq("active", true)
       .limit(1);
 
     if (existing && existing.length > 0) {
-      return new Response(
-        JSON.stringify({ error: "Un super administrateur existe déjà" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return jsonResponse(400, { error: "Un super administrateur existe déjà" });
     }
 
     const body = await req.json().catch(() => ({}));
     const firstName = String(body.firstName ?? "Super").trim();
     const lastName = String(body.lastName ?? "Admin").trim();
-    const password = String(body.password ?? "EduFaso2026!");
+    const password = String(body.password ?? "");
+    if (!isStrongPassword(password)) {
+      return jsonResponse(400, {
+        error:
+          "Mot de passe requis : 12 caractères minimum avec majuscule, minuscule, chiffre et caractère spécial.",
+      });
+    }
     const username = String(body.username ?? "superadmin").trim().toLowerCase();
     const email = `${username}@edufaso.local`;
 
@@ -80,7 +122,6 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         username,
-        password,
         message: "Connectez-vous puis changez le mot de passe",
       }),
       {

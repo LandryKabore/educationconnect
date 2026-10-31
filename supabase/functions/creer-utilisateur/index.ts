@@ -19,12 +19,24 @@ function slugify(value: string) {
     .slice(0, 20);
 }
 
-function randomPassword(length = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let out = "";
-  const arr = crypto.getRandomValues(new Uint8Array(length));
-  for (const n of arr) out += chars[n % chars.length];
-  return out;
+function randomPassword(length = 12) {
+  // F-22: always 12+ chars with upper, lower, digit and symbol, so temporary
+  // passwords also satisfy a stricter Auth password policy.
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%*?-+";
+  const all = upper + lower + digits + symbols;
+  const n = Math.max(length, 12);
+  const pick = (set: string) => set[crypto.getRandomValues(new Uint8Array(1))[0] % set.length];
+  const out = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+  while (out.length < n) out.push(pick(all));
+  // Fisher-Yates shuffle
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint8Array(1))[0] % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out.join("");
 }
 
 Deno.serve(async (req) => {
@@ -132,6 +144,72 @@ Deno.serve(async (req) => {
       });
     }
 
+    // F-15: only a super admin may create school administrators.
+    if (role === "school_admin" && !canSuper) {
+      return new Response(
+        JSON.stringify({
+          error: "Seul un super administrateur peut créer un administrateur d'école",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // F-05: every referenced id must belong to schoolId.  This function writes
+    // with the service role, so RLS does not protect these foreign keys.
+    if (role !== "super_admin" && schoolId) {
+      const badRef = (msg: string) =>
+        new Response(JSON.stringify({ error: msg }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+
+      if (classId) {
+        const { data: cls } = await admin
+          .from("classes")
+          .select("school_id")
+          .eq("id", classId)
+          .maybeSingle();
+        if (!cls || cls.school_id !== schoolId) {
+          return badRef("Classe introuvable dans cette école");
+        }
+      }
+      if (academicYearId) {
+        const { data: yr } = await admin
+          .from("annees_scolaires")
+          .select("school_id")
+          .eq("id", academicYearId)
+          .maybeSingle();
+        if (!yr || yr.school_id !== schoolId) {
+          return badRef("Année scolaire introuvable dans cette école");
+        }
+      }
+      if (subjectId) {
+        const { data: sub } = await admin
+          .from("matieres")
+          .select("school_id")
+          .eq("id", subjectId)
+          .maybeSingle();
+        if (!sub || sub.school_id !== schoolId) {
+          return badRef("Matière introuvable dans cette école");
+        }
+      }
+      if (studentId) {
+        const { data: stu } = await admin
+          .from("roles_utilisateurs")
+          .select("id")
+          .eq("user_id", studentId)
+          .eq("role", "student")
+          .eq("school_id", schoolId)
+          .maybeSingle();
+        if (!stu) {
+          return badRef("Élève introuvable dans cette école");
+        }
+      }
+    }
+
     const base = `${slugify(firstName)}.${slugify(lastName)}` || "utilisateur";
     const suffix = Math.floor(Math.random() * 900 + 100);
     const username = `${base}${suffix}`;
@@ -193,6 +271,15 @@ Deno.serve(async (req) => {
       username,
       temp_password_hint: tempPassword,
       used: false,
+    });
+
+    // F-15: audit trail for account creation (best effort).
+    await admin.from("audit_logs").insert({
+      actor_id: user.id,
+      action: "create_user",
+      entity_type: "user",
+      entity_id: newUserId,
+      details: { role, school_id: role === "super_admin" ? null : schoolId },
     });
 
     if (role === "student" && classId) {

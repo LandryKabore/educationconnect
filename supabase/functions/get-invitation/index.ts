@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const { data, error } = await admin
       .from("invitations")
       .select(
-        "id, email, role, school_id, first_name, last_name, expires_at, accepted_at, ecoles(name)",
+        "id, email, role, school_id, first_name, last_name, expires_at, accepted_at, cancelled_at, ecoles(name)",
       )
       .eq("token", token)
       .maybeSingle();
