@@ -207,7 +207,8 @@ Deno.serve(async (req) => {
       let restoredCount = restored?.length ?? 0;
       if (restoredCount === 0) {
         // Legacy lock (before locked_at existed): nothing is marked. If the
-        // user would be left with no active role at all, reactivate them.
+        // user would be left with no active role at all, reactivate them
+        // (except super_admin, which only an explicit grant may restore).
         const { count: activeCount } = await admin
           .from("roles_utilisateurs")
           .select("id", { count: "exact", head: true })
@@ -218,6 +219,7 @@ Deno.serve(async (req) => {
             .from("roles_utilisateurs")
             .update({ active: true })
             .eq("user_id", targetUserId)
+            .neq("role", "super_admin") // never resurrect platform-admin rows
             .select("id");
           if (legacyErr) throw legacyErr;
           restoredCount = legacy?.length ?? 0;
