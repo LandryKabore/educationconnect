@@ -37,3 +37,16 @@ npm-debug.log*
 # Generated
 dev-dist
 _site.zip
+
+# Supabase CLI local state
+supabase/.temp
+supabase/.branches
+
+# Local artifacts / secrets
+*.tgz
+*.patch
+test-creds*.json
+*test-creds*
+.env
+.env.*
+!.env.example
