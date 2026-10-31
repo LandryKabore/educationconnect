@@ -37,6 +37,7 @@ import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
 import Presences from "@/pages/enseignant/Presences";
 import Notes from "@/pages/enseignant/Notes";
+import NotesSaisie from "@/pages/enseignant/NotesSaisie";
 import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
 import MesClasses from "@/pages/enseignant/MesClasses";
 import MesEleves from "@/pages/enseignant/MesEleves";
@@ -55,6 +56,15 @@ import MonBulletin from "@/pages/eleve/MonBulletin";
 import Enfants from "@/pages/parent/Enfants";
 import EnfantNotes from "@/pages/parent/EnfantNotes";
 import EnfantPresences from "@/pages/parent/EnfantPresences";
+import EnfantBulletin from "@/pages/parent/EnfantBulletin";
+import EnfantEmploiDuTemps from "@/pages/parent/EnfantEmploiDuTemps";
+import {
+  EnfantExamensPage,
+  EnfantExercicesPage,
+} from "@/pages/parent/EnfantDevoirs";
+import EnfantCompositions from "@/pages/parent/EnfantCompositions";
+import MotDePasseOublie from "@/pages/MotDePasseOublie";
+import ReinitialiserMotDePasse from "@/pages/ReinitialiserMotDePasse";
 import { useAuth } from "@/contexts/AuthContext";
 
 function HomeRedirect() {
@@ -73,6 +83,11 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/connexion" element={<Connexion />} />
+      <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+      <Route
+        path="/reinitialiser-mot-de-passe"
+        element={<ReinitialiserMotDePasse />}
+      />
       <Route
         path="/premiere-connexion"
         element={
@@ -349,6 +364,14 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
+        <Route
+          path="/classes/:id/notes/:evalId"
+          element={
+            <RequireAuth roles={["teacher", "school_admin"]}>
+              <NotesSaisie />
+            </RequireAuth>
+          }
+        />
 
         <Route
           path="/exercices-maison"
@@ -483,6 +506,46 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["parent"]}>
               <EnfantPresences />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/bulletin"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantBulletin />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/emploi-du-temps"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantEmploiDuTemps />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/devoirs"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantExamensPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/exercices"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantExercicesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/enfants/:id/compositions"
+          element={
+            <RequireAuth roles={["parent"]}>
+              <EnfantCompositions />
             </RequireAuth>
           }
         />

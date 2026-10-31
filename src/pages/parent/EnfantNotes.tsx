@@ -70,13 +70,17 @@ export default function EnfantNotes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes")
-        .select("*, matieres(*), evaluations(type, title)")
+        .select("*, matieres(*), evaluations(type, title, eval_date)")
         .eq("student_id", id!)
         .order("period_label");
       if (error) throw error;
       return data as (GradeRow & {
         matieres: Subject;
-        evaluations: { type: EvaluationType; title: string } | null;
+        evaluations: {
+          type: EvaluationType;
+          title: string;
+          eval_date: string | null;
+        } | null;
       })[];
     },
   });

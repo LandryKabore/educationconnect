@@ -133,16 +133,32 @@ export function useMessagesHomeRealtime() {
           const row = payload.new as {
             is_announcement?: boolean;
             subject?: string | null;
+            body?: string | null;
             read_at?: string | null;
           };
-          if (!row?.is_announcement || row.read_at) return;
+          if (row?.read_at) return;
           if (onMessagesPage) return;
 
-          toast.message("Nouvelle annonce", {
-            description: row.subject?.trim() || "Message de l’école",
+          if (row?.is_announcement) {
+            toast.message("Nouvelle annonce", {
+              description: row.subject?.trim() || "Message de l’école",
+              action: {
+                label: "Voir",
+                onClick: () => navigate("/annonces"),
+              },
+            });
+            return;
+          }
+
+          const preview =
+            row.subject?.trim() ||
+            row.body?.trim()?.slice(0, 80) ||
+            "Nouveau message";
+          toast.message("Nouveau message", {
+            description: preview,
             action: {
-              label: "Voir",
-              onClick: () => navigate("/annonces"),
+              label: "Ouvrir",
+              onClick: () => navigate("/messages"),
             },
           });
         },

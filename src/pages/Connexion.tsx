@@ -111,108 +111,155 @@ export default function Connexion() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <BrandLogo className="mx-auto h-28 w-auto max-w-[14rem] rounded-2xl" />
-          <p className="mt-3 text-sm text-slate-500">{t("tagline")}</p>
+    <div className="grid min-h-screen lg:grid-cols-[2fr_1fr]">
+      <div className="relative flex items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 px-4 py-16 dark:from-[#243044] dark:to-[#1a2030]">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
         </div>
-
-        <h2 className="mb-4 text-lg font-semibold">{t("connexions.title")}</h2>
-
-        {saved.length > 0 ? (
-          <div className="mb-5">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-              {t("connexions.savedTitle")}
-            </p>
-            <ul className="space-y-2">
-              {saved.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => pickSaved(entry)}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/60 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-brand-500"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-200">
-                      <UserRound className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {entry.identifiant}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {getSavedPassword(entry)
-                          ? t("connexions.savedTapLogin")
-                          : t("connexions.savedTap")}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
-                    title={t("connexions.savedRemove")}
-                    aria-label={t("connexions.savedRemove")}
-                    onClick={() => deleteSaved(entry.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <Label htmlFor="identifiant">{t("connexions.identifiant")}</Label>
-            <Input
-              id="identifiant"
-              value={identifiant}
-              onChange={(e) => setIdentifiant(e.target.value)}
-              autoComplete="username"
-              required
+        <Card className="w-full max-w-sm border-t-4 border-t-navy-700 p-6 shadow-xl sm:p-8">
+          <div className="mb-6 text-center">
+            <BrandLogo
+              file="edufaso-logo-tight.png"
+              className="mx-auto h-32 w-auto max-w-[12rem]"
             />
+            <h1 className="sr-only">{t("connexions.title")}</h1>
+            <p className="mt-2 text-sm text-slate-600">{t("tagline")}</p>
           </div>
-          <div>
-            <Label htmlFor="password">{t("connexions.password")}</Label>
-            <PasswordInput
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? t("loading") : t("connexions.submit")}
-          </Button>
-        </form>
 
-        <p className="mt-4 text-center text-xs text-slate-500">
-          {t("connexions.hint")}
-        </p>
-        {!isDesktopApp() ? (
-          <p className="mt-2 text-center text-xs">
-            <Link to="/telecharger" className="text-brand-700 hover:underline">
-              {t("connexions.installHint")}
-            </Link>
-          </p>
-        ) : null}
-        {WEBSITE_URL ? (
-          <p className="mt-2 text-center text-xs">
-            <a
-              href={WEBSITE_URL}
-              className="text-slate-500 hover:text-brand-700 hover:underline"
+          {saved.length > 0 ? (
+            <div className="mb-5">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                {t("connexions.savedTitle")}
+              </p>
+              <ul className="space-y-2">
+                {saved.map((entry) => (
+                  <li key={entry.id} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => pickSaved(entry)}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/60 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-brand-500"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-200">
+                        <UserRound className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {entry.identifiant}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {getSavedPassword(entry)
+                            ? t("connexions.savedTapLogin")
+                            : t("connexions.savedTap")}
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                      title={t("connexions.savedRemove")}
+                      aria-label={t("connexions.savedRemove")}
+                      onClick={() => deleteSaved(entry.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+            <div>
+              <Label htmlFor="identifiant" className="font-semibold text-slate-900">
+                {t("connexions.identifiant")}
+              </Label>
+              <Input
+                id="identifiant"
+                value={identifiant}
+                onChange={(e) => setIdentifiant(e.target.value)}
+                placeholder={t("connexions.identifiantPlaceholder")}
+                autoComplete="username"
+                className="h-12 border-slate-400 focus:border-navy-700 focus:ring-navy-700/20"
+                required
+              />
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <Label
+                  htmlFor="password"
+                  className="mb-0 font-semibold text-slate-900"
+                >
+                  {t("connexions.password")}
+                </Label>
+                <Link
+                  to="/mot-de-passe-oublie"
+                  className="text-sm font-semibold text-navy-700! underline! hover:text-navy-800! dark:text-slate-100!"
+                >
+                  {t("connexions.forgotPassword")}
+                </Link>
+              </div>
+              <PasswordInput
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="h-12 border-slate-400 focus:border-navy-700 focus:ring-navy-700/20"
+                required
+              />
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full bg-navy-700 font-bold! hover:bg-navy-800"
+              disabled={submitting}
             >
-              Retour au site EduFaso
-            </a>
+              {submitting ? t("loading") : t("connexions.submit")}
+            </Button>
+          </form>
+
+          <p className="mt-5 text-center text-sm text-slate-600">
+            {t("connexions.hint")}
+            {!isDesktopApp() ? (
+              <>
+                {" "}
+                <Link
+                  to="/telecharger"
+                  className="font-semibold text-navy-700! underline! hover:text-navy-800! dark:text-slate-100!"
+                >
+                  {t("connexions.installLink")}
+                </Link>
+              </>
+            ) : null}
           </p>
-        ) : null}
-      </Card>
+          {WEBSITE_URL ? (
+            <p className="mt-2 text-center text-xs">
+              <a
+                href={WEBSITE_URL}
+                className="text-slate-500 hover:text-navy-700 hover:underline"
+              >
+                Retour au site EduFaso
+              </a>
+            </p>
+          ) : null}
+        </Card>
+      </div>
+
+      <aside className="flex items-center bg-navy-700 px-8 py-12 text-white sm:px-12 lg:px-14">
+        <div className="max-w-sm">
+          <h2 className="text-2xl font-bold leading-tight sm:text-3xl">
+            {t("connexions.panelTitle")}
+          </h2>
+          <p className="mt-4 text-sm text-slate-200 sm:text-base">
+            {t("connexions.panelBody")}
+          </p>
+          <div className="mt-6 flex gap-2" aria-hidden>
+            <span className="h-1.5 w-10 rounded-full bg-faso-red" />
+            <span className="h-1.5 w-10 rounded-full bg-faso-yellow" />
+            <span className="h-1.5 w-10 rounded-full bg-faso-green" />
+          </div>
+        </div>
+      </aside>
 
       {pendingSave ? (
         <div

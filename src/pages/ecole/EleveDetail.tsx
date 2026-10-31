@@ -48,7 +48,11 @@ const ATTENDANCE_LABEL: Record<string, string> = {
 
 type GradeWithSubject = GradeRow & {
   matieres: Subject | null;
-  evaluations: { type: EvaluationType; title: string } | null;
+  evaluations: {
+    type: EvaluationType;
+    title: string;
+    eval_date: string | null;
+  } | null;
 };
 
 type ParentLinkRow = ParentStudentLink & {
@@ -183,7 +187,7 @@ export default function EleveDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes")
-        .select("*, matieres(*), evaluations(type, title)")
+        .select("*, matieres(*), evaluations(type, title, eval_date)")
         .eq("student_id", id!)
         .order("period_label");
       if (error) throw error;

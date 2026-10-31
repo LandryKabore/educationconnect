@@ -206,7 +206,7 @@ export function useEdtPendingChanges() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const userId = user?.id;
-  const enabled = role === "student" && !!userId;
+  const enabled = (role === "student" || role === "parent") && !!userId;
 
   const pendingQuery = useQuery({
     queryKey: edtPendingQueryKey(userId ?? ""),
@@ -389,4 +389,159 @@ export function useSchoolTimetableRealtime(schoolId: string | null | undefined) 
       void supabase.removeChannel(channel);
     };
   }, [schoolId, qc]);
+}
+
+/** Parents: toast + pending badge when a child's timetable changes. */
+export function useParentTimetableRealtime() {
+  const { user, role } = useAuth();
+  const qc = useQueryClient();
+  const location = useLocation();
+  const userId = user?.id;
+  const enabled = role === "parent" && !!userId;
+  const onChildEdt = /\/enfants\/[^/]+\/emploi-du-temps/.test(
+    location.pathname,
+  );
+
+  const { data: childClassIds = [] } = useQuery({
+    queryKey: ["parent-child-class-ids", userId],
+    enabled,
+    queryFn: async () => {
+      const { data: links, error } = await supabase
+        .from("liens_parent_eleve")
+        .select("student_id")
+        .eq("parent_id", userId!);
+      if (error) throw error;
+      const studentIds = (links ?? []).map(
+        (r) => (r as { student_id: string }).student_id,
+      );
+      if (studentIds.length === 0) return [] as string[];
+
+      const { data: insc, error: inscError } = await supabase
+        .from("inscriptions")
+        .select("class_section_id")
+        .in("student_id", studentIds)
+        .eq("status", "active");
+      if (inscError) throw inscError;
+      return [
+        ...new Set(
+          (insc ?? [])
+            .map((r) => (r as { class_section_id: string }).class_section_id)
+            .filter(Boolean),
+        ),
+      ];
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!enabled || childClassIds.length === 0) return;
+
+    void (async () => {
+      const { data } = await supabase
+        .from("creneaux_edt")
+        .select(
+          "id, class_section_id, subject_id, day_of_week, start_time, end_time, room, matieres(name)",
+        )
+        .in("class_section_id", childClassIds);
+      rememberSlots(
+        (data ?? []).map((row) => {
+          const r = row as {
+            id: string;
+            class_section_id: string;
+            subject_id: string;
+            day_of_week: number;
+            start_time: string;
+            end_time: string;
+            room: string | null;
+            matieres: { name: string } | null;
+          };
+          return {
+            id: r.id,
+            class_section_id: r.class_section_id,
+            subject_id: r.subject_id,
+            day_of_week: r.day_of_week,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            room: r.room,
+            subjectName: r.matieres?.name ?? null,
+          };
+        }),
+      );
+    })();
+  }, [enabled, childClassIds]);
+
+  useEffect(() => {
+    if (!enabled || !userId || childClassIds.length === 0) return;
+
+    const classSet = new Set(childClassIds);
+    const channel = supabase
+      .channel(`edt-parent:${userId}:${crypto.randomUUID()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "creneaux_edt",
+        },
+        (payload) => {
+          void (async () => {
+            const kind = kindFromEvent(payload.eventType);
+            const raw = (
+              payload.eventType === "DELETE" ? payload.old : payload.new
+            ) as Record<string, unknown> | undefined;
+            const partial = asSnapshot(raw);
+            if (!partial?.id) return;
+
+            const classId =
+              partial.class_section_id ||
+              slotSnapshots.get(partial.id)?.class_section_id;
+            if (!classId || !classSet.has(classId)) return;
+
+            const merged = mergeWithCache(qc, userId, {
+              ...partial,
+              class_section_id: classId,
+            });
+            const label = await describeCreneau(merged);
+
+            if (payload.eventType === "DELETE") {
+              slotSnapshots.delete(partial.id);
+            } else {
+              rememberSlot(merged);
+            }
+
+            void qc.invalidateQueries({ queryKey: ["enfant-edt"] });
+            void qc.invalidateQueries({ queryKey: ["parent-home"] });
+
+            if (onChildEdt) {
+              toast.message("Emploi du temps mis à jour", {
+                description: `${kindLabel(kind)} : ${label}`,
+              });
+              return;
+            }
+
+            const next: EdtPendingChange[] = [
+              {
+                id: crypto.randomUUID(),
+                slotId: partial.id,
+                kind,
+                label,
+                at: new Date().toISOString(),
+              },
+              ...readPending(userId).filter((c) => c.slotId !== partial.id),
+            ].slice(0, 20);
+
+            writePending(userId, next);
+            qc.setQueryData(edtPendingQueryKey(userId), next);
+            toast.message("Emploi du temps mis à jour", {
+              description: `${kindLabel(kind)} : ${label}`,
+            });
+          })();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [enabled, userId, childClassIds, onChildEdt, qc]);
 }

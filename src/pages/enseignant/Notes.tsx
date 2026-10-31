@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -15,9 +15,11 @@ import {
   evaluationTypeTone,
 } from "@/lib/evaluationTypes";
 import { formatDateSafe } from "@/lib/dateFr";
+import {
+  initialGradingPeriod,
+  writeStoredGradingPeriod,
+} from "@/lib/gradingPeriod";
 import { fullName, joinProfile } from "@/lib/utils";
-import { PersonName } from "@/components/PersonName";
-import { SaveButton } from "@/components/SaveButton";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import {
   Badge,
@@ -32,25 +34,7 @@ import {
   TimeInput24,
 } from "@/components/ui";
 
-const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
-
-type GradeState = {
-  score: string;
-  absent: boolean;
-  comment: string;
-};
-
-const EMPTY_GRADE: GradeState = { score: "", absent: false, comment: "" };
-
-/** Stable empty defaults — inline `= []` creates a new array every render and can loop useEffects. */
-const EMPTY_OPEN_GRADES: {
-  id: string;
-  student_id: string;
-  score: number;
-  max_score: number;
-  comment: string | null;
-  is_absent: boolean;
-}[] = [];
+const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"] as const;
 
 function dueLabel(type: EvaluationType): string {
   if (type === "examen") return "Date du devoir";
@@ -67,12 +51,13 @@ export default function Notes() {
   const { user, role } = useAuth();
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   /** Admins never need a second admin to confirm their own exam. */
   const autoConfirmExam = role === "school_admin";
 
   const [subjectId, setSubjectId] = useState(paramSubject ?? "");
-  const [period, setPeriod] = useState(
-    paramPeriod && PERIODS.includes(paramPeriod) ? paramPeriod : PERIODS[0],
+  const [period, setPeriod] = useState(() =>
+    initialGradingPeriod(PERIODS, paramPeriod),
   );
   /** Once we have applied URL or smart default, don't override the teacher's choice. */
   const defaultApplied = useRef(Boolean(paramSubject));
@@ -91,12 +76,19 @@ export default function Notes() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Evaluation | null>(null);
 
-  // Which evaluation's grade grid is open.
-  const [openGradeId, setOpenGradeId] = useState<string | null>(null);
+  /** Grade entry has its own screen (/classes/:id/notes/:evalId). */
+  const gradeEntryPath = (evalId: string) => {
+    const params = new URLSearchParams();
+    if (fromDevoirs) params.set("from", "devoirs");
+    if (isProxy && proxyTeacherId) params.set("teacherId", proxyTeacherId);
+    const q = params.toString();
+    return `/classes/${id}/notes/${evalId}${q ? `?${q}` : ""}`;
+  };
 
-  // Grade grid state.
-  const [grades, setGrades] = useState<Record<string, GradeState>>({});
-  const [savingGrades, setSavingGrades] = useState(false);
+  const selectPeriod = (next: string) => {
+    setPeriod(next);
+    writeStoredGradingPeriod(next);
+  };
 
   const { data: proxyProfile } = useQuery({
     queryKey: ["profil-proxy", proxyTeacherId],
@@ -186,9 +178,7 @@ export default function Notes() {
       defaultApplied.current = true;
       if (focus) {
         setSubjectId(focus.subject_id);
-        if (PERIODS.includes(focus.period_label)) {
-          setPeriod(focus.period_label);
-        }
+        // Keep remembered / URL period — don't jump trimesters for the teacher.
       } else {
         setSubjectId(subjects[0]!.id);
       }
@@ -199,7 +189,7 @@ export default function Notes() {
     };
   }, [subjects, actingTeacherId, id, subjectId]);
 
-  const { data: students = [], isLoading: rosterLoading } = useQuery({
+  const { data: students = [] } = useQuery({
     queryKey: ["class-roster", id],
     enabled: !!id,
     queryFn: async () => {
@@ -294,27 +284,6 @@ export default function Notes() {
     }). Choisissez une autre date.`;
   };
 
-  // Grades for whatever evaluation is currently open in the grid.
-  const { data: openGrades = EMPTY_OPEN_GRADES } = useQuery({
-    queryKey: ["eval-grades", openGradeId],
-    enabled: !!openGradeId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("notes")
-        .select("id, student_id, score, max_score, comment, is_absent")
-        .eq("evaluation_id", openGradeId!);
-      if (error) throw error;
-      return data as {
-        id: string;
-        student_id: string;
-        score: number;
-        max_score: number;
-        comment: string | null;
-        is_absent: boolean;
-      }[];
-    },
-  });
-
   // How many students are graded per evaluation (for the list badges).
   const { data: gradedCounts = {} } = useQuery({
     queryKey: ["eval-graded-counts", id, subjectId, period],
@@ -385,47 +354,6 @@ export default function Notes() {
     },
   });
 
-  const openEval = useMemo(
-    () => evaluations.find((e) => e.id === openGradeId) ?? null,
-    [evaluations, openGradeId],
-  );
-
-  // Seed the grid when the open evaluation's grades load.
-  useEffect(() => {
-    if (!openGradeId) {
-      setGrades((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-      return;
-    }
-    const next: Record<string, GradeState> = {};
-    for (const g of openGrades) {
-      next[g.student_id] = {
-        score: g.is_absent ? "" : String(g.score),
-        absent: g.is_absent,
-        comment: g.comment ?? "",
-      };
-    }
-    setGrades((prev) =>
-      JSON.stringify(prev) === JSON.stringify(next) ? prev : next,
-    );
-  }, [openGradeId, openGrades]);
-
-  const getGrade = (studentId: string): GradeState =>
-    grades[studentId] ?? EMPTY_GRADE;
-
-  const setGrade = (studentId: string, patch: Partial<GradeState>) =>
-    setGrades((prev) => ({
-      ...prev,
-      [studentId]: { ...getGrade(studentId), ...patch },
-    }));
-
-  const gridDirty = useMemo(
-    () =>
-      Object.values(grades).some(
-        (g) => g.absent || g.score.trim() !== "" || g.comment.trim() !== "",
-      ),
-    [grades],
-  );
-
   const resetForm = () => {
     setEditingId(null);
     setNewType("devoir");
@@ -452,13 +380,13 @@ export default function Notes() {
     setNewStartTime(formatTimeHm(ev.start_time));
     setNewEndTime(formatTimeHm(ev.end_time));
     setNewMax(String(ev.max_score));
-    setOpenGradeId(null);
     setShowForm(true);
   };
 
   const isExam = newType === "examen";
 
   const handleSubmit = async () => {
+    let createdId: string | null = null;
     if (!id || !user || !actingTeacherId || !subjectId) {
       toast.error("Choisissez une matière");
       return;
@@ -608,7 +536,7 @@ export default function Notes() {
             : "Devoir proposé — en attente de confirmation par l’administration"
           : "Évaluation créée",
       );
-      setOpenGradeId((data as { id: string }).id);
+      createdId = (data as { id: string }).id;
     }
 
     resetForm();
@@ -624,6 +552,7 @@ export default function Notes() {
     void qc.invalidateQueries({ queryKey: ["ecole-examens"] });
     void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
     void qc.invalidateQueries({ queryKey: ["ecole-home"] });
+    if (createdId) navigate(gradeEntryPath(createdId));
   };
 
   const handleDelete = async (ev: Evaluation) => {
@@ -637,7 +566,6 @@ export default function Notes() {
     toast.success("Supprimé");
     setPendingDelete(null);
     if (editingId === ev.id) resetForm();
-    if (openGradeId === ev.id) setOpenGradeId(null);
     void qc.invalidateQueries({ queryKey: ["evaluations", id, subjectId, period] });
     void qc.invalidateQueries({ queryKey: ["examen-jours-classe", id] });
     void qc.invalidateQueries({ queryKey: ["teacher-home"] });
@@ -651,84 +579,6 @@ export default function Notes() {
     void qc.invalidateQueries({ queryKey: ["examens-en-attente"] });
     void qc.invalidateQueries({ queryKey: ["ecole-home"] });
   };
-
-  const saveGrades = async () => {
-    if (!openEval || !id || !user) return;
-    setSavingGrades(true);
-    try {
-      const existingByStudent = new Map(openGrades.map((g) => [g.student_id, g]));
-      for (const student of students) {
-        const g = getGrade(student.id);
-        const hasValue = g.absent || g.score.trim() !== "";
-        const existing = existingByStudent.get(student.id);
-
-        if (!hasValue) {
-          if (existing) {
-            await supabase.from("notes").delete().eq("id", existing.id);
-          }
-          continue;
-        }
-
-        const score = g.absent ? 0 : Number(g.score);
-        if (!g.absent && !Number.isFinite(score)) continue;
-
-        const payload = {
-          student_id: student.id,
-          subject_id: openEval.subject_id,
-          class_section_id: id,
-          period_label: openEval.period_label,
-          evaluation_id: openEval.id,
-          score,
-          max_score: openEval.max_score,
-          is_absent: g.absent,
-          comment: g.comment.trim() || null,
-          recorded_by: isProxy ? actingTeacherId! : user.id,
-        };
-
-        if (existing) {
-          await supabase.from("notes").update(payload).eq("id", existing.id);
-        } else {
-          await supabase.from("notes").insert(payload);
-        }
-      }
-      const savedCount = students.filter((s) => {
-        const g = getGrade(s.id);
-        return g.absent || g.score.trim() !== "";
-      }).length;
-      toast.success("Notes enregistrées", {
-        description: `${savedCount}/${students.length} élève(s) · ${openEval.title}`,
-      });
-      setOpenGradeId(null);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["eval-grades", openEval.id] }),
-        qc.invalidateQueries({
-          queryKey: ["eval-graded-counts", id, subjectId, period],
-        }),
-        qc.invalidateQueries({
-          queryKey: ["ungraded-by-subject", id, period, actingTeacherId],
-        }),
-        qc.invalidateQueries({ queryKey: ["notes"] }),
-        qc.invalidateQueries({ queryKey: ["mes-notes"] }),
-        qc.invalidateQueries({ queryKey: ["mes-devoirs"] }),
-        qc.invalidateQueries({ queryKey: ["student-home"] }),
-        qc.invalidateQueries({ queryKey: ["teacher-mes-devoirs"] }),
-      ]);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Enregistrement impossible");
-    } finally {
-      setSavingGrades(false);
-    }
-  };
-
-  const gradedNow = useMemo(
-    () =>
-      students.filter((s) => {
-        const g = getGrade(s.id);
-        return g.absent || g.score.trim() !== "";
-      }).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [students, grades],
-  );
 
   const canManageStructure =
     role === "school_admin" || role === "super_admin";
@@ -805,10 +655,7 @@ export default function Notes() {
           <Label>Matière</Label>
           <Select
             value={subjectId}
-            onChange={(e) => {
-              setSubjectId(e.target.value);
-              setOpenGradeId(null);
-            }}
+            onChange={(e) => setSubjectId(e.target.value)}
             className={
               subjectId && (ungradedBySubject[subjectId] ?? 0) > 0
                 ? "border-amber-400 bg-amber-50 focus:border-amber-500 focus:ring-amber-100 dark:border-amber-500/60 dark:bg-amber-950/30"
@@ -847,10 +694,7 @@ export default function Notes() {
           <Label>Période</Label>
           <Select
             value={period}
-            onChange={(e) => {
-              setPeriod(e.target.value);
-              setOpenGradeId(null);
-            }}
+            onChange={(e) => selectPeriod(e.target.value)}
           >
             {PERIODS.map((p) => (
               <option key={p} value={p}>
@@ -1026,7 +870,6 @@ export default function Notes() {
                   const count = gradedCounts[ev.id] ?? 0;
                   const total = students.length;
                   const complete = total > 0 && count >= total;
-                  const isOpen = openGradeId === ev.id;
                   const schedule = formatExamSchedule({
                     due_date: ev.eval_date,
                     start_time: ev.start_time,
@@ -1035,10 +878,7 @@ export default function Notes() {
                   return (
                     <Card
                       key={ev.id}
-                      className={
-                        "flex flex-wrap items-center justify-between gap-3 py-3" +
-                        (isOpen ? " ring-2 ring-brand-400" : "")
-                      }
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1081,18 +921,15 @@ export default function Notes() {
                         <Button
                           type="button"
                           size="sm"
-                          variant={isOpen ? "primary" : "outline"}
-                          onClick={() => {
-                            setShowForm(false);
-                            setOpenGradeId(isOpen ? null : ev.id);
-                          }}
+                          variant="outline"
+                          onClick={() => navigate(gradeEntryPath(ev.id))}
                         >
                           {complete ? (
                             <CheckCircle2 className="h-4 w-4" />
                           ) : (
                             <Pencil className="h-4 w-4" />
                           )}
-                          {isOpen ? "Fermer" : "Noter"}
+                          Noter
                         </Button>
                         {canEditEval(ev) ? (
                           <>
@@ -1126,89 +963,6 @@ export default function Notes() {
             )}
           </div>
 
-          {openEval ? (
-            <Card>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                    {evaluationTypeLabel(openEval.type)} — {openEval.title}
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    Note sur {openEval.max_score} · {gradedNow}/{students.length}{" "}
-                    saisie(s)
-                  </p>
-                </div>
-                <SaveButton
-                  type="button"
-                  saving={savingGrades}
-                  dirty={gridDirty}
-                  onClick={() => void saveGrades()}
-                />
-              </div>
-
-              {rosterLoading ? (
-                <p className="text-slate-500">Chargement…</p>
-              ) : students.length === 0 ? (
-                <EmptyState message="Aucun élève dans cette classe." />
-              ) : (
-                <div className="space-y-2">
-                  {students.map((s) => {
-                    const g = getGrade(s.id);
-                    return (
-                      <div
-                        key={s.id}
-                        className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"
-                      >
-                        <span className="min-w-[10rem] flex-1 font-medium text-slate-800 dark:text-slate-100">
-                          <PersonName first={s.first_name} last={s.last_name} />
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={openEval.max_score}
-                            step={0.25}
-                            placeholder={`/${openEval.max_score}`}
-                            className="w-24"
-                            disabled={g.absent}
-                            value={g.score}
-                            onChange={(e) =>
-                              setGrade(s.id, { score: e.target.value })
-                            }
-                          />
-                          <span className="text-sm text-slate-500">
-                            / {openEval.max_score}
-                          </span>
-                        </div>
-                        <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300"
-                            checked={g.absent}
-                            onChange={(e) =>
-                              setGrade(s.id, {
-                                absent: e.target.checked,
-                                score: e.target.checked ? "" : g.score,
-                              })
-                            }
-                          />
-                          Absent
-                        </label>
-                        <Input
-                          className="w-full sm:w-48"
-                          placeholder="Appréciation (facultatif)"
-                          value={g.comment}
-                          onChange={(e) =>
-                            setGrade(s.id, { comment: e.target.value })
-                          }
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-          ) : null}
         </div>
       )}
     </div>

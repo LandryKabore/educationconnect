@@ -1,17 +1,24 @@
-import type { GradeRow, Profile, School, Subject } from "@/lib/types";
+import type { Profile, School } from "@/lib/types";
 import {
   ANNUAL_PERIOD_LABEL,
   PASSING_AVERAGE,
-  computeAnnualAverage,
-  computeWeightedAverage,
   formatAverage,
   formatPassDecision,
-  type AverageOptions,
+  type AnnualAverageResult,
 } from "@/lib/averages";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const DAYS = ["", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const DAYS = [
+  "",
+  "Lundi",
+  "Mardi",
+  "Mercredi",
+  "Jeudi",
+  "Vendredi",
+  "Samedi",
+  "Dimanche",
+];
 
 export function formatDay(day: number) {
   const n = Number(day);
@@ -19,221 +26,325 @@ export function formatDay(day: number) {
   return DAYS[n] ?? `Jour ${n}`;
 }
 
+export type BulletinSubjectStat = {
+  subject_id: string;
+  subject_name: string;
+  coefficient: number;
+  teacher_name: string | null;
+  student_avg: number;
+  class_avg: number;
+  class_min: number;
+  class_max: number;
+  ecart: number;
+  rank: number;
+  ranked_count: number;
+};
+
+export type BulletinGeneralStat = {
+  student_avg: number;
+  class_avg: number;
+  class_min: number;
+  class_max: number;
+  ecart: number;
+  rank: number;
+  ranked_count: number;
+};
+
+export type BulletinClassStats = {
+  class_name: string | null;
+  year_label: string | null;
+  class_size: number;
+  period_label: string;
+  is_annual: boolean;
+  subjects: BulletinSubjectStat[];
+  general: BulletinGeneralStat | null;
+  attendance: { absences: number; lates: number };
+};
+
 export interface BulletinData {
   school: School;
   student: Profile;
   className: string;
   periodLabel: string;
-  grades: (GradeRow & { subject?: Subject })[];
-  /** All year grades — used for moyenne annuelle (T1+T2+T3)/3 */
-  allGrades?: (GradeRow & { subject?: Subject })[];
-  /** Class-specific coefficients (filière) */
-  coefficientBySubject?: AverageOptions["coefficientBySubject"];
+  stats: BulletinClassStats;
+  /** Used only for annual decision footer when trimesters are incomplete. */
+  annual?: Pick<
+    AnnualAverageResult,
+    "annualAverage" | "passed" | "complete" | "trimesters"
+  > | null;
 }
 
-function effectiveCoef(
-  subjectId: string | undefined,
-  defaultCoef: number | undefined,
-  map?: AverageOptions["coefficientBySubject"],
-) {
-  if (subjectId && map) {
-    const v = map instanceof Map ? map.get(subjectId) : map[subjectId];
-    if (v !== undefined && Number(v) > 0) return Number(v);
+/** Auto mention from moyenne générale — never blank because of missing teacher text. */
+export function bulletinMention(avg: number | null | undefined): string {
+  if (avg === null || avg === undefined || Number.isNaN(avg)) return "—";
+  if (avg >= 16) return "Félicitations";
+  if (avg >= 14) return "Encouragements";
+  if (avg >= 12) return "Compliments";
+  if (avg >= PASSING_AVERAGE) return "Passable";
+  return "Insuffisant";
+}
+
+function fmt(n: number | null | undefined, digits = 2): string {
+  return formatAverage(n ?? null, digits);
+}
+
+function fmtEcart(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(2)}`;
+}
+
+function periodTitle(periodLabel: string): string {
+  if (periodLabel === ANNUAL_PERIOD_LABEL) {
+    return "Bulletin annuel";
   }
-  return defaultCoef && defaultCoef > 0 ? defaultCoef : 1;
+  if (periodLabel === "Trimestre 1") return "Bulletin du 1er Trimestre";
+  if (periodLabel === "Trimestre 2") return "Bulletin du 2e Trimestre";
+  if (periodLabel === "Trimestre 3") return "Bulletin du 3e Trimestre";
+  return `Bulletin — ${periodLabel}`;
 }
 
-function appendAnnualSection(
-  doc: jsPDF,
-  startY: number,
-  data: BulletinData,
-): number {
-  const sourceGrades = data.allGrades ?? data.grades;
-  const annual = computeAnnualAverage(sourceGrades, {
-    coefficientBySubject: data.coefficientBySubject,
-  });
+export function generateBulletinPdf(data: BulletinData): jsPDF {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const studentName = [data.student.last_name, data.student.first_name]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+  const stats = data.stats;
+  const isAnnual = data.periodLabel === ANNUAL_PERIOD_LABEL || stats.is_annual;
+  const className = stats.class_name || data.className || "—";
+  const yearLabel = stats.year_label || "—";
+  const general = stats.general;
+  const mention = bulletinMention(general?.student_avg);
 
-  let y = startY;
+  // —— Header ——
+  doc.setDrawColor(30, 41, 59);
+  doc.setLineWidth(0.4);
+  doc.rect(12, 10, pageW - 24, 34);
 
   doc.setFontSize(11);
   doc.setTextColor(15, 118, 110);
-  doc.text("Moyenne annuelle (3 trimestres)", 14, y);
-  y += 4;
+  doc.setFont("helvetica", "bold");
+  doc.text(data.school.name || "École", 14, 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  if (data.school.city) doc.text(data.school.city, 14, 23);
+
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Année scolaire : ${yearLabel}`, 14, 30);
+  doc.text(`Classe : ${className}`, 14, 35);
+  doc.text(
+    `${stats.class_size} élève${stats.class_size !== 1 ? "s" : ""}`,
+    14,
+    40,
+  );
+
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text(periodTitle(data.periodLabel), pageW / 2, 20, {
+    align: "center",
+  });
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(studentName || "ÉLÈVE", pageW - 14, 20, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  if (data.student.matricule) {
+    doc.text(`Matricule : ${data.student.matricule}`, pageW - 14, 26, {
+      align: "right",
+    });
+  }
+  if (general) {
+    doc.text(
+      `Rang : ${general.rank} / ${general.ranked_count}`,
+      pageW - 14,
+      32,
+      { align: "right" },
+    );
+  }
+
+  let y = 50;
+
+  // Classic subject table — Écart replaces Appréciations (always filled)
+  const body =
+    stats.subjects.length > 0
+      ? stats.subjects.map((s) => [
+          s.teacher_name
+            ? `${s.subject_name}\n${s.teacher_name}`
+            : s.subject_name,
+          String(s.coefficient),
+          fmt(s.student_avg),
+          fmt(s.class_avg),
+          fmt(s.class_min),
+          fmt(s.class_max),
+          fmtEcart(s.ecart),
+        ])
+      : [["Aucune moyenne", "—", "—", "—", "—", "—", "—"]];
 
   autoTable(doc, {
     startY: y,
-    head: [["Période", "Moyenne générale /20"]],
-    body: annual.trimesters.map((t) => [
-      t.periodLabel,
-      formatAverage(t.generalAverage),
-    ]),
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [15, 118, 110] },
+    head: [["Matières", "Coef.", "Élève", "Clas.", "Min", "Max", "Écart"]],
+    body,
+    styles: { fontSize: 8, cellPadding: 1.6, valign: "middle" },
+    headStyles: {
+      fillColor: [15, 118, 110],
+      textColor: 255,
+      fontStyle: "bold",
+      halign: "center",
+    },
+    columnStyles: {
+      0: { cellWidth: 58, fontStyle: "bold",halign: "left" },
+      1: { cellWidth: 14,halign: "center" },
+      2: { cellWidth: 18,halign: "center" },
+      3: { cellWidth: 18,halign: "center" },
+      4: { cellWidth: 18,halign: "center" },
+      5: { cellWidth: 18,halign: "center" },
+      6: { cellWidth: 22,halign: "center", fontStyle: "bold" },
+    },
+    didParseCell: (hook) => {
+      if (hook.section !== "body" || hook.column.index !== 6) return;
+      const raw = String(hook.cell.raw ?? "");
+      if (raw.startsWith("+")) {
+        hook.cell.styles.textColor = [21, 128, 61];
+      } else if (raw.startsWith("-") || raw.startsWith("−")) {
+        hook.cell.styles.textColor = [185, 28, 28];
+      }
+    },
+    margin: { left: 12, right: 12 },
+    theme: "grid",
   });
 
   y =
     (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
       ?.finalY ?? y;
-  y += 10;
+  y += 4;
 
-  doc.setFontSize(12);
-  doc.setTextColor(30, 41, 59);
-  doc.text(
-    `Moyenne annuelle : ${formatAverage(annual.annualAverage)} / 20`,
-    14,
-    y,
-  );
-  y += 6;
-
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    `Formule : (T1 + T2 + T3) / ${annual.trimesterCount || 3} — seuil d’admission : ${PASSING_AVERAGE} / 20`,
+    "Écart = moyenne élève − moyenne de classe (remplace les appréciations textuelles).",
     14,
     y,
   );
   y += 8;
 
-  if (annual.annualAverage !== null) {
-    const decision = formatPassDecision(annual);
-    doc.setFontSize(12);
-    doc.setTextColor(
-      annual.passed ? 21 : 185,
-      annual.passed ? 128 : 28,
-      annual.passed ? 61 : 28,
-    );
+  if (isAnnual && (data.annual?.trimesters?.length ?? 0) > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [["Période", "Moyenne élève /20"]],
+      body: data.annual!.trimesters.map((t) => [
+        t.periodLabel,
+        fmt(t.generalAverage),
+      ]),
+      styles: { fontSize: 8, cellPadding: 1.5 },
+      headStyles: {
+        fillColor: [71, 85, 105],
+        textColor: 255,
+        fontStyle: "bold",
+      },
+      margin: { left: 12, right: 12 },
+    });
+    y =
+      (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+        ?.finalY ?? y;
+    y += 8;
+  }
+
+  // —— Moyennes générales ——
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+  doc.rect(12, y, pageW - 24, 22);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 118, 110);
+  doc.text("Moyennes générales", 14, y + 6);
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(9);
+  const gStudent = general?.student_avg ?? data.annual?.annualAverage ?? null;
+  doc.text(`Élève : ${fmt(gStudent)} / 20`, 14, y + 13);
+  doc.text(`Classe : ${fmt(general?.class_avg)} / 20`, 70, y + 13);
+  doc.text(`Écart : ${fmtEcart(general?.ecart)}`, 130, y + 13);
+
+  if (general) {
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
     doc.text(
-      `Décision : ${decision}${annual.complete ? "" : " (provisoire)"}`,
+      `Rang général : ${general.rank} / ${general.ranked_count}  ·  Min ${fmt(general.class_min)}  ·  Max ${fmt(general.class_max)}`,
+      14,
+      y + 19,
+    );
+  }
+
+  y += 28;
+
+  // —— Absences / Retards ——
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  doc.text(
+    `Absences : ${stats.attendance?.absences ?? 0} jour${(stats.attendance?.absences ?? 0) !== 1 ? "s" : ""}  —  Retards : ${stats.attendance?.lates ?? 0}`,
+    14,
+    y,
+  );
+  y += 8;
+
+  // —— Mention (auto) ——
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Mention : ${mention}`, 14, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    "(attribuée automatiquement selon la moyenne générale)",
+    14,
+    y + 4,
+  );
+  y += 12;
+
+  if (isAnnual && data.annual) {
+    doc.setFontSize(10);
+    doc.setTextColor(
+      data.annual.passed ? 21 : 185,
+      data.annual.passed ? 128 : 28,
+      data.annual.passed ? 61 : 28,
+    );
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Décision : ${formatPassDecision(data.annual)}${data.annual.complete ? "" : " (provisoire)"}`,
       14,
       y,
     );
-    y += 10;
+    doc.setFont("helvetica", "normal");
+    y += 8;
   }
 
-  return y;
-}
-
-export function generateBulletinPdf(data: BulletinData): jsPDF {
-  const doc = new jsPDF();
-  const studentName = [data.student.first_name, data.student.last_name]
-    .filter(Boolean)
-    .join(" ");
-
-  const isAnnual = data.periodLabel === ANNUAL_PERIOD_LABEL;
-  const averages = computeWeightedAverage(data.grades, {
-    coefficientBySubject: data.coefficientBySubject,
+  // —— Signature ——
+  y = Math.max(y, 250);
+  doc.setDrawColor(148, 163, 184);
+  doc.line(pageW - 80, y, pageW - 14, y);
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Le chef d’établissement", pageW - 14, y + 5, {
+    align: "right",
   });
 
-  doc.setFontSize(18);
-  doc.setTextColor(15, 118, 110);
-  doc.text("EduFaso — Bulletin scolaire", 14, 20);
-
-  doc.setFontSize(11);
-  doc.setTextColor(30, 41, 59);
-  doc.text(data.school.name, 14, 30);
-  if (data.school.city) doc.text(data.school.city, 14, 36);
-
-  doc.setFontSize(10);
-  doc.text(`Élève : ${studentName}`, 14, 48);
-  doc.text(`Classe : ${data.className}`, 14, 54);
+  doc.setFontSize(7);
+  doc.setTextColor(148, 163, 184);
   doc.text(
-    `Période : ${isAnnual ? "Année scolaire (moyenne annuelle)" : data.periodLabel}`,
+    `Généré le ${new Date().toLocaleDateString("fr-FR")} — EduFaso`,
     14,
-    60,
+    287,
   );
-
-  let y = 68;
-
-  if (isAnnual) {
-    y = appendAnnualSection(doc, y, data);
-  } else {
-    const detailRows = data.grades.map((g) => {
-      const absent = (g as { is_absent?: boolean }).is_absent;
-      const on20 = absent
-        ? "—"
-        : g.max_score > 0
-          ? ((g.score / g.max_score) * 20).toFixed(2)
-          : "—";
-      const coef = effectiveCoef(
-        g.subject_id ?? g.subject?.id,
-        g.subject?.coefficient,
-        data.coefficientBySubject,
-      );
-      return [
-        g.subject?.name ?? "—",
-        String(coef),
-        absent ? "Absent" : `${g.score} / ${g.max_score}`,
-        on20,
-        g.comment ?? "",
-      ];
-    });
-
-    autoTable(doc, {
-      startY: y,
-      head: [["Matière", "Coef.", "Note", "/20", "Commentaire"]],
-      body: detailRows.length
-        ? detailRows
-        : [["—", "—", "—", "—", "Aucune note"]],
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [15, 118, 110] },
-    });
-
-    y =
-      (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
-        ?.finalY ?? 100;
-    y += 10;
-
-    if (averages.subjects.length > 0) {
-      doc.setFontSize(11);
-      doc.setTextColor(15, 118, 110);
-      doc.text("Moyennes par matière (coefs de la classe)", 14, y);
-      y += 4;
-
-      autoTable(doc, {
-        startY: y,
-        head: [["Matière", "Coef.", "Moyenne /20", "Points (note × coef)"]],
-        body: averages.subjects.map((s) => [
-          s.subjectName,
-          String(s.coefficient),
-          formatAverage(s.averageOn20),
-          formatAverage(s.averageOn20 * s.coefficient),
-        ]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [15, 118, 110] },
-      });
-
-      y =
-        (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
-          ?.finalY ?? y;
-      y += 12;
-
-      doc.setFontSize(12);
-      doc.setTextColor(30, 41, 59);
-      doc.text(
-        `Moyenne générale : ${formatAverage(averages.generalAverage)} / 20`,
-        14,
-        y,
-      );
-      y += 6;
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(
-        `Formule : Σ (note × coef) / Σ coef = ${formatAverage(averages.weightedSum)} / ${formatAverage(averages.totalCoefficients, 1)}`,
-        14,
-        y,
-      );
-      y += 12;
-    }
-
-    // Always append annual decision when we have year grades.
-    if ((data.allGrades?.length ?? 0) > 0 || data.grades.length > 0) {
-      y = appendAnnualSection(doc, y, data);
-    }
-  }
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, 14, y);
 
   return doc;
 }

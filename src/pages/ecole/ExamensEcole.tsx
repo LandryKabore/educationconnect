@@ -1,14 +1,20 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isPast } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
+import { TRIMESTER_PERIODS } from "@/lib/averages";
 import { ClassColorDot } from "@/components/ClassColor";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
-import { formatDateSafe } from "@/lib/dateFr";
+import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
+import {
+  initialGradingPeriod,
+  writeStoredGradingPeriod,
+} from "@/lib/gradingPeriod";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Evaluation, Profile, Subject } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
@@ -26,11 +32,19 @@ import {
   TimeInput24,
 } from "@/components/ui";
 
-function currentPeriodLabel(): string {
-  const month = new Date().getMonth() + 1;
-  if (month >= 9) return "Trimestre 1";
-  if (month <= 3) return "Trimestre 2";
-  return "Trimestre 3";
+type StatusFilter = "upcoming" | "past" | "pending" | "confirmed" | "all";
+
+function isExamPast(exam: {
+  eval_date: string | null;
+  end_time?: string | null;
+}): boolean {
+  if (!exam.eval_date) return false;
+  const end = exam.end_time?.slice(0, 5);
+  const iso = end
+    ? `${exam.eval_date}T${end}:00`
+    : `${exam.eval_date}T23:59:59`;
+  const date = parseValidDate(iso);
+  return !!date && isPast(date);
 }
 
 /** Created already confirmed (admin) — not a teacher proposal that was later approved. */
@@ -55,9 +69,7 @@ type ExamRow = Evaluation & {
 export default function ExamensEcole() {
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<"pending" | "confirmed" | "all">(
-    "all",
-  );
+  const [filter, setFilter] = useState<StatusFilter>("upcoming");
   const [classId, setClassId] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -65,6 +77,9 @@ export default function ExamensEcole() {
   const [examClassId, setExamClassId] = useState("");
   const [examSubjectId, setExamSubjectId] = useState("");
   const [examTeacherId, setExamTeacherId] = useState("");
+  const [examPeriod, setExamPeriod] = useState(() =>
+    initialGradingPeriod(TRIMESTER_PERIODS),
+  );
   const [examTitle, setExamTitle] = useState("");
   const [examDescription, setExamDescription] = useState("");
   const [examDueDate, setExamDueDate] = useState("");
@@ -181,7 +196,7 @@ export default function ExamensEcole() {
       .sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }, [assignments, examTeacherId, examClassId, subjects, examSubjectId]);
 
-  const { data: exams = [], isLoading } = useQuery({
+  const { data: examsRaw = [], isLoading } = useQuery({
     queryKey: ["ecole-examens", schoolId, filter, classId],
     enabled: !!schoolId && classIds.length > 0,
     queryFn: async () => {
@@ -203,11 +218,31 @@ export default function ExamensEcole() {
     },
   });
 
+  const exams = useMemo(() => {
+    if (filter === "upcoming") {
+      return examsRaw.filter((e) => !isExamPast(e));
+    }
+    if (filter === "past") {
+      return examsRaw.filter((e) => isExamPast(e));
+    }
+    if (filter === "confirmed") {
+      // Confirmed = still relevant (not yet past).
+      return examsRaw.filter((e) => !isExamPast(e));
+    }
+    return examsRaw;
+  }, [examsRaw, filter]);
+
+  const pastCount = useMemo(
+    () => examsRaw.filter((e) => isExamPast(e)).length,
+    [examsRaw],
+  );
+
   const resetForm = () => {
     setShowForm(false);
     setExamClassId("");
     setExamSubjectId("");
     setExamTeacherId("");
+    setExamPeriod(initialGradingPeriod(TRIMESTER_PERIODS));
     setExamTitle("");
     setExamDescription("");
     setExamDueDate("");
@@ -219,6 +254,7 @@ export default function ExamensEcole() {
     setExamClassId(classId || classes[0]?.id || "");
     setExamSubjectId("");
     setExamTeacherId("");
+    setExamPeriod(initialGradingPeriod(TRIMESTER_PERIODS));
     setExamTitle("");
     setExamDescription("");
     setExamDueDate("");
@@ -291,7 +327,7 @@ export default function ExamensEcole() {
       class_section_id: examClassId,
       subject_id: examSubjectId,
       teacher_id: examTeacherId,
-      period_label: currentPeriodLabel(),
+      period_label: examPeriod,
       title: examTitle.trim(),
       description: examDescription.trim() || null,
       eval_date: examDueDate,
@@ -384,6 +420,7 @@ export default function ExamensEcole() {
     const sortKey = (e: ExamRow) => {
       const date = e.eval_date ?? "9999-99-99";
       const time = (e.start_time ?? "99:99").slice(0, 5);
+      // Passés: plus récents en premier.
       return `${date}T${time}`;
     };
 
@@ -395,7 +432,10 @@ export default function ExamensEcole() {
       byClass.set(id, list);
     }
     for (const list of byClass.values()) {
-      list.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+      list.sort((a, b) => {
+        const cmp = sortKey(a).localeCompare(sortKey(b));
+        return filter === "past" ? -cmp : cmp;
+      });
     }
 
     const knownIds = classes.map((c) => c.id).filter((id) => byClass.has(id));
@@ -412,7 +452,7 @@ export default function ExamensEcole() {
         exams: rows,
       };
     });
-  }, [exams, classes]);
+  }, [exams, classes, filter]);
 
   return (
     <div>
@@ -447,13 +487,13 @@ export default function ExamensEcole() {
           <Select
             id="exam-filter"
             value={filter}
-            onChange={(e) =>
-              setFilter(e.target.value as "pending" | "confirmed" | "all")
-            }
+            onChange={(e) => setFilter(e.target.value as StatusFilter)}
           >
-            <option value="all">Tous</option>
+            <option value="upcoming">À venir</option>
+            <option value="past">Passés</option>
             <option value="pending">En attente de confirmation</option>
-            <option value="confirmed">Confirmés</option>
+            <option value="confirmed">Confirmés (à venir)</option>
+            <option value="all">Tous</option>
           </Select>
         </div>
         <div>
@@ -473,6 +513,20 @@ export default function ExamensEcole() {
         </div>
       </div>
 
+      {filter === "upcoming" && pastCount > 0 && !isLoading ? (
+        <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+          {pastCount} devoir{pastCount > 1 ? "s" : ""} passé
+          {pastCount > 1 ? "s" : ""} —{" "}
+          <button
+            type="button"
+            className="font-medium text-brand-700 hover:underline"
+            onClick={() => setFilter("past")}
+          >
+            Voir les passés
+          </button>
+        </p>
+      ) : null}
+
       {filter === "pending" && !isLoading ? (
         <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
           {pendingCount} devoir{pendingCount > 1 ? "s" : ""} en attente.
@@ -486,7 +540,11 @@ export default function ExamensEcole() {
           message={
             filter === "pending"
               ? "Aucun devoir en attente de confirmation."
-              : "Aucun devoir pour cette sélection."
+              : filter === "past"
+                ? "Aucun devoir passé pour cette sélection."
+                : filter === "upcoming"
+                  ? "Aucun devoir à venir."
+                  : "Aucun devoir pour cette sélection."
           }
         />
       ) : (
@@ -520,8 +578,16 @@ export default function ExamensEcole() {
                   const className =
                     exam.classes?.name ?? group.className ?? "Classe";
                   const subjectName = exam.matieres?.name ?? "Matière";
+                  const past = isExamPast(exam);
                   return (
-                    <Card key={exam.id} className="h-full">
+                    <Card
+                      key={exam.id}
+                      className={
+                        past
+                          ? "h-full opacity-80"
+                          : "h-full"
+                      }
+                    >
                       <div className="flex h-full flex-col gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -533,15 +599,22 @@ export default function ExamensEcole() {
                               </span>
                               {subjectName}
                             </h3>
-                            <Badge
-                              tone={
-                                exam.admin_confirmed ? "success" : "warning"
-                              }
-                            >
-                              {exam.admin_confirmed
-                                ? "Confirmé"
-                                : "À confirmer"}
-                            </Badge>
+                            {past ? (
+                              <Badge tone="info">Passé</Badge>
+                            ) : (
+                              <Badge
+                                tone={
+                                  exam.admin_confirmed ? "success" : "warning"
+                                }
+                              >
+                                {exam.admin_confirmed
+                                  ? "Confirmé"
+                                  : "À confirmer"}
+                              </Badge>
+                            )}
+                            {exam.period_label ? (
+                              <Badge tone="default">{exam.period_label}</Badge>
+                            ) : null}
                           </div>
                           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                             {exam.title}
@@ -573,7 +646,7 @@ export default function ExamensEcole() {
                           </p>
                         </div>
                         <div className="mt-auto space-y-2">
-                          {!exam.admin_confirmed ? (
+                          {!past && !exam.admin_confirmed ? (
                             <Button
                               type="button"
                               size="sm"
@@ -588,7 +661,9 @@ export default function ExamensEcole() {
                                 ? "…"
                                 : "Confirmer la date"}
                             </Button>
-                          ) : wasCreatedConfirmed(exam) ? null : (
+                          ) : !past &&
+                            exam.admin_confirmed &&
+                            !wasCreatedConfirmed(exam) ? (
                             <Button
                               type="button"
                               size="sm"
@@ -599,7 +674,7 @@ export default function ExamensEcole() {
                             >
                               Retirer la confirmation
                             </Button>
-                          )}
+                          ) : null}
                           <Button
                             type="button"
                             size="sm"
@@ -637,6 +712,27 @@ export default function ExamensEcole() {
               Un seul devoir par classe et par jour. Le devoir créé ici est
               confirmé immédiatement et visible pour les élèves.
             </p>
+            <div>
+              <Label>Trimestre</Label>
+              <Select
+                value={examPeriod}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setExamPeriod(next);
+                  writeStoredGradingPeriod(next);
+                }}
+                required
+              >
+                {TRIMESTER_PERIODS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-slate-500">
+                Les notes de ce devoir seront rattachées à ce trimestre.
+              </p>
+            </div>
             <div>
               <Label>Classe</Label>
               <Select

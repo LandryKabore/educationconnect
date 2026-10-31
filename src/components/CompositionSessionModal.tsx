@@ -6,8 +6,13 @@ import { fullName } from "@/lib/utils";
 import type { Profile, Subject } from "@/lib/types";
 import { Modal } from "@/components/Modal";
 import { Button, Input, Label, Select, TimeInput24 } from "@/components/ui";
+import { TRIMESTER_PERIODS } from "@/lib/averages";
+import {
+  initialGradingPeriod,
+  writeStoredGradingPeriod,
+} from "@/lib/gradingPeriod";
 
-const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
+const PERIODS = TRIMESTER_PERIODS;
 
 export type PaperDraft = {
   subjectId: string;
@@ -38,16 +43,13 @@ type Props = {
   teachers: Profile[];
   assignments: Assignment[];
   subjects: Subject[];
-  defaultPeriod: string;
+  defaultPeriod?: string;
   onClose: () => void;
   onSaved: () => void;
 };
 
-function defaultPeriodLabel(): string {
-  const month = new Date().getMonth() + 1;
-  if (month >= 9) return "Trimestre 1";
-  if (month <= 3) return "Trimestre 2";
-  return "Trimestre 3";
+function resolvePeriod(preferred?: string | null): string {
+  return initialGradingPeriod(PERIODS, preferred || null);
 }
 
 export function CompositionSessionModal({
@@ -60,12 +62,12 @@ export function CompositionSessionModal({
   teachers,
   assignments,
   subjects,
-  defaultPeriod,
+  defaultPeriod = "",
   onClose,
   onSaved,
 }: Props) {
   const [title, setTitle] = useState("");
-  const [period, setPeriod] = useState(defaultPeriod || defaultPeriodLabel());
+  const [period, setPeriod] = useState(() => resolvePeriod(defaultPeriod));
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [papers, setPapers] = useState<PaperDraft[]>([]);
@@ -110,8 +112,9 @@ export function CompositionSessionModal({
       .sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }, [programme, assignments, classId, subjects]);
 
+  /** Teachers assigned to this class for this subject; else any teacher of the class. Never school-wide. */
   const teachersForSubject = (subjectId: string) => {
-    const ids = new Set(
+    const forSubjectIds = new Set(
       assignments
         .filter(
           (a) =>
@@ -119,31 +122,44 @@ export function CompositionSessionModal({
         )
         .map((a) => a.teacher_id),
     );
-    const list = teachers.filter((t) => ids.has(t.id));
-    return list.length > 0 ? list : teachers;
+    if (forSubjectIds.size > 0) {
+      return teachers.filter((t) => forSubjectIds.has(t.id));
+    }
+    const forClassIds = new Set(
+      assignments
+        .filter((a) => a.class_section_id === classId)
+        .map((a) => a.teacher_id),
+    );
+    return teachers.filter((t) => forClassIds.has(t.id));
   };
 
-  // Rebuild paper drafts when programme / date range changes.
+  // Rebuild paper drafts when class / programme / date range changes.
   useEffect(() => {
     if (!open) return;
     setPapers((prev) => {
       const bySubject = new Map(prev.map((p) => [p.subjectId, p]));
       return subjectRows.map((s) => {
         const existing = bySubject.get(s.id);
+        const teacherOpts = teachersForSubject(s.id);
+        const teacherStillValid =
+          !!existing?.teacherId &&
+          teacherOpts.some((t) => t.id === existing.teacherId);
+        const teacherId = teacherStillValid
+          ? existing!.teacherId
+          : (teacherOpts[0]?.id ?? "");
         if (existing) {
           return {
             ...existing,
             subjectName: s.name,
-            evalDate:
-              existing.evalDate || startsOn || existing.evalDate,
+            teacherId,
+            evalDate: existing.evalDate || startsOn || existing.evalDate,
           };
         }
-        const teacherOpts = teachersForSubject(s.id);
         return {
           subjectId: s.id,
           subjectName: s.name,
           included: true,
-          teacherId: teacherOpts[0]?.id ?? "",
+          teacherId,
           evalDate: startsOn || "",
           startTime: "08:00",
           endTime: "10:00",
@@ -151,16 +167,16 @@ export function CompositionSessionModal({
         };
       });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only rebuild when subject list or startsOn seed changes
-  }, [open, subjectRows, startsOn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- teachersForSubject derived from classId/assignments/teachers
+  }, [open, classId, subjectRows, startsOn, assignments, teachers]);
 
   useEffect(() => {
     if (!open) return;
     setTitle("");
-    setPeriod(defaultPeriod || defaultPeriodLabel());
+    setPeriod(resolvePeriod(defaultPeriod));
     setStartsOn("");
     setEndsOn("");
-    setPapers([]);
+    // Papers are rebuilt by the effect above (classId → teachers of that class).
   }, [open, classId, defaultPeriod]);
 
   const updatePaper = (subjectId: string, patch: Partial<PaperDraft>) => {
@@ -320,7 +336,14 @@ export function CompositionSessionModal({
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label>Période</Label>
-            <Select value={period} onChange={(e) => setPeriod(e.target.value)}>
+            <Select
+              value={period}
+              onChange={(e) => {
+                const next = e.target.value;
+                setPeriod(next);
+                writeStoredGradingPeriod(next);
+              }}
+            >
               {PERIODS.map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -414,8 +437,8 @@ export function CompositionSessionModal({
                       </span>
                     </label>
                     {p.included ? (
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                        <div className="sm:col-span-2 lg:col-span-2">
+                      <div className="mt-2 space-y-2">
+                        <div>
                           <Label>Enseignant</Label>
                           <Select
                             value={p.teacherId}
@@ -426,7 +449,11 @@ export function CompositionSessionModal({
                             }
                             required
                           >
-                            <option value="">Choisir…</option>
+                            <option value="">
+                              {teacherOpts.length === 0
+                                ? "Aucun enseignant affecté à cette classe"
+                                : "Choisir…"}
+                            </option>
                             {teacherOpts.map((t) => (
                               <option key={t.id} value={t.id}>
                                 {fullName(t.first_name, t.last_name)}
@@ -434,40 +461,42 @@ export function CompositionSessionModal({
                             ))}
                           </Select>
                         </div>
-                        <div>
-                          <Label>Date</Label>
-                          <Input
-                            type="date"
-                            value={p.evalDate}
-                            min={startsOn || undefined}
-                            max={endsOn || undefined}
-                            onChange={(e) =>
-                              updatePaper(p.subjectId, {
-                                evalDate: e.target.value,
-                              })
-                            }
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Début</Label>
-                          <TimeInput24
-                            value={p.startTime}
-                            onChange={(v) =>
-                              updatePaper(p.subjectId, { startTime: v })
-                            }
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Fin</Label>
-                          <TimeInput24
-                            value={p.endTime}
-                            onChange={(v) =>
-                              updatePaper(p.subjectId, { endTime: v })
-                            }
-                            required
-                          />
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <div>
+                            <Label>Date</Label>
+                            <Input
+                              type="date"
+                              value={p.evalDate}
+                              min={startsOn || undefined}
+                              max={endsOn || undefined}
+                              onChange={(e) =>
+                                updatePaper(p.subjectId, {
+                                  evalDate: e.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label>Début</Label>
+                            <TimeInput24
+                              value={p.startTime}
+                              onChange={(v) =>
+                                updatePaper(p.subjectId, { startTime: v })
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label>Fin</Label>
+                            <TimeInput24
+                              value={p.endTime}
+                              onChange={(v) =>
+                                updatePaper(p.subjectId, { endTime: v })
+                              }
+                              required
+                            />
+                          </div>
                         </div>
                       </div>
                     ) : null}

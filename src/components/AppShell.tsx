@@ -31,11 +31,17 @@ import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCou
 import { useUnreadMessagesCount, useMessagesHomeRealtime, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
 import {
+  useExercicesPendingChanges,
   useParentExamsRealtime,
   useSchoolExamsRealtime,
   useStudentExamsRealtime,
   useTeacherExamsRealtime,
 } from "@/hooks/useExamRealtime";
+import {
+  useCompositionsPendingChanges,
+  useParentCompositionsRealtime,
+  useStudentCompositionsRealtime,
+} from "@/hooks/useCompositionRealtime";
 import {
   useNotesPendingChanges,
   useParentNotesRealtime,
@@ -47,7 +53,11 @@ import {
   useSchoolPresenceRealtime,
   useStudentPresenceRealtime,
 } from "@/hooks/usePresenceRealtime";
-import { useStudentTimetableRealtime, useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
+import {
+  useEdtPendingChanges,
+  useParentTimetableRealtime,
+  useStudentTimetableRealtime,
+} from "@/hooks/useStudentTimetableUpdates";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -70,6 +80,8 @@ interface NavItem {
     | "examens-en-attente"
     | "notes-updates"
     | "presence-updates"
+    | "exercices-updates"
+    | "compositions-updates"
     | "enfants-attention";
 }
 
@@ -252,6 +264,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           to: "/mes-exercices",
           label: "Exercices de maison",
           icon: <ClipboardList className="h-4 w-4" />,
+          badgeKey: "exercices-updates",
         },
         {
           to: "/mes-devoirs",
@@ -262,6 +275,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           to: "/mes-compositions",
           label: "Compositions",
           icon: <BookMarked className="h-4 w-4" />,
+          badgeKey: "compositions-updates",
         },
         {
           to: "/mes-presences",
@@ -356,10 +370,22 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [pageOpening, setPageOpening] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [location.pathname, location.search]);
+    if (role !== "school_admin" && role !== "super_admin") return;
+
+    setPageOpening(true);
+    let timer: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(() => setPageOpening(false), 450);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [location.pathname, location.search, role]);
 
   const roleGroups = role ? NAV_GROUPS_BY_ROLE[role] : [];
   const navGroups: NavGroup[] = [
@@ -389,10 +415,13 @@ export function AppShell() {
   useMessagesHomeRealtime();
   const { data: pendingExamsCount = 0 } = usePendingExamsCount();
   useStudentTimetableRealtime();
+  useParentTimetableRealtime();
   useStudentExamsRealtime();
   useTeacherExamsRealtime();
   useSchoolExamsRealtime();
   useParentExamsRealtime();
+  useStudentCompositionsRealtime();
+  useParentCompositionsRealtime();
   useStudentNotesRealtime();
   useParentNotesRealtime();
   useStudentPresenceRealtime();
@@ -402,7 +431,16 @@ export function AppShell() {
   const { pendingCount: notesUpdatesCount = 0 } = useNotesPendingChanges();
   const { pendingCount: presenceUpdatesCount = 0 } =
     usePresencePendingChanges();
-  const enfantsAttentionCount = notesUpdatesCount + presenceUpdatesCount;
+  const { pendingCount: exercicesUpdatesCount = 0 } =
+    useExercicesPendingChanges();
+  const { pendingCount: compositionsUpdatesCount = 0 } =
+    useCompositionsPendingChanges();
+  const enfantsAttentionCount =
+    notesUpdatesCount +
+    presenceUpdatesCount +
+    edtUpdatesCount +
+    exercicesUpdatesCount +
+    compositionsUpdatesCount;
 
   const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" | "brand" } | null => {
     if (item.badgeKey === "eleves-sans-classe" && sansClasseCount > 0) {
@@ -454,10 +492,27 @@ export function AppShell() {
         tone: "amber",
       };
     }
+    if (item.badgeKey === "exercices-updates" && exercicesUpdatesCount > 0) {
+      return {
+        count: exercicesUpdatesCount,
+        title: `${exercicesUpdatesCount} nouvel(eaux) exercice(s)`,
+        tone: "brand",
+      };
+    }
+    if (
+      item.badgeKey === "compositions-updates" &&
+      compositionsUpdatesCount > 0
+    ) {
+      return {
+        count: compositionsUpdatesCount,
+        title: `${compositionsUpdatesCount} composition(s) à consulter`,
+        tone: "amber",
+      };
+    }
     if (item.badgeKey === "enfants-attention" && enfantsAttentionCount > 0) {
       return {
         count: enfantsAttentionCount,
-        title: `${enfantsAttentionCount} alerte(s) notes / présences`,
+        title: `${enfantsAttentionCount} alerte(s) scolaires`,
         tone: "amber",
       };
     }
@@ -614,6 +669,24 @@ export function AppShell() {
           supportSchoolId ? "pt-12" : "",
         )}
       >
+        {pageOpening ? (
+          <>
+            <div
+              className="fixed inset-x-0 top-0 z-[70] h-1 overflow-hidden bg-brand-100 lg:left-72"
+              role="progressbar"
+              aria-label="Chargement de la page"
+            >
+              <div className="h-full w-1/2 animate-[pulse_0.7s_ease-in-out_infinite] bg-brand-600" />
+            </div>
+            <div
+              className="fixed right-4 top-4 z-[70] flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg dark:border-brand-800 dark:bg-[var(--surface)] dark:text-slate-100"
+              role="status"
+            >
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-700" />
+              Chargement de la page…
+            </div>
+          </>
+        ) : null}
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
           <button
             type="button"

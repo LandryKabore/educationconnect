@@ -1,23 +1,18 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users } from "lucide-react";
-import { ClassColorDot } from "@/components/ClassColor";
-import {
-  CLASS_COLOR_SURFACE,
-  classColorVars,
-} from "@/lib/classColors";
+import { BookOpen, ChevronRight, ClipboardCheck, Users } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatAverage, scoreOn20 } from "@/lib/averages";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
 
 type SubjectAvg = {
   subjectId: string;
   subjectName: string;
   /** Class average on /20 for this subject, or null if no grades yet. */
   averageOn20: number | null;
+  gradeCount: number;
 };
 
 type TeacherClass = {
@@ -27,6 +22,11 @@ type TeacherClass = {
   subjects: SubjectAvg[];
   studentCount: number;
 };
+
+function scoreBarWidth(on20: number | null): string {
+  if (on20 === null) return "0%";
+  return `${Math.min(100, Math.max(0, (on20 / 20) * 100))}%`;
+}
 
 export default function MesClasses() {
   const { user } = useAuth();
@@ -112,7 +112,6 @@ export default function MesClasses() {
         }
       }
 
-      // All grades for these classes/subjects → class average per matière.
       const scoresByKey = new Map<string, number[]>();
       if (classIds.length > 0 && subjectIds.length > 0) {
         const { data: notes } = await supabase
@@ -145,7 +144,12 @@ export default function MesClasses() {
               scores.length > 0
                 ? scores.reduce((a, b) => a + b, 0) / scores.length
                 : null;
-            return { subjectId, subjectName, averageOn20 };
+            return {
+              subjectId,
+              subjectName,
+              averageOn20,
+              gradeCount: scores.length,
+            };
           })
           .sort((a, b) =>
             a.subjectName.localeCompare(b.subjectName, "fr", {
@@ -164,11 +168,16 @@ export default function MesClasses() {
     },
   });
 
+  const totalStudents = classes.reduce((n, c) => n + c.studentCount, 0);
+  const totalSubjects = new Set(
+    classes.flatMap((c) => c.subjects.map((s) => s.subjectId)),
+  ).size;
+
   return (
     <div>
       <PageHeader
         title="Mes classes"
-        subtitle="Classes où vous enseignez — matières et moyennes"
+        subtitle="Classes où vous enseignez — moyenne de classe par matière"
       />
 
       {isLoading ? (
@@ -176,65 +185,125 @@ export default function MesClasses() {
       ) : classes.length === 0 ? (
         <EmptyState message="Aucune classe assignée pour le moment." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {classes.map((c) => (
-            <Link
-              key={c.classId}
-              to={`/classes/${c.classId}`}
-              className="block rounded-xl outline-none ring-brand-500 focus-visible:ring-2"
-            >
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Classes
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {classes.length}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Élèves
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {totalStudents}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Matières
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {totalSubjects}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {classes.map((c) => (
               <Card
-                data-class-color
-                style={classColorVars({ id: c.classId, name: c.className })}
-                className={cn(
-                  "flex h-full flex-col border p-4 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                  CLASS_COLOR_SURFACE,
-                )}
+                key={c.classId}
+                className="flex flex-col overflow-hidden border border-slate-200 bg-white p-0 transition hover:border-brand-300 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700"
               >
-                <div className="flex items-start gap-2">
-                  <ClassColorDot
-                    id={c.classId}
-                    name={c.className}
-                    className="mt-1"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold leading-tight">
+                <Link
+                  to={`/classes/${c.classId}`}
+                  className="flex flex-1 flex-col outline-none ring-inset ring-brand-500 focus-visible:ring-2"
+                >
+                  <div className="px-4 pt-4">
+                    <h2 className="truncate text-lg font-semibold leading-tight text-slate-900 dark:text-slate-100">
                       {c.className}
                     </h2>
-                    {c.gradeLevel ? (
-                      <p className="text-xs opacity-75">{c.gradeLevel}</p>
-                    ) : null}
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                      <Users className="h-3 w-3 shrink-0" />
+                      {c.studentCount} élève
+                      {c.studentCount > 1 ? "s" : ""}
+                      {c.gradeLevel ? ` · ${c.gradeLevel}` : ""}
+                    </p>
                   </div>
+
+                  <div className="mt-3 flex-1 space-y-2.5 px-4 pb-3">
+                    {c.subjects.map((s) => (
+                      <div key={s.subjectId}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                              {s.subjectName}
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                              Moyenne de classe
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-right text-lg font-bold tabular-nums leading-none text-brand-700">
+                            {s.averageOn20 != null
+                              ? formatAverage(s.averageOn20)
+                              : "—"}
+                            <span className="text-sm font-semibold text-slate-400">
+                              {" "}
+                              / 20
+                            </span>
+                          </p>
+                        </div>
+                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-brand-500"
+                            style={{ width: scoreBarWidth(s.averageOn20) }}
+                          />
+                        </div>
+                        {s.gradeCount > 0 ? (
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            Calculée sur {s.gradeCount} note
+                            {s.gradeCount > 1 ? "s" : ""}
+                          </p>
+                        ) : (
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            Aucune note encore
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Link>
+
+                <div className="grid grid-cols-3 border-t border-slate-100 dark:border-[var(--border)]">
+                  <Link
+                    to={`/classes/${c.classId}/notes`}
+                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Notes
+                  </Link>
+                  <Link
+                    to={`/classes/${c.classId}/presences`}
+                    className="flex items-center justify-center gap-1.5 border-x border-slate-100 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:border-[var(--border)] dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
+                  >
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                    Présences
+                  </Link>
+                  <Link
+                    to={`/classes/${c.classId}`}
+                    className="flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
+                  >
+                    Détail
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
-
-                <p className="mt-3 text-xs font-medium uppercase tracking-wide opacity-70">
-                  Matières ({c.subjects.length})
-                </p>
-                <ul className="mt-1 space-y-2">
-                  {c.subjects.map((s) => (
-                    <li
-                      key={s.subjectId}
-                      className="flex items-baseline justify-between gap-3 text-sm"
-                    >
-                      <span className="min-w-0 truncate opacity-90">
-                        {s.subjectName}
-                      </span>
-                      <span className="shrink-0 font-semibold tabular-nums">
-                        {s.averageOn20 != null
-                          ? `${formatAverage(s.averageOn20)} / 20`
-                          : "— / 20"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                <p className="mt-4 flex items-center gap-1.5 text-xs opacity-80">
-                  <Users className="h-3.5 w-3.5" />
-                  {c.studentCount} élève{c.studentCount > 1 ? "s" : ""}
-                </p>
               </Card>
-            </Link>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>

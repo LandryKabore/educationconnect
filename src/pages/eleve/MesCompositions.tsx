@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isPast, isWithinInterval, parseISO, startOfDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompositionsPendingChanges } from "@/hooks/useCompositionRealtime";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
@@ -41,6 +43,11 @@ function sessionStatus(startsOn: string, endsOn: string) {
 
 export default function MesCompositions() {
   const { user } = useAuth();
+  const { markSeen } = useCompositionsPendingChanges();
+
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
 
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["mes-compositions", user?.id],

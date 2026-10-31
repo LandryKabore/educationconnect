@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  LoaderCircle,
 } from "lucide-react";
 import { formatFrDateInput, frToIso, isoToFr } from "@/lib/dateFr";
 import { cn } from "@/lib/utils";
@@ -495,46 +496,59 @@ export function TimeInput24({
   minuteStep?: number;
 }) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  const hour = match ? Math.min(23, Math.max(0, Number(match[1]))) : "";
-  const minute = match ? Math.min(59, Math.max(0, Number(match[2]))) : "";
+  const hourNum = match
+    ? Math.min(23, Math.max(0, Number(match[1])))
+    : null;
+  const minuteNum = match
+    ? Math.min(59, Math.max(0, Number(match[2])))
+    : null;
+  // Always strings — numeric select values can render blank in some browsers.
+  const hour = hourNum === null ? "" : String(hourNum);
+  const minute = minuteNum === null ? "" : String(minuteNum);
 
   const step = Math.min(30, Math.max(1, Math.round(minuteStep)));
   const minuteOptions = Array.from(
     { length: Math.floor(60 / step) },
     (_, i) => i * step,
   );
-  if (typeof minute === "number" && !minuteOptions.includes(minute)) {
-    minuteOptions.push(minute);
+  if (minuteNum !== null && !minuteOptions.includes(minuteNum)) {
+    minuteOptions.push(minuteNum);
     minuteOptions.sort((a, b) => a - b);
   }
 
-  const emit = (h: number | "", m: number | "") => {
+  const emit = (h: string, m: string) => {
     if (h === "" || m === "") {
       onChange("");
       return;
     }
     onChange(
-      `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      `${h.padStart(2, "0")}:${m.padStart(2, "0")}`,
     );
   };
 
+  const selectClass =
+    "h-11 w-[4.5rem] shrink-0 rounded-xl border border-slate-300 bg-white px-2 text-center text-sm font-medium tabular-nums text-slate-900 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-100";
+
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div
+      className={cn("flex items-center gap-1.5", className)}
+      title="Heure (24 h)"
+    >
       <select
         id={id}
         aria-label="Heure"
         required={required}
         disabled={disabled}
-        value={hour === "" ? "" : hour}
+        value={hour}
         onChange={(e) => {
-          const h = e.target.value === "" ? "" : Number(e.target.value);
-          emit(h, minute === "" ? 0 : minute);
+          const h = e.target.value;
+          emit(h, minute === "" ? "0" : minute);
         }}
-        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 dark:border-slate-500 dark:bg-[var(--surface-2)]"
+        className={selectClass}
       >
         <option value="">--</option>
         {Array.from({ length: 24 }, (_, h) => (
-          <option key={h} value={h}>
+          <option key={h} value={String(h)}>
             {String(h).padStart(2, "0")}
           </option>
         ))}
@@ -546,21 +560,21 @@ export function TimeInput24({
         aria-label="Minutes"
         required={required}
         disabled={disabled}
-        value={minute === "" ? "" : minute}
+        value={minute}
         onChange={(e) => {
-          const m = e.target.value === "" ? "" : Number(e.target.value);
-          emit(hour === "" ? 8 : hour, m);
+          const m = e.target.value;
+          emit(hour === "" ? "8" : hour, m);
         }}
-        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100 dark:border-slate-500 dark:bg-[var(--surface-2)]"
+        className={selectClass}
       >
         <option value="">--</option>
         {minuteOptions.map((m) => (
-          <option key={m} value={m}>
+          <option key={m} value={String(m)}>
             {String(m).padStart(2, "0")}
           </option>
         ))}
       </select>
-      <span className="shrink-0 text-xs text-slate-500">24 h</span>
+      <span className="sr-only">24 h</span>
     </div>
   );
 }
@@ -625,6 +639,34 @@ export function EmptyState({ message }: { message: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-100 px-4 py-10 text-center text-sm font-medium text-slate-600 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-200">
       {message}
+    </div>
+  );
+}
+
+export function PageLoadingState({
+  message = "Chargement de la page…",
+}: {
+  message?: string;
+}) {
+  return (
+    <div
+      className="flex min-h-56 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[var(--border)] dark:bg-[var(--surface)]"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
+          <LoaderCircle className="h-6 w-6 animate-spin" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {message}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Veuillez patienter un instant.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

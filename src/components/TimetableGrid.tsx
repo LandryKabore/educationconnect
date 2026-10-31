@@ -123,6 +123,8 @@ type Props = {
   includeSaturday?: boolean;
   /** Slot ids to visually emphasize (e.g. recent additions). */
   highlightIds?: string[];
+  /** Highlight this weekday column (1=Mon … 6=Sat). */
+  highlightDay?: number | null;
 };
 
 export function TimetableGrid({
@@ -133,13 +135,20 @@ export function TimetableGrid({
   className,
   includeSaturday = true,
   highlightIds = [],
+  highlightDay = null,
 }: Props) {
   const days = includeSaturday
     ? DAY_META
     : DAY_META.filter((d) => d.day <= 5);
   const highlight = new Set(highlightIds);
   const subjectColors = useMemo(
-    () => buildSubjectColorMap(slots.map((s) => s.subjectName)),
+    () =>
+      buildSubjectColorMap(
+        slots.map((s) =>
+          [s.className, s.subjectName].filter(Boolean).join(" · ") ||
+          s.subjectName,
+        ),
+      ),
     [slots],
   );
 
@@ -190,17 +199,26 @@ export function TimetableGrid({
           <div className="flex items-center justify-center border-b-2 border-r-2 border-slate-800 bg-slate-50 px-1 py-2 text-center text-xs font-bold uppercase tracking-wide text-slate-700 dark:border-slate-600 dark:bg-[var(--surface-2)] dark:text-slate-200">
             Heure
           </div>
-          {days.map((d) => (
-            <div
-              key={d.day}
-              className={cn(
-                "border-b-2 border-r-2 border-slate-800 px-2 py-2 text-center text-sm font-bold last:border-r-0 dark:border-slate-600",
-                d.headerClass,
-              )}
-            >
-              {d.label}
-            </div>
-          ))}
+          {days.map((d) => {
+            const isToday = highlightDay === d.day;
+            return (
+              <div
+                key={d.day}
+                className={cn(
+                  "border-b-2 border-r-2 border-slate-800 px-2 py-2 text-center text-sm font-bold last:border-r-0 dark:border-slate-600",
+                  d.headerClass,
+                  isToday && "ring-2 ring-inset ring-brand-600 dark:ring-brand-300",
+                )}
+              >
+                {d.label}
+                {isToday ? (
+                  <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wide opacity-90">
+                    Aujourd’hui
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
 
           <div
             className="relative border-r-2 border-slate-800 bg-slate-50 dark:border-slate-600 dark:bg-[var(--surface-2)]"
@@ -221,10 +239,14 @@ export function TimetableGrid({
 
           {days.map((d) => {
             const daySlots = slotsByDay.get(d.day) ?? [];
+            const isToday = highlightDay === d.day;
             return (
               <div
                 key={d.day}
-                className="relative overflow-visible border-r-2 border-slate-800 last:border-r-0 dark:border-slate-600 dark:bg-[var(--bg)]"
+                className={cn(
+                  "relative overflow-visible border-r-2 border-slate-800 last:border-r-0 dark:border-slate-600 dark:bg-[var(--bg)]",
+                  isToday && "bg-brand-50/40 dark:bg-brand-950/20",
+                )}
                 style={{ height: bodyHeight }}
               >
                 {hourMarks.map((m) => (
@@ -257,9 +279,15 @@ export function TimetableGrid({
                     .filter(Boolean)
                     .join(" · ");
                   const subjectKey =
-                    (slot.subjectName || "Cours").trim() || "Cours";
+                    [slot.className, slot.subjectName]
+                      .filter(Boolean)
+                      .join(" · ") ||
+                    (slot.subjectName || "Cours").trim() ||
+                    "Cours";
                   const slotColor =
                     subjectColors.get(subjectKey) ?? SLOT_COLORS[0];
+                  const klass = slot.className?.trim() || null;
+                  const subject = slot.subjectName?.trim() || "Cours";
 
                   return (
                     <div
@@ -301,8 +329,8 @@ export function TimetableGrid({
                     >
                       {density === "xs" ? (
                         <div className="flex h-full items-center gap-1">
-                          <p className="edt-slot-title min-w-0 flex-1 truncate text-[10px] font-bold leading-none text-slate-900">
-                            {slot.subjectName}
+                          <p className="edt-slot-title min-w-0 flex-1 text-[10px] font-bold leading-tight text-slate-900">
+                            {klass ?? subject}
                             <span className="edt-slot-body font-medium text-slate-700">
                               {" "}
                               · {timeLabel}
@@ -325,9 +353,22 @@ export function TimetableGrid({
                       ) : (
                         <>
                           <div className="flex items-start justify-between gap-1">
-                            <p className="edt-slot-title min-w-0 truncate text-xs font-bold leading-tight text-slate-900">
-                              {slot.subjectName}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              {klass ? (
+                                <>
+                                  <p className="edt-slot-title text-xs font-bold leading-tight text-slate-900">
+                                    {klass}
+                                  </p>
+                                  <p className="edt-slot-body text-[11px] font-semibold leading-snug text-slate-800">
+                                    {subject}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="edt-slot-title text-xs font-bold leading-snug text-slate-900">
+                                  {subject}
+                                </p>
+                              )}
+                            </div>
                             {onRemove ? (
                               <button
                                 type="button"
@@ -342,21 +383,16 @@ export function TimetableGrid({
                               </button>
                             ) : null}
                           </div>
-                          <p className="edt-slot-body truncate text-[10px] font-medium leading-tight text-slate-700">
+                          <p className="edt-slot-body text-[10px] font-medium leading-tight text-slate-700">
                             {timeLabel}
                           </p>
                           {density !== "sm" && slot.teacherName ? (
-                            <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-600">
+                            <p className="edt-slot-body text-[10px] leading-tight text-slate-600">
                               {slot.teacherName}
                             </p>
                           ) : null}
-                          {density === "lg" && slot.className ? (
-                            <p className="edt-slot-muted truncate text-[10px] leading-tight text-slate-500">
-                              {slot.className}
-                            </p>
-                          ) : null}
                           {density === "lg" && slot.room ? (
-                            <p className="edt-slot-muted truncate text-[10px] leading-tight text-slate-500">
+                            <p className="edt-slot-muted text-[10px] leading-tight text-slate-500">
                               Salle {slot.room}
                             </p>
                           ) : null}
@@ -364,19 +400,19 @@ export function TimetableGrid({
                           {density === "sm" ? (
                             <div className="mt-0.5 hidden group-hover/slot:block">
                               {slot.teacherName ? (
-                                <p className="edt-slot-body truncate text-[10px] text-slate-600">
+                                <p className="edt-slot-body text-[10px] text-slate-600">
                                   {slot.teacherName}
                                 </p>
                               ) : null}
                               {slot.room ? (
-                                <p className="edt-slot-muted truncate text-[10px] text-slate-500">
+                                <p className="edt-slot-muted text-[10px] text-slate-500">
                                   Salle {slot.room}
                                 </p>
                               ) : null}
                             </div>
                           ) : null}
                           {density === "md" && slot.room ? (
-                            <p className="edt-slot-muted hidden truncate text-[10px] text-slate-500 group-hover/slot:block">
+                            <p className="edt-slot-muted hidden text-[10px] text-slate-500 group-hover/slot:block">
                               Salle {slot.room}
                             </p>
                           ) : null}
@@ -384,13 +420,18 @@ export function TimetableGrid({
                       )}
                       {density === "xs" ? (
                         <div className="mt-1 hidden rounded-md border border-slate-200/80 bg-inherit p-1 shadow-sm group-hover/slot:block dark:border-slate-600">
+                          {klass ? (
+                            <p className="edt-slot-body text-[10px] text-slate-700">
+                              {subject}
+                            </p>
+                          ) : null}
                           {slot.teacherName ? (
-                            <p className="edt-slot-body truncate text-[10px] text-slate-600">
+                            <p className="edt-slot-body text-[10px] text-slate-600">
                               {slot.teacherName}
                             </p>
                           ) : null}
                           {slot.room ? (
-                            <p className="edt-slot-muted truncate text-[10px] text-slate-500">
+                            <p className="edt-slot-muted text-[10px] text-slate-500">
                               Salle {slot.room}
                             </p>
                           ) : null}

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { fr } from "date-fns/locale";
 import {
   computeAnnualAverage,
   computeWeightedAverage,
@@ -6,6 +7,7 @@ import {
   formatPassDecision,
   scoreOn20,
 } from "@/lib/averages";
+import { formatDateSafe } from "@/lib/dateFr";
 import {
   evaluationTypeLabel,
   evaluationTypeShort,
@@ -17,7 +19,11 @@ import { cn } from "@/lib/utils";
 
 export type NotesPeriodGrade = GradeRow & {
   matieres?: Subject | null;
-  evaluations?: { type: EvaluationType; title: string } | null;
+  evaluations?: {
+    type: EvaluationType;
+    title: string;
+    eval_date?: string | null;
+  } | null;
 };
 
 type Props = {
@@ -123,7 +129,8 @@ export function NotesPeriodTables({
               Moyenne annuelle
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
-              (T1 + T2 + T3) / {annual.trimesterCount || 3}
+              Moyenne générale des trimestres · (T1 + T2 + T3) /{" "}
+              {annual.trimesterCount || 3}
               {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
             </p>
           </div>
@@ -194,18 +201,22 @@ export function NotesPeriodTables({
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Moyenne
+                        </p>
                         <p
                           className={cn(
-                            "text-xl font-bold tabular-nums leading-none",
+                            "mt-0.5 text-xl font-bold tabular-nums leading-none",
                             scoreTone(subject.averageOn20),
                           )}
                         >
                           {subject.averageOn20 !== null
                             ? formatAverage(subject.averageOn20)
                             : "—"}
-                        </p>
-                        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                          / 20
+                          <span className="text-sm font-semibold text-slate-400">
+                            {" "}
+                            / 20
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -239,6 +250,11 @@ export function NotesPeriodTables({
                       const comment = g.comment?.trim() || "";
                       const evalType = g.evaluations?.type;
                       const evalTitle = g.evaluations?.title?.trim();
+                      const evalDate = g.evaluations?.eval_date
+                        ? formatDateSafe(g.evaluations.eval_date, "d MMM yyyy", {
+                            locale: fr,
+                          })
+                        : null;
 
                       return (
                         <li key={g.id} className="px-4 py-2.5">
@@ -264,6 +280,11 @@ export function NotesPeriodTables({
                                   Note
                                 </p>
                               )}
+                              {evalDate ? (
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {evalDate}
+                                </p>
+                              ) : null}
                               {comment ? (
                                 <p className="mt-1 line-clamp-2 text-xs text-slate-500">
                                   {comment}
@@ -275,23 +296,26 @@ export function NotesPeriodTables({
                                 <Badge tone="warning">Absent</Badge>
                               ) : (
                                 <>
+                                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                                    Note
+                                  </p>
                                   <p
                                     className={cn(
-                                      "text-sm font-bold tabular-nums",
+                                      "mt-0.5 text-sm font-bold tabular-nums",
                                       scoreTone(on20),
                                     )}
                                   >
-                                    {on20 !== null
-                                      ? on20.toFixed(1)
-                                      : "—"}
+                                    {g.score}
                                     <span className="font-medium text-slate-400">
                                       {" "}
-                                      /20
+                                      / {g.max_score}
                                     </span>
                                   </p>
-                                  <p className="text-[11px] tabular-nums text-slate-400">
-                                    {g.score} / {g.max_score}
-                                  </p>
+                                  {g.max_score !== 20 && on20 !== null ? (
+                                    <p className="text-[11px] tabular-nums text-slate-400">
+                                      soit {on20.toFixed(1)} / 20
+                                    </p>
+                                  ) : null}
                                 </>
                               )}
                             </div>

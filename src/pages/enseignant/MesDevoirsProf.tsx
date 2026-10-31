@@ -2,8 +2,6 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import { ClipboardList, FileText } from "lucide-react";
-import { ClassColorDot } from "@/components/ClassColor";
-import { CLASS_COLOR_SURFACE, classColorVars } from "@/lib/classColors";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatDateSafe } from "@/lib/dateFr";
 import { evaluationTypeLabel } from "@/lib/evaluationTypes";
@@ -11,7 +9,6 @@ import type { EvaluationType } from "@/lib/types";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
 
 type NextExam = {
   title: string;
@@ -191,29 +188,21 @@ export default function MesDevoirsProf() {
           {classes.map((c) => {
             const params = new URLSearchParams({ from: "devoirs" });
             if (c.focusSubjectId) params.set("subject", c.focusSubjectId);
-            if (c.focusPeriod) params.set("period", c.focusPeriod);
+            // Keep the teacher's remembered trimestre — don't force focusPeriod.
             return (
               <Link
                 key={c.classId}
                 to={`/classes/${c.classId}/notes?${params.toString()}`}
                 className="block rounded-xl outline-none ring-brand-500 focus-visible:ring-2"
               >
-                <Card
-                  data-class-color
-                  style={classColorVars({ id: c.classId, name: c.className })}
-                  className={cn(
-                    "flex h-full flex-col border p-4 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                    CLASS_COLOR_SURFACE,
-                  )}
-                >
+                <Card className="flex h-full flex-col border border-slate-200 bg-white p-4 transition hover:border-brand-300 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700">
                   <div className="flex items-start gap-2">
-                    <ClassColorDot id={c.classId} name={c.className} className="mt-1" />
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-lg font-semibold leading-tight">
+                      <h2 className="text-lg font-semibold leading-tight text-slate-900 dark:text-slate-100">
                         {c.className}
                       </h2>
                       {c.gradeLevel ? (
-                        <p className="text-xs opacity-75">{c.gradeLevel}</p>
+                        <p className="text-xs text-slate-500">{c.gradeLevel}</p>
                       ) : null}
                     </div>
                     {c.ungraded > 0 ? (
@@ -222,7 +211,7 @@ export default function MesDevoirsProf() {
                   </div>
 
                   {c.total === 0 ? (
-                    <p className="mt-4 flex items-center gap-1.5 text-xs opacity-70">
+                    <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
                       <ClipboardList className="h-3.5 w-3.5" />
                       Rien pour le moment
                     </p>
@@ -233,7 +222,7 @@ export default function MesDevoirsProf() {
                         .map((t) => (
                           <span
                             key={t}
-                            className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium opacity-90 dark:bg-black/20"
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
                           >
                             {c.byType[t]} {evaluationTypeLabel(t).toLowerCase()}
                             {c.byType[t] > 1 ? "s" : ""}
@@ -243,7 +232,7 @@ export default function MesDevoirsProf() {
                   )}
 
                   {c.nextExam ? (
-                    <p className="mt-3 flex items-center gap-1.5 text-xs font-medium opacity-90">
+                    <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">
                       <FileText className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">
                         {c.nextExam.title}
@@ -257,7 +246,7 @@ export default function MesDevoirsProf() {
                     </p>
                   ) : null}
 
-                  <p className="mt-4 text-sm font-medium">Gérer →</p>
+                  <p className="mt-4 text-sm font-medium text-brand-700">Gérer →</p>
                 </Card>
               </Link>
             );

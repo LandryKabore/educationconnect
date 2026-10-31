@@ -5,14 +5,18 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { generateBulletinPdf } from "@/lib/pdfBulletin";
+import { buildBulletinPdf } from "@/lib/bulletinData";
 import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
+import {
+  initialGradingPeriod,
+  writeStoredGradingPeriod,
+} from "@/lib/gradingPeriod";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { fetchEnrollmentsByStudent } from "@/lib/programmeCounts";
-import type { ClassSection, GradeRow, Profile, School, Subject } from "@/lib/types";
+import type { ClassSection, Profile, School } from "@/lib/types";
 import { cn, fullName, matchesSearch } from "@/lib/utils";
 import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
 import {
@@ -30,12 +34,16 @@ type StudentRow = Profile & {
   classSectionId: string | null;
 };
 
+const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
+
 export default function Bulletins() {
   const { schoolId, schools } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [studentId, setStudentId] = useState("");
-  const [period, setPeriod] = useState<string>(TRIMESTER_PERIODS[0]);
+  const [period, setPeriod] = useState(() =>
+    initialGradingPeriod(BULLETIN_PERIODS),
+  );
   const [generating, setGenerating] = useState(false);
 
   const selectedClassId = searchParams.get("classe") ?? "";
@@ -158,33 +166,19 @@ export default function Bulletins() {
       student.classSectionId ??
       undefined;
 
-    const { data: allGradesRaw } = await supabase
-      .from("notes")
-      .select("*, matieres(*)")
-      .eq("student_id", studentId)
-      .in("period_label", [...TRIMESTER_PERIODS]);
-
-    const allGrades = (
-      (allGradesRaw ?? []) as (GradeRow & { matieres: Subject })[]
-    ).map((g) => ({
-      ...g,
-      subject: g.matieres,
-    }));
-
-    const grades =
-      period === ANNUAL_PERIOD_LABEL
-        ? []
-        : allGrades.filter((g) => g.period_label === period);
+    if (!classSectionId) {
+      toast.error("Cet élève n’est pas inscrit dans une classe");
+      setGenerating(false);
+      return;
+    }
 
     let coefficientBySubject: Record<string, number> = {};
-    if (classSectionId) {
-      const { data: programme } = await supabase
-        .from("programme_classe")
-        .select("subject_id, coefficient")
-        .eq("class_section_id", classSectionId);
-      for (const row of programme ?? []) {
-        coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
-      }
+    const { data: programme } = await supabase
+      .from("programme_classe")
+      .select("subject_id, coefficient")
+      .eq("class_section_id", classSectionId);
+    for (const row of programme ?? []) {
+      coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
     }
 
     const className =
@@ -192,32 +186,25 @@ export default function Bulletins() {
       student.className ??
       "—";
 
-    if (period !== ANNUAL_PERIOD_LABEL && grades.length === 0) {
-      toast.message("Aucune note pour cette période");
-      setGenerating(false);
-      return;
-    }
-    if (period === ANNUAL_PERIOD_LABEL && allGrades.length === 0) {
-      toast.message("Aucune note sur l’année");
-      setGenerating(false);
-      return;
-    }
+    try {
+      const doc = await buildBulletinPdf({
+        school: school as School,
+        student,
+        classSectionId,
+        className,
+        periodLabel: period,
+        coefficientBySubject,
+      });
 
-    const doc = generateBulletinPdf({
-      school: school as School,
-      student,
-      className,
-      periodLabel: period,
-      coefficientBySubject,
-      grades,
-      allGrades,
-    });
-
-    const filePeriod =
-      period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
-    doc.save(`bulletin-${student.last_name}-${filePeriod}.pdf`);
-    toast.success("Bulletin téléchargé");
-    setGenerating(false);
+      const filePeriod =
+        period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
+      doc.save(`bulletin-${student.last_name}-${filePeriod}.pdf`);
+      toast.success("Bulletin téléchargé");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Génération impossible");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -303,7 +290,11 @@ export default function Bulletins() {
                   <Label>Période</Label>
                   <Select
                     value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setPeriod(next);
+                      writeStoredGradingPeriod(next);
+                    }}
                   >
                     {TRIMESTER_PERIODS.map((p) => (
                       <option key={p} value={p}>
@@ -315,8 +306,9 @@ export default function Bulletins() {
                     </option>
                   </Select>
                   <p className="mt-1 text-xs text-slate-500">
-                    La moyenne annuelle = (T1 + T2 + T3) / 3. Admission à partir
-                    de 10 / 20.
+                    Moyennes par matière avec comparaison classe (élève /
+                    clas. / min / max / écart). Mention automatique selon la
+                    moyenne générale.
                   </p>
                 </div>
 

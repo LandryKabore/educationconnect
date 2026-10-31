@@ -18,6 +18,7 @@ import {
   EmptyState,
   Input,
   Label,
+  PageLoadingState,
   PageHeader,
   Select,
   Textarea,
@@ -45,6 +46,13 @@ type InboxMessage = MessageRow & {
 
 type SentMessage = MessageRow & {
   recipient: { first_name: string; last_name: string } | null;
+};
+
+type AnnouncementListItem = {
+  key: string;
+  message: InboxMessage;
+  sentByMe: boolean;
+  recipientCount: number;
 };
 
 type ChatMessage = MessageRow & {
@@ -541,22 +549,58 @@ export default function Messages({
     () => inbox.filter((m) => !!m.is_announcement),
     [inbox],
   );
+  const announcementItems = useMemo((): AnnouncementListItem[] => {
+    const items: AnnouncementListItem[] = announcementInbox.map((message) => ({
+      key: `in-${message.id}`,
+      message,
+      sentByMe: false,
+      recipientCount: 1,
+    }));
+    const sentGroups = new Map<
+      string,
+      { message: SentMessage; recipientCount: number }
+    >();
+
+    for (const message of sent) {
+      if (!message.is_announcement) continue;
+      const key = message.announcement_id || message.id;
+      const current = sentGroups.get(key);
+      if (current) current.recipientCount += 1;
+      else sentGroups.set(key, { message, recipientCount: 1 });
+    }
+
+    for (const [key, group] of sentGroups) {
+      items.push({
+        key: `sent-${key}`,
+        message: { ...group.message, sender: null },
+        sentByMe: true,
+        recipientCount: group.recipientCount,
+      });
+    }
+
+    return items.sort(
+      (a, b) =>
+        new Date(b.message.created_at).getTime() -
+        new Date(a.message.created_at).getTime(),
+    );
+  }, [announcementInbox, sent]);
   const directSent = useMemo(
     () => sent.filter((m) => !m.is_announcement),
     [sent],
   );
 
   const filteredAnnouncements = useMemo(() => {
-    return announcementInbox.filter((m) =>
+    return announcementItems.filter(({ message: m, sentByMe }) =>
       matchesSearch(
         listSearch,
         m.subject,
         m.body,
+        sentByMe ? "Vous" : null,
         m.sender?.first_name,
         m.sender?.last_name,
       ),
     );
-  }, [announcementInbox, listSearch]);
+  }, [announcementItems, listSearch]);
 
   const conversations = useMemo((): Conversation[] => {
     const map = new Map<string, ChatMessage[]>();
@@ -1435,9 +1479,9 @@ export default function Messages({
           </form>
         </Card>
       ) : tab === "announcements" ? (
-        inboxLoading ? (
-          <p className="text-slate-500">Chargement…</p>
-        ) : announcementInbox.length === 0 ? (
+        inboxLoading || sentLoading ? (
+          <PageLoadingState message="Chargement des annonces…" />
+        ) : announcementItems.length === 0 ? (
           <EmptyState message="Aucune annonce pour le moment." />
         ) : (
           <div className="space-y-8">
@@ -1453,13 +1497,18 @@ export default function Messages({
             {filteredAnnouncements.length === 0 ? (
               <EmptyState message="Aucune annonce ne correspond à la recherche." />
             ) : (
-              filteredAnnouncements.map((m) => {
+              filteredAnnouncements.map((item) => {
+                const m = item.message;
                 const canReply = m.allow_replies !== false;
                 return (
                   <AnnouncementPaper
-                    key={m.id}
+                    key={item.key}
                     title={m.subject || "(Sans objet)"}
-                    senderName={fullName(m.sender?.first_name, m.sender?.last_name)}
+                    senderName={
+                      item.sentByMe
+                        ? `Vous · envoyée à ${item.recipientCount} destinataire${item.recipientCount !== 1 ? "s" : ""}`
+                        : fullName(m.sender?.first_name, m.sender?.last_name)
+                    }
                     body={m.body}
                     dateLabel={formatDateSafe(m.created_at, "d MMM yyyy", {
                       locale: fr,
@@ -1469,7 +1518,11 @@ export default function Messages({
                     }
                     isNew={!m.read_at}
                     footer={
-                      canReply ? (
+                      item.sentByMe ? (
+                        <p className="announcement-paper__note">
+                          Annonce envoyée
+                        </p>
+                      ) : canReply ? (
                         <Button
                           size="sm"
                           variant="outline"

@@ -76,10 +76,8 @@ export default function MonEmploiDuTempsProf() {
         day_of_week: s.day_of_week,
         start_time: s.start_time,
         end_time: s.end_time,
-        subjectName: [s.classes?.name, s.matieres?.name]
-          .filter(Boolean)
-          .join(" · "),
-        className: s.classes?.name ?? "Classe",
+        subjectName: s.matieres?.name ?? "Matière",
+        className: s.classes?.name ?? null,
         room: s.room,
       })),
     [slots],
@@ -260,6 +258,7 @@ export default function MonEmploiDuTempsProf() {
           <TimetableGrid
             slots={gridSlots}
             title="Planning hebdomadaire"
+            highlightDay={todayDow}
           />
         </>
       )}

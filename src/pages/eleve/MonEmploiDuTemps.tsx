@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
+import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { fullName, personName } from "@/lib/utils";
@@ -206,7 +207,11 @@ export default function MonEmploiDuTemps() {
       ) : slots.length === 0 ? (
         <EmptyState message="Aucun créneau planifié." />
       ) : (
-        <TimetableGrid slots={gridSlots} highlightIds={highlightIds} />
+        <TimetableGrid
+          slots={gridSlots}
+          highlightIds={highlightIds}
+          highlightDay={dbDayOfWeek()}
+        />
       )}
     </div>
   );

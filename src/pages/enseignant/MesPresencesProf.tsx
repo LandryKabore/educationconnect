@@ -4,11 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CheckCircle2, ClipboardList, Users } from "lucide-react";
-import { ClassColorDot } from "@/components/ClassColor";
-import {
-  CLASS_COLOR_SURFACE,
-  classColorVars,
-} from "@/lib/classColors";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatDateSafe } from "@/lib/dateFr";
 import {
@@ -21,7 +16,6 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
 
 type ClassPresenceRow = {
   classId: string;
@@ -209,26 +203,14 @@ export default function MesPresencesProf() {
                 to={`/classes/${c.classId}/presences?date=${date}`}
                 className="block rounded-xl outline-none ring-brand-500 focus-visible:ring-2"
               >
-                <Card
-                  data-class-color
-                  style={classColorVars({ id: c.classId, name: c.className })}
-                  className={cn(
-                    "flex h-full flex-col border p-4 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                    CLASS_COLOR_SURFACE,
-                  )}
-                >
+                <Card className="flex h-full flex-col border border-slate-200 bg-white p-4 transition hover:border-brand-300 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700">
                   <div className="flex items-start gap-2">
-                    <ClassColorDot
-                      id={c.classId}
-                      name={c.className}
-                      className="mt-1"
-                    />
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-lg font-semibold leading-tight">
+                      <h2 className="text-lg font-semibold leading-tight text-slate-900 dark:text-slate-100">
                         {c.className}
                       </h2>
                       {c.gradeLevel ? (
-                        <p className="text-xs opacity-75">{c.gradeLevel}</p>
+                        <p className="text-xs text-slate-500">{c.gradeLevel}</p>
                       ) : null}
                     </div>
                     <Badge
@@ -244,12 +226,12 @@ export default function MesPresencesProf() {
                     </Badge>
                   </div>
 
-                  <p className="mt-4 flex items-center gap-1.5 text-xs opacity-80">
+                  <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-500">
                     <Users className="h-3.5 w-3.5" />
                     {c.studentCount} élève{c.studentCount > 1 ? "s" : ""}
                   </p>
                   {c.recordedCount === 0 ? (
-                    <p className="mt-1 flex items-center gap-1.5 text-xs opacity-80">
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                       <ClipboardList className="h-3.5 w-3.5" />
                       Aucun appel pour cette date
                     </p>
@@ -274,7 +256,7 @@ export default function MesPresencesProf() {
                       ) : null}
                     </div>
                   )}
-                  <p className="mt-3 text-sm font-medium">
+                  <p className="mt-3 text-sm font-medium text-brand-700">
                     {complete ? "Voir / modifier →" : "Prendre les présences →"}
                   </p>
                 </Card>

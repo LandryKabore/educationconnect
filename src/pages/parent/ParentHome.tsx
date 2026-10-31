@@ -306,6 +306,24 @@ export default function ParentHome() {
                     >
                       Présences →
                     </Link>
+                    <Link
+                      to={`/enfants/${child.id}/bulletin`}
+                      className="hover:underline"
+                    >
+                      Bulletin →
+                    </Link>
+                    <Link
+                      to={`/enfants/${child.id}/emploi-du-temps`}
+                      className="hover:underline"
+                    >
+                      EDT →
+                    </Link>
+                    <Link
+                      to={`/enfants/${child.id}/devoirs`}
+                      className="hover:underline"
+                    >
+                      Devoirs →
+                    </Link>
                   </div>
                 </li>
               ))}

@@ -3,13 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
-import { generateBulletinPdf } from "@/lib/pdfBulletin";
+import { buildBulletinPdf } from "@/lib/bulletinData";
 import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
-import type { GradeRow, Profile, School, Subject } from "@/lib/types";
+import {
+  initialGradingPeriod,
+  writeStoredGradingPeriod,
+} from "@/lib/gradingPeriod";
+import type { Profile, School } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 import {
   Button,
   Card,
@@ -19,10 +23,14 @@ import {
   Select,
 } from "@/components/ui";
 
+const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
+
 export default function MonBulletin() {
   const { user, profile, schoolId, schools } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const [period, setPeriod] = useState<string>(TRIMESTER_PERIODS[0]);
+  const [period, setPeriod] = useState(() =>
+    initialGradingPeriod(BULLETIN_PERIODS),
+  );
   const [generating, setGenerating] = useState(false);
 
   const { data: enrollment, isLoading } = useQuery({
@@ -55,8 +63,7 @@ export default function MonBulletin() {
       );
       for (const d of TRIMESTER_PERIODS) set.add(d);
       set.add(ANNUAL_PERIOD_LABEL);
-      // Keep trimesters first, then Année, then any custom labels.
-      const ordered = [
+      return [
         ...TRIMESTER_PERIODS.filter((p) => set.has(p)),
         ANNUAL_PERIOD_LABEL,
         ...[...set].filter(
@@ -65,65 +72,34 @@ export default function MonBulletin() {
             p !== ANNUAL_PERIOD_LABEL,
         ),
       ];
-      return ordered;
     },
   });
 
   const handleGenerate = async () => {
-    if (!user || !profile || !school) {
-      toast.error("Profil ou école introuvable");
+    if (!user || !profile || !school || !enrollment?.class_section_id) {
+      toast.error("Profil, classe ou école introuvable");
       return;
     }
     setGenerating(true);
     try {
-      const { data: allGradesRaw } = await supabase
-        .from("notes")
-        .select("*, matieres(*)")
-        .eq("student_id", user.id)
-        .in("period_label", [...TRIMESTER_PERIODS]);
-
-      const allGrades = (
-        (allGradesRaw ?? []) as (GradeRow & { matieres: Subject })[]
-      ).map((g) => ({
-        ...g,
-        subject: g.matieres,
-      }));
-
-      const grades =
-        period === ANNUAL_PERIOD_LABEL
-          ? []
-          : allGrades.filter((g) => g.period_label === period);
-
       let coefficientBySubject: Record<string, number> = {};
-      if (enrollment?.class_section_id) {
-        const { data: programme } = await supabase
-          .from("programme_classe")
-          .select("subject_id, coefficient")
-          .eq("class_section_id", enrollment.class_section_id);
-        for (const row of programme ?? []) {
-          coefficientBySubject[row.subject_id as string] = Number(
-            row.coefficient,
-          );
-        }
+      const { data: programme } = await supabase
+        .from("programme_classe")
+        .select("subject_id, coefficient")
+        .eq("class_section_id", enrollment.class_section_id);
+      for (const row of programme ?? []) {
+        coefficientBySubject[row.subject_id as string] = Number(
+          row.coefficient,
+        );
       }
 
-      if (period !== ANNUAL_PERIOD_LABEL && !grades.length) {
-        toast.message("Aucune note pour cette période");
-        return;
-      }
-      if (period === ANNUAL_PERIOD_LABEL && !allGrades.length) {
-        toast.message("Aucune note sur l’année");
-        return;
-      }
-
-      const doc = generateBulletinPdf({
+      const doc = await buildBulletinPdf({
         school: school as School,
         student: profile as Profile,
-        className: enrollment?.classes?.name ?? "—",
+        classSectionId: enrollment.class_section_id,
+        className: enrollment.classes?.name ?? "—",
         periodLabel: period,
         coefficientBySubject,
-        grades,
-        allGrades,
       });
 
       const filePeriod =
@@ -162,7 +138,14 @@ export default function MonBulletin() {
           </p>
           <div>
             <Label>Période</Label>
-            <Select value={period} onChange={(e) => setPeriod(e.target.value)}>
+            <Select
+              value={period}
+              onChange={(e) => {
+                const next = e.target.value;
+                setPeriod(next);
+                writeStoredGradingPeriod(next);
+              }}
+            >
               {periods.map((p) => (
                 <option key={p} value={p}>
                   {p === ANNUAL_PERIOD_LABEL
@@ -172,8 +155,9 @@ export default function MonBulletin() {
               ))}
             </Select>
             <p className="mt-1 text-xs text-slate-500">
-              Moyenne annuelle = (T1 + T2 + T3) / 3. Admission à partir de
-              10 / 20.
+              Moyennes par matière avec comparaison classe (élève / clas. /
+              min / max / écart). Mention automatique selon la moyenne
+              générale.
             </p>
           </div>
           <Button

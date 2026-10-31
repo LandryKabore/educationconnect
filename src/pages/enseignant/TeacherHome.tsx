@@ -22,11 +22,6 @@ import {
   snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
-import { ClassColorDot } from "@/components/ClassColor";
-import {
-  CLASS_COLOR_SURFACE,
-  classColorVars,
-} from "@/lib/classColors";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import {
@@ -506,36 +501,21 @@ export default function TeacherHome() {
                   <li key={c.classId}>
                     <Link
                       to={`/classes/${c.classId}/presences`}
-                      data-class-color
-                      style={classColorVars({
-                        id: c.classId,
-                        name: c.className,
-                      })}
-                      className={cn(
-                        "flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                        CLASS_COLOR_SURFACE,
-                      )}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <ClassColorDot
-                          id={c.classId}
-                          name={c.className}
-                          className="shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {c.className}
-                          </p>
-                          <p className="text-xs opacity-80">
-                            {c.recorded === 0
-                              ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
-                              : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
-                                  c.late > 0
-                                    ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
-                                    : ""
-                                }`}
-                          </p>
-                        </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {c.className}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {c.recorded === 0
+                            ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
+                            : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
+                                c.late > 0
+                                  ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
+                                  : ""
+                              }`}
+                        </p>
                       </div>
                       <Badge
                         tone={
@@ -652,37 +632,22 @@ export default function TeacherHome() {
                 <li key={c.classId}>
                   <Link
                     to={`/classes/${c.classId}`}
-                    data-class-color
-                    style={classColorVars({
-                      id: c.classId,
-                      name: c.className,
-                    })}
-                    className={cn(
-                      "flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5 transition hover:brightness-[0.97] dark:hover:brightness-110",
-                      CLASS_COLOR_SURFACE,
-                    )}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
                   >
-                    <div className="flex min-w-0 items-start gap-2">
-                      <ClassColorDot
-                        id={c.classId}
-                        name={c.className}
-                        className="mt-1.5"
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">
-                          {c.className}
-                          {c.gradeLevel ? (
-                            <span className="ml-1.5 text-xs font-normal opacity-70">
-                              {c.gradeLevel}
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="mt-0.5 text-xs leading-snug opacity-80">
-                          {c.subjects.join(" · ")}
-                        </p>
-                      </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {c.className}
+                        {c.gradeLevel ? (
+                          <span className="ml-1.5 text-xs font-normal text-slate-500">
+                            {c.gradeLevel}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-slate-500">
+                        {c.subjects.join(" · ")}
+                      </p>
                     </div>
-                    <span className="mt-0.5 shrink-0 text-xs font-medium opacity-90">
+                    <span className="mt-0.5 shrink-0 text-xs font-medium text-brand-700">
                       Ouvrir →
                     </span>
                   </Link>

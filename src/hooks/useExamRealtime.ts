@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -16,12 +16,84 @@ type DevoirRow = {
   teacher_id?: string | null;
 };
 
+export type ExercicePendingChange = {
+  id: string;
+  evaluationId: string;
+  label: string;
+  at: string;
+};
+
+export const exercicesPendingQueryKey = (userId: string) =>
+  ["exercices-pending-changes", userId] as const;
+
+function exercicesStorageKey(userId: string) {
+  return `edufaso:exercices-pending:${userId}`;
+}
+
+function readExercicePending(userId: string): ExercicePendingChange[] {
+  try {
+    const raw = localStorage.getItem(exercicesStorageKey(userId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ExercicePendingChange[];
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeExercicePending(userId: string, items: ExercicePendingChange[]) {
+  localStorage.setItem(
+    exercicesStorageKey(userId),
+    JSON.stringify(items.slice(0, 20)),
+  );
+}
+
+function pushExercicePending(
+  qc: ReturnType<typeof useQueryClient>,
+  userId: string,
+  item: ExercicePendingChange,
+) {
+  const next = [
+    item,
+    ...readExercicePending(userId).filter(
+      (c) => c.evaluationId !== item.evaluationId,
+    ),
+  ].slice(0, 20);
+  writeExercicePending(userId, next);
+  qc.setQueryData(exercicesPendingQueryKey(userId), next);
+}
+
+export function useExercicesPendingChanges() {
+  const { user, role } = useAuth();
+  const qc = useQueryClient();
+  const userId = user?.id;
+  const enabled = (role === "student" || role === "parent") && !!userId;
+
+  const pendingQuery = useQuery({
+    queryKey: exercicesPendingQueryKey(userId ?? ""),
+    enabled,
+    queryFn: () => readExercicePending(userId!),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const markSeen = useCallback(() => {
+    if (!userId) return;
+    writeExercicePending(userId, []);
+    qc.setQueryData(exercicesPendingQueryKey(userId), []);
+  }, [userId, qc]);
+
+  return {
+    pending: enabled ? (pendingQuery.data ?? []) : [],
+    pendingCount: enabled ? (pendingQuery.data?.length ?? 0) : 0,
+    markSeen,
+  };
+}
+
 function asDevoir(raw: Record<string, unknown> | undefined): DevoirRow | null {
   if (!raw || typeof raw.id !== "string") return null;
   return {
     id: raw.id,
-    // "type" on evaluations covers interrogation/devoir/composition/examen;
-    // only "devoir" and "examen" are schedule-relevant here.
     kind: typeof raw.type === "string" ? raw.type : undefined,
     title: typeof raw.title === "string" ? raw.title : null,
     admin_confirmed:
@@ -42,7 +114,7 @@ function invalidateStudentExamQueries(
 
 /**
  * Students: live-refresh exam list/home when admin confirms (or withdraws)
- * an exam for their class.
+ * an exam for their class. Also toast + badge for new exercices de maison.
  */
 export function useStudentExamsRealtime() {
   const { user, role } = useAuth();
@@ -50,7 +122,10 @@ export function useStudentExamsRealtime() {
   const location = useLocation();
   const userId = user?.id;
   const enabled = role === "student" && !!userId;
-  const onExamsPage = location.pathname.startsWith("/mes-devoirs") || location.pathname.startsWith("/mes-examens");
+  const onExamsPage =
+    location.pathname.startsWith("/mes-devoirs") ||
+    location.pathname.startsWith("/mes-examens");
+  const onExercicesPage = location.pathname.startsWith("/mes-exercices");
 
   const { data: classId } = useQuery({
     queryKey: studentClassIdQueryKey(userId ?? ""),
@@ -91,13 +166,29 @@ export function useStudentExamsRealtime() {
             payload.old as Record<string, unknown> | undefined,
           );
           const row = next ?? prev;
-          if (!row || row.kind !== "examen") {
-            // Homework changes still refresh exercise lists.
-            if (row?.kind === "devoir") {
-              invalidateStudentExamQueries(qc, userId);
+          if (!row) return;
+
+          // Exercices de maison
+          if (row.kind === "devoir") {
+            invalidateStudentExamQueries(qc, userId);
+            if (payload.eventType === "INSERT" && next?.id) {
+              const label = next.title?.trim() || "Nouvel exercice";
+              if (!onExercicesPage) {
+                pushExercicePending(qc, userId, {
+                  id: crypto.randomUUID(),
+                  evaluationId: next.id,
+                  label,
+                  at: new Date().toISOString(),
+                });
+              }
+              toast.message("Nouvel exercice de maison", {
+                description: label,
+              });
             }
             return;
           }
+
+          if (row.kind !== "examen") return;
 
           invalidateStudentExamQueries(qc, userId);
 
@@ -105,7 +196,8 @@ export function useStudentExamsRealtime() {
           const isConfirmed = next?.admin_confirmed === true;
           if (payload.eventType === "UPDATE" && !wasConfirmed && isConfirmed) {
             toast.success("Devoir confirmé", {
-              description: next?.title?.trim() || "Un devoir est maintenant visible",
+              description:
+                next?.title?.trim() || "Un devoir est maintenant visible",
             });
           } else if (
             payload.eventType === "UPDATE" &&
@@ -124,10 +216,10 @@ export function useStudentExamsRealtime() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, userId, classId, onExamsPage, qc]);
+  }, [enabled, userId, classId, onExamsPage, onExercicesPage, qc]);
 }
 
-/** Teachers: live-refresh Confirmé / En attente badges. */
+/** Teachers: live-refresh Confirmé / En attente badges + confirmation toast. */
 export function useTeacherExamsRealtime() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
@@ -147,9 +239,29 @@ export function useTeacherExamsRealtime() {
           table: "evaluations",
           filter: `teacher_id=eq.${userId}`,
         },
-        () => {
+        (payload) => {
           void qc.invalidateQueries({ queryKey: ["evaluations"] });
           void qc.invalidateQueries({ queryKey: ["teacher-home", userId] });
+
+          if (payload.eventType !== "UPDATE") return;
+          const next = asDevoir(
+            payload.new as Record<string, unknown> | undefined,
+          );
+          const prev = asDevoir(
+            payload.old as Record<string, unknown> | undefined,
+          );
+          if (next?.kind !== "examen") return;
+          const wasConfirmed = prev?.admin_confirmed === true;
+          const isConfirmed = next?.admin_confirmed === true;
+          if (!wasConfirmed && isConfirmed) {
+            toast.success("Devoir confirmé par l’administration", {
+              description: next.title?.trim() || undefined,
+            });
+          } else if (wasConfirmed && !isConfirmed) {
+            toast.message("Confirmation de devoir retirée", {
+              description: prev?.title?.trim() || undefined,
+            });
+          }
         },
       )
       .subscribe();
@@ -204,13 +316,16 @@ export function useSchoolExamsRealtime() {
   }, [enabled, schoolId, qc]);
 }
 
-/** Parents: live devoirs/examens for linked children. */
+/** Parents: live devoirs/examens/exercices for linked children. */
 export function useParentExamsRealtime() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const location = useLocation();
   const userId = user?.id;
   const enabled = role === "parent" && !!userId;
+  const onChildExercices = /\/enfants\/[^/]+\/exercices/.test(
+    location.pathname,
+  );
 
   const { data: childClassIds = [] } = useQuery({
     queryKey: ["parent-child-class-ids", userId],
@@ -270,6 +385,25 @@ export function useParentExamsRealtime() {
 
           void qc.invalidateQueries({ queryKey: ["parent-home"] });
           void qc.invalidateQueries({ queryKey: ["enfants"] });
+          void qc.invalidateQueries({ queryKey: ["enfant-devoirs"] });
+
+          if (row.kind === "devoir") {
+            if (payload.eventType === "INSERT" && next?.id) {
+              const label = next.title?.trim() || "Nouvel exercice";
+              if (!onChildExercices) {
+                pushExercicePending(qc, userId, {
+                  id: crypto.randomUUID(),
+                  evaluationId: next.id,
+                  label,
+                  at: new Date().toISOString(),
+                });
+              }
+              toast.message("Nouvel exercice de maison", {
+                description: label,
+              });
+            }
+            return;
+          }
 
           if (row.kind !== "examen") return;
           const wasConfirmed = prev?.admin_confirmed === true;
@@ -277,11 +411,11 @@ export function useParentExamsRealtime() {
           if (
             payload.eventType === "UPDATE" &&
             !wasConfirmed &&
-            isConfirmed &&
-            !location.pathname.startsWith("/messages")
+            isConfirmed
           ) {
             toast.success("Devoir confirmé", {
-              description: next?.title?.trim() || "Un devoir est maintenant visible",
+              description:
+                next?.title?.trim() || "Un devoir est maintenant visible",
             });
           }
         },
@@ -291,5 +425,5 @@ export function useParentExamsRealtime() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, userId, childClassIds, location.pathname, qc]);
+  }, [enabled, userId, childClassIds, onChildExercices, qc]);
 }

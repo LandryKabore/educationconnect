@@ -9,6 +9,9 @@ import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { sortClassesByProgression } from "@/lib/classCatalog";
+import {
+  initialGradingPeriod,
+} from "@/lib/gradingPeriod";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
@@ -23,12 +26,11 @@ import {
   Select,
 } from "@/components/ui";
 
-function currentPeriodLabel(): string {
-  const month = new Date().getMonth() + 1;
-  if (month >= 9) return "Trimestre 1";
-  if (month <= 3) return "Trimestre 2";
-  return "Trimestre 3";
-}
+const COMPOSITION_PERIODS = [
+  "Trimestre 1",
+  "Trimestre 2",
+  "Trimestre 3",
+] as const;
 
 type SessionRow = {
   id: string;
@@ -134,7 +136,13 @@ export default function CompositionsEcole() {
           }
         ).affectations_enseignement;
         if (!Array.isArray(affs)) continue;
-        for (const a of affs) rows.push(a);
+        for (const a of affs) {
+          rows.push({
+            teacher_id: a.teacher_id,
+            class_section_id: a.class_section_id || cls.id,
+            subject_id: a.subject_id,
+          });
+        }
       }
       return rows;
     },
@@ -415,7 +423,7 @@ export default function CompositionsEcole() {
           teachers={teachers}
           assignments={assignments}
           subjects={subjects}
-          defaultPeriod={currentPeriodLabel()}
+          defaultPeriod={initialGradingPeriod(COMPOSITION_PERIODS)}
           onClose={() => setShowForm(false)}
           onSaved={invalidate}
         />
