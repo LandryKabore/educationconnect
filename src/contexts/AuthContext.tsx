@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
     let loadGen = 0;
+    let currentUserId: string | null = null;
 
     const clearUserState = () => {
       setProfile(null);
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
+      currentUserId = data.session?.user?.id ?? null;
       void applySession(data.session, { blockUi: true });
     });
 
@@ -152,6 +154,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // INITIAL_SESSION is covered by getSession(); avoid a double loading flash.
       if (event === "INITIAL_SESSION") return;
+
+      // Supabase re-emits SIGNED_IN when the window regains focus. If it's the
+      // same user, refresh silently so the page (and scroll position) is kept.
+      if (event === "SIGNED_IN" && sess?.user && sess.user.id === currentUserId) {
+        setSession(sess);
+        return;
+      }
+      currentUserId = sess?.user?.id ?? null;
 
       void applySession(sess, {
         blockUi: event === "SIGNED_IN" || event === "SIGNED_OUT",
