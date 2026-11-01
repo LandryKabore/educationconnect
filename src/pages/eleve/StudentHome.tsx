@@ -43,6 +43,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
+import { fetchAttendanceCounts } from "@/lib/scaleApi";
 import { cn, fullName, personName } from "@/lib/utils";
 import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
 
@@ -127,23 +128,12 @@ export default function StudentHome() {
         coefficientBySubject: coefMap,
       });
 
-      const { data: presenceData } = await supabase
-        .from("presences")
-        .select("status")
-        .eq("student_id", uid)
-        .limit(120);
-
-      const presences = (presenceData ?? []) as { status: AttendanceStatus }[];
-      const presentish = presences.filter((p) =>
-        isAttendancePositive(p.status),
-      ).length;
+      // exact rate over the whole history, computed in SQL (was: last 120 rows only)
+      const att = await fetchAttendanceCounts(uid);
+      const presentish = att.present + att.late + att.excused;
       const attendanceRate =
-        presences.length > 0
-          ? Math.round((presentish / presences.length) * 100)
-          : null;
-      const absencesCount = presences.filter((p) =>
-        isUnjustifiedAbsence(p.status),
-      ).length;
+        att.total > 0 ? Math.round((presentish / att.total) * 100) : null;
+      const absencesCount = att.absent;
 
       let pendingExercices: {
         id: string;

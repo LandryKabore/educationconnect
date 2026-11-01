@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { isSchoolFormComplete, schoolToForm } from "@/lib/schoolForm";
-import { fetchProgrammeCountsByClass } from "@/lib/programmeCounts";
+import { fetchSchoolSetupCounts } from "@/lib/scaleApi";
 import {
   type SetupCounts,
   setupProgress,
@@ -14,7 +14,7 @@ export function useSchoolSetupProgress() {
   const { schoolId } = useAuth();
 
   const query = useQuery({
-    queryKey: ["school-setup", schoolId, "v3"],
+    queryKey: ["school-setup", schoolId, "v4"],
     enabled: !!schoolId,
     queryFn: async (): Promise<SetupCounts> => {
       const sid = schoolId!;
@@ -27,7 +27,7 @@ export function useSchoolSetupProgress() {
         teachersRes,
         studentsRes,
         parentsRes,
-        classIdsRes,
+        setupCountsRes,
       ] = await Promise.all([
         supabase
           .from("ecoles")
@@ -57,44 +57,11 @@ export function useSchoolSetupProgress() {
           .eq("school_id", sid)
           .eq("role", "parent")
           .eq("active", true),
-        supabase.from("classes").select("id").eq("school_id", sid),
+        fetchSchoolSetupCounts(sid),
       ]);
 
-      let enrollments = 0;
-      let assignments = 0;
-      let timetableSlots = 0;
-      let classesWithProgramme = 0;
-      const classIds = (classIdsRes.data ?? []).map((c) => c.id as string);
-      if (classIds.length) {
-        const programmeCounts = await fetchProgrammeCountsByClass(sid);
-        classesWithProgramme = Object.keys(programmeCounts).length;
-
-        const chunkSize = 50;
-        for (let i = 0; i < classIds.length; i += chunkSize) {
-          const chunk = classIds.slice(i, i + chunkSize);
-          const [enr, aff, slots] = await Promise.all([
-            supabase
-              .from("inscriptions")
-              .select("id", { count: "exact", head: true })
-              .in("class_section_id", chunk)
-              .eq("status", "active"),
-            supabase
-              .from("affectations_enseignement")
-              .select("id", { count: "exact", head: true })
-              .in("class_section_id", chunk),
-            supabase
-              .from("creneaux_edt")
-              .select("id", { count: "exact", head: true })
-              .in("class_section_id", chunk),
-          ]);
-          if (enr.error) throw enr.error;
-          if (aff.error) throw aff.error;
-          if (slots.error) throw slots.error;
-          enrollments += enr.count ?? 0;
-          assignments += aff.count ?? 0;
-          timetableSlots += slots.count ?? 0;
-        }
-      }
+      const { classesWithProgramme, enrollments, assignments, timetableSlots } =
+        setupCountsRes;
 
       const years = yearsRes.data ?? [];
       const profileComplete = schoolRes.data

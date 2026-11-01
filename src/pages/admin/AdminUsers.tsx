@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Headphones, Loader2, Lock, RefreshCw, Unlock } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { ROLE_LABELS, type AppRole, type Profile, type UserRoleRow } from "@/lib/types";
+import { ROLE_LABELS, type AppRole } from "@/lib/types";
 import { fullName } from "@/lib/utils";
+import {
+  fetchAdminUsersFacets,
+  fetchAdminUsersPage,
+  type AdminUserRow,
+} from "@/lib/scaleApi";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   Badge,
   Button,
@@ -17,14 +23,9 @@ import {
   Select,
 } from "@/components/ui";
 
-type UserWithRoles = Profile & {
-  roles: UserRoleRow[];
-  schoolNames: string[];
-  schoolIds: string[];
-  classId: string | null;
-  className: string | null;
-  classSchoolId: string | null;
-};
+type UserWithRoles = AdminUserRow;
+
+const PAGE = 50;
 
 type RoleFilter = AppRole | "none";
 type ClassFilter = "" | "__none__" | string;
@@ -49,30 +50,6 @@ function roleFilterLabel(filter: RoleFilter) {
   return ROLE_LABELS[filter];
 }
 
-function userMatchesRole(u: UserWithRoles, filter: RoleFilter) {
-  const activeRoles = u.roles.filter((r) => r.active);
-  if (filter === "none") return activeRoles.length === 0;
-  return activeRoles.some((r) => r.role === filter);
-}
-
-function userMatchesSchool(
-  u: UserWithRoles,
-  role: RoleFilter,
-  schoolId: string,
-) {
-  if (!schoolId) return true;
-  if (!ROLES_WITH_SCHOOL_FILTER.includes(role)) return true;
-  return u.roles.some(
-    (r) => r.active && r.role === role && r.school_id === schoolId,
-  );
-}
-
-function userMatchesClass(u: UserWithRoles, classFilter: ClassFilter) {
-  if (!classFilter) return true;
-  if (classFilter === "__none__") return !u.classId;
-  return u.classId === classFilter;
-}
-
 async function invokeUserAction(action: string, userId: string) {
   const { data, error } = await supabase.functions.invoke("support-user-action", {
     body: { action, userId },
@@ -95,96 +72,49 @@ export default function AdminUsers() {
     null,
   );
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: async () => {
-      const [
-        { data: profils, error: pErr },
-        { data: roles, error: rErr },
-        { data: schools, error: sErr },
-        { data: classes, error: cErr },
-        { data: inscriptions, error: iErr },
-      ] = await Promise.all([
-        supabase.from("profils").select("*").order("created_at", { ascending: false }),
-        supabase.from("roles_utilisateurs").select("*"),
-        supabase.from("ecoles").select("id, name").order("name"),
-        supabase.from("classes").select("id, name, school_id").order("name"),
-        supabase
-          .from("inscriptions")
-          .select("student_id, class_section_id, status")
-          .eq("status", "active"),
-      ]);
-      if (pErr) throw pErr;
-      if (rErr) throw rErr;
-      if (sErr) throw sErr;
-      if (cErr) throw cErr;
-      if (iErr) throw iErr;
+  // The user list is searched and paged by the database (50 at a time); the role / school /
+  // class counts come from one small facets query.  The old page downloaded every profile,
+  // role and enrollment in the platform, which is cut at 1,000 rows by the API.
+  const debouncedSearch = useDebouncedValue(search, 300);
 
-      const schoolList = (schools ?? []).map((s) => ({
-        id: s.id as string,
-        name: s.name as string,
-      }));
-      const schoolMap = new Map(schoolList.map((s) => [s.id, s.name]));
-      const classList = (classes ?? []).map((c) => ({
-        id: c.id as string,
-        name: c.name as string,
-        schoolId: c.school_id as string,
-      }));
-      const classMap = new Map(classList.map((c) => [c.id, c]));
+  const { data: facets } = useQuery({
+    queryKey: ["admin-users", "facets", roleFilter, schoolFilter],
+    queryFn: () => fetchAdminUsersFacets(roleFilter, schoolFilter || undefined),
+    placeholderData: keepPreviousData,
+  });
 
-      const enrollmentByStudent = new Map<
-        string,
-        { classId: string; className: string; classSchoolId: string }
-      >();
-      for (const row of inscriptions ?? []) {
-        const classId = row.class_section_id as string;
-        const cls = classMap.get(classId);
-        if (!cls) continue;
-        enrollmentByStudent.set(row.student_id as string, {
-          classId: cls.id,
-          className: cls.name,
-          classSchoolId: cls.schoolId,
-        });
-      }
-
-      const rolesByUser = new Map<string, UserRoleRow[]>();
-      for (const role of (roles ?? []) as UserRoleRow[]) {
-        const list = rolesByUser.get(role.user_id) ?? [];
-        list.push(role);
-        rolesByUser.set(role.user_id, list);
-      }
-
-      const users = ((profils ?? []) as Profile[]).map((p) => {
-        const userRoles = rolesByUser.get(p.id) ?? [];
-        const schoolIds = [
-          ...new Set(
-            userRoles
-              .filter((r) => r.active && r.school_id)
-              .map((r) => r.school_id as string),
-          ),
-        ];
-        const schoolNames = schoolIds
-          .map((id) => schoolMap.get(id))
-          .filter(Boolean) as string[];
-        const enrollment = enrollmentByStudent.get(p.id);
-        return {
-          ...p,
-          roles: userRoles,
-          schoolNames,
-          schoolIds,
-          classId: enrollment?.classId ?? null,
-          className: enrollment?.className ?? null,
-          classSchoolId: enrollment?.classSchoolId ?? null,
-        };
-      }) as UserWithRoles[];
-
-      return { users, schools: schoolList, classes: classList };
+  const {
+    data: pages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["admin-users", "page", roleFilter, schoolFilter, classFilter, debouncedSearch],
+    placeholderData: keepPreviousData,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchAdminUsersPage({
+        role: roleFilter,
+        schoolId: schoolFilter || undefined,
+        classId: roleFilter === "student" ? classFilter : "",
+        search: debouncedSearch,
+        limit: PAGE,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
     },
   });
 
-  const users = data?.users ?? [];
-  const schools = data?.schools ?? [];
-  const classes = data?.classes ?? [];
+  const filtered = useMemo(
+    () => (pages?.pages ?? []).flatMap((p) => p.rows),
+    [pages],
+  );
+  const total = pages?.pages[0]?.total ?? 0;
+  const schools = facets?.schools ?? [];
+  const classes = facets?.classes ?? [];
   const showSchoolFilter = ROLES_WITH_SCHOOL_FILTER.includes(roleFilter);
   const showClassFilter = roleFilter === "student";
 
@@ -199,84 +129,12 @@ export default function AdminUsers() {
     setClassFilter("");
   };
 
-  const roleCounts = useMemo(() => {
-    const counts = Object.fromEntries(
-      ROLE_FILTER_ORDER.map((r) => [r, 0]),
-    ) as Record<RoleFilter, number>;
-    for (const u of users) {
-      for (const filter of ROLE_FILTER_ORDER) {
-        if (userMatchesRole(u, filter)) counts[filter] += 1;
-      }
-    }
-    return counts;
-  }, [users]);
-
-  const schoolOptions = useMemo(() => {
-    if (!showSchoolFilter) return [];
-    return schools
-      .map((s) => ({
-        ...s,
-        count: users.filter(
-          (u) =>
-            userMatchesRole(u, roleFilter) &&
-            userMatchesSchool(u, roleFilter, s.id),
-        ).length,
-      }))
-      .filter((s) => s.count > 0);
-  }, [schools, users, roleFilter, showSchoolFilter]);
-
-  const studentsForClassOptions = useMemo(() => {
-    return users
-      .filter((u) => userMatchesRole(u, "student"))
-      .filter((u) => userMatchesSchool(u, "student", schoolFilter));
-  }, [users, schoolFilter]);
-
-  const classOptions = useMemo(() => {
-    if (!showClassFilter) return { listed: [], noneCount: 0 };
-    const counts = new Map<string, number>();
-    let noneCount = 0;
-    for (const u of studentsForClassOptions) {
-      if (!u.classId) {
-        noneCount += 1;
-        continue;
-      }
-      counts.set(u.classId, (counts.get(u.classId) ?? 0) + 1);
-    }
-
-    const listed = classes
-      .filter((c) => !schoolFilter || c.schoolId === schoolFilter)
-      .filter((c) => (counts.get(c.id) ?? 0) > 0)
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        schoolId: c.schoolId,
-        count: counts.get(c.id) ?? 0,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
-
-    return { listed, noneCount };
-  }, [showClassFilter, classes, schoolFilter, studentsForClassOptions]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return users
-      .filter((u) => userMatchesRole(u, roleFilter))
-      .filter((u) => userMatchesSchool(u, roleFilter, schoolFilter))
-      .filter((u) =>
-        roleFilter === "student" ? userMatchesClass(u, classFilter) : true,
-      )
-      .filter((u) => {
-        if (!q) return true;
-        const name = fullName(u.first_name, u.last_name).toLowerCase();
-        return name.includes(q) || (u.email ?? "").toLowerCase().includes(q);
-      })
-      .sort((a, b) =>
-        fullName(a.first_name, a.last_name).localeCompare(
-          fullName(b.first_name, b.last_name),
-          "fr",
-        ),
-      );
-  }, [users, search, roleFilter, schoolFilter, classFilter]);
+  const roleCount = (r: RoleFilter) => facets?.roleCounts?.[r] ?? 0;
+  const schoolOptions = showSchoolFilter ? schools : [];
+  const classOptions = {
+    listed: showClassFilter ? classes : [],
+    noneCount: showClassFilter ? (facets?.noClass ?? 0) : 0,
+  };
 
   const selectedSchoolName = schoolFilter
     ? schools.find((s) => s.id === schoolFilter)?.name
@@ -364,7 +222,7 @@ export default function AdminUsers() {
           >
             {ROLE_FILTER_ORDER.map((role) => (
               <option key={role} value={role}>
-                {roleFilterLabel(role)} ({roleCounts[role]})
+                {roleFilterLabel(role)} ({roleCount(role)})
               </option>
             ))}
           </Select>
@@ -429,7 +287,7 @@ export default function AdminUsers() {
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-slate-500">
-            {filtered.length} utilisateur{filtered.length > 1 ? "s" : ""} —{" "}
+            {total} utilisateur{total > 1 ? "s" : ""} —{" "}
             {roleFilterLabel(roleFilter)}
             {selectedSchoolName ? ` · ${selectedSchoolName}` : ""}
             {selectedClassLabel ? ` · ${selectedClassLabel}` : ""}
@@ -558,6 +416,20 @@ export default function AdminUsers() {
               </Card>
             );
           })}
+          {hasNextPage ? (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isFetchingNextPage}
+                onClick={() => void fetchNextPage()}
+              >
+                {isFetchingNextPage
+                  ? "Chargement…"
+                  : `Afficher plus (${total - filtered.length} restants)`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

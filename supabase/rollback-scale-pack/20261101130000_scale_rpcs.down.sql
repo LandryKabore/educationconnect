@@ -1,0 +1,18 @@
+drop function if exists public.ef_school_setup_counts(uuid);
+drop function if exists public.ef_programme_counts(uuid);
+drop function if exists public.ef_sent_announcements(int);
+drop function if exists public.ef_message_contacts(uuid, text);
+drop function if exists public.ef_attendance_counts(uuid);
+drop function if exists public.ef_my_children_summary();
+drop function if exists public.ef_teacher_class_stats(uuid[]);
+drop function if exists public.ef_admin_users_facets(text, uuid);
+drop function if exists public.ef_admin_users_page(text, uuid, text, text, int, int);
+drop function if exists public.ef_student_picker(uuid, text, int);
+drop function if exists public.ef_parents_page(uuid, text, int, int);
+drop function if exists public.ef_students_page(uuid, text, text, int, int);
+drop function if exists public.ef_school_home_stats(uuid, date, int);
+drop function if exists public.ef_attendance_day_summary(uuid, date, uuid);
+drop function if exists public.ef_class_student_counts(uuid);
+drop function if exists public.ef_students_without_class(uuid, int);
+drop function if exists public.ef_match(text, text);
+drop function if exists public.ef_norm(text);

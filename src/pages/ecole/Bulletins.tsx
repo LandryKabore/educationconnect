@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { zipSync } from "fflate";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Download, FolderDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -15,9 +16,17 @@ import {
   writeStoredGradingPeriod,
 } from "@/lib/gradingPeriod";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { fetchEnrollmentsByStudent } from "@/lib/programmeCounts";
-import type { ClassSection, Profile, School } from "@/lib/types";
-import { cn, fullName, matchesSearch } from "@/lib/utils";
+import {
+  fetchAllStudents,
+  fetchClassStudentCounts,
+  fetchStudentsPage,
+  PAGE_SIZE,
+  type StudentPageRow,
+} from "@/lib/scaleApi";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import type { ClassSection, School } from "@/lib/types";
+import { downloadBlob } from "@/lib/studentCsv";
+import { cn, fullName } from "@/lib/utils";
 import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
 import {
   Button,
@@ -29,10 +38,7 @@ import {
   Select,
 } from "@/components/ui";
 
-type StudentRow = Profile & {
-  className: string | null;
-  classSectionId: string | null;
-};
+type StudentRow = StudentPageRow;
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
@@ -45,6 +51,7 @@ export default function Bulletins() {
     initialGradingPeriod(BULLETIN_PERIODS),
   );
   const [generating, setGenerating] = useState(false);
+  const [classProgress, setClassProgress] = useState<{ done: number; total: number } | null>(null);
 
   const selectedClassId = searchParams.get("classe") ?? "";
   const search = searchParams.get("q") ?? "";
@@ -92,54 +99,54 @@ export default function Bulletins() {
     [classesRaw],
   );
 
-  const { data: students = [], isLoading } = useQuery({
-    queryKey: ["eleves", schoolId, "v4"],
-    enabled: !!schoolId,
-    queryFn: async () => {
-      const { data: roles, error } = await supabase
-        .from("roles_utilisateurs")
-        .select("user_id, profils(*)")
-        .eq("school_id", schoolId!)
-        .eq("role", "student")
-        .eq("active", true);
-      if (error) throw error;
-      const profiles = (roles ?? []).map(
-        (r) => (r as unknown as { profils: Profile }).profils,
-      );
-      if (!profiles.length) return [] as StudentRow[];
-
-      const classByStudent = await fetchEnrollmentsByStudent(schoolId!);
-
-      return profiles.map((p) => {
-        const cls = classByStudent.get(p.id);
-        return {
-          ...p,
-          className: cls?.name ?? null,
-          classSectionId: cls?.id ?? null,
-        };
-      }) as StudentRow[];
+  // The class list is fetched one page at a time and searched by the database.
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const {
+    data: pages,
+    isLoading: studentsLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["bulletin-students", schoolId, selectedClassId, debouncedSearch],
+    // keep the list on screen while typing a search
+    placeholderData: keepPreviousData,
+    enabled: !!schoolId && !!selectedClassId,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchStudentsPage(schoolId!, {
+        classId: selectedClassId,
+        search: debouncedSearch,
+        limit: PAGE_SIZE,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
     },
   });
+  const students = useMemo(
+    () => (pages?.pages ?? []).flatMap((p) => p.rows) as StudentRow[],
+    [pages],
+  );
+  const filteredStudents = students;
+  const filteredTotal = pages?.pages[0]?.total ?? 0;
+
+  const { data: classCounts = {}, isLoading: countsLoading } = useQuery({
+    queryKey: ["eleves-class-counts", schoolId],
+    enabled: !!schoolId,
+    queryFn: () => fetchClassStudentCounts(schoolId!),
+  });
+  const totalStudents = Object.values(classCounts).reduce((n, v) => n + v, 0);
+  const isLoading = countsLoading || (studentsLoading && !!selectedClassId);
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
 
-  const filteredStudents = useMemo(() => {
-    if (!selectedClassId) return [];
-    return students
-      .filter((s) => s.classSectionId === selectedClassId)
-      .filter((s) =>
-        matchesSearch(search, s.first_name, s.last_name, s.matricule),
-      )
-      .sort((a, b) =>
-        fullName(a.first_name, a.last_name).localeCompare(
-          fullName(b.first_name, b.last_name),
-          "fr",
-          { sensitivity: "base" },
-        ),
-      );
-  }, [students, selectedClassId, search]);
-
-  const selectedStudent = students.find((s) => s.id === studentId);
+  // keep the picked student even if a new search no longer lists them
+  const [pickedStudent, setPickedStudent] = useState<StudentRow | null>(null);
+  const selectedStudent =
+    students.find((s) => s.id === studentId) ??
+    (pickedStudent?.id === studentId ? pickedStudent : undefined);
 
   const handleGenerate = async () => {
     if (!studentId || !school) {
@@ -148,7 +155,7 @@ export default function Bulletins() {
     }
     setGenerating(true);
 
-    const student = students.find((s) => s.id === studentId);
+    const student = selectedStudent;
     if (!student) {
       setGenerating(false);
       return;
@@ -207,6 +214,85 @@ export default function Bulletins() {
     }
   };
 
+  /** Whole class in one click: one PDF per student, delivered as a single .zip. */
+  const handleGenerateClass = async () => {
+    if (!school || !selectedClass || !schoolId) return;
+    if (classProgress) return;
+    setClassProgress({ done: 0, total: 0 });
+    try {
+      const roster = await fetchAllStudents(schoolId, { classId: selectedClass.id });
+      if (roster.length === 0) {
+        toast.error("Aucun élève dans cette classe");
+        return;
+      }
+      const coefficientBySubject: Record<string, number> = {};
+      const { data: programme, error: progErr } = await supabase
+        .from("programme_classe")
+        .select("subject_id, coefficient")
+        .eq("class_section_id", selectedClass.id);
+      if (progErr) throw progErr;
+      for (const row of programme ?? []) {
+        coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
+      }
+
+      const filePeriod =
+        period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
+      const files: Record<string, Uint8Array> = {};
+      const failed: string[] = [];
+      let done = 0;
+      setClassProgress({ done: 0, total: roster.length });
+
+      // 3 at a time keeps the browser and the database comfortable.
+      let next = 0;
+      const worker = async () => {
+        while (next < roster.length) {
+          const student = roster[next++];
+          try {
+            const doc = await buildBulletinPdf({
+              school: school as School,
+              student,
+              classSectionId: selectedClass.id,
+              className: selectedClass.name,
+              periodLabel: period,
+              coefficientBySubject,
+            });
+            const buf = new Uint8Array(doc.output("arraybuffer") as ArrayBuffer);
+            const base = `bulletin-${student.last_name}-${student.first_name}-${filePeriod}`
+              .replace(/[^\p{L}\p{N}_-]+/gu, "-");
+            let name = `${base}.pdf`;
+            for (let n = 2; files[name]; n++) name = `${base}-${n}.pdf`;
+            files[name] = buf;
+          } catch {
+            failed.push(fullName(student.first_name, student.last_name));
+          }
+          done += 1;
+          setClassProgress({ done, total: roster.length });
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+
+      const made = Object.keys(files).length;
+      if (made === 0) {
+        toast.error("Aucun bulletin généré (pas de notes pour cette période ?)");
+        return;
+      }
+      const zip = zipSync(files, { level: 0 });
+      downloadBlob(
+        `bulletins-${selectedClass.name.replace(/\s+/g, "-")}-${filePeriod}.zip`,
+        new Blob([zip as BlobPart], { type: "application/zip" }),
+      );
+      toast.success(
+        failed.length
+          ? `${made} bulletin(s) téléchargés — ${failed.length} sans notes : ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? "…" : ""}`
+          : `${made} bulletin(s) téléchargés`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Génération impossible");
+    } finally {
+      setClassProgress(null);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -216,7 +302,7 @@ export default function Bulletins() {
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
-      ) : students.length === 0 ? (
+      ) : totalStudents === 0 ? (
         <EmptyState message="Aucun élève disponible." />
       ) : classes.length === 0 ? (
         <EmptyState message="Aucune classe configurée." />
@@ -232,9 +318,7 @@ export default function Bulletins() {
               >
                 <option value="">Choisir une classe…</option>
                 {classes.map((c) => {
-                  const count = students.filter(
-                    (s) => s.classSectionId === c.id,
-                  ).length;
+                  const count = classCounts[c.id] ?? 0;
                   return (
                     <option key={c.id} value={c.id}>
                       {c.name} ({count})
@@ -337,6 +421,17 @@ export default function Bulletins() {
                     ? "Génération…"
                     : "Télécharger le bulletin PDF"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleGenerateClass()}
+                  disabled={!!classProgress || generating}
+                >
+                  <FolderDown className="h-4 w-4" />
+                  {classProgress
+                    ? `Génération… ${classProgress.done}/${classProgress.total || "…"}`
+                    : "Toute la classe (ZIP)"}
+                </Button>
               </Card>
 
               {filteredStudents.length === 0 ? (
@@ -381,7 +476,10 @@ export default function Bulletins() {
                                   type="button"
                                   size="sm"
                                   variant={active ? "primary" : "outline"}
-                                  onClick={() => setStudentId(s.id)}
+                                  onClick={() => {
+                                    setStudentId(s.id);
+                                    setPickedStudent(s);
+                                  }}
                                 >
                                   {active ? "Sélectionné" : "Sélectionner"}
                                 </Button>
@@ -393,10 +491,28 @@ export default function Bulletins() {
                     </table>
                   </div>
                   <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-700">
-                    {filteredStudents.length} élève
-                    {filteredStudents.length !== 1 ? "s" : ""}
+                    {filteredTotal} élève
+                    {filteredTotal !== 1 ? "s" : ""}
                     {selectedClass ? ` · ${selectedClass.name}` : ""}
+                    {filteredStudents.length < filteredTotal
+                      ? ` (affichage de ${filteredStudents.length} sur ${filteredTotal})`
+                      : ""}
                   </p>
+                  {hasNextPage ? (
+                    <div className="flex justify-center border-t border-slate-100 px-4 py-3 dark:border-slate-700">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isFetchingNextPage}
+                        onClick={() => void fetchNextPage()}
+                      >
+                        {isFetchingNextPage
+                          ? "Chargement…"
+                          : `Afficher plus (${filteredTotal - filteredStudents.length} restants)`}
+                      </Button>
+                    </div>
+                  ) : null}
                 </Card>
               )}
             </>

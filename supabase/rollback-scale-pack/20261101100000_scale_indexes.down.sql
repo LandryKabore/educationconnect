@@ -1,0 +1,13 @@
+drop index if exists public.presences_student_date_idx;
+drop index if exists public.presences_date_class_idx;
+drop index if exists public.notes_student_idx;
+drop index if exists public.notes_class_subject_idx;
+drop index if exists public.inscriptions_class_idx;
+drop index if exists public.classes_school_idx;
+drop index if exists public.roles_utilisateurs_school_role_idx;
+drop index if exists public.messages_sender_created_idx;
+drop index if exists public.liens_parent_eleve_student_idx;
+drop index if exists public.affectations_enseignement_class_idx;
+drop index if exists public.creneaux_edt_class_idx;
+drop index if exists public.creneaux_edt_teacher_idx;
+drop index if exists public.identifiants_temporaires_user_idx;

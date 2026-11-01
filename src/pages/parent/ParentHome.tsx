@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
+import { fetchMyChildrenSummary } from "@/lib/scaleApi";
 import { cn, fullName, personName } from "@/lib/utils";
 
 type ChildCard = {
@@ -49,13 +50,9 @@ export default function ParentHome() {
     queryFn: async () => {
       const uid = user!.id;
 
-      const { data: links, error } = await supabase
-        .from("liens_parent_eleve")
-        .select(
-          "student_id, profils:profils!liens_parent_eleve_student_id_fkey(id, first_name, last_name)",
-        )
-        .eq("parent_id", uid);
-      if (error) throw error;
+      // One SQL call for all children (the old page made 5 requests per child, one after
+      // the other, and counted absences/grades from capped lists).
+      const summary = await fetchMyChildrenSummary();
 
       const children: ChildCard[] = [];
       let totalNotes = 0;
@@ -69,82 +66,28 @@ export default function ParentHome() {
         period: string;
         created_at: string;
       }[] = [];
+      const scoreOn20 = (score: number, max: number) =>
+        max > 0 ? ((score / max) * 20).toFixed(1) : "—";
 
-      for (const link of links ?? []) {
-        const child = (
-          link as unknown as {
-            student_id: string;
-            profils: {
-              id: string;
-              first_name: string;
-              last_name: string;
-            } | null;
-          }
-        ).profils;
-        if (!child) continue;
-
+      for (const child of summary) {
         const childName = fullName(child.first_name, child.last_name);
-
-        const { data: enrollment } = await supabase
-          .from("inscriptions")
-          .select("classes(name)")
-          .eq("student_id", child.id)
-          .eq("status", "active")
-          .maybeSingle();
-
-        const { count: absences } = await supabase
-          .from("presences")
-          .select("id", { count: "exact", head: true })
-          .eq("student_id", child.id)
-          .eq("status", "absent");
-
-        const { count: notesCount } = await supabase
-          .from("notes")
-          .select("id", { count: "exact", head: true })
-          .eq("student_id", child.id);
-
-        const { data: recentNotes } = await supabase
-          .from("notes")
-          .select(
-            "id, score, max_score, period_label, created_at, is_absent, matieres(name)",
-          )
-          .eq("student_id", child.id)
-          .order("created_at", { ascending: false })
-          .limit(5);
-
-        const notes = (recentNotes ?? []) as {
-          id: string;
-          score: number;
-          max_score: number;
-          period_label: string;
-          created_at: string;
-          is_absent: boolean;
-          matieres: { name: string } | null;
-        }[];
-
-        const abs = absences ?? 0;
-        const nCount = notesCount ?? 0;
+        const notes = child.recentNotes;
+        const abs = Number(child.absences) || 0;
+        const nCount = Number(child.notesCount) || 0;
         totalAbsences += abs;
         totalNotes += nCount;
 
         const latest = notes.find((n) => !n.is_absent);
-        const scoreOn20 = (score: number, max: number) =>
-          max > 0 ? ((score / max) * 20).toFixed(1) : "—";
 
         children.push({
           id: child.id,
           name: childName,
-          className:
-            (
-              enrollment as {
-                classes?: { name: string } | null;
-              } | null
-            )?.classes?.name ?? "Sans classe",
+          className: child.className ?? "Sans classe",
           notesCount: nCount,
           absences: abs,
           recentNote: latest
             ? {
-                subject: latest.matieres?.name ?? "Matière",
+                subject: latest.subject ?? "Matière",
                 scoreOn20: scoreOn20(latest.score, latest.max_score),
                 period: latest.period_label,
               }
@@ -156,7 +99,7 @@ export default function ParentHome() {
             id: n.id,
             childName,
             childId: child.id,
-            subject: n.matieres?.name ?? "Matière",
+            subject: n.subject ?? "Matière",
             scoreOn20: scoreOn20(n.score, n.max_score),
             period: n.period_label,
             created_at: n.created_at,

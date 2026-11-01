@@ -25,7 +25,7 @@ import {
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";
-import { fetchEnrollmentsByStudent } from "@/lib/programmeCounts";
+import { fetchSchoolHomeStats } from "@/lib/scaleApi";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
@@ -75,7 +75,7 @@ export default function EcoleOverview() {
   const name = personName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["ecole-home", "v2", schoolId, user?.id],
+    queryKey: ["ecole-home", "v3", schoolId, user?.id],
     enabled: !!schoolId && !!user?.id,
     queryFn: async () => {
       const sid = schoolId!;
@@ -150,15 +150,18 @@ export default function EcoleOverview() {
       let classesWithoutEdt: { id: string; name: string }[] = [];
 
       if (classIds.length > 0) {
+        // Exact numbers for today (absent / late / excused) are counted by the database;
+        // only the first rows are listed.
         const { data: presenceRows } = await supabase
           .from("presences")
           .select(
-            "id, status, student_id, class_section_id, matieres(name), profils:profils!presences_student_id_fkey(first_name, last_name)",
+            "id, status, student_id, class_section_id, matieres(name), profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey!inner(school_id)",
           )
           .eq("date", today)
-          .in("class_section_id", classIds)
+          .eq("classes.school_id", sid)
           .in("status", ["absent", "late", "excused"])
-          .limit(40);
+          .order("status")
+          .limit(6);
 
         type PresenceRow = {
           id: string;
@@ -168,7 +171,7 @@ export default function EcoleOverview() {
           profils: { first_name: string; last_name: string } | null;
         };
 
-        const alerts = ((presenceRows ?? []) as PresenceRow[]).map((p) => {
+        presenceAlerts = ((presenceRows ?? []) as unknown as PresenceRow[]).map((p) => {
           const profil = joinProfile(p.profils);
           return {
             id: p.id,
@@ -179,20 +182,29 @@ export default function EcoleOverview() {
           };
         });
 
-        presenceAlerts = alerts.slice(0, 6);
-        presenceAbsent = alerts.filter((a) => a.status === "absent").length;
-        presenceLate = alerts.filter((a) => a.status === "late").length;
-        presenceExcused = alerts.filter((a) => a.status === "excused").length;
-
-        const { data: examRows } = await supabase
-          .from("evaluations")
-          .select(
-            "id, title, due_date:eval_date, start_time, end_time, admin_confirmed, classes(name), matieres(name), teacher:profils!evaluations_teacher_id_fkey(first_name, last_name)",
-          )
-          .eq("type", "examen")
-          .in("class_section_id", classIds)
-          .order("eval_date", { ascending: true, nullsFirst: false })
-          .limit(40);
+        // Two small queries (pending / upcoming) instead of "first 40 then filter",
+        // which could hide an unconfirmed exam when the school has many.
+        const examSelect =
+          "id, title, due_date:eval_date, start_time, end_time, admin_confirmed, classes!inner(name, school_id), matieres(name), teacher:profils!evaluations_teacher_id_fkey(first_name, last_name)";
+        const [{ data: pendingRows }, { data: upcomingRows }] = await Promise.all([
+          supabase
+            .from("evaluations")
+            .select(examSelect)
+            .eq("type", "examen")
+            .eq("classes.school_id", sid)
+            .eq("admin_confirmed", false)
+            .order("eval_date", { ascending: true, nullsFirst: false })
+            .limit(4),
+          supabase
+            .from("evaluations")
+            .select(examSelect)
+            .eq("type", "examen")
+            .eq("classes.school_id", sid)
+            .eq("admin_confirmed", true)
+            .or(`eval_date.is.null,eval_date.gte.${today}`)
+            .order("eval_date", { ascending: true, nullsFirst: false })
+            .limit(4),
+        ]);
 
         type ExamRow = {
           id: string;
@@ -206,7 +218,7 @@ export default function EcoleOverview() {
           teacher: { first_name: string; last_name: string } | null;
         };
 
-        const exams = ((examRows ?? []) as ExamRow[]).map((e) => ({
+        const toExam = (e: ExamRow) => ({
           id: e.id,
           title: e.title,
           due_date: e.due_date,
@@ -218,65 +230,23 @@ export default function EcoleOverview() {
           teacherName: e.teacher
             ? fullName(e.teacher.first_name, e.teacher.last_name)
             : null,
-        }));
+        });
 
-        pendingExamList = exams
-          .filter((e) => !e.admin_confirmed)
-          .slice(0, 4);
-        upcomingExamList = exams
-          .filter(
-            (e) =>
-              e.admin_confirmed && (!e.due_date || e.due_date >= today),
-          )
-          .slice(0, 4);
-
-        const { data: slotRows } = await supabase
-          .from("creneaux_edt")
-          .select("id, class_section_id, day_of_week")
-          .in("class_section_id", classIds);
-
-        const slotsByClass = new Map<string, number>();
-        let todayCount = 0;
-        for (const row of slotRows ?? []) {
-          const cid = row.class_section_id as string;
-          slotsByClass.set(cid, (slotsByClass.get(cid) ?? 0) + 1);
-          if (Number(row.day_of_week) === todayDow) todayCount += 1;
-        }
-        todaySlotCount = todayCount;
-        classesWithEdt = classRows.filter((c) => (slotsByClass.get(c.id) ?? 0) > 0)
-          .length;
-        classesWithoutEdt = classRows
-          .filter((c) => (slotsByClass.get(c.id) ?? 0) === 0)
-          .slice(0, 5)
-          .map((c) => ({ id: c.id, name: c.name }));
+        pendingExamList = ((pendingRows ?? []) as unknown as ExamRow[]).map(toExam);
+        upcomingExamList = ((upcomingRows ?? []) as unknown as ExamRow[]).map(toExam);
       }
 
-      const { data: studentRoles } = await supabase
-        .from("roles_utilisateurs")
-        .select("user_id, profils(first_name, last_name)")
-        .eq("school_id", sid)
-        .eq("role", "student")
-        .eq("active", true)
-        .limit(500);
-
-      const enrolled = await fetchEnrollmentsByStudent(sid);
-      studentsWithoutClass = (
-        (studentRoles ?? []) as {
-          user_id: string;
-          profils: { first_name: string; last_name: string } | null;
-        }[]
-      )
-        .filter((r) => !enrolled.has(r.user_id))
-        .map((r) => {
-          const profil = joinProfile(r.profils);
-          return {
-            id: r.user_id,
-            name: personName(profil?.first_name, profil?.last_name),
-          };
-        })
-        .filter((r) => r.name)
-        .sort((a, b) => a.name.localeCompare(b.name, "fr"))
-        .slice(0, 6);
+      // timetable coverage, today's attendance totals and the students without a class
+      // are all counted in the database (the old code downloaded the rows and was
+      // cut off at 1,000).
+      const stats = await fetchSchoolHomeStats(sid, today, todayDow);
+      presenceAbsent = stats.absent;
+      presenceLate = stats.late;
+      presenceExcused = stats.excused;
+      classesWithEdt = stats.classesWithEdt;
+      todaySlotCount = stats.todaySlotCount;
+      classesWithoutEdt = stats.classesWithoutEdt;
+      studentsWithoutClass = stats.studentsWithoutClass.sample;
 
       const allMsgs = (msgRes.data ?? []) as InboxPreview[];
 

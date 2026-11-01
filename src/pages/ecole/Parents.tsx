@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { Download, KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import type { Profile } from "@/lib/types";
-import { fromAuthEmail, fullName, joinProfile, matchesSearch, personName } from "@/lib/utils";
+import { fromAuthEmail, fullName } from "@/lib/utils";
+import {
+  fetchAllParents,
+  fetchParentsPage,
+  PAGE_SIZE,
+  type ParentPageRow,
+} from "@/lib/scaleApi";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -32,9 +38,7 @@ interface CreateResult {
   tempPassword: string;
 }
 
-type StudentOption = Profile & { className: string | null };
-
-type ParentRow = Profile & { children: string[] };
+type ParentRow = ParentPageRow;
 
 interface ParentCredential {
   username: string;
@@ -84,125 +88,45 @@ export default function Parents() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const { data: students = [] } = useQuery({
-    queryKey: ["eleves-picker", schoolId],
+  // One page at a time, searched by the database.  (The old page asked for every parent,
+  // then sent all their ids in one URL, which failed with "400 Bad Request" in big schools.)
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const {
+    data: pages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["parents", schoolId, "v2", debouncedSearch],
+    placeholderData: keepPreviousData,
     enabled: !!schoolId,
-    queryFn: async () => {
-      const { data: roles } = await supabase
-        .from("roles_utilisateurs")
-        .select("user_id, profils(*)")
-        .eq("school_id", schoolId!)
-        .eq("role", "student")
-        .eq("active", true);
-      const profiles = (roles ?? [])
-        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
-        .filter((p): p is Profile => !!p?.id);
-      if (!profiles.length) return [] as StudentOption[];
-
-      const { data: enrollments } = await supabase
-        .from("inscriptions")
-        .select("student_id, classes(name)")
-        .eq("status", "active")
-        .in(
-          "student_id",
-          profiles.map((p) => p.id),
-        );
-
-      const classByStudent = new Map<string, string>();
-      for (const row of enrollments ?? []) {
-        const cls = (row as unknown as { classes?: { name: string } | null })
-          .classes;
-        if (cls?.name) {
-          classByStudent.set(
-            (row as { student_id: string }).student_id,
-            cls.name,
-          );
-        }
-      }
-
-      return profiles.map((p) => ({
-        ...p,
-        className: classByStudent.get(p.id) ?? null,
-      }));
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchParentsPage(schoolId!, {
+        search: debouncedSearch,
+        limit: PAGE_SIZE,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
     },
   });
-
-  const { data: parents = [], isLoading } = useQuery({
-    queryKey: ["parents", schoolId],
-    enabled: !!schoolId,
-    queryFn: async () => {
-      const { data: roles, error } = await supabase
-        .from("roles_utilisateurs")
-        .select("user_id, profils(*)")
-        .eq("school_id", schoolId!)
-        .eq("role", "parent")
-        .eq("active", true);
-      if (error) throw error;
-      const profiles = (roles ?? [])
-        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
-        .filter((p): p is Profile => !!p?.id);
-      if (!profiles.length) return [] as ParentRow[];
-
-      const { data: links } = await supabase
-        .from("liens_parent_eleve")
-        .select(
-          "parent_id, student_id, profils:profils!liens_parent_eleve_student_id_fkey(first_name, last_name)",
-        )
-        .in(
-          "parent_id",
-          profiles.map((p) => p.id),
-        );
-
-      const childrenByParent = new Map<string, string[]>();
-      for (const link of links ?? []) {
-        const child = joinProfile(
-          (link as unknown as { profils: unknown }).profils,
-        );
-        const name = personName(child?.first_name, child?.last_name);
-        if (!name) continue;
-        const list =
-          childrenByParent.get((link as { parent_id: string }).parent_id) ??
-          [];
-        list.push(name);
-        childrenByParent.set(
-          (link as { parent_id: string }).parent_id,
-          list,
-        );
-      }
-
-      return profiles.map((p) => ({
-        ...p,
-        children: childrenByParent.get(p.id) ?? [],
-      }));
-    },
-  });
-
-  const parentIds = useMemo(() => parents.map((p) => p.id), [parents]);
-
-  const { data: credentialsByUser = {} } = useQuery({
-    queryKey: ["identifiants-parents", schoolId, parentIds.join(",")],
-    enabled: !!schoolId && parentIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("identifiants_temporaires")
-        .select("user_id, username, temp_password_hint, used")
-        .in("user_id", parentIds);
-      if (error) throw error;
-      const map: Record<string, ParentCredential> = {};
-      for (const row of data ?? []) {
-        map[row.user_id as string] = {
-          username: row.username as string,
-          tempPassword: (row.temp_password_hint as string | null) ?? null,
-          used: Boolean(row.used),
-        };
-      }
-      return map;
-    },
-  });
+  const parents = useMemo(
+    () => (pages?.pages ?? []).flatMap((p) => p.rows),
+    [pages],
+  );
+  const parentsTotal = pages?.pages[0]?.total ?? 0;
 
   const credentialFor = (p: ParentRow): ParentCredential => {
-    const stored = credentialsByUser[p.id];
-    if (stored) return stored;
+    const stored = p.cred;
+    if (stored)
+      return {
+        username: stored.username ?? "—",
+        tempPassword: stored.tempPassword ?? null,
+        used: Boolean(stored.used),
+      };
     return {
       username: fromAuthEmail(p.email) || "—",
       tempPassword: null,
@@ -210,31 +134,24 @@ export default function Parents() {
     };
   };
 
-  const filteredParents = useMemo(
-    () =>
-      parents.filter((p) => {
-        const cred = credentialFor(p);
-        return matchesSearch(
-          search,
-          p.first_name,
-          p.last_name,
-          p.phone,
-          cred.username,
-          ...(p.children ?? []),
-        );
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parents, search, credentialsByUser],
-  );
+  const filteredParents = parents;
 
   const invalidateParentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["parents", schoolId] });
-    void qc.invalidateQueries({ queryKey: ["identifiants-parents", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
   };
 
-  const downloadAllCredentials = () => {
-    const rows = parents
+  const downloadAllCredentials = async () => {
+    if (!schoolId) return;
+    // every parent matching the search, not only the pages on screen
+    let all: ParentRow[];
+    try {
+      all = await fetchAllParents(schoolId, { search: debouncedSearch });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export impossible");
+      return;
+    }
+    const rows = all
       .map((p) => {
         const cred = credentialFor(p);
         if (!cred.tempPassword || cred.used) return null;
@@ -459,22 +376,17 @@ export default function Parents() {
               <div>
                 <Label>Élève à lier</Label>
                 <StudentSearchPicker
-                  students={students}
+                  schoolId={schoolId ?? undefined}
                   value={studentId}
                   onChange={setStudentId}
                   required
                 />
-                {students.length === 0 ? (
-                  <p className="mt-1 text-xs text-amber-700">
-                    Créez d’abord des élèves.
-                  </p>
-                ) : null}
               </div>
             </div>
             <div className="flex gap-2">
               <Button
                 type="submit"
-                disabled={creating || students.length === 0}
+                disabled={creating}
               >
                 {creating ? "Création…" : "Créer"}
               </Button>
@@ -508,7 +420,7 @@ export default function Parents() {
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
-      ) : parents.length === 0 ? (
+      ) : parentsTotal === 0 && !debouncedSearch.trim() ? (
         <EmptyState message="Aucun parent enregistré." />
       ) : (
         <div className="space-y-4">
@@ -526,7 +438,7 @@ export default function Parents() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={downloadAllCredentials}
+              onClick={() => void downloadAllCredentials()}
             >
               <Download className="mr-1 h-4 w-4" />
               Télécharger les mots de passe temporaires
@@ -536,6 +448,11 @@ export default function Parents() {
             Les identifiants restent visibles ici tant que le parent n’a pas
             changé son mot de passe.
           </p>
+          {parentsTotal > filteredParents.length ? (
+            <p className="text-xs text-slate-500">
+              Affichage de {filteredParents.length} sur {parentsTotal} parents
+            </p>
+          ) : null}
           {filteredParents.length === 0 ? (
             <EmptyState message="Aucun parent ne correspond à la recherche." />
           ) : (
@@ -620,6 +537,20 @@ export default function Parents() {
               })}
             </div>
           )}
+          {hasNextPage ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isFetchingNextPage}
+                onClick={() => void fetchNextPage()}
+              >
+                {isFetchingNextPage
+                  ? "Chargement…"
+                  : `Afficher plus (${parentsTotal - filteredParents.length} restants)`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

@@ -1,17 +1,25 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { Download, KeyRound, Link2, Upload } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import type { ClassSection, Profile } from "@/lib/types";
+import type { ClassSection } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { fetchEnrollmentsByStudent, fetchByIdChunks } from "@/lib/programmeCounts";
+import {
+  fetchAllStudents,
+  fetchClassStudentCounts,
+  fetchStudentsPage,
+  fetchStudentsWithoutClass,
+  PAGE_SIZE,
+  type StudentPageRow,
+} from "@/lib/scaleApi";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { fromAuthEmail, fullName, joinProfile, matchesSearch } from "@/lib/utils";
+import { fromAuthEmail, fullName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -56,10 +64,7 @@ interface StudentCredential {
   used: boolean;
 }
 
-type StudentRow = Profile & {
-  className: string | null;
-  classSectionId: string | null;
-};
+type StudentRow = StudentPageRow;
 
 function accountStatus(s: StudentRow, cred: StudentCredential) {
   if (!s.must_change_password && (cred.used || s.last_login_at)) {
@@ -167,67 +172,65 @@ export default function Eleves() {
     [classesRaw],
   );
 
-  const { data: students = [], isLoading } = useQuery({
-    queryKey: ["eleves", schoolId, "v4"],
+  // One page of the selected class (or of "sans classe") at a time, searched by the database.
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const {
+    data: pages,
+    isLoading: studentsLoading,
+    isFetching: studentsFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["eleves", schoolId, "v5", selectedClassId, debouncedSearch],
+    // keep the list on screen while typing a search
+    placeholderData: keepPreviousData,
+    enabled: !!schoolId && !!selectedClassId,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchStudentsPage(schoolId!, {
+        classId: selectedClassId,
+        search: debouncedSearch,
+        limit: PAGE_SIZE,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+  });
+  const filteredStudents = useMemo(
+    () => (pages?.pages ?? []).flatMap((p) => p.rows) as StudentRow[],
+    [pages],
+  );
+  const filteredTotal = pages?.pages[0]?.total ?? 0;
+
+  // Class dropdown numbers and the "sans classe" count come from the database,
+  // so they stay exact above 1,000 students.
+  const { data: classCounts = {}, isLoading: countsLoading } = useQuery({
+    queryKey: ["eleves-class-counts", schoolId],
     enabled: !!schoolId,
-    queryFn: async () => {
-      const { data: roles, error } = await supabase
-        .from("roles_utilisateurs")
-        .select("user_id, profils(*)")
-        .eq("school_id", schoolId!)
-        .eq("role", "student")
-        .eq("active", true);
-      if (error) throw error;
-      const profiles = (roles ?? [])
-        .map((r) => joinProfile<Profile>((r as { profils: unknown }).profils))
-        .filter((p): p is Profile => !!p?.id);
-      if (!profiles.length) return [];
-
-      const classByStudent = await fetchEnrollmentsByStudent(schoolId!);
-
-      return profiles.map((p) => {
-        const cls = classByStudent.get(p.id);
-        return {
-          ...p,
-          className: cls?.name ?? null,
-          classSectionId: cls?.id ?? null,
-        };
-      }) as StudentRow[];
-    },
+    queryFn: () => fetchClassStudentCounts(schoolId!),
   });
-
-  const studentIds = useMemo(() => students.map((s) => s.id), [students]);
-
-  const { data: credentialsByUser = {} } = useQuery({
-    queryKey: ["identifiants-eleves", schoolId, studentIds.join(",")],
-    enabled: !!schoolId && studentIds.length > 0,
-    queryFn: async () => {
-      const rows = await fetchByIdChunks<{
-        user_id: string;
-        username: string;
-        temp_password_hint: string | null;
-        used: boolean;
-      }>(
-        "identifiants_temporaires",
-        "user_id",
-        studentIds,
-        "user_id, username, temp_password_hint, used",
-      );
-      const map: Record<string, StudentCredential> = {};
-      for (const row of rows) {
-        map[row.user_id] = {
-          username: row.username,
-          tempPassword: row.temp_password_hint ?? null,
-          used: Boolean(row.used),
-        };
-      }
-      return map;
-    },
+  const { data: withoutClass, isLoading: withoutLoading } = useQuery({
+    queryKey: ["eleves-sans-classe", schoolId, "v5"],
+    enabled: !!schoolId,
+    queryFn: () => fetchStudentsWithoutClass(schoolId!, 0),
   });
+  const sansClasseCount = withoutClass?.count ?? 0;
+  const totalStudents =
+    Object.values(classCounts).reduce((n, v) => n + v, 0) + sansClasseCount;
+  const isLoading = studentsLoading && !!selectedClassId;
+  const classesLoadingGuard = countsLoading || withoutLoading;
 
   const credentialFor = (s: StudentRow): StudentCredential => {
-    const stored = credentialsByUser[s.id];
-    if (stored) return stored;
+    const stored = s.cred;
+    if (stored)
+      return {
+        username: stored.username ?? "—",
+        tempPassword: stored.tempPassword ?? null,
+        used: Boolean(stored.used),
+      };
     return {
       username: fromAuthEmail(s.email) || "—",
       tempPassword: null,
@@ -235,48 +238,17 @@ export default function Eleves() {
     };
   };
 
-  const filteredStudents = useMemo(() => {
-    if (!selectedClassId) return [];
-    return students
-      .filter((s) => {
-        if (selectedClassId === "__none__") return !s.classSectionId;
-        return s.classSectionId === selectedClassId;
-      })
-      .filter((s) => {
-        const cred = credentialFor(s);
-        return matchesSearch(
-          search,
-          s.first_name,
-          s.last_name,
-          s.className,
-          s.phone,
-          cred.username,
-        );
-      })
-      .sort((a, b) =>
-        fullName(a.first_name, a.last_name).localeCompare(
-          fullName(b.first_name, b.last_name),
-          "fr",
-        ),
-      );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- credentialFor depends on credentialsByUser
-  }, [students, search, credentialsByUser, selectedClassId]);
-
   const selectedClassLabel = useMemo(() => {
     if (selectedClassId === "__none__") return "Sans classe";
     return classes.find((c) => c.id === selectedClassId)?.name ?? "";
   }, [selectedClassId, classes]);
-
-  const sansClasseCount = useMemo(
-    () => students.filter((s) => !s.classSectionId).length,
-    [students],
-  );
 
   const viewingSansClasse = selectedClassId === "__none__";
 
   const allFilteredSelected =
     viewingSansClasse &&
     filteredStudents.length > 0 &&
+    filteredStudents.length >= filteredTotal &&
     filteredStudents.every((s) => selectedStudentIds.includes(s.id));
 
   const toggleStudentSelected = (id: string) => {
@@ -285,17 +257,27 @@ export default function Eleves() {
     );
   };
 
-  const toggleSelectAllFiltered = () => {
+  const toggleSelectAllFiltered = async () => {
+    if (!schoolId) return;
     if (allFilteredSelected) {
       const filteredSet = new Set(filteredStudents.map((s) => s.id));
       setSelectedStudentIds((prev) => prev.filter((id) => !filteredSet.has(id)));
       return;
     }
-    setSelectedStudentIds((prev) => {
-      const next = new Set(prev);
-      for (const s of filteredStudents) next.add(s.id);
-      return [...next];
-    });
+    try {
+      // select every matching student, including those on pages not yet loaded
+      const all = await fetchAllStudents(schoolId, {
+        classId: selectedClassId,
+        search: debouncedSearch,
+      });
+      setSelectedStudentIds((prev) => {
+        const next = new Set(prev);
+        for (const s of all) next.add(s.id);
+        return [...next];
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sélection impossible");
+    }
   };
 
   const handleBulkAssignClass = async () => {
@@ -347,8 +329,19 @@ export default function Eleves() {
     void qc.invalidateQueries({ queryKey: ["ecole-stats", schoolId] });
   };
 
-  const downloadAllCredentials = () => {
-    const source = selectedClassId ? filteredStudents : students;
+  const downloadAllCredentials = async () => {
+    if (!schoolId || !selectedClassId) return;
+    // Export every student of the selection (not only the pages on screen).
+    let source: StudentRow[];
+    try {
+      source = await fetchAllStudents(schoolId, {
+        classId: selectedClassId,
+        search: debouncedSearch,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export impossible");
+      return;
+    }
     const rows = source
       .map((s) => {
         const cred = credentialFor(s);
@@ -363,11 +356,7 @@ export default function Eleves() {
       })
       .filter(Boolean) as ImportCredential[];
     if (rows.length === 0) {
-      toast.message(
-        selectedClassId
-          ? "Aucun mot de passe temporaire à télécharger pour cette sélection"
-          : "Aucun mot de passe temporaire à télécharger",
-      );
+      toast.message("Aucun mot de passe temporaire à télécharger pour cette sélection");
       return;
     }
     const slug = selectedClassLabel
@@ -1064,9 +1053,7 @@ export default function Eleves() {
         </Modal>
       ) : null}
 
-      {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
-      ) : students.length === 0 ? (
+      {totalStudents === 0 && !classesLoadingGuard ? (
         <EmptyState message="Aucun élève inscrit." />
       ) : (
         <div className="space-y-4">
@@ -1089,7 +1076,7 @@ export default function Eleves() {
               ) : null}
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name} ({classCounts[c.id] ?? 0})
                 </option>
               ))}
             </Select>
@@ -1141,7 +1128,7 @@ export default function Eleves() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={downloadAllCredentials}
+                  onClick={() => void downloadAllCredentials()}
                 >
                   <Download className="mr-1 h-4 w-4" />
                   Télécharger les mots de passe temporaires
@@ -1155,9 +1142,9 @@ export default function Eleves() {
                         type="checkbox"
                         className="h-4 w-4 rounded border-slate-300"
                         checked={allFilteredSelected}
-                        onChange={toggleSelectAllFiltered}
+                        onChange={() => void toggleSelectAllFiltered()}
                       />
-                      Tout sélectionner ({filteredStudents.length})
+                      Tout sélectionner ({filteredTotal})
                     </label>
                     <div className="min-w-[12rem] flex-1">
                       <Label htmlFor="bulk-class">Classe cible</Label>
@@ -1204,9 +1191,12 @@ export default function Eleves() {
                 </Card>
               ) : null}
               <p className="text-sm text-slate-500">
-                {filteredStudents.length} élève
-                {filteredStudents.length !== 1 ? "s" : ""}
-                {selectedClassLabel ? ` · ${selectedClassLabel}` : ""}. Les
+                {filteredTotal} élève
+                {filteredTotal !== 1 ? "s" : ""}
+                {selectedClassLabel ? ` · ${selectedClassLabel}` : ""}
+                {filteredStudents.length < filteredTotal
+                  ? ` (affichage de ${filteredStudents.length} sur ${filteredTotal})`
+                  : ""}. Les
                 identifiants restent visibles tant que l’élève n’a pas changé
                 son mot de passe.
               </p>
@@ -1339,6 +1329,20 @@ export default function Eleves() {
                   })}
                 </div>
               )}
+              {hasNextPage ? (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isFetchingNextPage}
+                    onClick={() => void fetchNextPage()}
+                  >
+                    {isFetchingNextPage
+                      ? "Chargement…"
+                      : `Afficher plus (${filteredTotal - filteredStudents.length} restants)`}
+                  </Button>
+                </div>
+              ) : null}
             </>
           )}
         </div>

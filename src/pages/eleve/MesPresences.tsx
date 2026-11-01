@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
-import { supabase } from "@/lib/supabase";
+import { useStudentAttendance, type StudentPresenceRow } from "@/hooks/useStudentAttendance";
 import type { AttendanceStatus } from "@/lib/types";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: "Présent",
@@ -25,14 +24,7 @@ const STATUS_TONE: Record<
   excused: "info",
 };
 
-type PresenceRow = {
-  id: string;
-  date: string;
-  status: AttendanceStatus;
-  note: string | null;
-  subject_id: string;
-  matieres: { name: string } | null;
-};
+type PresenceRow = StudentPresenceRow;
 
 export default function MesPresences() {
   const { user } = useAuth();
@@ -42,33 +34,21 @@ export default function MesPresences() {
     markSeen();
   }, [markSeen]);
 
-  const { data: attendance = [], isLoading } = useQuery({
-    queryKey: ["mes-presences", user?.id],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("presences")
-        .select("id, date, status, note, subject_id, matieres(name)")
-        .eq("student_id", user!.id)
-        .order("date", { ascending: false })
-        .limit(120);
-      if (error) throw error;
-      return (data ?? []) as unknown as PresenceRow[];
-    },
-  });
+  const att = useStudentAttendance("mes-presences", user?.id);
+  const attendance = att.rows;
+  const isLoading = att.isLoading;
 
-  const summary = useMemo(() => {
-    const counts: Record<AttendanceStatus, number> = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      excused: 0,
-    };
-    for (const a of attendance) {
-      counts[a.status] = (counts[a.status] ?? 0) + 1;
-    }
-    return counts;
-  }, [attendance]);
+  // exact totals over the whole history (SQL), not just the rows shown below
+  const summary: Record<AttendanceStatus, number> = {
+    present: att.counts?.present ?? 0,
+    absent: att.counts?.absent ?? 0,
+    late: att.counts?.late ?? 0,
+    excused: att.counts?.excused ?? 0,
+  };
+  const subjectCounts = useMemo(
+    () => new Map((att.counts?.bySubject ?? []).map((x) => [x.subjectId ?? x.name, x])),
+    [att.counts],
+  );
 
   const bySubject = useMemo(() => {
     const map = new Map<
@@ -121,13 +101,13 @@ export default function MesPresences() {
 
           <div className="space-y-8">
             {bySubject.map((group) => {
+              const sc = subjectCounts.get(group.subjectId || group.subjectName);
               const counts: Record<AttendanceStatus, number> = {
-                present: 0,
-                absent: 0,
-                late: 0,
-                excused: 0,
+                present: sc?.present ?? 0,
+                absent: sc?.absent ?? 0,
+                late: sc?.late ?? 0,
+                excused: sc?.excused ?? 0,
               };
-              for (const r of group.rows) counts[r.status] += 1;
               return (
                 <section key={group.subjectId}>
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -176,6 +156,20 @@ export default function MesPresences() {
               );
             })}
           </div>
+          {att.hasNextPage ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={att.isFetchingNextPage}
+                onClick={att.fetchNextPage}
+              >
+                {att.isFetchingNextPage
+                  ? "Chargement…"
+                  : `Afficher plus (${Math.max(att.total - attendance.length, 0)} restantes)`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

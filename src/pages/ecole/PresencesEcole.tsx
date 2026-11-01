@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/classColors";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
+import { fetchAttendanceDaySummary } from "@/lib/scaleApi";
 import type { AttendanceStatus, ClassSection } from "@/lib/types";
 import { cn, joinProfile } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
@@ -32,6 +33,8 @@ import {
   Select,
   Textarea,
 } from "@/components/ui";
+
+const LIST_PAGE = 50;
 
 type PresenceRow = {
   id: string;
@@ -67,39 +70,76 @@ export default function PresencesEcole() {
     },
   });
 
-  const classIds = useMemo(() => classes.map((c) => c.id), [classes]);
-
-  const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["ecole-presences", schoolId, date, classId],
-    enabled: !!schoolId && classIds.length > 0,
-    queryFn: async () => {
-      let q = supabase
-        .from("presences")
-        .select(
-          "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey(id, name), matieres(name)",
-        )
-        .eq("date", date)
-        .in("class_section_id", classId ? [classId] : classIds)
-        .order("class_section_id");
-
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as PresenceRow[];
-    },
+  // Exact day totals come from one SQL count (the old page counted the rows it had
+  // downloaded, which stops being the real number once a school passes 1,000 marks a day).
+  const { data: summaryData } = useQuery({
+    queryKey: ["ecole-presences", "summary", schoolId, date, classId],
+    enabled: !!schoolId,
+    queryFn: () => fetchAttendanceDaySummary(schoolId!, date, classId || undefined),
   });
+  const summary: Record<AttendanceStatus, number> = {
+    present: summaryData?.present ?? 0,
+    absent: summaryData?.absent ?? 0,
+    late: summaryData?.late ?? 0,
+    excused: summaryData?.excused ?? 0,
+  };
+  const dayTotal = summaryData?.total ?? 0;
 
-  const absences = rows.filter((r) => r.status === "absent");
-  const justified = rows.filter((r) => r.status === "excused");
-  const summary = useMemo(() => {
-    const counts: Record<AttendanceStatus, number> = {
-      present: 0,
-      absent: 0,
-      late: 0,
-      excused: 0,
-    };
-    for (const r of rows) counts[r.status] += 1;
-    return counts;
-  }, [rows]);
+  // Each list loads 50 rows at a time ("Afficher plus"), filtered to the school in SQL
+  // (the old page put every class id of the school in the URL).
+  const usePresenceList = (status: AttendanceStatus | null, total: number) => {
+    const q = useInfiniteQuery({
+      queryKey: ["ecole-presences", "list", schoolId, date, classId, status ?? "all"],
+      enabled: !!schoolId && total > 0,
+      initialPageParam: 0,
+      queryFn: async ({ pageParam }) => {
+        let query = supabase
+          .from("presences")
+          .select(
+            "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey!inner(id, name, school_id), matieres(name)",
+          )
+          .eq("date", date)
+          .eq("classes.school_id", schoolId!)
+          .order("class_section_id")
+          .order("id")
+          .range(pageParam, pageParam + LIST_PAGE - 1);
+        if (classId) query = query.eq("class_section_id", classId);
+        if (status) query = query.eq("status", status);
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []) as unknown as PresenceRow[];
+      },
+      getNextPageParam: (last, all) =>
+        last.length === LIST_PAGE ? all.length * LIST_PAGE : undefined,
+    });
+    const list = useMemo(() => (q.data?.pages ?? []).flat(), [q.data]);
+    return { ...q, list };
+  };
+  const absencesQ = usePresenceList("absent", summary.absent);
+  const justifiedQ = usePresenceList("excused", summary.excused);
+  const rowsQ = usePresenceList(null, dayTotal);
+  const absences = absencesQ.list;
+  const justified = justifiedQ.list;
+  const rows = rowsQ.list;
+  const isLoading = !summaryData || rowsQ.isLoading;
+  const classIds = classes.map((c) => c.id);
+
+  const moreButton = (q: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown }, shown: number, total: number) =>
+    q.hasNextPage ? (
+      <div className="mt-3 flex justify-center">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={q.isFetchingNextPage}
+          onClick={() => void q.fetchNextPage()}
+        >
+          {q.isFetchingNextPage
+            ? "Chargement…"
+            : `Afficher plus (${Math.max(total - shown, 0)} restants)`}
+        </Button>
+      </div>
+    ) : null;
 
   const setStatus = async (
     row: PresenceRow,
@@ -195,9 +235,9 @@ export default function PresencesEcole() {
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Absences à justifier
               </h2>
-              <Badge tone="danger">{absences.length}</Badge>
+              <Badge tone="danger">{summary.absent}</Badge>
             </div>
-            {absences.length === 0 ? (
+            {summary.absent === 0 ? (
               <Card>
                 <p className="text-sm text-slate-500">
                   Aucune absence non justifiée pour cette date
@@ -272,6 +312,7 @@ export default function PresencesEcole() {
                 ))}
               </div>
             )}
+            {moreButton(absencesQ, absences.length, summary.absent)}
           </section>
 
           <section>
@@ -280,9 +321,9 @@ export default function PresencesEcole() {
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Absences déjà justifiées
               </h2>
-              <Badge tone="info">{justified.length}</Badge>
+              <Badge tone="info">{summary.excused}</Badge>
             </div>
-            {justified.length === 0 ? (
+            {summary.excused === 0 ? (
               <Card>
                 <p className="text-sm text-slate-500">
                   Aucune absence justifiée pour cette sélection.
@@ -324,13 +365,14 @@ export default function PresencesEcole() {
                 ))}
               </div>
             )}
+            {moreButton(justifiedQ, justified.length, summary.excused)}
           </section>
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
               Appel du jour
             </h2>
-            {rows.length === 0 ? (
+            {dayTotal === 0 ? (
               <EmptyState message="Aucun appel enregistré pour cette date." />
             ) : (
               <div className="space-y-2">
@@ -375,6 +417,7 @@ export default function PresencesEcole() {
                 ))}
               </div>
             )}
+            {moreButton(rowsQ, rows.length, dayTotal)}
           </section>
         </div>
       )}

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { searchStudentsForPicker } from "@/lib/scaleApi";
 import { cn, fullName, matchesSearch } from "@/lib/utils";
 import { Input } from "@/components/ui";
 
@@ -11,7 +14,10 @@ export type StudentOption = {
 };
 
 type Props = {
-  students: StudentOption[];
+  /** Fixed list (small schools). Ignored when `schoolId` is given. */
+  students?: StudentOption[];
+  /** When set, the box searches the school's students in the database as you type. */
+  schoolId?: string;
   value: string;
   onChange: (studentId: string) => void;
   required?: boolean;
@@ -20,7 +26,8 @@ type Props = {
 };
 
 export function StudentSearchPicker({
-  students,
+  students: studentsProp,
+  schoolId,
   value,
   onChange,
   required,
@@ -31,12 +38,26 @@ export function StudentSearchPicker({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const serverMode = !!schoolId;
+  const debouncedQuery = useDebouncedValue(query, 250);
+  const { data: remote = [], isFetching } = useQuery({
+    queryKey: ["student-picker", schoolId, debouncedQuery],
+    enabled: serverMode && open,
+    queryFn: () => searchStudentsForPicker(schoolId!, debouncedQuery, 40),
+    staleTime: 15_000,
+  });
+  const students: StudentOption[] = serverMode ? remote : (studentsProp ?? []);
+  const [picked, setPicked] = useState<StudentOption | null>(null);
+
   const selected = useMemo(
-    () => students.find((s) => s.id === value) ?? null,
-    [students, value],
+    () =>
+      students.find((s) => s.id === value) ??
+      (picked && picked.id === value ? picked : null),
+    [students, value, picked],
   );
 
   const filtered = useMemo(() => {
+    if (serverMode) return students;
     const list = students.filter((s) =>
       matchesSearch(query, s.first_name, s.last_name, s.className, s.phone),
     );
@@ -49,7 +70,7 @@ export function StudentSearchPicker({
         ),
       )
       .slice(0, 80);
-  }, [students, query]);
+  }, [students, query, serverMode]);
 
   useEffect(() => {
     if (!open) return;
@@ -95,7 +116,7 @@ export function StudentSearchPicker({
         <>
           <Input
             value={query}
-            disabled={disabled || students.length === 0}
+            disabled={disabled || (!serverMode && students.length === 0)}
             placeholder={placeholder}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -105,11 +126,11 @@ export function StudentSearchPicker({
             autoComplete="off"
             required={required && !value}
           />
-          {open && students.length > 0 ? (
+          {open && (serverMode || students.length > 0) ? (
             <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
               {filtered.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-slate-400">
-                  Aucun élève trouvé
+                  {serverMode && isFetching ? "Recherche…" : "Aucun élève trouvé"}
                 </p>
               ) : (
                 filtered.map((s) => (
@@ -121,6 +142,7 @@ export function StudentSearchPicker({
                       value === s.id && "bg-brand-50",
                     )}
                     onClick={() => {
+                      setPicked(s);
                       onChange(s.id);
                       setOpen(false);
                       setQuery("");
@@ -135,7 +157,7 @@ export function StudentSearchPicker({
                   </button>
                 ))
               )}
-              {students.length > 80 && filtered.length >= 80 ? (
+              {(serverMode ? filtered.length >= 40 : students.length > 80 && filtered.length >= 80) ? (
                 <p className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-400">
                   Affinez la recherche pour voir plus d’élèves
                 </p>

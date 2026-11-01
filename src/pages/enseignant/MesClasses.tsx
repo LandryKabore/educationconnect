@@ -2,10 +2,11 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, ChevronRight, ClipboardCheck, Users } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { formatAverage, scoreOn20 } from "@/lib/averages";
+import { formatAverage } from "@/lib/averages";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { fetchTeacherClassStats } from "@/lib/scaleApi";
 
 type SubjectAvg = {
   subjectId: string;
@@ -95,60 +96,27 @@ export default function MesClasses() {
         .filter(Boolean);
 
       const classIds = ordered.map((c) => c.classId);
-      const subjectIds = [
-        ...new Set(ordered.flatMap((c) => [...c.subjects.keys()])),
-      ];
 
-      const counts = new Map<string, number>();
-      if (classIds.length > 0) {
-        const { data: insc } = await supabase
-          .from("inscriptions")
-          .select("class_section_id")
-          .in("class_section_id", classIds)
-          .eq("status", "active");
-        for (const row of insc ?? []) {
-          const id = (row as { class_section_id: string }).class_section_id;
-          counts.set(id, (counts.get(id) ?? 0) + 1);
-        }
-      }
-
-      const scoresByKey = new Map<string, number[]>();
-      if (classIds.length > 0 && subjectIds.length > 0) {
-        const { data: notes } = await supabase
-          .from("notes")
-          .select("class_section_id, subject_id, score, max_score, is_absent")
-          .in("class_section_id", classIds)
-          .in("subject_id", subjectIds);
-        for (const n of notes ?? []) {
-          const row = n as {
-            class_section_id: string;
-            subject_id: string;
-            score: number;
-            max_score: number;
-            is_absent: boolean | null;
-          };
-          if (row.is_absent) continue;
-          const key = `${row.class_section_id}|${row.subject_id}`;
-          const on20 = scoreOn20(Number(row.score), Number(row.max_score));
-          const listScores = scoresByKey.get(key) ?? [];
-          listScores.push(on20);
-          scoresByKey.set(key, listScores);
-        }
-      }
+      // Student counts and grade averages are computed in SQL (the old page downloaded
+      // every grade of every class, which stops at 1,000 rows and gave wrong averages).
+      const stats =
+        classIds.length > 0
+          ? await fetchTeacherClassStats(classIds)
+          : { counts: {} as Record<string, number>, averages: [] };
+      const counts = new Map<string, number>(Object.entries(stats.counts));
+      const avgByKey = new Map(
+        stats.averages.map((a) => [`${a.classId}|${a.subjectId}`, a]),
+      );
 
       return ordered.map((c): TeacherClass => {
         const subjects: SubjectAvg[] = [...c.subjects.entries()]
           .map(([subjectId, subjectName]) => {
-            const scores = scoresByKey.get(`${c.classId}|${subjectId}`) ?? [];
-            const averageOn20 =
-              scores.length > 0
-                ? scores.reduce((a, b) => a + b, 0) / scores.length
-                : null;
+            const a = avgByKey.get(`${c.classId}|${subjectId}`);
             return {
               subjectId,
               subjectName,
-              averageOn20,
-              gradeCount: scores.length,
+              averageOn20: a ? Number(a.avg) : null,
+              gradeCount: a ? Number(a.n) : 0,
             };
           })
           .sort((a, b) =>

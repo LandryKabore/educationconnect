@@ -284,15 +284,17 @@ export default function NotesSaisie() {
     setSavingGrades(true);
     try {
       const existingByStudent = new Map(openGrades.map((g) => [g.student_id, g]));
+      const toDelete: string[] = [];
+      const toUpdate: Record<string, unknown>[] = [];
+      const toInsert: Record<string, unknown>[] = [];
+
       for (const student of students) {
         const g = getGrade(student.id);
         const hasValue = g.absent || g.score.trim() !== "";
         const existing = existingByStudent.get(student.id);
 
         if (!hasValue) {
-          if (existing) {
-            await supabase.from("notes").delete().eq("id", existing.id);
-          }
+          if (existing) toDelete.push(existing.id);
           continue;
         }
 
@@ -312,11 +314,40 @@ export default function NotesSaisie() {
           recorded_by: isProxy ? actingTeacherId! : user.id,
         };
 
-        if (existing) {
-          await supabase.from("notes").update(payload).eq("id", existing.id);
-        } else {
-          await supabase.from("notes").insert(payload);
+        if (existing) toUpdate.push({ id: existing.id, ...payload });
+        else toInsert.push(payload);
+      }
+
+      // One request per kind of change (the old code sent one request per student, one
+      // after the other, and ignored every error: a failed row was silently lost).
+      // Every request is checked; the first failure stops the save and is shown.
+      const CHUNK = 500;
+      const chunks = <T,>(rows: T[]) =>
+        Array.from({ length: Math.ceil(rows.length / CHUNK) }, (_, i) =>
+          rows.slice(i * CHUNK, (i + 1) * CHUNK),
+        );
+      try {
+        for (const part of chunks(toDelete)) {
+          const { error } = await supabase.from("notes").delete().in("id", part);
+          if (error) throw error;
         }
+        for (const part of chunks(toUpdate)) {
+          const { error } = await supabase
+            .from("notes")
+            .upsert(part, { onConflict: "id" });
+          if (error) throw error;
+        }
+        for (const part of chunks(toInsert)) {
+          const { error } = await supabase.from("notes").insert(part);
+          if (error) throw error;
+        }
+      } catch (err) {
+        // show what is really stored now, then report the failure
+        void qc.invalidateQueries({ queryKey: ["eval-grades", openEval.id] });
+        const msg = err instanceof Error ? err.message : (err as { message?: string })?.message;
+        throw new Error(
+          `Certaines notes n’ont pas été enregistrées${msg ? ` (${msg})` : ""}. Vérifiez la liste puis réessayez.`,
+        );
       }
       const savedCount = students.filter((s) => {
         const g = getGrade(s.id);

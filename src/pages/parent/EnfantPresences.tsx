@@ -7,9 +7,10 @@ import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
+import { useStudentAttendance, type StudentPresenceRow } from "@/hooks/useStudentAttendance";
 import type { AttendanceStatus } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: "Présent",
@@ -28,14 +29,7 @@ const STATUS_TONE: Record<
   excused: "info",
 };
 
-type PresenceRow = {
-  id: string;
-  date: string;
-  status: AttendanceStatus;
-  note: string | null;
-  subject_id: string;
-  matieres: { name: string } | null;
-};
+type PresenceRow = StudentPresenceRow;
 
 export default function EnfantPresences() {
   const { id } = useParams<{ id: string }>();
@@ -64,20 +58,9 @@ export default function EnfantPresences() {
     link as { profils?: { first_name: string; last_name: string } } | null
   )?.profils;
 
-  const { data: attendance = [], isLoading } = useQuery({
-    queryKey: ["enfant-presences", id],
-    enabled: !!id && !!link,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("presences")
-        .select("id, date, status, note, subject_id, matieres(name)")
-        .eq("student_id", id!)
-        .order("date", { ascending: false })
-        .limit(120);
-      if (error) throw error;
-      return (data ?? []) as unknown as PresenceRow[];
-    },
-  });
+  const att = useStudentAttendance("enfant-presences", id, !!link);
+  const attendance = att.rows;
+  const isLoading = att.isLoading;
 
   const bySubject = useMemo(() => {
     const map = new Map<
@@ -153,6 +136,20 @@ export default function EnfantPresences() {
               </div>
             </section>
           ))}
+          {att.hasNextPage ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={att.isFetchingNextPage}
+                onClick={att.fetchNextPage}
+              >
+                {att.isFetchingNextPage
+                  ? "Chargement…"
+                  : `Afficher plus (${Math.max(att.total - attendance.length, 0)} restantes)`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

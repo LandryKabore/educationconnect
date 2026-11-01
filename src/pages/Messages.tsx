@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchMessageContacts, fetchSentAnnouncements } from "@/lib/scaleApi";
 import { format, isToday } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ArrowLeft, Check, CheckCheck, Send } from "lucide-react";
@@ -251,7 +252,9 @@ export default function Messages({
     },
   });
 
-  const { data: sent = [], isLoading: sentLoading } = useQuery({
+  // Direct messages I sent (newest first; the oldest are dropped past 1,000 - the API limit
+  // - instead of the old behaviour where a big announcement used up those 1,000 rows).
+  const { data: sent = [], isLoading: sentDirectLoading } = useQuery({
     queryKey: ["messages-sent", user?.id],
     enabled: !!user?.id,
     staleTime: 0,
@@ -262,104 +265,41 @@ export default function Messages({
           "id, school_id, sender_id, recipient_id, subject, body, read_at, created_at, allow_replies, parent_message_id, is_announcement, announcement_id, is_cc, thread_id, recipient:profils!messages_recipient_id_fkey(first_name, last_name)",
         )
         .eq("sender_id", user!.id)
-        .order("created_at", { ascending: false });
+        .eq("is_announcement", false)
+        .order("created_at", { ascending: false })
+        .limit(1000);
       if (error) throw error;
       return data as SentMessage[];
     },
   });
 
+  // Announcements I sent: one line per announcement with the real number of recipients,
+  // counted in SQL (not by counting the rows that happened to be downloaded).
+  const { data: sentAnnouncements = [], isLoading: sentAnnLoading } = useQuery({
+    queryKey: ["messages-sent", user?.id, "announcements"],
+    enabled: !!user?.id,
+    staleTime: 0,
+    queryFn: async () =>
+      (await fetchSentAnnouncements(100)) as unknown as (SentMessage & {
+        recipientCount: number;
+      })[],
+  });
+  const sentLoading = sentDirectLoading || sentAnnLoading;
+
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
     queryKey: ["message-contacts", schoolId, user?.id, role],
     enabled: !!schoolId && !!user?.id && !!role,
     queryFn: async () => {
+      // Admins and teachers: the whole list in one SQL call (a single JSON value, so the
+      // 1,000-row API limit does not cut it - the old code lost contacts past 1,000).
+      if (role === "school_admin" || role === "super_admin" || role === "teacher") {
+        return (await fetchMessageContacts(schoolId!, role)) as MessageContact[];
+      }
+
       const map = new Map<string, MessageContact>();
       const selfId = user!.id;
 
-      if (role === "school_admin" || role === "super_admin") {
-        const { data: roles } = await supabase
-          .from("roles_utilisateurs")
-          .select("user_id, role, profils(*)")
-          .eq("school_id", schoolId!)
-          .eq("active", true)
-          .in("role", ["student", "parent", "teacher", "school_admin"]);
-
-        for (const row of roles ?? []) {
-          const r = row as unknown as {
-            role: ContactRole;
-            profils: Profile | null;
-          };
-          if (
-            r.role === "student" ||
-            r.role === "parent" ||
-            r.role === "teacher" ||
-            r.role === "school_admin"
-          ) {
-            pushContact(map, r.profils, r.role, selfId);
-          }
-        }
-      } else if (role === "teacher") {
-        const { data: aff } = await supabase
-          .from("affectations_enseignement")
-          .select("class_section_id")
-          .eq("teacher_id", selfId);
-        const classIds = [
-          ...new Set(
-            (aff ?? []).map((a) => a.class_section_id as string).filter(Boolean),
-          ),
-        ];
-
-        if (classIds.length > 0) {
-          const { data: enrollments } = await supabase
-            .from("inscriptions")
-            .select(
-              "student_id, profils:profils!inscriptions_student_id_fkey(*)",
-            )
-            .in("class_section_id", classIds)
-            .eq("status", "active");
-
-          const studentIds: string[] = [];
-          for (const row of enrollments ?? []) {
-            const r = row as unknown as {
-              student_id: string;
-              profils: Profile | null;
-            };
-            studentIds.push(r.student_id);
-            pushContact(map, r.profils, "student", selfId);
-          }
-
-          if (studentIds.length > 0) {
-            const { data: links } = await supabase
-              .from("liens_parent_eleve")
-              .select(
-                "parent_id, profils:profils!liens_parent_eleve_parent_id_fkey(*)",
-              )
-              .in("student_id", studentIds);
-
-            for (const row of links ?? []) {
-              const r = row as unknown as {
-                profils: Profile | null;
-              };
-              pushContact(map, r.profils, "parent", selfId);
-            }
-          }
-        }
-
-        const { data: admins } = await supabase
-          .from("roles_utilisateurs")
-          .select("profils(*)")
-          .eq("school_id", schoolId!)
-          .eq("role", "school_admin")
-          .eq("active", true);
-
-        for (const row of admins ?? []) {
-          pushContact(
-            map,
-            asProfile((row as { profils: unknown }).profils),
-            "school_admin",
-            selfId,
-          );
-        }
-      } else if (role === "parent") {
+      if (role === "parent") {
         const { data: links } = await supabase
           .from("liens_parent_eleve")
           .select("student_id")
@@ -556,25 +496,12 @@ export default function Messages({
       sentByMe: false,
       recipientCount: 1,
     }));
-    const sentGroups = new Map<
-      string,
-      { message: SentMessage; recipientCount: number }
-    >();
-
-    for (const message of sent) {
-      if (!message.is_announcement) continue;
-      const key = message.announcement_id || message.id;
-      const current = sentGroups.get(key);
-      if (current) current.recipientCount += 1;
-      else sentGroups.set(key, { message, recipientCount: 1 });
-    }
-
-    for (const [key, group] of sentGroups) {
+    for (const a of sentAnnouncements) {
       items.push({
-        key: `sent-${key}`,
-        message: { ...group.message, sender: null },
+        key: `sent-${a.announcement_id || a.id}`,
+        message: { ...a, recipient: undefined, sender: null } as unknown as InboxMessage,
         sentByMe: true,
-        recipientCount: group.recipientCount,
+        recipientCount: Number(a.recipientCount) || 1,
       });
     }
 
@@ -583,7 +510,7 @@ export default function Messages({
         new Date(b.message.created_at).getTime() -
         new Date(a.message.created_at).getTime(),
     );
-  }, [announcementInbox, sent]);
+  }, [announcementInbox, sentAnnouncements]);
   const directSent = useMemo(
     () => sent.filter((m) => !m.is_announcement),
     [sent],
