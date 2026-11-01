@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookMarked,
@@ -19,6 +19,7 @@ import {
   MessageSquare,
   PencilLine,
   School,
+  Search,
   Settings,
   User,
   UserCog,
@@ -357,6 +358,11 @@ const DOWNLOAD_ITEM: NavItem = {
   icon: <Download className="h-4 w-4" />,
 };
 
+// loaded the first time the admin opens the search (keeps the main bundle small)
+const GlobalSearch = lazy(() =>
+  import("@/components/GlobalSearch").then((m) => ({ default: m.GlobalSearch })),
+);
+
 export function AppShell() {
   const {
     profile,
@@ -371,6 +377,21 @@ export function AppShell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pageOpening, setPageOpening] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const canSearch = role === "school_admin" && !!schoolId;
+
+  // Ctrl/Cmd + K opens the school search
+  useEffect(() => {
+    if (!canSearch) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canSearch]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -581,6 +602,25 @@ export function AppShell() {
           <ThemeToggle className="w-full justify-center" />
         </div>
 
+        {canSearch ? (
+          <div className="shrink-0 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setSearchOpen(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 hover:border-slate-300 dark:border-[var(--border)] dark:bg-[var(--surface-2)]"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              <span className="flex-1 truncate">Rechercher…</span>
+              <kbd className="hidden rounded border border-slate-200 px-1.5 text-[10px] font-medium text-slate-400 lg:inline dark:border-[var(--border)]">
+                Ctrl K
+              </kbd>
+            </button>
+          </div>
+        ) : null}
+
         <nav className="min-h-0 flex-1 overflow-y-auto p-3">
           <div className="space-y-4">
             {navGroups.map((group, groupIndex) => (
@@ -696,6 +736,16 @@ export function AppShell() {
             <Menu className="h-5 w-5" />
           </button>
           <BrandLogo className="h-9 w-auto max-w-[9rem] flex-1 rounded-md" />
+          {canSearch ? (
+            <button
+              type="button"
+              className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Rechercher"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Search className="h-5 w-5" />
+            </button>
+          ) : null}
           <ThemeToggle compact />
         </header>
 
@@ -708,6 +758,11 @@ export function AppShell() {
             <Outlet />
           </ErrorBoundary>
         </main>
+        {canSearch && searchOpen ? (
+          <Suspense fallback={null}>
+            <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   );

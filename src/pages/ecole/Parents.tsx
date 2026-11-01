@@ -1,19 +1,21 @@
-import { useMemo, useState } from "react";
-import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { Download, KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { fromAuthEmail, fullName } from "@/lib/utils";
+import { cn, fromAuthEmail, fullName } from "@/lib/utils";
 import {
   fetchAllParents,
   fetchParentsPage,
-  PAGE_SIZE,
   type ParentPageRow,
 } from "@/lib/scaleApi";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePageParams } from "@/hooks/usePageParams";
+import { useRowSelection } from "@/hooks/useRowSelection";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -22,6 +24,11 @@ import {
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { StudentSearchPicker } from "@/components/StudentSearchPicker";
 import { Modal } from "@/components/Modal";
+import { SearchField } from "@/components/SearchField";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Pagination } from "@/components/Pagination";
+import { RowMenu } from "@/components/RowMenu";
+import { BulkBar } from "@/components/BulkBar";
 import {
   Badge,
   Button,
@@ -85,39 +92,66 @@ export default function Parents() {
   const [studentId, setStudentId] = useState("");
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<CreateResult | null>(null);
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { page, pageSize, setPage, setPageSize } = usePageParams();
+  const search = searchParams.get("q") ?? "";
+  const setSearch = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value.trimStart()) next.set("q", value);
+        else next.delete("q");
+        next.delete("page");
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // One page at a time, searched by the database.  (The old page asked for every parent,
-  // then sent all their ids in one URL, which failed with "400 Bad Request" in big schools.)
+  // One page at a time, searched and counted by the database.  (The old page asked for
+  // every parent, then sent all their ids in one URL, which failed with "400 Bad Request"
+  // in big schools.)
   const debouncedSearch = useDebouncedValue(search, 300);
   const {
-    data: pages,
+    data: parentsPage,
     isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["parents", schoolId, "v2", debouncedSearch],
+    isFetching,
+  } = useQuery({
+    queryKey: ["parents", schoolId, "v3", debouncedSearch, page, pageSize],
     placeholderData: keepPreviousData,
     enabled: !!schoolId,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+    queryFn: () =>
       fetchParentsPage(schoolId!, {
         search: debouncedSearch,
-        limit: PAGE_SIZE,
-        offset: pageParam,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       }),
-    getNextPageParam: (last, all) => {
-      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
   });
-  const parents = useMemo(
-    () => (pages?.pages ?? []).flatMap((p) => p.rows),
-    [pages],
-  );
-  const parentsTotal = pages?.pages[0]?.total ?? 0;
+  const parents = useMemo(() => parentsPage?.rows ?? [], [parentsPage]);
+  const parentsTotal = parentsPage?.total ?? 0;
+
+  // a page number from an old link that no longer exists → last page
+  useEffect(() => {
+    if (!parentsPage || isFetching) return;
+    const last = Math.max(1, Math.ceil(parentsPage.total / pageSize));
+    if (page > last) setPage(last);
+  }, [parentsPage, isFetching, page, pageSize, setPage]);
+
+  const selection = useRowSelection<ParentRow>();
+  const pageFullySelected =
+    parents.length > 0 && parents.every((p) => selection.ids.has(p.id));
+  const canSelectAllResults = pageFullySelected && parentsTotal > selection.count;
+
+  const selectAllResults = async () => {
+    if (!schoolId) return;
+    try {
+      const all = await fetchAllParents(schoolId, { search: debouncedSearch });
+      selection.setMany(all, true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sélection impossible");
+    }
+  };
 
   const credentialFor = (p: ParentRow): ParentCredential => {
     const stored = p.cred;
@@ -134,24 +168,13 @@ export default function Parents() {
     };
   };
 
-  const filteredParents = parents;
-
   const invalidateParentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["parents", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
   };
 
-  const downloadAllCredentials = async () => {
-    if (!schoolId) return;
-    // every parent matching the search, not only the pages on screen
-    let all: ParentRow[];
-    try {
-      all = await fetchAllParents(schoolId, { search: debouncedSearch });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Export impossible");
-      return;
-    }
-    const rows = all
+  const exportCredentials = (source: ParentRow[], slug: string) => {
+    const rows = source
       .map((p) => {
         const cred = credentialFor(p);
         if (!cred.tempPassword || cred.used) return null;
@@ -175,10 +198,23 @@ export default function Parents() {
       return;
     }
     downloadTextFile(
-      `identifiants-parents-${new Date().toISOString().slice(0, 10)}.csv`,
+      `identifiants-${slug}-${new Date().toISOString().slice(0, 10)}.csv`,
       credentialsToCsv(rows),
     );
     toast.success(`${rows.length} identifiant(s) exporté(s)`);
+  };
+
+  const downloadAllCredentials = async () => {
+    if (!schoolId) return;
+    // every parent matching the search, not only the page on screen
+    let all: ParentRow[];
+    try {
+      all = await fetchAllParents(schoolId, { search: debouncedSearch });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export impossible");
+      return;
+    }
+    exportCredentials(all, "parents");
   };
 
   const runCredentialAction = async (
@@ -238,6 +274,122 @@ export default function Parents() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const parentMenu = (p: ParentRow) => [
+    {
+      label: "Nouveau mot de passe",
+      icon: <KeyRound className="h-4 w-4" />,
+      onSelect: () => void runCredentialAction(p, "reset_password"),
+    },
+    {
+      label: "Lien oublié",
+      icon: <Link2 className="h-4 w-4" />,
+      onSelect: () => void runCredentialAction(p, "recovery_link"),
+    },
+  ];
+
+  const parentColumns: DataTableColumn<ParentRow>[] = [
+    {
+      key: "parent",
+      header: "Parent",
+      cell: (p) => (
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-900">
+            {fullName(p.first_name, p.last_name)}
+          </p>
+          {p.phone ? <p className="text-xs text-slate-500">{p.phone}</p> : null}
+        </div>
+      ),
+    },
+    {
+      key: "enfants",
+      header: "Enfant(s)",
+      cell: (p) =>
+        p.children.length > 0 ? (
+          <span className="text-slate-600">{p.children.join(", ")}</span>
+        ) : (
+          <span className="text-xs font-medium text-amber-700">Aucun enfant lié</span>
+        ),
+    },
+    {
+      key: "identifiant",
+      header: "Identifiant",
+      hideBelowLg: true,
+      cell: (p) => {
+        const cred = credentialFor(p);
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge>{cred.username}</Badge>
+            {cred.tempPassword && !cred.used ? (
+              <span title="Mot de passe temporaire">
+                <Badge tone="warning">{cred.tempPassword}</Badge>
+              </span>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: "compte",
+      header: "Compte",
+      cell: (p) => {
+        const status = accountStatus(p, credentialFor(p));
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {status.detail ? (
+              <span className="hidden text-xs text-slate-400 xl:block">
+                {status.detail}
+              </span>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      className: "w-12 text-right",
+      cell: (p) => (
+        <RowMenu
+          label={`Actions pour ${fullName(p.first_name, p.last_name)}`}
+          busy={busyId === p.id}
+          items={parentMenu(p)}
+        />
+      ),
+    },
+  ];
+
+  const parentMobileRow = (p: ParentRow) => {
+    const cred = credentialFor(p);
+    const status = accountStatus(p, cred);
+    return (
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-slate-900">
+            {fullName(p.first_name, p.last_name)}
+          </p>
+          <p className="text-xs text-slate-500">
+            {p.children.length > 0
+              ? `Enfant(s) : ${p.children.join(", ")}`
+              : "Aucun enfant lié"}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            <span className="text-xs text-slate-500">{cred.username}</span>
+            {cred.tempPassword && !cred.used ? (
+              <Badge tone="warning">{cred.tempPassword}</Badge>
+            ) : null}
+          </div>
+        </div>
+        <RowMenu
+          label={`Actions pour ${fullName(p.first_name, p.last_name)}`}
+          busy={busyId === p.id}
+          items={parentMenu(p)}
+        />
+      </div>
+    );
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -423,136 +575,100 @@ export default function Parents() {
       ) : parentsTotal === 0 && !debouncedSearch.trim() ? (
         <EmptyState message="Aucun parent enregistré." />
       ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="max-w-md flex-1">
-              <Label htmlFor="search-parents">Rechercher</Label>
-              <Input
-                id="search-parents"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Nom, enfant, identifiant…"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void downloadAllCredentials()}
-            >
-              <Download className="mr-1 h-4 w-4" />
-              Télécharger les mots de passe temporaires
-            </Button>
-          </div>
-          <p className="text-sm text-slate-500">
-            Les identifiants restent visibles ici tant que le parent n’a pas
-            changé son mot de passe.
-          </p>
-          {parentsTotal > filteredParents.length ? (
-            <p className="text-xs text-slate-500">
-              Affichage de {filteredParents.length} sur {parentsTotal} parents
-            </p>
-          ) : null}
-          {filteredParents.length === 0 ? (
-            <EmptyState message="Aucun parent ne correspond à la recherche." />
-          ) : (
-            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredParents.map((p) => {
-                const cred = credentialFor(p);
-                const status = accountStatus(p, cred);
-                const busy = busyId === p.id;
-                return (
-                  <Card key={p.id}>
-                    <div className="flex flex-col gap-3">
-                      <div className="min-w-0">
-                        <h3 className="font-semibold">
-                          {fullName(p.first_name, p.last_name)}
-                        </h3>
-                        {p.phone ? (
-                          <p className="text-sm text-slate-500">{p.phone}</p>
-                        ) : null}
-                        {p.children.length > 0 ? (
-                          <p className="mt-1 text-sm text-slate-600">
-                            Enfant(s) : {p.children.join(", ")}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-sm text-amber-700">
-                            Aucun enfant lié
-                          </p>
-                        )}
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                          <span className="text-slate-500">Identifiant</span>
-                          <Badge>{cred.username}</Badge>
-                          {cred.tempPassword && !cred.used ? (
-                            <>
-                              <span className="text-slate-500">
-                                Mot de passe
-                              </span>
-                              <Badge tone="warning">{cred.tempPassword}</Badge>
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              Mot de passe temporaire non affiché
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                          {status.detail ? (
-                            <span className="text-xs text-slate-400">
-                              {status.detail}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() =>
-                            void runCredentialAction(p, "reset_password")
-                          }
-                        >
-                          <KeyRound className="mr-1 h-3.5 w-3.5" />
-                          {busy ? "…" : "Nouveau mot de passe"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() =>
-                            void runCredentialAction(p, "recovery_link")
-                          }
-                        >
-                          <Link2 className="mr-1 h-3.5 w-3.5" />
-                          Lien oublié
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-          {hasNextPage ? (
-            <div className="flex justify-center">
+        <div className={cn("space-y-4", selection.count > 0 && "pb-24")}>
+          <Card className="p-4">
+            <Label htmlFor="search-parents">Rechercher</Label>
+            <SearchField
+              id="search-parents"
+              className="max-w-xl"
+              value={search}
+              onChange={setSearch}
+              placeholder="Nom, enfant, identifiant, téléphone…"
+            />
+          </Card>
+
+          <Card className="overflow-hidden p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {parentsTotal} parent{parentsTotal !== 1 ? "s" : ""}
+                </span>
+                {debouncedSearch.trim() ? ` · « ${debouncedSearch.trim()} »` : ""}
+              </p>
               <Button
                 type="button"
                 variant="outline"
-                disabled={isFetchingNextPage}
-                onClick={() => void fetchNextPage()}
+                size="sm"
+                onClick={() => void downloadAllCredentials()}
               >
-                {isFetchingNextPage
-                  ? "Chargement…"
-                  : `Afficher plus (${parentsTotal - filteredParents.length} restants)`}
+                <Download className="mr-1 h-4 w-4" />
+                Télécharger les mots de passe temporaires
               </Button>
             </div>
-          ) : null}
+            <p className="px-4 pb-3 text-xs text-slate-500">
+              Les identifiants restent visibles ici tant que le parent n’a pas
+              changé son mot de passe.
+            </p>
+            {parents.length === 0 ? (
+              <div className="space-y-3 border-t border-slate-100 p-4 dark:border-slate-700">
+                <EmptyState
+                  message={`Aucun parent ne correspond à « ${debouncedSearch.trim()} ». Essayez le nom seul, ou le prénom de l’enfant.`}
+                />
+                <div className="flex justify-center">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setSearch("")}>
+                    Effacer la recherche
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-slate-100 dark:border-slate-700">
+                <DataTable
+                  rows={parents}
+                  columns={parentColumns}
+                  mobileRow={parentMobileRow}
+                  selectedIds={selection.ids}
+                  onToggle={selection.toggle}
+                  onTogglePage={selection.setMany}
+                  rowLabel={(p) => `Sélectionner ${fullName(p.first_name, p.last_name)}`}
+                  dimmed={isFetching}
+                />
+              </div>
+            )}
+            {parentsTotal > 0 ? (
+              <Pagination
+                total={parentsTotal}
+                page={page}
+                pageSize={pageSize}
+                onPage={setPage}
+                onPageSize={setPageSize}
+                noun="parent"
+                busy={isFetching}
+              />
+            ) : null}
+          </Card>
         </div>
       )}
+
+      <BulkBar count={selection.count} noun="parent" onClear={selection.clear}>
+        {canSelectAllResults ? (
+          <button
+            type="button"
+            onClick={() => void selectAllResults()}
+            className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-200 underline underline-offset-2 hover:text-white"
+          >
+            Sélectionner les {parentsTotal} résultats
+          </button>
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => exportCredentials(selection.rows, "parents-selection")}
+        >
+          <Download className="mr-1 h-4 w-4" />
+          Identifiants (CSV)
+        </Button>
+      </BulkBar>
     </div>
   );
 }

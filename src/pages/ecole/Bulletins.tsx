@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { zipSync } from "fflate";
 import { useSearchParams } from "react-router-dom";
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Download, FolderDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,19 +20,22 @@ import {
   fetchAllStudents,
   fetchClassStudentCounts,
   fetchStudentsPage,
-  PAGE_SIZE,
   type StudentPageRow,
 } from "@/lib/scaleApi";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePageParams } from "@/hooks/usePageParams";
 import type { ClassSection, School } from "@/lib/types";
 import { downloadBlob } from "@/lib/studentCsv";
-import { cn, fullName } from "@/lib/utils";
-import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
+import { fullName } from "@/lib/utils";
+import { ClassColorBadge } from "@/components/ClassColor";
+import { ClassFilter } from "@/components/ClassFilter";
+import { SearchField } from "@/components/SearchField";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Pagination } from "@/components/Pagination";
 import {
   Button,
   Card,
   EmptyState,
-  Input,
   Label,
   PageHeader,
   Select,
@@ -53,6 +56,8 @@ export default function Bulletins() {
   const [generating, setGenerating] = useState(false);
   const [classProgress, setClassProgress] = useState<{ done: number; total: number } | null>(null);
 
+  const { page, pageSize, setPage, setPageSize } = usePageParams();
+  // "" = tous les élèves, "__none__" = sans classe, sinon l'id d'une classe
   const selectedClassId = searchParams.get("classe") ?? "";
   const search = searchParams.get("q") ?? "";
 
@@ -63,7 +68,7 @@ export default function Bulletins() {
         const next = new URLSearchParams(prev);
         if (value) next.set("classe", value);
         else next.delete("classe");
-        next.delete("q");
+        next.delete("page");
         return next;
       },
       { replace: true },
@@ -74,8 +79,9 @@ export default function Bulletins() {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (value.trim()) next.set("q", value);
+        if (value.trimStart()) next.set("q", value);
         else next.delete("q");
+        next.delete("page");
         return next;
       },
       { replace: true },
@@ -99,38 +105,46 @@ export default function Bulletins() {
     [classesRaw],
   );
 
-  // The class list is fetched one page at a time and searched by the database.
+  // All students by default; the list is fetched one page at a time and searched by the
+  // database.
   const debouncedSearch = useDebouncedValue(search, 300);
   const {
-    data: pages,
+    data: studentsPage,
     isLoading: studentsLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["bulletin-students", schoolId, selectedClassId, debouncedSearch],
+    isFetching: studentsFetching,
+  } = useQuery({
+    queryKey: [
+      "bulletin-students",
+      schoolId,
+      "v2",
+      selectedClassId,
+      debouncedSearch,
+      page,
+      pageSize,
+    ],
     // keep the list on screen while typing a search
     placeholderData: keepPreviousData,
-    enabled: !!schoolId && !!selectedClassId,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+    enabled: !!schoolId,
+    queryFn: () =>
       fetchStudentsPage(schoolId!, {
         classId: selectedClassId,
         search: debouncedSearch,
-        limit: PAGE_SIZE,
-        offset: pageParam,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       }),
-    getNextPageParam: (last, all) => {
-      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
   });
   const students = useMemo(
-    () => (pages?.pages ?? []).flatMap((p) => p.rows) as StudentRow[],
-    [pages],
+    () => (studentsPage?.rows ?? []) as StudentRow[],
+    [studentsPage],
   );
-  const filteredStudents = students;
-  const filteredTotal = pages?.pages[0]?.total ?? 0;
+  const filteredTotal = studentsPage?.total ?? 0;
+
+  // a page number from an old link that no longer exists → last page
+  useEffect(() => {
+    if (!studentsPage || studentsFetching) return;
+    const last = Math.max(1, Math.ceil(studentsPage.total / pageSize));
+    if (page > last) setPage(last);
+  }, [studentsPage, studentsFetching, page, pageSize, setPage]);
 
   const { data: classCounts = {}, isLoading: countsLoading } = useQuery({
     queryKey: ["eleves-class-counts", schoolId],
@@ -138,8 +152,9 @@ export default function Bulletins() {
     queryFn: () => fetchClassStudentCounts(schoolId!),
   });
   const totalStudents = Object.values(classCounts).reduce((n, v) => n + v, 0);
-  const isLoading = countsLoading || (studentsLoading && !!selectedClassId);
+  const isLoading = countsLoading || studentsLoading;
 
+  // the whole-class ZIP needs a real class (not "all" nor "sans classe")
   const selectedClass = classes.find((c) => c.id === selectedClassId);
 
   // keep the picked student even if a new search no longer lists them
@@ -293,11 +308,81 @@ export default function Bulletins() {
     }
   };
 
+  const studentColumns: DataTableColumn<StudentRow>[] = [
+    {
+      key: "eleve",
+      header: "Élève",
+      cell: (s) => (
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          {fullName(s.first_name, s.last_name)}
+        </span>
+      ),
+    },
+    {
+      key: "classe",
+      header: "Classe",
+      cell: (s) =>
+        s.classSectionId && s.className ? (
+          <ClassColorBadge id={s.classSectionId} name={s.className} />
+        ) : (
+          <span className="text-xs font-medium text-amber-700">Sans classe</span>
+        ),
+    },
+    {
+      key: "matricule",
+      header: "Matricule",
+      hideBelowLg: true,
+      cell: (s) => (
+        <span className="text-slate-600 dark:text-slate-300">{s.matricule || "—"}</span>
+      ),
+    },
+    {
+      key: "action",
+      header: <span className="sr-only">Action</span>,
+      className: "w-36 text-right",
+      cell: (s) => pickButton(s),
+    },
+  ];
+
+  const pickButton = (s: StudentRow) => {
+    const active = s.id === studentId;
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant={active ? "primary" : "outline"}
+        disabled={!s.classSectionId}
+        title={s.classSectionId ? undefined : "Cet élève n’est pas inscrit dans une classe"}
+        onClick={() => {
+          setStudentId(s.id);
+          setPickedStudent(s);
+        }}
+      >
+        {active ? "Sélectionné" : "Sélectionner"}
+      </Button>
+    );
+  };
+
+  const studentMobileRow = (s: StudentRow) => (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-slate-900 dark:text-slate-100">
+          {fullName(s.first_name, s.last_name)}
+        </p>
+        <p className="text-xs text-slate-500">
+          {s.className || "Sans classe"}
+          {s.matricule ? ` · ${s.matricule}` : ""}
+        </p>
+      </div>
+      {pickButton(s)}
+    </div>
+  );
+
   return (
     <div>
       <PageHeader
         title="Bulletins"
-        subtitle="Choisissez une classe, recherchez un élève, puis téléchargez le PDF"
+        subtitle="Recherchez un élève (toutes classes, ou filtrez par classe), puis téléchargez le PDF"
       />
 
       {isLoading ? (
@@ -308,214 +393,139 @@ export default function Bulletins() {
         <EmptyState message="Aucune classe configurée." />
       ) : (
         <div className="space-y-4">
-          <Card className="max-w-xl space-y-3">
-            <div>
-              <Label htmlFor="filter-classe-bulletins">Classe</Label>
-              <Select
-                id="filter-classe-bulletins"
-                value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
-              >
-                <option value="">Choisir une classe…</option>
-                {classes.map((c) => {
-                  const count = classCounts[c.id] ?? 0;
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({count})
-                    </option>
-                  );
-                })}
-              </Select>
-            </div>
-
-            {selectedClass ? (
-              <ClassColorBadge id={selectedClass.id} name={selectedClass.name} />
-            ) : null}
-
-            {classes.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {classes.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setSelectedClassId(c.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs transition",
-                      selectedClassId === c.id
-                        ? "border-brand-300 bg-brand-50 text-brand-900 dark:bg-brand-900/40 dark:text-brand-50"
-                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
-                    )}
-                    title={c.name}
-                  >
-                    <ClassColorDot id={c.id} name={c.name} />
-                    <span className="max-w-[5.5rem] truncate">{c.name}</span>
-                  </button>
-                ))}
+          <Card className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.2fr)]">
+              <div>
+                <Label htmlFor="search-bulletins">Rechercher un élève</Label>
+                <SearchField
+                  id="search-bulletins"
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Nom, prénom, matricule…"
+                />
               </div>
-            ) : null}
+              <div>
+                <Label htmlFor="filter-classe-bulletins">Classe</Label>
+                <ClassFilter
+                  id="filter-classe-bulletins"
+                  value={selectedClassId}
+                  onChange={setSelectedClassId}
+                  classes={classes}
+                  counts={classCounts}
+                  total={totalStudents}
+                />
+              </div>
+              <div>
+                <Label htmlFor="period-bulletins">Période</Label>
+                <Select
+                  id="period-bulletins"
+                  value={period}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setPeriod(next);
+                    writeStoredGradingPeriod(next);
+                  }}
+                >
+                  {TRIMESTER_PERIODS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                  <option value={ANNUAL_PERIOD_LABEL}>Année (moyenne annuelle)</option>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              Moyennes par matière avec comparaison classe (élève / clas. / min / max /
+              écart). Mention automatique selon la moyenne générale.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
+              {selectedStudent ? (
+                <p className="mr-auto text-sm">
+                  Élève sélectionné :{" "}
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                    {fullName(selectedStudent.first_name, selectedStudent.last_name)}
+                  </span>
+                </p>
+              ) : (
+                <p className="mr-auto text-sm text-slate-500">
+                  Sélectionnez un élève dans la liste ci-dessous.
+                </p>
+              )}
+              <Button
+                onClick={() => void handleGenerate()}
+                disabled={generating || !studentId}
+              >
+                <Download className="h-4 w-4" />
+                {generating ? "Génération…" : "Télécharger le bulletin PDF"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleGenerateClass()}
+                disabled={!!classProgress || generating || !selectedClass}
+                title={selectedClass ? undefined : "Choisissez une classe pour télécharger toute la classe"}
+              >
+                <FolderDown className="h-4 w-4" />
+                {classProgress
+                  ? `Génération… ${classProgress.done}/${classProgress.total || "…"}`
+                  : "Toute la classe (ZIP)"}
+              </Button>
+            </div>
           </Card>
 
-          {!selectedClassId ? (
-            <EmptyState message="Choisissez une classe pour afficher les élèves." />
-          ) : (
-            <>
-              <Card className="max-w-xl space-y-4">
-                <div>
-                  <Label htmlFor="search-bulletins">Rechercher un élève</Label>
-                  <Input
-                    id="search-bulletins"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Nom, prénom, matricule…"
-                  />
-                </div>
-
-                <div>
-                  <Label>Période</Label>
-                  <Select
-                    value={period}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setPeriod(next);
-                      writeStoredGradingPeriod(next);
+          {students.length === 0 ? (
+            <Card className="space-y-3 p-4">
+              <EmptyState
+                message={
+                  debouncedSearch.trim()
+                    ? `Aucun élève ne correspond à « ${debouncedSearch.trim()} ».`
+                    : "Aucun élève dans cette classe."
+                }
+              />
+              {debouncedSearch.trim() || selectedClassId ? (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchParams(
+                        (prev) => {
+                          const next = new URLSearchParams(prev);
+                          next.delete("q");
+                          next.delete("classe");
+                          next.delete("page");
+                          return next;
+                        },
+                        { replace: true },
+                      );
                     }}
                   >
-                    {TRIMESTER_PERIODS.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                    <option value={ANNUAL_PERIOD_LABEL}>
-                      Année (moyenne annuelle)
-                    </option>
-                  </Select>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Moyennes par matière avec comparaison classe (élève /
-                    clas. / min / max / écart). Mention automatique selon la
-                    moyenne générale.
-                  </p>
+                    Effacer les filtres
+                  </Button>
                 </div>
-
-                {selectedStudent ? (
-                  <div className="rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2 text-sm dark:border-brand-800 dark:bg-brand-900/30">
-                    Élève sélectionné :{" "}
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
-                      {fullName(
-                        selectedStudent.first_name,
-                        selectedStudent.last_name,
-                      )}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    Sélectionnez un élève dans la liste ci-dessous.
-                  </p>
-                )}
-
-                <Button
-                  onClick={() => void handleGenerate()}
-                  disabled={generating || !studentId}
-                >
-                  <Download className="h-4 w-4" />
-                  {generating
-                    ? "Génération…"
-                    : "Télécharger le bulletin PDF"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleGenerateClass()}
-                  disabled={!!classProgress || generating}
-                >
-                  <FolderDown className="h-4 w-4" />
-                  {classProgress
-                    ? `Génération… ${classProgress.done}/${classProgress.total || "…"}`
-                    : "Toute la classe (ZIP)"}
-                </Button>
-              </Card>
-
-              {filteredStudents.length === 0 ? (
-                <EmptyState
-                  message={
-                    search.trim()
-                      ? "Aucun élève ne correspond à la recherche."
-                      : "Aucun élève dans cette classe."
-                  }
-                />
-              ) : (
-                <Card className="overflow-hidden p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500 dark:border-slate-600 dark:bg-[var(--surface-2)]">
-                          <th className="px-4 py-3 font-medium">Élève</th>
-                          <th className="px-4 py-3 font-medium">Matricule</th>
-                          <th className="px-4 py-3 font-medium">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredStudents.map((s) => {
-                          const active = s.id === studentId;
-                          return (
-                            <tr
-                              key={s.id}
-                              className={cn(
-                                "border-b border-slate-100 last:border-0 dark:border-slate-700",
-                                active &&
-                                  "bg-brand-50/70 dark:bg-brand-900/25",
-                              )}
-                            >
-                              <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
-                                {fullName(s.first_name, s.last_name)}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                                {s.matricule || "—"}
-                              </td>
-                              <td className="px-4 py-3">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={active ? "primary" : "outline"}
-                                  onClick={() => {
-                                    setStudentId(s.id);
-                                    setPickedStudent(s);
-                                  }}
-                                >
-                                  {active ? "Sélectionné" : "Sélectionner"}
-                                </Button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-700">
-                    {filteredTotal} élève
-                    {filteredTotal !== 1 ? "s" : ""}
-                    {selectedClass ? ` · ${selectedClass.name}` : ""}
-                    {filteredStudents.length < filteredTotal
-                      ? ` (affichage de ${filteredStudents.length} sur ${filteredTotal})`
-                      : ""}
-                  </p>
-                  {hasNextPage ? (
-                    <div className="flex justify-center border-t border-slate-100 px-4 py-3 dark:border-slate-700">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isFetchingNextPage}
-                        onClick={() => void fetchNextPage()}
-                      >
-                        {isFetchingNextPage
-                          ? "Chargement…"
-                          : `Afficher plus (${filteredTotal - filteredStudents.length} restants)`}
-                      </Button>
-                    </div>
-                  ) : null}
-                </Card>
-              )}
-            </>
+              ) : null}
+            </Card>
+          ) : (
+            <Card className="overflow-hidden p-0">
+              <DataTable
+                rows={students}
+                columns={studentColumns}
+                mobileRow={studentMobileRow}
+                dimmed={studentsFetching}
+              />
+              <Pagination
+                total={filteredTotal}
+                page={page}
+                pageSize={pageSize}
+                onPage={setPage}
+                onPageSize={setPageSize}
+                noun="élève"
+                busy={studentsFetching}
+              />
+            </Card>
           )}
         </div>
       )}

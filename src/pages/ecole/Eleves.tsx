@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, KeyRound, Link2, Upload } from "lucide-react";
+import { Download, KeyRound, Link2, Upload, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection } from "@/lib/types";
@@ -14,12 +14,13 @@ import {
   fetchClassStudentCounts,
   fetchStudentsPage,
   fetchStudentsWithoutClass,
-  PAGE_SIZE,
   type StudentPageRow,
 } from "@/lib/scaleApi";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { usePageParams } from "@/hooks/usePageParams";
+import { useRowSelection } from "@/hooks/useRowSelection";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { fromAuthEmail, fullName } from "@/lib/utils";
+import { cn, fromAuthEmail, fullName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
   credentialsToCsv,
@@ -32,7 +33,13 @@ import {
 } from "@/lib/studentCsv";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { Modal } from "@/components/Modal";
-import { ClassColorBadge, ClassColorDot } from "@/components/ClassColor";
+import { ClassColorBadge } from "@/components/ClassColor";
+import { ClassFilter } from "@/components/ClassFilter";
+import { SearchField } from "@/components/SearchField";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Pagination } from "@/components/Pagination";
+import { RowMenu } from "@/components/RowMenu";
+import { BulkBar } from "@/components/BulkBar";
 import {
   Badge,
   Button,
@@ -96,8 +103,11 @@ export default function Eleves() {
   const { schoolId } = useAuth();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { page, pageSize, setPage, setPageSize } = usePageParams();
 
+  // "" = tous les élèves, "__none__" = sans classe, sinon l'id d'une classe
   const selectedClassId = searchParams.get("classe") ?? "";
   const search = searchParams.get("q") ?? "";
 
@@ -107,7 +117,7 @@ export default function Eleves() {
         const next = new URLSearchParams(prev);
         if (value) next.set("classe", value);
         else next.delete("classe");
-        next.delete("q");
+        next.delete("page");
         return next;
       },
       { replace: true },
@@ -121,11 +131,26 @@ export default function Eleves() {
         const trimmed = value.trimStart();
         if (trimmed) next.set("q", value);
         else next.delete("q");
+        next.delete("page");
         return next;
       },
       { replace: true },
     );
   };
+
+  const clearFilters = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("q");
+        next.delete("classe");
+        next.delete("page");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
 
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -151,7 +176,6 @@ export default function Eleves() {
     { line: number | null; firstName: string; lastName: string; error: string }[]
   >([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [bulkClassId, setBulkClassId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
 
@@ -172,38 +196,37 @@ export default function Eleves() {
     [classesRaw],
   );
 
-  // One page of the selected class (or of "sans classe") at a time, searched by the database.
+  // One page at a time (all students by default), searched and counted by the database.
   const debouncedSearch = useDebouncedValue(search, 300);
   const {
-    data: pages,
+    data: studentsPage,
     isLoading: studentsLoading,
     isFetching: studentsFetching,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery({
-    queryKey: ["eleves", schoolId, "v5", selectedClassId, debouncedSearch],
-    // keep the list on screen while typing a search
+  } = useQuery({
+    queryKey: ["eleves", schoolId, "v6", selectedClassId, debouncedSearch, page, pageSize],
+    // keep the list on screen while typing a search or changing page
     placeholderData: keepPreviousData,
-    enabled: !!schoolId && !!selectedClassId,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
+    enabled: !!schoolId,
+    queryFn: () =>
       fetchStudentsPage(schoolId!, {
         classId: selectedClassId,
         search: debouncedSearch,
-        limit: PAGE_SIZE,
-        offset: pageParam,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       }),
-    getNextPageParam: (last, all) => {
-      const loaded = all.reduce((n, p) => n + p.rows.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
   });
   const filteredStudents = useMemo(
-    () => (pages?.pages ?? []).flatMap((p) => p.rows) as StudentRow[],
-    [pages],
+    () => (studentsPage?.rows ?? []) as StudentRow[],
+    [studentsPage],
   );
-  const filteredTotal = pages?.pages[0]?.total ?? 0;
+  const filteredTotal = studentsPage?.total ?? 0;
+
+  // a page number from an old link that no longer exists → last page
+  useEffect(() => {
+    if (!studentsPage || studentsFetching) return;
+    const last = Math.max(1, Math.ceil(studentsPage.total / pageSize));
+    if (page > last) setPage(last);
+  }, [studentsPage, studentsFetching, page, pageSize, setPage]);
 
   // Class dropdown numbers and the "sans classe" count come from the database,
   // so they stay exact above 1,000 students.
@@ -220,7 +243,7 @@ export default function Eleves() {
   const sansClasseCount = withoutClass?.count ?? 0;
   const totalStudents =
     Object.values(classCounts).reduce((n, v) => n + v, 0) + sansClasseCount;
-  const isLoading = studentsLoading && !!selectedClassId;
+  const isLoading = studentsLoading;
   const classesLoadingGuard = countsLoading || withoutLoading;
 
   const credentialFor = (s: StudentRow): StudentCredential => {
@@ -243,47 +266,37 @@ export default function Eleves() {
     return classes.find((c) => c.id === selectedClassId)?.name ?? "";
   }, [selectedClassId, classes]);
 
-  const viewingSansClasse = selectedClassId === "__none__";
+  const selection = useRowSelection<StudentRow>();
+  // Only students without a class can be assigned (a second class would double-enrol them).
+  const selectedWithClass = selection.rows.filter((s) => s.classSectionId).length;
+  const canBulkAssign = selection.count > 0 && selectedWithClass === 0;
+  const pageFullySelected =
+    filteredStudents.length > 0 && filteredStudents.every((s) => selection.ids.has(s.id));
+  const canSelectAllResults = pageFullySelected && filteredTotal > selection.count;
 
-  const allFilteredSelected =
-    viewingSansClasse &&
-    filteredStudents.length > 0 &&
-    filteredStudents.length >= filteredTotal &&
-    filteredStudents.every((s) => selectedStudentIds.includes(s.id));
-
-  const toggleStudentSelected = (id: string) => {
-    setSelectedStudentIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
-  const toggleSelectAllFiltered = async () => {
+  const selectAllResults = async () => {
     if (!schoolId) return;
-    if (allFilteredSelected) {
-      const filteredSet = new Set(filteredStudents.map((s) => s.id));
-      setSelectedStudentIds((prev) => prev.filter((id) => !filteredSet.has(id)));
-      return;
-    }
     try {
-      // select every matching student, including those on pages not yet loaded
+      // every matching student, including those on other pages
       const all = await fetchAllStudents(schoolId, {
         classId: selectedClassId,
         search: debouncedSearch,
       });
-      setSelectedStudentIds((prev) => {
-        const next = new Set(prev);
-        for (const s of all) next.add(s.id);
-        return [...next];
-      });
+      selection.setMany(all as StudentRow[], true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sélection impossible");
     }
   };
 
   const handleBulkAssignClass = async () => {
-    if (!viewingSansClasse) return;
-    if (selectedStudentIds.length === 0) {
+    if (selection.count === 0) {
       toast.error("Sélectionnez au moins un élève");
+      return;
+    }
+    if (!canBulkAssign) {
+      toast.error(
+        "Seuls les élèves sans classe peuvent être affectés — décochez ceux qui ont déjà une classe",
+      );
       return;
     }
     if (!bulkClassId) {
@@ -298,8 +311,8 @@ export default function Eleves() {
 
     setBulkAssigning(true);
     try {
-      const payload = selectedStudentIds.map((studentId) => ({
-        student_id: studentId,
+      const payload = selection.rows.map((s) => ({
+        student_id: s.id,
         class_section_id: bulkClassId,
         academic_year_id: target.academic_year_id,
         status: "active",
@@ -309,7 +322,7 @@ export default function Eleves() {
       toast.success(
         `${payload.length} élève${payload.length > 1 ? "s" : ""} affecté${payload.length > 1 ? "s" : ""} en ${target.name}`,
       );
-      setSelectedStudentIds([]);
+      selection.clear();
       setBulkClassId("");
       invalidateStudentQueries();
     } catch (err) {
@@ -323,25 +336,14 @@ export default function Eleves() {
 
   const invalidateStudentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves-class-counts", schoolId] });
     void qc.invalidateQueries({ queryKey: ["identifiants-eleves", schoolId] });
     void qc.invalidateQueries({ queryKey: ["eleves-sans-classe", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     void qc.invalidateQueries({ queryKey: ["ecole-stats", schoolId] });
   };
 
-  const downloadAllCredentials = async () => {
-    if (!schoolId || !selectedClassId) return;
-    // Export every student of the selection (not only the pages on screen).
-    let source: StudentRow[];
-    try {
-      source = await fetchAllStudents(schoolId, {
-        classId: selectedClassId,
-        search: debouncedSearch,
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Export impossible");
-      return;
-    }
+  const exportCredentials = (source: StudentRow[], slug: string) => {
     const rows = source
       .map((s) => {
         const cred = credentialFor(s);
@@ -359,14 +361,32 @@ export default function Eleves() {
       toast.message("Aucun mot de passe temporaire à télécharger pour cette sélection");
       return;
     }
-    const slug = selectedClassLabel
-      ? selectedClassLabel.replace(/\s+/g, "-").toLowerCase()
-      : "eleves";
     downloadTextFile(
       `identifiants-${slug}-${new Date().toISOString().slice(0, 10)}.csv`,
       credentialsToCsv(rows),
     );
     toast.success(`${rows.length} identifiant(s) exporté(s)`);
+  };
+
+  const downloadAllCredentials = async () => {
+    if (!schoolId) return;
+    // Export every student of the filter (not only the page on screen).
+    let source: StudentRow[];
+    try {
+      source = await fetchAllStudents(schoolId, {
+        classId: selectedClassId,
+        search: debouncedSearch,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export impossible");
+      return;
+    }
+    exportCredentials(
+      source,
+      selectedClassLabel
+        ? selectedClassLabel.replace(/\s+/g, "-").toLowerCase()
+        : "eleves",
+    );
   };
 
   const runCredentialAction = async (
@@ -429,6 +449,162 @@ export default function Eleves() {
     } finally {
       setBusyId(null);
     }
+  };
+
+
+  const listState = {
+    elevesList: searchParams.toString()
+      ? `/eleves?${searchParams.toString()}`
+      : "/eleves",
+  };
+
+  const studentMenu = (s: StudentRow) => [
+    {
+      label: "Voir le profil",
+      icon: <User className="h-4 w-4" />,
+      onSelect: () => navigate(`/eleves/${s.id}`, { state: listState }),
+    },
+    {
+      label: "Nouveau mot de passe",
+      icon: <KeyRound className="h-4 w-4" />,
+      onSelect: () => void runCredentialAction(s, "reset_password"),
+    },
+    {
+      label: "Lien oublié",
+      icon: <Link2 className="h-4 w-4" />,
+      onSelect: () => void runCredentialAction(s, "recovery_link"),
+    },
+  ];
+
+  const studentColumns: DataTableColumn<StudentRow>[] = [
+    {
+      key: "eleve",
+      header: "Élève",
+      cell: (s) => (
+        <Link
+          to={`/eleves/${s.id}`}
+          state={listState}
+          className="flex min-w-0 items-center gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
+        >
+          <ProfileAvatar
+            userId={s.id}
+            avatarUrl={s.avatar_url}
+            name={fullName(s.first_name, s.last_name)}
+            size="sm"
+          />
+          <span className="min-w-0">
+            <span className="block font-semibold text-slate-900 hover:text-brand-800">
+              {fullName(s.first_name, s.last_name)}
+            </span>
+            {s.phone ? (
+              <span className="block text-xs text-slate-500">{s.phone}</span>
+            ) : null}
+          </span>
+        </Link>
+      ),
+    },
+    {
+      key: "classe",
+      header: "Classe",
+      cell: (s) =>
+        s.className ? (
+          <ClassColorBadge id={s.classSectionId} name={s.className} />
+        ) : (
+          <span className="text-xs font-medium text-amber-700">Sans classe</span>
+        ),
+    },
+    {
+      key: "identifiant",
+      header: "Identifiant",
+      hideBelowLg: true,
+      cell: (s) => {
+        const cred = credentialFor(s);
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge>{cred.username}</Badge>
+            {cred.tempPassword && !cred.used ? (
+              <span title="Mot de passe temporaire">
+                <Badge tone="warning">{cred.tempPassword}</Badge>
+              </span>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: "compte",
+      header: "Compte",
+      cell: (s) => {
+        const status = accountStatus(s, credentialFor(s));
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge tone={status.tone}>{status.label}</Badge>
+            {status.detail ? (
+              <span className="hidden text-xs text-slate-400 xl:block">
+                {status.detail}
+              </span>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      className: "w-12 text-right",
+      cell: (s) => (
+        <RowMenu
+          label={`Actions pour ${fullName(s.first_name, s.last_name)}`}
+          busy={busyId === s.id}
+          items={studentMenu(s)}
+        />
+      ),
+    },
+  ];
+
+  const studentMobileRow = (s: StudentRow) => {
+    const cred = credentialFor(s);
+    const status = accountStatus(s, cred);
+    return (
+      <div className="flex items-start gap-2">
+        <Link
+          to={`/eleves/${s.id}`}
+          state={listState}
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
+        >
+          <ProfileAvatar
+            userId={s.id}
+            avatarUrl={s.avatar_url}
+            name={fullName(s.first_name, s.last_name)}
+            size="sm"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold text-slate-900">
+              {fullName(s.first_name, s.last_name)}
+            </span>
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              {s.className ? (
+                <ClassColorBadge id={s.classSectionId} name={s.className} />
+              ) : (
+                <span className="text-xs font-medium text-amber-700">Sans classe</span>
+              )}
+              <Badge tone={status.tone}>{status.label}</Badge>
+            </span>
+            <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+              {cred.username}
+              {cred.tempPassword && !cred.used ? (
+                <Badge tone="warning">{cred.tempPassword}</Badge>
+              ) : null}
+            </span>
+          </span>
+        </Link>
+        <RowMenu
+          label={`Actions pour ${fullName(s.first_name, s.last_name)}`}
+          busy={busyId === s.id}
+          items={studentMenu(s)}
+        />
+      </div>
+    );
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -657,8 +833,8 @@ export default function Eleves() {
               {sansClasseCount} élève{sansClasseCount > 1 ? "s" : ""} sans classe
             </p>
             <p className="mt-0.5 text-amber-800">
-              Sélectionnez « Sans classe », cochez les élèves, puis affectez-les
-              en masse à une classe.
+              Filtrez sur « Sans classe », cochez les élèves, puis affectez-les en
+              masse à une classe.
             </p>
           </div>
           <Button
@@ -667,7 +843,7 @@ export default function Eleves() {
             variant="outline"
             onClick={() => {
               setSelectedClassId("__none__");
-              setSelectedStudentIds([]);
+              selection.clear();
               setBulkClassId("");
             }}
           >
@@ -1056,297 +1232,161 @@ export default function Eleves() {
       {totalStudents === 0 && !classesLoadingGuard ? (
         <EmptyState message="Aucun élève inscrit." />
       ) : (
-        <div className="space-y-4">
-          <Card className="max-w-xl">
-            <Label htmlFor="filter-classe-eleves">Classe</Label>
-            <Select
-              id="filter-classe-eleves"
-              value={selectedClassId}
-              onChange={(e) => {
-                setSelectedClassId(e.target.value);
-                setSelectedStudentIds([]);
-                setBulkClassId("");
-              }}
-            >
-              <option value="">Choisir une classe…</option>
-              {sansClasseCount > 0 ? (
-                <option value="__none__">
-                  Sans classe ({sansClasseCount})
-                </option>
-              ) : null}
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({classCounts[c.id] ?? 0})
-                </option>
-              ))}
-            </Select>
-            {selectedClassId && selectedClassId !== "__none__" ? (
-              <div className="mt-3">
-                <ClassColorBadge
-                  id={selectedClassId}
-                  name={selectedClassLabel || "Classe"}
+        <div className={cn("space-y-4", selection.count > 0 && "pb-24")}>
+          <Card className="p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1">
+                <Label htmlFor="search-eleves">Rechercher</Label>
+                <SearchField
+                  id="search-eleves"
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Nom, classe, identifiant, téléphone…"
                 />
               </div>
-            ) : null}
-            {classes.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {classes.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedClassId(c.id);
-                      setSelectedStudentIds([]);
-                      setBulkClassId("");
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-xs text-slate-600 transition hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]"
-                    title={c.name}
-                  >
-                    <ClassColorDot id={c.id} name={c.name} />
-                    <span className="max-w-[5.5rem] truncate">{c.name}</span>
-                  </button>
-                ))}
+              <div className="sm:w-72">
+                <Label htmlFor="filter-classe-eleves">Classe</Label>
+                <ClassFilter
+                  id="filter-classe-eleves"
+                  value={selectedClassId}
+                  onChange={(value) => {
+                    setSelectedClassId(value);
+                    selection.clear();
+                    setBulkClassId("");
+                  }}
+                  classes={classes}
+                  counts={classCounts}
+                  total={totalStudents}
+                  withoutClassCount={sansClasseCount}
+                />
               </div>
-            ) : null}
+            </div>
           </Card>
 
-          {!selectedClassId ? (
-            <EmptyState message="Choisissez une classe pour afficher les élèves." />
-          ) : (
-            <>
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div className="max-w-md flex-1">
-                  <Label htmlFor="search-eleves">Rechercher</Label>
-                  <Input
-                    id="search-eleves"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Nom, identifiant…"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void downloadAllCredentials()}
-                >
-                  <Download className="mr-1 h-4 w-4" />
-                  Télécharger les mots de passe temporaires
-                </Button>
-              </div>
-              {viewingSansClasse && filteredStudents.length > 0 ? (
-                <Card className="border-amber-200 bg-amber-50/60">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300"
-                        checked={allFilteredSelected}
-                        onChange={() => void toggleSelectAllFiltered()}
-                      />
-                      Tout sélectionner ({filteredTotal})
-                    </label>
-                    <div className="min-w-[12rem] flex-1">
-                      <Label htmlFor="bulk-class">Classe cible</Label>
-                      <Select
-                        id="bulk-class"
-                        value={bulkClassId}
-                        onChange={(e) => setBulkClassId(e.target.value)}
-                      >
-                        <option value="">Choisir…</option>
-                        {classes.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    <Button
-                      type="button"
-                      disabled={
-                        bulkAssigning ||
-                        selectedStudentIds.length === 0 ||
-                        !bulkClassId ||
-                        classes.length === 0
-                      }
-                      onClick={() => void handleBulkAssignClass()}
-                    >
-                      {bulkAssigning
-                        ? "Affectation…"
-                        : `Affecter (${selectedStudentIds.length})`}
-                    </Button>
-                  </div>
-                  {selectedStudentIds.length > 0 ? (
-                    <p className="mt-2 text-xs text-amber-900">
-                      {selectedStudentIds.length} élève
-                      {selectedStudentIds.length > 1 ? "s" : ""} sélectionné
-                      {selectedStudentIds.length > 1 ? "s" : ""}.
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs text-amber-800">
-                      Cochez les élèves à affecter, choisissez une classe, puis
-                      validez.
-                    </p>
-                  )}
-                </Card>
-              ) : null}
-              <p className="text-sm text-slate-500">
-                {filteredTotal} élève
-                {filteredTotal !== 1 ? "s" : ""}
+          <Card className="overflow-hidden p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {filteredTotal} élève{filteredTotal !== 1 ? "s" : ""}
+                </span>
                 {selectedClassLabel ? ` · ${selectedClassLabel}` : ""}
-                {filteredStudents.length < filteredTotal
-                  ? ` (affichage de ${filteredStudents.length} sur ${filteredTotal})`
-                  : ""}. Les
-                identifiants restent visibles tant que l’élève n’a pas changé
-                son mot de passe.
+                {debouncedSearch.trim() ? ` · « ${debouncedSearch.trim()} »` : ""}
               </p>
-              {filteredStudents.length === 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void downloadAllCredentials()}
+              >
+                <Download className="mr-1 h-4 w-4" />
+                Télécharger les mots de passe temporaires
+              </Button>
+            </div>
+            <p className="px-4 pb-3 text-xs text-slate-500">
+              Les identifiants restent visibles tant que l’élève n’a pas changé son
+              mot de passe.
+            </p>
+            {isLoading ? (
+              <p className="border-t border-slate-100 px-4 py-6 text-slate-500 dark:border-slate-700">
+                Chargement…
+              </p>
+            ) : filteredStudents.length === 0 ? (
+              <div className="space-y-3 border-t border-slate-100 p-4 dark:border-slate-700">
                 <EmptyState
                   message={
-                    search.trim()
-                      ? "Aucun élève ne correspond à la recherche."
+                    debouncedSearch.trim()
+                      ? `Aucun élève ne correspond à « ${debouncedSearch.trim()} ». Essayez le prénom seul, ou un autre filtre de classe.`
                       : selectedClassId === "__none__"
                         ? "Aucun élève sans classe."
                         : "Aucun élève dans cette classe."
                   }
                 />
-              ) : (
-                <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredStudents.map((s) => {
-                    const cred = credentialFor(s);
-                    const status = accountStatus(s, cred);
-                    const busy = busyId === s.id;
-                    const checked = selectedStudentIds.includes(s.id);
-                    return (
-                      <Card
-                        key={s.id}
-                        className={
-                          viewingSansClasse && checked
-                            ? "border-brand-300 bg-brand-50/40 transition hover:border-brand-300 hover:shadow-md"
-                            : "transition hover:border-brand-300 hover:shadow-md"
-                        }
-                      >
-                        <div className="flex flex-col gap-3">
-                          <div className="flex min-w-0 items-start gap-3">
-                            {viewingSansClasse ? (
-                              <input
-                                type="checkbox"
-                                className="mt-2 h-4 w-4 shrink-0 rounded border-slate-300"
-                                checked={checked}
-                                onChange={() => toggleStudentSelected(s.id)}
-                                aria-label={`Sélectionner ${fullName(s.first_name, s.last_name)}`}
-                              />
-                            ) : null}
-                            <Link
-                              to={`/eleves/${s.id}`}
-                              state={{
-                                elevesList: searchParams.toString()
-                                  ? `/eleves?${searchParams.toString()}`
-                                  : "/eleves",
-                              }}
-                              className="flex min-w-0 flex-1 items-start gap-3 rounded-lg outline-none ring-brand-500 focus-visible:ring-2"
-                            >
-                              <ProfileAvatar
-                                userId={s.id}
-                                avatarUrl={s.avatar_url}
-                                name={fullName(s.first_name, s.last_name)}
-                                size="sm"
-                              />
-                              <div className="min-w-0 flex-1">
-                                <h4 className="font-semibold text-slate-900 hover:text-brand-800">
-                                  {fullName(s.first_name, s.last_name)}
-                                </h4>
-                                {s.phone ? (
-                                  <p className="text-sm text-slate-500">
-                                    {s.phone}
-                                  </p>
-                                ) : null}
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                                  <span className="text-slate-500">
-                                    Identifiant
-                                  </span>
-                                  <Badge>{cred.username}</Badge>
-                                  {cred.tempPassword && !cred.used ? (
-                                    <>
-                                      <span className="text-slate-500">
-                                        Mot de passe
-                                      </span>
-                                      <Badge tone="warning">
-                                        {cred.tempPassword}
-                                      </Badge>
-                                    </>
-                                  ) : (
-                                    <span className="text-xs text-slate-400">
-                                      Mot de passe temporaire non affiché
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <Badge tone={status.tone}>
-                                    {status.label}
-                                  </Badge>
-                                  {status.detail ? (
-                                    <span className="text-xs text-slate-400">
-                                      {status.detail}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <p className="mt-2 text-xs font-medium text-brand-700">
-                                  Voir le profil →
-                                </p>
-                              </div>
-                            </Link>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() =>
-                                void runCredentialAction(s, "reset_password")
-                              }
-                            >
-                              <KeyRound className="mr-1 h-3.5 w-3.5" />
-                              {busy ? "…" : "Nouveau mot de passe"}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() =>
-                                void runCredentialAction(s, "recovery_link")
-                              }
-                            >
-                              <Link2 className="mr-1 h-3.5 w-3.5" />
-                              Lien oublié
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-              {hasNextPage ? (
-                <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isFetchingNextPage}
-                    onClick={() => void fetchNextPage()}
-                  >
-                    {isFetchingNextPage
-                      ? "Chargement…"
-                      : `Afficher plus (${filteredTotal - filteredStudents.length} restants)`}
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          )}
+                {search.trim() || selectedClassId ? (
+                  <div className="flex justify-center">
+                    <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                      Effacer les filtres
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="border-t border-slate-100 dark:border-slate-700">
+                <DataTable
+                  rows={filteredStudents}
+                  columns={studentColumns}
+                  mobileRow={studentMobileRow}
+                  selectedIds={selection.ids}
+                  onToggle={selection.toggle}
+                  onTogglePage={selection.setMany}
+                  rowLabel={(s) => `Sélectionner ${fullName(s.first_name, s.last_name)}`}
+                  dimmed={studentsFetching}
+                />
+              </div>
+            )}
+            {filteredTotal > 0 ? (
+              <Pagination
+                total={filteredTotal}
+                page={page}
+                pageSize={pageSize}
+                onPage={setPage}
+                onPageSize={setPageSize}
+                noun="élève"
+                busy={studentsFetching}
+              />
+            ) : null}
+          </Card>
         </div>
       )}
+
+      <BulkBar count={selection.count} noun="élève" onClear={selection.clear}>
+        {canSelectAllResults ? (
+          <button
+            type="button"
+            onClick={() => void selectAllResults()}
+            className="rounded-lg px-2 py-1.5 text-xs font-medium text-brand-200 underline underline-offset-2 hover:text-white"
+          >
+            Sélectionner les {filteredTotal} résultats
+          </button>
+        ) : null}
+        {canBulkAssign ? (
+          <>
+            <Select
+              aria-label="Classe cible"
+              className="h-9 w-auto max-w-[14rem] py-0 text-sm text-slate-900"
+              value={bulkClassId}
+              onChange={(e) => setBulkClassId(e.target.value)}
+            >
+              <option value="">Affecter à…</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+            <Button
+              type="button"
+              size="sm"
+              disabled={bulkAssigning || !bulkClassId || classes.length === 0}
+              onClick={() => void handleBulkAssignClass()}
+            >
+              {bulkAssigning ? "Affectation…" : `Affecter (${selection.count})`}
+            </Button>
+          </>
+        ) : (
+          <span className="text-xs text-slate-300">
+            Affectation possible uniquement pour des élèves sans classe.
+          </span>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => exportCredentials(selection.rows, "selection")}
+        >
+          <Download className="mr-1 h-4 w-4" />
+          Identifiants (CSV)
+        </Button>
+      </BulkBar>
     </div>
   );
 }

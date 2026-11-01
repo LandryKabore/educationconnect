@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -28,7 +29,8 @@ import EleveDetail from "@/pages/ecole/EleveDetail";
 import Enseignants from "@/pages/ecole/Enseignants";
 import Parents from "@/pages/ecole/Parents";
 import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
-import Bulletins from "@/pages/ecole/Bulletins";
+// loaded on demand: pulls in the PDF / ZIP tools, and keeps the main bundle under the PWA cache limit
+const Bulletins = lazy(() => import("@/pages/ecole/Bulletins"));
 import PresencesEcole from "@/pages/ecole/PresencesEcole";
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
 import CompositionsEcole from "@/pages/ecole/CompositionsEcole";
@@ -297,7 +299,9 @@ function AppRoutes() {
           path="/bulletins"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <Bulletins />
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <Bulletins />
+              </Suspense>
             </RequireAuth>
           }
         />

@@ -291,3 +291,34 @@ export function fetchAdminUsersFacets(role: string, schoolId?: string) {
   });
 }
 
+/**
+ * Teachers of ONE school, paged and searched by the database (same function the super
+ * admin's user list uses).  The school id is always sent, and row-level security still
+ * limits what the caller can read.
+ */
+export function fetchTeachersPage(
+  schoolId: string,
+  opts: { search?: string; limit?: number; offset?: number } = {},
+) {
+  return fetchAdminUsersPage({
+    role: "teacher",
+    schoolId,
+    search: opts.search,
+    limit: opts.limit ?? 50,
+    offset: opts.offset ?? 0,
+  });
+}
+
+export async function fetchAllTeachers(
+  schoolId: string,
+  opts: { search?: string } = {},
+): Promise<AdminUserRow[]> {
+  const out: AdminUserRow[] = [];
+  const step = 200;
+  for (let offset = 0; ; offset += step) {
+    const page = await fetchTeachersPage(schoolId, { ...opts, limit: step, offset });
+    out.push(...page.rows);
+    if (page.rows.length < step || out.length >= page.total) break;
+  }
+  return out;
+}
