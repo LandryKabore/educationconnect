@@ -34,9 +34,10 @@ import {
   computeAnnualAverage,
   formatAverage,
   formatPassDecision,
-  programmeToCoefMap,
   TRIMESTER_PERIODS,
+  type AnnualAverageResult,
 } from "@/lib/averages";
+import { fetchAnnualAverage } from "@/lib/annualAverage";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
@@ -115,18 +116,13 @@ export default function StudentHome() {
           .filter((id): id is string => !!id),
       );
 
-      let coefMap: Record<string, number> = {};
-      if (classId) {
-        const { data: programme } = await supabase
-          .from("programme_classe")
-          .select("subject_id, coefficient")
-          .eq("class_section_id", classId);
-        coefMap = programmeToCoefMap(programme ?? []);
-      }
-
-      const annual = computeAnnualAverage(notes, {
-        coefficientBySubject: coefMap,
-      });
+      // one shared calculation (database), same as the bulletin and the class ranking
+      // (if it is unavailable the card shows "—" instead of a number computed another way)
+      const annual: AnnualAverageResult = classId
+        ? await fetchAnnualAverage(uid, classId).catch(() =>
+            computeAnnualAverage([]),
+          )
+        : computeAnnualAverage([]);
 
       // exact rate over the whole history, computed in SQL (was: last 120 rows only)
       const att = await fetchAttendanceCounts(uid);

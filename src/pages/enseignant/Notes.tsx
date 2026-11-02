@@ -3,7 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
+import { NotesHistoryModal } from "@/components/NotesHistoryModal";
+import { PeriodClosedBanner } from "@/components/PeriodClosedBanner";
+import { usePeriodClosed } from "@/hooks/usePeriodClosed";
+import { ArrowLeft, CheckCircle2, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { formatExamSchedule, formatTimeHm } from "@/lib/assignmentKinds";
@@ -64,6 +67,8 @@ export default function Notes() {
 
   // Create / edit form.
   const [showForm, setShowForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const periodClosed = usePeriodClosed(id, period);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newType, setNewType] = useState<EvaluationType>("devoir");
   const [newTitle, setNewTitle] = useState("");
@@ -714,15 +719,37 @@ export default function Notes() {
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {period}
               </h2>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => (showForm ? resetForm() : openCreate())}
-              >
-                <Plus className="h-4 w-4" />
-                {showForm ? "Fermer" : "Nouveau"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowHistory(true)}
+                >
+                  <History className="h-4 w-4" />
+                  Historique
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={periodClosed && !showForm}
+                  onClick={() => (showForm ? resetForm() : openCreate())}
+                >
+                  <Plus className="h-4 w-4" />
+                  {showForm ? "Fermer" : "Nouveau"}
+                </Button>
+              </div>
             </div>
+            {periodClosed ? <PeriodClosedBanner periodLabel={period} /> : null}
+            {id ? (
+              <NotesHistoryModal
+                open={showHistory}
+                onClose={() => setShowHistory(false)}
+                classSectionId={id}
+                subjectId={subjectId}
+                periodLabel={period}
+              />
+            ) : null}
 
             {showForm ? (
               <Card className="mb-4 max-w-xl">

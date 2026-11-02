@@ -14,6 +14,7 @@ import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminInvites from "@/pages/admin/AdminInvites";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminReports from "@/pages/admin/AdminReports";
+import Signalements from "@/pages/Signalements";
 import AdminAudit from "@/pages/admin/AdminAudit";
 import AdminBilling from "@/pages/admin/AdminBilling";
 import AdminSuperAdmins from "@/pages/admin/AdminSuperAdmins";
@@ -21,6 +22,7 @@ import EcoleOverview from "@/pages/ecole/EcoleOverview";
 import ConfigurationEcole from "@/pages/ecole/ConfigurationEcole";
 import ParametresEcole from "@/pages/ecole/ParametresEcole";
 import Annees from "@/pages/ecole/Annees";
+import Periodes from "@/pages/ecole/Periodes";
 import Classes from "@/pages/ecole/Classes";
 import ProgrammeClasses from "@/pages/ecole/ProgrammeClasses";
 import Matieres from "@/pages/ecole/Matieres";
@@ -30,6 +32,7 @@ import Enseignants from "@/pages/ecole/Enseignants";
 import Parents from "@/pages/ecole/Parents";
 import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
 // loaded on demand: pulls in the PDF / ZIP tools, and keeps the main bundle under the PWA cache limit
+const VerifierDocument = lazy(() => import("@/pages/VerifierDocument"));
 const Bulletins = lazy(() => import("@/pages/ecole/Bulletins"));
 import PresencesEcole from "@/pages/ecole/PresencesEcole";
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
@@ -107,6 +110,15 @@ function AppRoutes() {
         }
       />
       <Route path="/telecharger" element={<Telecharger />} />
+      {/* public: opened by the QR code on bulletins, no login */}
+      <Route
+        path="/verifier"
+        element={
+          <Suspense fallback={null}>
+            <VerifierDocument />
+          </Suspense>
+        }
+      />
 
       <Route
         element={
@@ -228,6 +240,22 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["school_admin"]}>
               <Annees />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/signalements"
+          element={
+            <RequireAuth roles={["school_admin", "super_admin"]}>
+              <Signalements />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/periodes"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Periodes />
             </RequireAuth>
           }
         />

@@ -1,15 +1,17 @@
+import { ANNUAL_PERIOD_LABEL } from "@/lib/averages";
+import { fetchAnnualAverage } from "@/lib/annualAverage";
 import {
-  ANNUAL_PERIOD_LABEL,
-  TRIMESTER_PERIODS,
-  computeAnnualAverage,
-} from "@/lib/averages";
+  documentVerifyUrl,
+  issueBulletinCode,
+  qrPngDataUrl,
+} from "@/lib/documents";
 import {
   generateBulletinPdf,
   type BulletinClassStats,
   type BulletinData,
 } from "@/lib/pdfBulletin";
 import { supabase } from "@/lib/supabase";
-import type { GradeRow, Profile, School, Subject } from "@/lib/types";
+import type { Profile, School } from "@/lib/types";
 
 export type BulletinFetchInput = {
   school: School;
@@ -50,7 +52,8 @@ async function fetchClassStats(
 
 /**
  * Fetch anonymized class stats + build PDF.
- * For the annual bulletin, also loads the student's trimester notes for the decision footer.
+ * For the annual bulletin, also loads the annual average (database) for the decision footer.
+ * Registers the document and prints a QR code that opens the public verification page.
  */
 export async function buildBulletinPdf(
   input: BulletinFetchInput,
@@ -73,24 +76,19 @@ export async function buildBulletinPdf(
 
   let annual: BulletinData["annual"] = null;
   if (periodLabel === ANNUAL_PERIOD_LABEL) {
-    const { data: allGradesRaw, error } = await supabase
-      .from("notes")
-      .select("*, matieres(*)")
-      .eq("student_id", student.id)
-      .in("period_label", [...TRIMESTER_PERIODS]);
-    if (error) throw error;
-
-    const allGrades = (
-      (allGradesRaw ?? []) as (GradeRow & { matieres: Subject })[]
-    ).map((g) => ({ ...g, subject: g.matieres }));
-
-    if (allGrades.length === 0 && !stats.general) {
+    // Same formula as the class ranking: computed once, in the database.
+    annual = await fetchAnnualAverage(student.id, classSectionId);
+    if (annual.trimesters.every((t) => t.generalAverage === null) && !stats.general) {
       throw new Error("Aucune note sur l’année");
     }
+  }
 
-    annual = computeAnnualAverage(allGrades, {
-      coefficientBySubject: input.coefficientBySubject,
-    });
+  // Register the document and get its public code (QR code); skipped if the register is not installed.
+  let verification: BulletinData["verification"] = null;
+  const code = await issueBulletinCode(student.id, classSectionId, periodLabel);
+  if (code) {
+    const url = documentVerifyUrl(code);
+    verification = { code, url, qrDataUrl: await qrPngDataUrl(url) };
   }
 
   return generateBulletinPdf({
@@ -100,5 +98,6 @@ export async function buildBulletinPdf(
     periodLabel,
     stats,
     annual,
+    verification,
   });
 }

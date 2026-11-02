@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, History, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +15,9 @@ import type { Evaluation, Profile } from "@/lib/types";
 import { evaluationTypeLabel } from "@/lib/evaluationTypes";
 import { cn, fullName, joinProfile, personName } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
+import { NotesHistoryModal } from "@/components/NotesHistoryModal";
+import { PeriodClosedBanner } from "@/components/PeriodClosedBanner";
+import { usePeriodClosed } from "@/hooks/usePeriodClosed";
 import { SaveButton } from "@/components/SaveButton";
 import { Card, EmptyState, Input } from "@/components/ui";
 
@@ -78,6 +81,7 @@ export default function NotesSaisie() {
 
   const [grades, setGrades] = useState<Record<string, GradeState>>({});
   const [savingGrades, setSavingGrades] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window === "undefined"
@@ -109,6 +113,8 @@ export default function NotesSaisie() {
       return data as Evaluation | null;
     },
   });
+
+  const periodClosed = usePeriodClosed(id, openEval?.period_label);
 
   const { data: className } = useQuery({
     queryKey: ["class-name", id],
@@ -389,7 +395,8 @@ export default function NotesSaisie() {
     }
   };
 
-  const canSave = changedCount > 0 && invalidCount === 0 && !savingGrades;
+  const canSave =
+    changedCount > 0 && invalidCount === 0 && !savingGrades && !periodClosed;
   const saveRef = useRef(() => {});
   saveRef.current = () => {
     if (canSave) void saveGrades();
@@ -511,15 +518,16 @@ export default function NotesSaisie() {
       size={size}
       saving={savingGrades}
       dirty={changedCount > 0}
-      disabled={invalidCount > 0}
+      disabled={invalidCount > 0 || periodClosed}
       saveLabel={`Enregistrer (${changedCount})`}
       className={className}
       onClick={() => void saveGrades()}
     />
   );
 
-  const statusHint =
-    invalidCount > 0
+  const statusHint = periodClosed
+    ? "Période clôturée : notes verrouillées"
+    : invalidCount > 0
       ? `Corrigez ${invalidCount} note${invalidCount > 1 ? "s" : ""} (0 à ${openEval.max_score})`
       : changedCount > 0
         ? `${changedCount} modification${changedCount > 1 ? "s" : ""} non enregistrée${changedCount > 1 ? "s" : ""}`
@@ -587,6 +595,28 @@ export default function NotesSaisie() {
         </div>
       </div>
 
+      {periodClosed ? <PeriodClosedBanner periodLabel={openEval.period_label} /> : null}
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
+        >
+          <History className="h-4 w-4" />
+          Historique des modifications
+        </button>
+      </div>
+      {id ? (
+        <NotesHistoryModal
+          open={showHistory}
+          onClose={() => setShowHistory(false)}
+          classSectionId={id}
+          evaluationId={openEval.id}
+          title={`Historique — ${openEval.title}`}
+        />
+      ) : null}
+
+      <fieldset disabled={periodClosed} className="m-0 min-w-0 border-0 p-0">
       {total === 0 ? (
         <EmptyState message="Aucun élève dans cette classe." />
       ) : isDesktop ? (
@@ -806,6 +836,7 @@ export default function NotesSaisie() {
           })}
         </ul>
       )}
+      </fieldset>
 
       <div className="sticky bottom-0 z-20 -mx-4 -mb-4 mt-4 flex items-center gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:-mx-6 sm:-mb-6 sm:px-6 lg:hidden dark:border-[var(--border)]">
         <p

@@ -29,6 +29,7 @@ import { downloadBlob } from "@/lib/studentCsv";
 import { fullName } from "@/lib/utils";
 import { ClassColorBadge } from "@/components/ClassColor";
 import { ClassFilter } from "@/components/ClassFilter";
+import { DocumentsRegister } from "@/components/DocumentsRegister";
 import { SearchField } from "@/components/SearchField";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
@@ -529,6 +530,7 @@ export default function Bulletins() {
           )}
         </div>
       )}
+      <DocumentsRegister />
     </div>
   );
 }

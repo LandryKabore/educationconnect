@@ -13,6 +13,7 @@ import {
   Layers,
   LayoutDashboard,
   ListChecks,
+  Lock,
   LogOut,
   Megaphone,
   Menu,
@@ -62,6 +63,7 @@ import {
 import { BrandLogo } from "@/components/BrandLogo";
 import { LiveClockWeather } from "@/components/LiveClockWeather";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { HelpLauncher } from "@/components/HelpLauncher";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui";
 import { cn, personName } from "@/lib/utils";
@@ -101,6 +103,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
         { to: "/admin/utilisateurs", label: "Utilisateurs", icon: <Users className="h-4 w-4" /> },
         { to: "/admin/invitations", label: "Invitations", icon: <MessageSquare className="h-4 w-4" /> },
         { to: "/admin/rapports", label: "Rapports", icon: <ClipboardList className="h-4 w-4" /> },
+        { to: "/signalements", label: "Signalements", icon: <MessageSquare className="h-4 w-4" /> },
         { to: "/admin/abonnements", label: "Abonnements", icon: <BookOpen className="h-4 w-4" /> },
         { to: "/admin/parametres", label: "Paramètres", icon: <Settings className="h-4 w-4" /> },
         { to: "/admin/audit", label: "Journal d'audit", icon: <ClipboardList className="h-4 w-4" /> },
@@ -173,6 +176,8 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           icon: <Settings className="h-4 w-4" />,
         },
         { to: "/annees", label: "Années scolaires", icon: <CalendarRange className="h-4 w-4" /> },
+        { to: "/periodes", label: "Périodes et clôture", icon: <Lock className="h-4 w-4" /> },
+        { to: "/signalements", label: "Signalements", icon: <MessageSquare className="h-4 w-4" /> },
         { to: "/matieres", label: "Matières", icon: <BookOpen className="h-4 w-4" /> },
         { to: "/classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
         { to: "/programmes", label: "Programmes", icon: <Layers className="h-4 w-4" /> },
@@ -600,6 +605,7 @@ export function AppShell() {
         <div className="shrink-0 space-y-2 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
           <LiveClockWeather />
           <ThemeToggle className="w-full justify-center" />
+          <HelpLauncher />
         </div>
 
         {canSearch ? (
@@ -746,6 +752,7 @@ export function AppShell() {
               <Search className="h-5 w-5" />
             </button>
           ) : null}
+          <HelpLauncher compact />
           <ThemeToggle compact />
         </header>
 

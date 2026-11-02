@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
+import { recordClientError } from "@/lib/errorBuffer";
 
 type Props = {
   children: ReactNode;
@@ -36,6 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     const scope = this.props.scope ?? "app";
     console.error(`[EduFaso:${scope}] render crash`, error, info.componentStack);
+    recordClientError(error);
   }
 
   componentDidUpdate(prevProps: Props) {

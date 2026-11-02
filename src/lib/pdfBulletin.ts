@@ -72,6 +72,8 @@ export interface BulletinData {
     AnnualAverageResult,
     "annualAverage" | "passed" | "complete" | "trimesters"
   > | null;
+  /** Authenticity QR code (public verification page). Omitted when the register is unavailable. */
+  verification?: { code: string; url: string; qrDataUrl: string } | null;
 }
 
 /** Auto mention from moyenne générale — never blank because of missing teacher text. */
@@ -326,6 +328,27 @@ export function generateBulletinPdf(data: BulletinData): jsPDF {
     );
     doc.setFont("helvetica", "normal");
     y += 8;
+  }
+
+  // —— Authenticity QR code (left of the signature) ——
+  if (data.verification) {
+    const size = 24;
+    let qrY = Math.max(y - 4, 244);
+    if (qrY + size > 284) {
+      doc.addPage();
+      qrY = 20;
+    }
+    doc.addImage(data.verification.qrDataUrl, "PNG", 14, qrY, size, size);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Vérifier l’authenticité", 14 + size + 4, qrY + 6);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Scannez le QR code ou ouvrez :", 14 + size + 4, qrY + 11);
+    doc.text(data.verification.url.replace(/\?.*$/, ""), 14 + size + 4, qrY + 15);
+    doc.text(`Code : ${data.verification.code}`, 14 + size + 4, qrY + 19);
   }
 
   // —— Signature ——

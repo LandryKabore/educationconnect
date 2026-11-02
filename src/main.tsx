@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AppToaster } from "@/components/AppToaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import App from "@/App";
+import { recordClientError } from "@/lib/errorBuffer";
 import "@/i18n";
 import "./index.css";
 
@@ -22,9 +23,11 @@ const queryClient = new QueryClient({
 function installGlobalErrorHooks() {
   window.addEventListener("error", (event) => {
     console.error("[EduFaso] window error", event.error ?? event.message);
+    recordClientError(event.error ?? event.message);
   });
   window.addEventListener("unhandledrejection", (event) => {
     console.error("[EduFaso] unhandled rejection", event.reason);
+    recordClientError(event.reason);
   });
 }
 
