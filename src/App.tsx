@@ -1,5 +1,12 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+  createBrowserRouter,
+  createHashRouter,
+  Navigate,
+  Route,
+  RouterProvider,
+  Routes,
+} from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import Connexion from "@/pages/Connexion";
@@ -34,13 +41,13 @@ import EmploisDuTemps from "@/pages/ecole/EmploisDuTemps";
 // loaded on demand: pulls in the PDF / ZIP tools, and keeps the main bundle under the PWA cache limit
 const VerifierDocument = lazy(() => import("@/pages/VerifierDocument"));
 const Bulletins = lazy(() => import("@/pages/ecole/Bulletins"));
-import PresencesEcole from "@/pages/ecole/PresencesEcole";
+const PresencesEcole = lazy(() => import("@/pages/ecole/PresencesEcole"));
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
 import CompositionsEcole from "@/pages/ecole/CompositionsEcole";
 import SaisieEnseignant from "@/pages/ecole/SaisieEnseignant";
 import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
-import Presences from "@/pages/enseignant/Presences";
+const Presences = lazy(() => import("@/pages/enseignant/Presences"));
 import Notes from "@/pages/enseignant/Notes";
 import NotesSaisie from "@/pages/enseignant/NotesSaisie";
 import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
@@ -53,14 +60,14 @@ import {
   MesExamensPage,
   MesExercicesPage,
 } from "@/pages/eleve/MesDevoirs";
-import MesPresences from "@/pages/eleve/MesPresences";
+const MesPresences = lazy(() => import("@/pages/eleve/MesPresences"));
 import MesCompositions from "@/pages/eleve/MesCompositions";
 import MesProfs from "@/pages/eleve/MesProfs";
 import MonEmploiDuTempsPage from "@/pages/MonEmploiDuTempsPage";
 import MonBulletin from "@/pages/eleve/MonBulletin";
 import Enfants from "@/pages/parent/Enfants";
 import EnfantNotes from "@/pages/parent/EnfantNotes";
-import EnfantPresences from "@/pages/parent/EnfantPresences";
+const EnfantPresences = lazy(() => import("@/pages/parent/EnfantPresences"));
 import EnfantBulletin from "@/pages/parent/EnfantBulletin";
 import EnfantEmploiDuTemps from "@/pages/parent/EnfantEmploiDuTemps";
 import {
@@ -337,7 +344,9 @@ function AppRoutes() {
           path="/presences-ecole"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <PresencesEcole />
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <PresencesEcole />
+              </Suspense>
             </RequireAuth>
           }
         />
@@ -384,7 +393,9 @@ function AppRoutes() {
           path="/classes/:id/presences"
           element={
             <RequireAuth roles={["teacher", "school_admin"]}>
-              <Presences />
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <Presences />
+              </Suspense>
             </RequireAuth>
           }
         />
@@ -504,7 +515,9 @@ function AppRoutes() {
           path="/mes-presences"
           element={
             <RequireAuth roles={["student"]}>
-              <MesPresences />
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <MesPresences />
+              </Suspense>
             </RequireAuth>
           }
         />
@@ -537,7 +550,9 @@ function AppRoutes() {
           path="/enfants/:id/presences"
           element={
             <RequireAuth roles={["parent"]}>
-              <EnfantPresences />
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <EnfantPresences />
+              </Suspense>
             </RequireAuth>
           }
         />
@@ -588,23 +603,17 @@ function AppRoutes() {
   );
 }
 
+// A data router (instead of <BrowserRouter>) is required for useBlocker, used to warn
+// about unsaved work (roll call). All the routes stay in <AppRoutes/> under a catch-all.
+// Electron (file://) needs the hash router; the web uses the browser router.
+const isDesktopFile =
+  typeof window !== "undefined" && window.location.protocol === "file:";
+const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
+const routes = [{ path: "*", element: <AppRoutes /> }];
+const router = isDesktopFile
+  ? createHashRouter(routes)
+  : createBrowserRouter(routes, { basename });
+
 export default function App() {
-  // Electron (file://) needs HashRouter; web uses BrowserRouter
-  const isDesktopFile =
-    typeof window !== "undefined" && window.location.protocol === "file:";
-  const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || undefined;
-
-  if (isDesktopFile) {
-    return (
-      <HashRouter>
-        <AppRoutes />
-      </HashRouter>
-    );
-  }
-
-  return (
-    <BrowserRouter basename={basename}>
-      <AppRoutes />
-    </BrowserRouter>
-  );
+  return <RouterProvider router={router} />;
 }

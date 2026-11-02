@@ -69,6 +69,20 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // A page that asks for a « beforeunload » confirmation (unsaved roll call / grades):
+  // Electron shows no prompt by itself and would silently refuse to close or reload.
+  win.webContents.on("will-prevent-unload", (event) => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: "warning",
+      buttons: ["Rester", "Quitter quand même"],
+      defaultId: 0,
+      cancelId: 0,
+      title: "Modifications non enregistrées",
+      message: "Vos modifications non enregistrées seront perdues. Quitter quand même ?",
+    });
+    if (choice === 1) event.preventDefault(); // preventDefault = ignore the block, let it leave
+  });
+
   // Renderer crash (OOM, GPU, etc.) → reload instead of a blank window
   win.webContents.on("render-process-gone", (_event, details) => {
     console.error("[EduFaso] render-process-gone", details);

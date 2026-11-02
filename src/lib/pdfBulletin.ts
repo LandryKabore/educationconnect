@@ -291,8 +291,12 @@ export function generateBulletinPdf(data: BulletinData): jsPDF {
   // —— Absences / Retards ——
   doc.setFontSize(9);
   doc.setTextColor(30, 41, 59);
+  // The numbers are DAYS (a day with 3 missed lessons counts once) and only unjustified
+  // absences: a justified one is not counted.  Say so, instead of a bare "jours".
+  const nAbs = stats.attendance?.absences ?? 0;
+  const nLate = stats.attendance?.lates ?? 0;
   doc.text(
-    `Absences : ${stats.attendance?.absences ?? 0} jour${(stats.attendance?.absences ?? 0) !== 1 ? "s" : ""}  —  Retards : ${stats.attendance?.lates ?? 0}`,
+    `Absences non justifiées : ${nAbs} jour${nAbs > 1 ? "s" : ""}  —  Retards : ${nLate} jour${nLate > 1 ? "s" : ""}`,
     14,
     y,
   );

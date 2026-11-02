@@ -1,27 +1,29 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { format, subDays } from "date-fns";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList } from "lucide-react";
+import { CheckCircle2, Undo2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ATTENDANCE_LABELS,
   ATTENDANCE_TONE,
+  JUSTIFICATION_REASONS,
+  attendanceRate,
+  type AttendanceTotals,
 } from "@/lib/attendance";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { ClassColorDot } from "@/components/ClassColor";
-import {
-  CLASS_COLOR_SURFACE,
-  classColorVars,
-} from "@/lib/classColors";
-import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
-import { fetchAttendanceDaySummary } from "@/lib/scaleApi";
 import type { AttendanceStatus, ClassSection } from "@/lib/types";
 import { cn, joinProfile } from "@/lib/utils";
+import { usePageParams } from "@/hooks/usePageParams";
+import { useRowSelection } from "@/hooks/useRowSelection";
+import { BulkBar } from "@/components/BulkBar";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
+import { Pagination } from "@/components/Pagination";
 import { PersonName } from "@/components/PersonName";
+import { StudentSearchPicker } from "@/components/StudentSearchPicker";
 import {
   Badge,
   Button,
@@ -31,10 +33,7 @@ import {
   Label,
   PageHeader,
   Select,
-  Textarea,
 } from "@/components/ui";
-
-const LIST_PAGE = 50;
 
 type PresenceRow = {
   id: string;
@@ -48,13 +47,50 @@ type PresenceRow = {
   matieres: { name: string } | null;
 };
 
+type StatusFilter = "absent" | "late" | "excused" | "exceptions" | "all";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "absent", label: "À justifier" },
+  { value: "late", label: "Retards" },
+  { value: "excused", label: "Justifiées" },
+  { value: "exceptions", label: "Toutes les absences et retards" },
+  { value: "all", label: "Tout, présents compris" },
+];
+
+const SELECT_FIELDS =
+  "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey!inner(id, name, school_id), matieres(name)";
+
+const MAX_SELECT_ALL = 1000;
+const WRITE_CHUNK = 100;
+
+const fmtDay = (iso: string) => {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+};
+
 export default function PresencesEcole() {
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
-  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const { page, pageSize, setPage, setPageSize } = usePageParams();
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [from, setFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
+  const [to, setTo] = useState(today);
   const [classId, setClassId] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [justifyNote, setJustifyNote] = useState<Record<string, string>>({});
+  const [subjectId, setSubjectId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("absent");
+  const selection = useRowSelection<PresenceRow>();
+
+  // the confirm dialog: rows to justify / to put back to « absent »
+  const [dialog, setDialog] = useState<null | { kind: "justify" | "undo"; rows: PresenceRow[] }>(null);
+  const [reason, setReason] = useState<string>(JUSTIFICATION_REASONS[0]);
+  const [extra, setExtra] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+
+  const resetPage = () => {
+    setPage(1);
+  };
 
   const { data: classes = [] } = useQuery({
     queryKey: ["classes", schoolId],
@@ -70,357 +106,488 @@ export default function PresencesEcole() {
     },
   });
 
-  // Exact day totals come from one SQL count (the old page counted the rows it had
-  // downloaded, which stops being the real number once a school passes 1,000 marks a day).
-  const { data: summaryData } = useQuery({
-    queryKey: ["ecole-presences", "summary", schoolId, date, classId],
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["matieres", schoolId, "names"],
     enabled: !!schoolId,
-    queryFn: () => fetchAttendanceDaySummary(schoolId!, date, classId || undefined),
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("matieres")
+        .select("id, name")
+        .eq("school_id", schoolId!)
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
   });
-  const summary: Record<AttendanceStatus, number> = {
-    present: summaryData?.present ?? 0,
-    absent: summaryData?.absent ?? 0,
-    late: summaryData?.late ?? 0,
-    excused: summaryData?.excused ?? 0,
-  };
-  const dayTotal = summaryData?.total ?? 0;
 
-  // Each list loads 50 rows at a time ("Afficher plus"), filtered to the school in SQL
-  // (the old page put every class id of the school in the URL).
-  const usePresenceList = (status: AttendanceStatus | null, total: number) => {
-    const q = useInfiniteQuery({
-      queryKey: ["ecole-presences", "list", schoolId, date, classId, status ?? "all"],
-      enabled: !!schoolId && total > 0,
-      initialPageParam: 0,
-      queryFn: async ({ pageParam }) => {
-        let query = supabase
-          .from("presences")
-          .select(
-            "id, class_section_id, student_id, date, status, note, profils:profils!presences_student_id_fkey(first_name, last_name), classes:classes!presences_class_section_id_fkey!inner(id, name, school_id), matieres(name)",
-          )
-          .eq("date", date)
-          .eq("classes.school_id", schoolId!)
-          .order("class_section_id")
-          .order("id")
-          .range(pageParam, pageParam + LIST_PAGE - 1);
-        if (classId) query = query.eq("class_section_id", classId);
-        if (status) query = query.eq("status", status);
-        const { data, error } = await query;
+  const rangeOk = !!from && !!to && from <= to;
+
+  // Same filters for the list, the numbers and « select all » (query builders are loosely
+  // typed here on purpose: the generated Supabase types make this helper very slow to check).
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const filtered = (q: any, withStatus: boolean): any => {
+    let r = q.eq("classes.school_id", schoolId!).gte("date", from).lte("date", to);
+    if (classId) r = r.eq("class_section_id", classId);
+    if (subjectId) r = r.eq("subject_id", subjectId);
+    if (studentId) r = r.eq("student_id", studentId);
+    if (withStatus) {
+      if (status === "exceptions") r = r.neq("status", "present");
+      else if (status !== "all") r = r.eq("status", status);
+    }
+    return r;
+  };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const filterKey = [schoolId, from, to, classId, subjectId, studentId];
+
+  // Numbers for the chosen period (not affected by the « Statut » filter).
+  const { data: totals } = useQuery({
+    queryKey: ["ecole-presences", "kpi", ...filterKey],
+    enabled: !!schoolId && rangeOk,
+    queryFn: async (): Promise<AttendanceTotals> => {
+      const count = async (st?: AttendanceStatus) => {
+        let q = filtered(
+          supabase
+            .from("presences")
+            .select("id, classes:classes!presences_class_section_id_fkey!inner(school_id)", {
+              count: "exact",
+              head: true,
+            }),
+          false,
+        );
+        if (st) q = q.eq("status", st);
+        const { count: n, error } = await q;
         if (error) throw error;
-        return (data ?? []) as unknown as PresenceRow[];
-      },
-      getNextPageParam: (last, all) =>
-        last.length === LIST_PAGE ? all.length * LIST_PAGE : undefined,
-    });
-    const list = useMemo(() => (q.data?.pages ?? []).flat(), [q.data]);
-    return { ...q, list };
-  };
-  const absencesQ = usePresenceList("absent", summary.absent);
-  const justifiedQ = usePresenceList("excused", summary.excused);
-  const rowsQ = usePresenceList(null, dayTotal);
-  const absences = absencesQ.list;
-  const justified = justifiedQ.list;
-  const rows = rowsQ.list;
-  const isLoading = !summaryData || rowsQ.isLoading;
-  const classIds = classes.map((c) => c.id);
+        return (n ?? 0) as number;
+      };
+      const [total, absent, late, excused] = await Promise.all([
+        count(),
+        count("absent"),
+        count("late"),
+        count("excused"),
+      ]);
+      return { total, absent, late, excused, present: Math.max(total - absent - late - excused, 0) };
+    },
+  });
 
-  const moreButton = (q: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown }, shown: number, total: number) =>
-    q.hasNextPage ? (
-      <div className="mt-3 flex justify-center">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={q.isFetchingNextPage}
-          onClick={() => void q.fetchNextPage()}
-        >
-          {q.isFetchingNextPage
-            ? "Chargement…"
-            : `Afficher plus (${Math.max(total - shown, 0)} restants)`}
-        </Button>
-      </div>
+  const listQ = useQuery({
+    queryKey: ["ecole-presences", "list", ...filterKey, status, page, pageSize],
+    enabled: !!schoolId && rangeOk,
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const q = filtered(
+        supabase.from("presences").select(SELECT_FIELDS, { count: "exact" }),
+        true,
+      )
+        .order("date", { ascending: false })
+        .order("id")
+        .range((page - 1) * pageSize, page * pageSize - 1);
+      const { data, count, error } = await q;
+      if (error) throw error;
+      return { rows: (data ?? []) as unknown as PresenceRow[], total: count ?? 0 };
+    },
+  });
+  const rows = listQ.data?.rows ?? [];
+  const listTotal = listQ.data?.total ?? 0;
+
+  const rate = totals ? attendanceRate(totals) : null;
+
+  const refresh = () => {
+    for (const k of ["ecole-presences", "presences", "mes-presences", "enfant-presences", "teacher-home", "ecole-home"]) {
+      void qc.invalidateQueries({ queryKey: [k] });
+    }
+  };
+
+  const onFilter = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    resetPage();
+    selection.clear();
+  };
+
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    try {
+      const { data, error } = await filtered(
+        supabase.from("presences").select(SELECT_FIELDS),
+        true,
+      )
+        .order("date", { ascending: false })
+        .order("id")
+        .range(0, MAX_SELECT_ALL - 1);
+      if (error) throw error;
+      selection.setMany((data ?? []) as unknown as PresenceRow[], true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sélection impossible");
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
+  const apply = async () => {
+    if (!dialog || !user) return;
+    const ids = dialog.rows
+      .filter((r) => (dialog.kind === "justify" ? r.status === "absent" : r.status === "excused"))
+      .map((r) => r.id);
+    if (ids.length === 0) return;
+    const note =
+      dialog.kind === "justify"
+        ? [reason, extra.trim()].filter(Boolean).join(" — ")
+        : null;
+    setBusy(true);
+    try {
+      for (let i = 0; i < ids.length; i += WRITE_CHUNK) {
+        const { error } = await supabase
+          .from("presences")
+          .update({
+            status: dialog.kind === "justify" ? "excused" : "absent",
+            note,
+            recorded_by: user.id,
+          })
+          .in("id", ids.slice(i, i + WRITE_CHUNK));
+        if (error) throw error;
+      }
+      toast.success(
+        dialog.kind === "justify"
+          ? `${ids.length} absence${ids.length > 1 ? "s" : ""} justifiée${ids.length > 1 ? "s" : ""}`
+          : `${ids.length} justification${ids.length > 1 ? "s" : ""} retirée${ids.length > 1 ? "s" : ""}`,
+      );
+      selection.clear();
+      setDialog(null);
+      setExtra("");
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Mise à jour impossible");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selAbsent = selection.rows.filter((r) => r.status === "absent");
+  const selExcused = selection.rows.filter((r) => r.status === "excused");
+
+  const statusBadge = (r: PresenceRow) => (
+    <Badge tone={ATTENDANCE_TONE[r.status]}>
+      {r.status === "absent" ? "À justifier" : ATTENDANCE_LABELS[r.status]}
+    </Badge>
+  );
+
+  const rowAction = (r: PresenceRow) =>
+    r.status === "absent" ? (
+      <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: "justify", rows: [r] })}>
+        Justifier
+      </Button>
+    ) : r.status === "excused" ? (
+      <Button type="button" size="sm" variant="ghost" onClick={() => setDialog({ kind: "undo", rows: [r] })}>
+        Retirer
+      </Button>
     ) : null;
 
-  const setStatus = async (
-    row: PresenceRow,
-    status: AttendanceStatus,
-    note: string | null,
-  ) => {
-    if (!user) return;
-    setBusyId(row.id);
-    const { error } = await supabase
-      .from("presences")
-      .update({
-        status,
-        note,
-        recorded_by: user.id,
-      })
-      .eq("id", row.id);
-    setBusyId(null);
-    if (error) {
-      toast.error(error.message || "Mise à jour impossible");
-      return;
-    }
-    toast.success(
-      status === "excused"
-        ? "Absence justifiée — elle ne compte plus comme absence"
-        : "Justification retirée",
-    );
-    void qc.invalidateQueries({ queryKey: ["ecole-presences"] });
-    void qc.invalidateQueries({ queryKey: ["presences"] });
-    void qc.invalidateQueries({ queryKey: ["mes-presences"] });
-    void qc.invalidateQueries({ queryKey: ["teacher-home"] });
-    void qc.invalidateQueries({ queryKey: ["eleve-presences"] });
-  };
+  const columns: DataTableColumn<PresenceRow>[] = [
+    {
+      key: "student",
+      header: "Élève",
+      cell: (r) => (
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          <PersonName first={joinProfile(r.profils)?.first_name} last={joinProfile(r.profils)?.last_name} />
+        </span>
+      ),
+    },
+    { key: "class", header: "Classe", cell: (r) => r.classes?.name ?? "—" },
+    { key: "date", header: "Date", cell: (r) => fmtDay(r.date) },
+    { key: "subject", header: "Cours", cell: (r) => r.matieres?.name ?? "—", hideBelowLg: true },
+    {
+      key: "status",
+      header: "Statut",
+      cell: (r) => (
+        <div className="space-y-0.5">
+          {statusBadge(r)}
+          {r.status === "excused" && r.note ? (
+            <p className="max-w-[16rem] truncate text-xs text-slate-500" title={r.note}>
+              {r.note}
+            </p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "action",
+      header: "",
+      className: "text-right whitespace-nowrap",
+      cell: (r) => (
+        <div className="flex items-center justify-end gap-2">
+          <Link
+            to={`/classes/${r.class_section_id}/presences?date=${r.date}`}
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            Appel
+          </Link>
+          {rowAction(r)}
+        </div>
+      ),
+    },
+  ];
+
+  const pageCount = Math.max(1, Math.ceil(listTotal / pageSize));
+  const canSelectAll = listTotal > rows.length && listTotal <= MAX_SELECT_ALL;
+  const allMatchingSelected = listTotal > 0 && selection.count >= listTotal;
+
+  const dialogRows = useMemo(
+    () =>
+      dialog
+        ? dialog.rows.filter((r) => (dialog.kind === "justify" ? r.status === "absent" : r.status === "excused"))
+        : [],
+    [dialog],
+  );
 
   return (
-    <div>
+    <div className={cn(selection.count > 0 && "pb-24")}>
       <PageHeader
         title="Présences"
-        subtitle="Consultez l’appel et justifiez les absences (elles ne compteront plus comme absences)"
+        subtitle="Passez en revue les absences et justifiez-les en lot"
       />
 
-      <div className="mb-6 grid max-w-2xl gap-4 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="date">Date</Label>
-          <Input
-            id="date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            {formatDateSafe(date, "EEEE d MMMM yyyy", { locale: fr })}
-          </p>
+      <Card className="mb-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div>
+            <Label htmlFor="pe-from">Du</Label>
+            <Input id="pe-from" type="date" max={to || undefined} value={from} onChange={(e) => onFilter(setFrom)(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="pe-to">Au</Label>
+            <Input id="pe-to" type="date" min={from || undefined} value={to} onChange={(e) => onFilter(setTo)(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="pe-class">Classe</Label>
+            <Select id="pe-class" value={classId} onChange={(e) => onFilter(setClassId)(e.target.value)}>
+              <option value="">Toutes les classes</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="pe-subject">Matière</Label>
+            <Select id="pe-subject" value={subjectId} onChange={(e) => onFilter(setSubjectId)(e.target.value)}>
+              <option value="">Toutes les matières</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="col-span-2 lg:col-span-1">
+            <Label htmlFor="pe-status">Statut</Label>
+            <Select id="pe-status" value={status} onChange={(e) => onFilter(setStatus)(e.target.value as StatusFilter)}>
+              {STATUS_FILTERS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="col-span-2 lg:col-span-1">
+            <Label>Élève</Label>
+            {schoolId ? (
+              <StudentSearchPicker
+                schoolId={schoolId}
+                value={studentId}
+                onChange={onFilter(setStudentId)}
+                placeholder="Rechercher un élève"
+              />
+            ) : null}
+          </div>
         </div>
-        <div>
-          <Label htmlFor="classe">Classe</Label>
-          <Select
-            id="classe"
-            value={classId}
-            onChange={(e) => setClassId(e.target.value)}
-          >
-            <option value="">Toutes les classes</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
+      </Card>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(Object.keys(ATTENDANCE_LABELS) as AttendanceStatus[]).map((st) => (
-          <Card key={st} className="py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              {ATTENDANCE_LABELS[st]}
-            </p>
-            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
-              {summary[st]}
-            </p>
-          </Card>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
-      ) : classIds.length === 0 ? (
-        <EmptyState message="Aucune classe dans l’école." />
+      {!rangeOk ? (
+        <EmptyState message="Choisissez une période valide (la date de début doit précéder la date de fin)." />
       ) : (
-        <div className="space-y-8">
-          <section>
-            <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-4 w-4 text-rose-600" />
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Absences à justifier
-              </h2>
-              <Badge tone="danger">{summary.absent}</Badge>
-            </div>
-            {summary.absent === 0 ? (
-              <Card>
-                <p className="text-sm text-slate-500">
-                  Aucune absence non justifiée pour cette date
-                  {classId ? " / classe" : ""}.
-                </p>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {absences.map((row) => (
-                  <Card key={row.id} className="space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">
-                          <PersonName
-                            first={joinProfile(row.profils)?.first_name}
-                            last={joinProfile(row.profils)?.last_name}
-                          />
-                        </p>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
-                          {row.classes ? (
-                            <>
-                              <ClassColorDot
-                                id={row.classes.id}
-                                name={row.classes.name}
-                              />
-                              {row.classes.name}
-                            </>
-                          ) : (
-                            "Classe"
-                          )}
-                          {row.matieres?.name
-                            ? ` · ${row.matieres.name}`
-                            : ""}
-                        </p>
-                      </div>
-                      <Badge tone="danger">Absent</Badge>
-                    </div>
-                    <div>
-                      <Label htmlFor={`note-${row.id}`}>
-                        Motif de justification (facultatif)
-                      </Label>
-                      <Textarea
-                        id={`note-${row.id}`}
-                        rows={2}
-                        placeholder="Ex. : certificat médical, rendez-vous…"
-                        value={justifyNote[row.id] ?? ""}
-                        onChange={(e) =>
-                          setJustifyNote((prev) => ({
-                            ...prev,
-                            [row.id]: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <Button
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Card className="py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Présence</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-700">{rate === null ? "—" : `${rate.toLocaleString("fr-FR")} %`}</p>
+              <p className="text-xs text-slate-500">{totals ? `${totals.total.toLocaleString("fr-FR")} cours` : "…"}</p>
+            </Card>
+            <Card className="py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">À justifier</p>
+              <p className="mt-1 text-2xl font-bold text-rose-600">{totals ? totals.absent.toLocaleString("fr-FR") : "…"}</p>
+              <p className="text-xs text-slate-500">absences non justifiées</p>
+            </Card>
+            <Card className="py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Retards</p>
+              <p className="mt-1 text-2xl font-bold text-amber-600">{totals ? totals.late.toLocaleString("fr-FR") : "…"}</p>
+              <p className="text-xs text-slate-500">sur la période</p>
+            </Card>
+            <Card className="py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Justifiées</p>
+              <p className="mt-1 text-2xl font-bold text-sky-600">{totals ? totals.excused.toLocaleString("fr-FR") : "…"}</p>
+              <p className="text-xs text-slate-500">ne comptent pas comme absences</p>
+            </Card>
+          </div>
+
+          {listQ.isLoading ? (
+            <p className="text-slate-500">Chargement…</p>
+          ) : listQ.isError ? (
+            <EmptyState message="Impossible de charger les présences. Réessayez plus tard." />
+          ) : listTotal === 0 ? (
+            <EmptyState message="Aucune présence ne correspond à ces filtres." />
+          ) : (
+            <Card className="overflow-hidden p-0">
+              {canSelectAll || selection.count > 0 ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-100 bg-slate-50 px-4 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-[var(--surface-2)] dark:text-slate-300">
+                  {allMatchingSelected ? (
+                    <span>Les {listTotal} résultats sont sélectionnés.</span>
+                  ) : canSelectAll ? (
+                    <button
                       type="button"
-                      size="sm"
-                      disabled={busyId === row.id}
-                      onClick={() =>
-                        void setStatus(
-                          row,
-                          "excused",
-                          (justifyNote[row.id] ?? "").trim() ||
-                            "Justifié par l’administration",
-                        )
-                      }
+                      className="font-medium text-brand-700 hover:underline disabled:opacity-60"
+                      disabled={selectingAll}
+                      onClick={() => void selectAllMatching()}
                     >
-                      <CheckCircle2 className="h-4 w-4" />
-                      {busyId === row.id ? "…" : "Justifier l’absence"}
-                    </Button>
-                  </Card>
-                ))}
-              </div>
-            )}
-            {moreButton(absencesQ, absences.length, summary.absent)}
-          </section>
-
-          <section>
-            <div className="mb-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-sky-600" />
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Absences déjà justifiées
-              </h2>
-              <Badge tone="info">{summary.excused}</Badge>
-            </div>
-            {summary.excused === 0 ? (
-              <Card>
-                <p className="text-sm text-slate-500">
-                  Aucune absence justifiée pour cette sélection.
-                </p>
-              </Card>
-            ) : (
-              <div className="space-y-2">
-                {justified.map((row) => (
-                  <Card
-                    key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">
-                        <PersonName
-                          first={joinProfile(row.profils)?.first_name}
-                          last={joinProfile(row.profils)?.last_name}
-                        />
+                      {selectingAll ? "Sélection…" : `Sélectionner les ${listTotal} résultats`}
+                    </button>
+                  ) : null}
+                  {selection.count > 0 ? (
+                    <button type="button" className="text-slate-500 hover:underline" onClick={selection.clear}>
+                      Tout désélectionner
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              <DataTable
+                rows={rows}
+                columns={columns}
+                dimmed={listQ.isFetching}
+                selectedIds={selection.ids}
+                onToggle={selection.toggle}
+                onTogglePage={selection.setMany}
+                rowLabel={(r) => `Sélectionner ${joinProfile(r.profils)?.first_name ?? ""} ${joinProfile(r.profils)?.last_name ?? ""} le ${fmtDay(r.date)}`}
+                mobileRow={(r) => (
+                  <div className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-slate-900 dark:text-slate-100">
+                        <PersonName first={joinProfile(r.profils)?.first_name} last={joinProfile(r.profils)?.last_name} />
                       </p>
-                      <p className="text-sm text-slate-500">
-                        {row.classes?.name ?? "Classe"}
-                        {row.matieres?.name ? ` · ${row.matieres.name}` : ""}
-                        {row.note ? ` · ${row.note}` : ""}
-                      </p>
+                      {statusBadge(r)}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="info">Justifié</Badge>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === row.id}
-                        onClick={() => void setStatus(row, "absent", null)}
-                      >
-                        Retirer
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-            {moreButton(justifiedQ, justified.length, summary.excused)}
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Appel du jour
-            </h2>
-            {dayTotal === 0 ? (
-              <EmptyState message="Aucun appel enregistré pour cette date." />
-            ) : (
-              <div className="space-y-2">
-                {rows.map((row) => (
-                  <div
-                    key={row.id}
-                    data-class-color
-                    style={classColorVars({
-                      id: row.classes?.id,
-                      name: row.classes?.name,
-                    })}
-                    className={cn(
-                      "flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-2.5",
-                      CLASS_COLOR_SURFACE,
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">
-                        <PersonName
-                          first={joinProfile(row.profils)?.first_name}
-                          last={joinProfile(row.profils)?.last_name}
-                        />
-                      </p>
-                      <p className="text-xs opacity-80">
-                        {row.classes?.name ?? "—"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge tone={ATTENDANCE_TONE[row.status]}>
-                        {ATTENDANCE_LABELS[row.status]}
-                      </Badge>
-                      {row.class_section_id ? (
-                        <Link
-                          to={`/classes/${row.class_section_id}/presences`}
-                          className="text-xs font-medium text-brand-700 hover:underline"
-                        >
-                          Classe →
-                        </Link>
-                      ) : null}
+                    <p className="text-xs text-slate-500">
+                      {r.classes?.name ?? "—"} · {fmtDay(r.date)}
+                      {r.matieres?.name ? ` · ${r.matieres.name}` : ""}
+                    </p>
+                    {r.status === "excused" && r.note ? <p className="text-xs text-slate-500">{r.note}</p> : null}
+                    <div className="flex items-center gap-3">
+                      {rowAction(r)}
+                      <Link to={`/classes/${r.class_section_id}/presences?date=${r.date}`} className="text-xs font-medium text-brand-700 hover:underline">
+                        Voir l’appel
+                      </Link>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-            {moreButton(rowsQ, rows.length, dayTotal)}
-          </section>
-        </div>
+                )}
+              />
+              <Pagination
+                total={listTotal}
+                page={Math.min(page, pageCount)}
+                pageSize={pageSize}
+                onPage={setPage}
+                onPageSize={setPageSize}
+                noun="ligne"
+                busy={listQ.isFetching}
+              />
+            </Card>
+          )}
+        </>
       )}
+
+      <BulkBar count={selection.count} noun="ligne" onClear={selection.clear}>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={selAbsent.length === 0}
+          onClick={() => setDialog({ kind: "justify", rows: selAbsent })}
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          Justifier ({selAbsent.length})
+        </Button>
+        {selExcused.length > 0 ? (
+          <Button type="button" size="sm" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10" onClick={() => setDialog({ kind: "undo", rows: selExcused })}>
+            <Undo2 className="h-4 w-4" />
+            Retirer la justification ({selExcused.length})
+          </Button>
+        ) : null}
+        {selection.count > selAbsent.length + selExcused.length ? (
+          <span className="text-xs text-slate-300">
+            {selection.count - selAbsent.length - selExcused.length} retard(s) ou présence(s) ignoré(s)
+          </span>
+        ) : null}
+      </BulkBar>
+
+      <Modal
+        open={!!dialog}
+        title={dialog?.kind === "undo" ? "Retirer la justification" : "Justifier les absences"}
+        onClose={() => setDialog(null)}
+        closeDisabled={busy}
+      >
+        {dialog ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {dialog.kind === "justify" ? (
+                <>
+                  <strong>{dialogRows.length}</strong> absence{dialogRows.length > 1 ? "s" : ""} seront justifiée
+                  {dialogRows.length > 1 ? "s" : ""} et ne compteront plus comme absences.
+                </>
+              ) : (
+                <>
+                  <strong>{dialogRows.length}</strong> justification{dialogRows.length > 1 ? "s" : ""} seront retirée
+                  {dialogRows.length > 1 ? "s" : ""} : les cours redeviennent des absences non justifiées.
+                </>
+              )}
+            </p>
+            {dialog.kind === "justify" ? (
+              <>
+                <div>
+                  <Label>Motif</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {JUSTIFICATION_REASONS.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        aria-pressed={reason === r}
+                        onClick={() => setReason(r)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-sm font-medium transition",
+                          reason === r
+                            ? "border-brand-600 bg-brand-50 text-brand-800"
+                            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50",
+                        )}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="pe-extra">Précision (facultatif)</Label>
+                  <Input id="pe-extra" maxLength={200} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="Ex. : certificat reçu le 3 novembre" />
+                </div>
+              </>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setDialog(null)}>
+                Annuler
+              </Button>
+              <Button type="button" disabled={busy || dialogRows.length === 0} onClick={() => void apply()}>
+                {busy ? "Enregistrement…" : dialog.kind === "justify" ? "Justifier" : "Retirer"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

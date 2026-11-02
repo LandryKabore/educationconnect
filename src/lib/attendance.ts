@@ -24,6 +24,39 @@ export function isAttendancePositive(status: AttendanceStatus): boolean {
   return status === "present" || status === "late" || status === "excused";
 }
 
+export type AttendanceTotals = {
+  total: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+};
+
+/**
+ * Attendance rate in % (null when there is no lesson).
+ * Same convention as the rest of the app: a justified absence does not count against the
+ * student, and a late arrival counts as present.  rate = (lessons − unjustified absences) / lessons.
+ */
+export function attendanceRate(c: AttendanceTotals): number | null {
+  if (!c.total) return null;
+  return Math.round(((c.total - c.absent) / c.total) * 1000) / 10;
+}
+
+/** Every absence, justified or not. */
+export function absencesTotal(c: AttendanceTotals): number {
+  return c.absent + c.excused;
+}
+
+/** Reasons the school can pick when it justifies absences (stored as the row's note). */
+export const JUSTIFICATION_REASONS = [
+  "Maladie",
+  "Certificat médical",
+  "Rendez-vous médical",
+  "Raison familiale",
+  "Problème de transport",
+  "Autre",
+] as const;
+
 export const ATTENDANCE_TONE: Record<
   AttendanceStatus,
   "success" | "danger" | "warning" | "info"
