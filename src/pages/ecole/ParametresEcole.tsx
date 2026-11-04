@@ -13,6 +13,7 @@ import {
 } from "@/lib/schoolForm";
 import { supabase } from "@/lib/supabase";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
+import { FamilyAccountsCard } from "@/components/FamilyAccountsCard";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 
 function formSnapshot(form: SchoolFormFields) {
@@ -100,6 +101,8 @@ export default function ParametresEcole() {
           </div>
         </form>
       </Card>
+
+      <FamilyAccountsCard schoolId={schoolId} />
 
       {(school.plan || school.billing_status) && (
         <Card className="mt-6 max-w-2xl">

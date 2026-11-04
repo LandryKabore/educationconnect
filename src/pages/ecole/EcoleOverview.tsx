@@ -25,7 +25,7 @@ import {
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";
-import { fetchSchoolHomeStats } from "@/lib/scaleApi";
+import { fetchDeparturesSummary, fetchSchoolHomeStats } from "@/lib/scaleApi";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
@@ -72,6 +72,13 @@ export default function EcoleOverview() {
   const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const { data: sansClasse = 0 } = useStudentsWithoutClassCount();
   const { data: pendingExams = 0 } = usePendingExamsCount();
+  // pupils who left the school this year (kept in the database but not in the headcount)
+  const { data: departures } = useQuery({
+    queryKey: ["departs", schoolId],
+    enabled: !!schoolId,
+    queryFn: () => fetchDeparturesSummary(schoolId!),
+  });
+  const departed = departures?.total ?? 0;
   const name = personName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -360,11 +367,13 @@ export default function EcoleOverview() {
         />
         <MetricCard
           label="Élèves"
-          value={String(data.students)}
+          value={String(Math.max(0, data.students - departed))}
           hint={
             sansClasse > 0
               ? `${sansClasse} sans classe`
-              : "Comptes élèves"
+              : departed > 0
+                ? `${departed} sorti(s) cette année`
+                : "Comptes élèves"
           }
           valueClass={sansClasse > 0 ? "text-amber-600" : "text-sky-600"}
           to="/eleves"

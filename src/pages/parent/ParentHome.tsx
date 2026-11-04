@@ -18,6 +18,7 @@ import {
   type InboxPreview,
 } from "@/components/PortalHomeKit";
 import { Button } from "@/components/ui";
+import { HomeworkTomorrowCard } from "@/components/HomeworkTomorrowCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { formatDateSafe } from "@/lib/dateFr";
@@ -151,6 +152,11 @@ export default function ParentHome() {
         name={name}
         context={[schoolName, "Parent"].filter(Boolean).join(" · ")}
         unreadInbox={unreadInbox}
+      />
+
+      <HomeworkTomorrowCard
+        userId={user?.id}
+        moreHref={data.children.length === 1 ? `/enfants/${data.children[0].id}/cahier` : "/enfants"}
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

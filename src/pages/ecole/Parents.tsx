@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, KeyRound, Link2 } from "lucide-react";
+import { Download, FileText, KeyRound, Link2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { cn, fromAuthEmail, fullName } from "@/lib/utils";
@@ -80,7 +80,7 @@ function accountStatus(p: ParentRow, cred: ParentCredential) {
 }
 
 export default function Parents() {
-  const { schoolId } = useAuth();
+  const { schoolId, schools } = useAuth();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -202,6 +202,44 @@ export default function Parents() {
       credentialsToCsv(rows),
     );
     toast.success(`${rows.length} identifiant(s) exporté(s)`);
+  };
+
+  // "fiche famille": one printable card per parent (login + temporary password + children)
+  const printFamilySheets = async (source: ParentRow[]) => {
+    const fiches = source
+      .map((p) => {
+        const cred = credentialFor(p);
+        if (!cred.tempPassword || cred.used) return null;
+        return {
+          parentName: fullName(p.first_name, p.last_name),
+          children: p.children ?? [],
+          username: cred.username,
+          tempPassword: cred.tempPassword,
+        };
+      })
+      .filter(Boolean) as { parentName: string; children: string[]; username: string; tempPassword: string }[];
+    if (fiches.length === 0) {
+      toast.message("Aucun mot de passe temporaire à imprimer");
+      return;
+    }
+    const { generateFichesFamillePdf } = await import("@/lib/pdfFichesFamille");
+    const doc = generateFichesFamillePdf({
+      schoolName: schools.find((x) => x.id === schoolId)?.name ?? "École",
+      appUrl: window.location.origin,
+      fiches,
+    });
+    doc.save(`fiches-famille-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success(`${fiches.length} fiche(s) famille créée(s)`);
+  };
+
+  const printAllFamilySheets = async () => {
+    if (!schoolId) return;
+    try {
+      const all = await fetchAllParents(schoolId, { search: debouncedSearch });
+      await printFamilySheets(all);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Impression impossible");
+    }
   };
 
   const downloadAllCredentials = async () => {
@@ -604,6 +642,10 @@ export default function Parents() {
                 <Download className="mr-1 h-4 w-4" />
                 Télécharger les mots de passe temporaires
               </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => void printAllFamilySheets()}>
+                <FileText className="mr-1 h-4 w-4" />
+                Fiches famille (PDF)
+              </Button>
             </div>
             <p className="px-4 pb-3 text-xs text-slate-500">
               Les identifiants restent visibles ici tant que le parent n’a pas
@@ -667,6 +709,10 @@ export default function Parents() {
         >
           <Download className="mr-1 h-4 w-4" />
           Identifiants (CSV)
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void printFamilySheets(selection.rows)}>
+          <FileText className="mr-1 h-4 w-4" />
+          Fiches famille (PDF)
         </Button>
       </BulkBar>
     </div>

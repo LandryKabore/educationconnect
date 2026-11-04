@@ -13,6 +13,7 @@ export function ClassFilter({
   counts,
   total,
   withoutClassCount,
+  showFormer,
   className,
 }: {
   id: string;
@@ -24,6 +25,8 @@ export function ClassFilter({
   total?: number;
   /** When set (> 0), a "Sans classe" option is offered. */
   withoutClassCount?: number;
+  /** Offer "Anciens élèves" (pupils who left the school). */
+  showFormer?: boolean;
   className?: string;
 }) {
   return (
@@ -40,6 +43,7 @@ export function ClassFilter({
       {withoutClassCount && withoutClassCount > 0 ? (
         <option value="__none__">Sans classe ({withoutClassCount})</option>
       ) : null}
+      {showFormer ? <option value="__former__">Anciens élèves (sortis)</option> : null}
       {classes.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name} ({counts[c.id] ?? 0})

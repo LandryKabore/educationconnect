@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookMarked,
+  BarChart3,
   BookOpen,
+  BookOpenCheck,
   CalendarDays,
   CalendarRange,
   CheckCircle2,
@@ -152,6 +154,8 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           icon: <PencilLine className="h-4 w-4" />,
         },
         { to: "/bulletins", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
+        { to: "/cahier-ecole", label: "Cahier de textes", icon: <BookOpenCheck className="h-4 w-4" /> },
+        { to: "/statistiques", label: "Statistiques", icon: <BarChart3 className="h-4 w-4" /> },
       ],
     },
     {
@@ -223,6 +227,11 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           icon: <CalendarDays className="h-4 w-4" />,
         },
         {
+          to: "/cahier-de-textes",
+          label: "Cahier de textes",
+          icon: <BookOpenCheck className="h-4 w-4" />,
+        },
+        {
           to: "/devoirs",
           label: "Devoirs & évaluations",
           icon: <ClipboardList className="h-4 w-4" />,
@@ -260,6 +269,11 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
     {
       label: "Vie scolaire",
       items: [
+        {
+          to: "/mon-cahier",
+          label: "Cahier de textes",
+          icon: <BookOpenCheck className="h-4 w-4" />,
+        },
         {
           to: "/mes-notes",
           label: "Mes notes",

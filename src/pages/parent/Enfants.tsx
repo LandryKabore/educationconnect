@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
+  BookOpenCheck,
   CalendarDays,
   ClipboardList,
   FileText,
@@ -27,6 +28,7 @@ const CHILD_LINKS = [
   { to: "presences", label: "Présences", icon: UserCheck },
   { to: "bulletin", label: "Bulletin", icon: FileText },
   { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
+  { to: "cahier", label: "Cahier de textes", icon: BookOpenCheck },
   { to: "devoirs", label: "Devoirs", icon: GraduationCap },
   { to: "exercices", label: "Exercices", icon: NotebookPen },
   { to: "compositions", label: "Compositions", icon: ClipboardList },

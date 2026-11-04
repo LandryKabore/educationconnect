@@ -1,6 +1,8 @@
 /** Student import helpers (CSV + XLSX). UTF-8 CSV: comma or semicolon. */
 
 import * as XLSX from "xlsx";
+// same rules as the import edge function (one file, two users)
+import { dobIsPlausible, normalizeDob, normalizeGender, phoneIsUsable } from "../../supabase/functions/_shared/famille";
 
 export type StudentCsvRow = {
   line: number;
@@ -8,6 +10,14 @@ export type StudentCsvRow = {
   lastName: string;
   className: string;
   phone: string;
+  /** M / F (empty = not given) */
+  gender: string;
+  /** yyyy-mm-dd (empty = not given) */
+  dateOfBirth: string;
+  matricule: string;
+  parentFirstName: string;
+  parentLastName: string;
+  parentPhone: string;
 };
 
 export type StudentCsvParseResult = {
@@ -30,6 +40,29 @@ const HEADER_MAP: Record<string, keyof Omit<StudentCsvRow, "line">> = {
   téléphone: "phone",
   phone: "phone",
   tel: "phone",
+  // identity (nov3)
+  sexe: "gender",
+  genre: "gender",
+  gender: "gender",
+  date_de_naissance: "dateOfBirth",
+  date_naissance: "dateOfBirth",
+  naissance: "dateOfBirth",
+  datenaissance: "dateOfBirth",
+  date_of_birth: "dateOfBirth",
+  dob: "dateOfBirth",
+  matricule: "matricule",
+  // parent (nov3)
+  parent_prenom: "parentFirstName",
+  prenom_parent: "parentFirstName",
+  parent_firstname: "parentFirstName",
+  parent_nom: "parentLastName",
+  nom_parent: "parentLastName",
+  parent_lastname: "parentLastName",
+  parent_telephone: "parentPhone",
+  telephone_parent: "parentPhone",
+  parent_tel: "parentPhone",
+  tel_parent: "parentPhone",
+  parent_phone: "parentPhone",
 };
 
 function detectDelimiter(headerLine: string): "," | ";" {
@@ -70,7 +103,8 @@ function normalizeHeader(h: string) {
     .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
 }
 
 function cellToString(value: unknown): string {
@@ -149,6 +183,12 @@ export function parseStudentTable(
       lastName: "",
       className: "",
       phone: "",
+      gender: "",
+      dateOfBirth: "",
+      matricule: "",
+      parentFirstName: "",
+      parentLastName: "",
+      parentPhone: "",
     };
     mapped.forEach((key, idx) => {
       if (!key) return;
@@ -157,6 +197,31 @@ export function parseStudentTable(
 
     if (!row.firstName || !row.lastName) {
       errors.push(`Ligne ${row.line} : prénom et nom requis.`);
+      continue;
+    }
+    if (row.gender) {
+      const g = normalizeGender(row.gender);
+      if (!g) {
+        errors.push(`Ligne ${row.line} : sexe non reconnu « ${row.gender} » (M ou F).`);
+        continue;
+      }
+      row.gender = g;
+    }
+    if (row.dateOfBirth) {
+      const iso = normalizeDob(row.dateOfBirth);
+      if (!iso || !dobIsPlausible(iso)) {
+        errors.push(
+          `Ligne ${row.line} : date de naissance non reconnue « ${row.dateOfBirth} » (écrire jj/mm/aaaa, âge entre 3 et 35 ans).`,
+        );
+        continue;
+      }
+      row.dateOfBirth = iso;
+    }
+    if (
+      (row.parentFirstName || row.parentLastName || row.parentPhone) &&
+      !phoneIsUsable(row.parentPhone)
+    ) {
+      errors.push(`Ligne ${row.line} : téléphone du parent obligatoire (8 chiffres au moins) pour créer ou relier le parent.`);
       continue;
     }
     rows.push(row);
@@ -254,19 +319,19 @@ export async function parseStudentImportFile(
 
 export function studentCsvTemplate(): string {
   return [
-    "prenom,nom,classe,telephone",
-    "Awa,Ouedraogo,6eme A,70123456",
-    "Ibrahim,Sawadogo,6emeA",
-    "Fatou,Kaboré,5eme B,70234567",
+    "prenom,nom,classe,telephone,sexe,date_naissance,matricule,parent_prenom,parent_nom,parent_telephone",
+    "Awa,Ouedraogo,6eme A,70123456,F,07/03/2014,,Mariam,Ouedraogo,70999888",
+    "Ibrahim,Sawadogo,6emeA,,M,15/09/2013,,Moussa,Sawadogo,70777666",
+    "Fatou,Kaboré,5eme B,70234567,F,02/12/2012,,,,",
   ].join("\n");
 }
 
 export function studentXlsxTemplateBlob(): Blob {
   const rows = [
-    ["prenom", "nom", "classe", "telephone"],
-    ["Awa", "Ouedraogo", "6eme A", "70123456"],
-    ["Ibrahim", "Sawadogo", "6emeA", ""],
-    ["Fatou", "Kaboré", "5eme B", "70234567"],
+    ["prenom", "nom", "classe", "telephone", "sexe", "date_naissance", "matricule", "parent_prenom", "parent_nom", "parent_telephone"],
+    ["Awa", "Ouedraogo", "6eme A", "70123456", "F", "07/03/2014", "", "Mariam", "Ouedraogo", "70999888"],
+    ["Ibrahim", "Sawadogo", "6emeA", "", "M", "15/09/2013", "", "Moussa", "Sawadogo", "70777666"],
+    ["Fatou", "Kaboré", "5eme B", "70234567", "F", "02/12/2012", "", "", "", ""],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   const workbook = XLSX.utils.book_new();

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { KeyRound, Link2, MessageSquare } from "lucide-react";
+import { KeyRound, Link2, LogOut, MessageSquare, Undo2, UserCheck, UserX } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { programmeToCoefMap } from "@/lib/averages";
@@ -22,11 +22,16 @@ import { fromAuthEmail, fullName } from "@/lib/utils";
 import { copyToClipboard } from "@/lib/clipboard";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { ParcoursCard } from "@/components/ParcoursCard";
+import { Modal } from "@/components/Modal";
+import { ReintegrerModal, SortieEleveModal } from "@/components/SortieEleve";
+import { exitReasonLabel, setStudentIdentity } from "@/lib/scaleApi";
 import {
   BackLink,
   Badge,
   Button,
   Card,
+  DateInputFr,
   EmptyState,
   Label,
   PageHeader,
@@ -74,6 +79,14 @@ export default function EleveDetail() {
   const [busy, setBusy] = useState(false);
   const [assignClassId, setAssignClassId] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [showExit, setShowExit] = useState(false);
+  const [showReinstate, setShowReinstate] = useState(false);
+  const [editIdentity, setEditIdentity] = useState(false);
+  const [identityGender, setIdentityGender] = useState("");
+  const [identityDob, setIdentityDob] = useState("");
+  const [savingIdentity, setSavingIdentity] = useState(false);
+  const [familyAction, setFamilyAction] = useState<"give_account" | "make_family_managed" | null>(null);
+  const [familyBusy, setFamilyBusy] = useState(false);
 
   const backTo =
     typeof (location.state as { elevesList?: unknown } | null)?.elevesList ===
@@ -117,6 +130,28 @@ export default function EleveDetail() {
         .eq("status", "active")
         .maybeSingle();
       return data as EnrollmentRow | null;
+    },
+  });
+
+  // departure (#30): the pupil left the school, the file is kept
+  const { data: former } = useQuery({
+    queryKey: ["eleve-sortie", id],
+    enabled: !!id && !!student && !enrollment,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("inscriptions")
+        .select("left_at, exit_reason, exit_note, classes(name)")
+        .eq("student_id", id!)
+        .eq("status", "sorti")
+        .order("left_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as {
+        left_at: string | null;
+        exit_reason: string | null;
+        exit_note: string | null;
+        classes: { name: string } | null;
+      } | null;
     },
   });
 
@@ -343,6 +378,71 @@ export default function EleveDetail() {
     }
   };
 
+  const refreshAfterChange = () => {
+    void qc.invalidateQueries({ queryKey: ["eleve-inscription", id] });
+    void qc.invalidateQueries({ queryKey: ["eleve-sortie", id] });
+    void qc.invalidateQueries({ queryKey: ["eleve-detail", id] });
+    void qc.invalidateQueries({ queryKey: ["eleve-identifiant", id] });
+    void qc.invalidateQueries({ queryKey: ["parcours", id] });
+    void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves-class-counts", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["eleves-sans-classe", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["departs", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["family-overview", schoolId] });
+  };
+
+  const saveIdentity = async () => {
+    if (!id) return;
+    if (!identityGender && !identityDob) {
+      toast.error("Renseignez le sexe ou la date de naissance");
+      return;
+    }
+    setSavingIdentity(true);
+    try {
+      await setStudentIdentity(id, identityGender || null, identityDob || null);
+      toast.success("Informations enregistrées");
+      setEditIdentity(false);
+      setIdentityGender("");
+      setIdentityDob("");
+      refreshAfterChange();
+      void qc.invalidateQueries({ queryKey: ["identity-gaps", schoolId] });
+      void qc.invalidateQueries({ queryKey: ["statistiques", schoolId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Enregistrement impossible");
+    } finally {
+      setSavingIdentity(false);
+    }
+  };
+
+  const runFamilyAction = async () => {
+    if (!schoolId || !id || !familyAction) return;
+    setFamilyBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("gerer-identifiant", {
+        body: { action: familyAction, userId: id, schoolId },
+      });
+      if (error) throw error;
+      const res = data as { error?: string; tempPassword?: string; username?: string };
+      if (res.error) throw new Error(res.error);
+      if (familyAction === "give_account" && res.tempPassword) {
+        const creds = `${res.username}\n${res.tempPassword}`;
+        toast.success("Compte élève activé", {
+          description: `${res.username ?? ""} · ${res.tempPassword}`,
+          action: { label: "Copier", onClick: () => void copyToClipboard(creds) },
+          duration: 30_000,
+        });
+      } else {
+        toast.success("Compte famille activé : le parent est maintenant le seul accès");
+      }
+      setFamilyAction(null);
+      refreshAfterChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action impossible");
+    } finally {
+      setFamilyBusy(false);
+    }
+  };
+
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;
   }
@@ -365,31 +465,63 @@ export default function EleveDetail() {
         subtitle={
           enrollment?.classes?.name
             ? `Classe ${enrollment.classes.name}`
-            : "Sans classe"
+            : former
+              ? `Ancien élève${former.classes?.name ? ` · dernière classe : ${former.classes.name}` : ""}`
+              : "Sans classe"
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void runCredentialAction("reset_password")}
-            >
-              <KeyRound className="mr-1 h-3.5 w-3.5" />
-              Nouveau mot de passe
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void runCredentialAction("recovery_link")}
-            >
-              <Link2 className="mr-1 h-3.5 w-3.5" />
-              Lien oublié
-            </Button>
+            {student.family_managed ? null : (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void runCredentialAction("reset_password")}
+                >
+                  <KeyRound className="mr-1 h-3.5 w-3.5" />
+                  Nouveau mot de passe
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void runCredentialAction("recovery_link")}
+                >
+                  <Link2 className="mr-1 h-3.5 w-3.5" />
+                  Lien oublié
+                </Button>
+              </>
+            )}
+            {enrollment ? (
+              <Button size="sm" variant="outline" onClick={() => setShowExit(true)}>
+                <LogOut className="mr-1 h-3.5 w-3.5" />
+                Sortie de l'élève
+              </Button>
+            ) : former ? (
+              <Button size="sm" variant="outline" onClick={() => setShowReinstate(true)}>
+                <Undo2 className="mr-1 h-3.5 w-3.5" />
+                Réintégrer
+              </Button>
+            ) : null}
           </div>
         }
       />
+
+      {former ? (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">
+            Cet élève est sorti de l'école
+            {former.left_at ? ` le ${format(new Date(former.left_at), "d MMMM yyyy", { locale: fr })}` : ""}
+            {" · "}
+            {exitReasonLabel(former.exit_reason)}
+          </p>
+          {former.exit_note ? <p className="mt-1 text-amber-900">{former.exit_note}</p> : null}
+          <p className="mt-1 text-amber-800">
+            Ses notes, ses présences et son parcours sont conservés. Il n'apparaît plus dans les listes de classe.
+          </p>
+        </div>
+      ) : null}
 
       <Card className="mb-6">
         <h3 className="mb-3 font-semibold text-slate-900">Photo de profil</h3>
@@ -439,7 +571,45 @@ export default function EleveDetail() {
             />
           </dl>
 
-          <div className="mt-4 border-t border-slate-100 pt-4">
+          {!student.gender || student.gender === "other" || !student.date_of_birth ? (
+            <div className="mt-3">
+              {editIdentity ? (
+                <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <div>
+                    <Label>Sexe</Label>
+                    <Select value={identityGender} onChange={(e) => setIdentityGender(e.target.value)}>
+                      <option value="">{student.gender === "M" || student.gender === "F" ? "Inchangé" : "Choisir…"}</option>
+                      <option value="M">Masculin</option>
+                      <option value="F">Féminin</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Date de naissance</Label>
+                    <DateInputFr
+                      value={identityDob}
+                      onChange={setIdentityDob}
+                      minYear={new Date().getFullYear() - 35}
+                      maxYear={new Date().getFullYear() - 3}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" disabled={savingIdentity} onClick={() => void saveIdentity()}>
+                      {savingIdentity ? "Enregistrement…" : "Enregistrer"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditIdentity(false)}>
+                      Annuler
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setEditIdentity(true)}>
+                  Compléter le sexe / la date de naissance
+                </Button>
+              )}
+            </div>
+          ) : null}
+
+          <div className={enrollment || !former ? "mt-4 border-t border-slate-100 pt-4" : "hidden"}>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Label>Affecter / changer de classe</Label>
               {!enrollment ? (
@@ -494,6 +664,23 @@ export default function EleveDetail() {
 
         <Card>
           <h3 className="font-semibold text-slate-900">Compte</h3>
+          {student.family_managed ? (
+            <div className="mt-3 space-y-3 text-sm">
+              <Badge tone="info">Compte famille</Badge>
+              <p className="text-slate-600">
+                Cet élève n'a pas de connexion : c'est le parent qui suit son enfant avec son propre compte.
+              </p>
+              {parents.length === 0 ? (
+                <p className="text-amber-700">
+                  Aucun parent lié : personne ne peut voir cet élève. Créez le parent dans la page Parents.
+                </p>
+              ) : null}
+              <Button size="sm" variant="outline" onClick={() => setFamilyAction("give_account")}>
+                <UserCheck className="mr-1 h-3.5 w-3.5" />
+                Donner un compte à l'élève
+              </Button>
+            </div>
+          ) : (
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500">Identifiant</span>
@@ -520,8 +707,17 @@ export default function EleveDetail() {
                 })}
               </p>
             ) : null}
+            <div className="pt-2">
+              <Button size="sm" variant="outline" onClick={() => setFamilyAction("make_family_managed")}>
+                <UserX className="mr-1 h-3.5 w-3.5" />
+                Passer en compte famille
+              </Button>
+            </div>
           </div>
+          )}
         </Card>
+
+        {id ? <ParcoursCard studentId={id} /> : null}
 
         <Card>
           <h3 className="font-semibold text-slate-900">Parents liés</h3>
@@ -638,6 +834,54 @@ export default function EleveDetail() {
           </div>
         )}
       </Card>
+
+      {showExit && id ? (
+        <SortieEleveModal
+          open
+          studentId={id}
+          studentName={fullName(student.first_name, student.last_name)}
+          onClose={() => setShowExit(false)}
+          onDone={refreshAfterChange}
+        />
+      ) : null}
+      {showReinstate && id ? (
+        <ReintegrerModal
+          open
+          studentId={id}
+          studentName={fullName(student.first_name, student.last_name)}
+          classes={classes}
+          onClose={() => setShowReinstate(false)}
+          onDone={refreshAfterChange}
+        />
+      ) : null}
+      <Modal
+        open={familyAction !== null}
+        title={familyAction === "give_account" ? "Donner un compte à l'élève" : "Passer en compte famille"}
+        onClose={() => setFamilyAction(null)}
+        closeDisabled={familyBusy}
+      >
+        <div className="space-y-4 text-sm text-slate-700">
+          {familyAction === "give_account" ? (
+            <p>
+              L'élève aura son propre identifiant et un mot de passe temporaire à lui remettre. Le compte du parent
+              reste inchangé.
+            </p>
+          ) : (
+            <p>
+              Le login de l'élève sera <strong>fermé</strong> (son mot de passe ne marchera plus). Les parents
+              gardent leur accès et voient tout. Il faut au moins un parent lié.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button disabled={familyBusy} onClick={() => void runFamilyAction()}>
+              {familyBusy ? "Enregistrement…" : "Confirmer"}
+            </Button>
+            <Button variant="ghost" disabled={familyBusy} onClick={() => setFamilyAction(null)}>
+              Annuler
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

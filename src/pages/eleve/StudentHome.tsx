@@ -40,6 +40,7 @@ import {
 import { fetchAnnualAverage } from "@/lib/annualAverage";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import { Button } from "@/components/ui";
+import { HomeworkTomorrowCard } from "@/components/HomeworkTomorrowCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
@@ -417,6 +418,8 @@ export default function StudentHome() {
         context={classLabel}
         unreadInbox={unreadInbox}
       />
+
+      <HomeworkTomorrowCard userId={user?.id} moreHref="/mon-cahier" showChildren={false} />
 
       {edtPendingCount > 0 ? (
         <div className="flex flex-col gap-3 rounded-2xl border border-brand-200 bg-brand-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-brand-500/40 dark:bg-brand-950/30">

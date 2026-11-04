@@ -19,6 +19,8 @@ export interface Profile {
   address?: string | null;
   matricule?: string | null;
   must_change_password: boolean;
+  /** true = the pupil has no login of their own: the parent is the only account (family-first schools) */
+  family_managed?: boolean;
   last_login_at?: string | null;
   active: boolean;
   created_at: string;
@@ -45,6 +47,8 @@ export interface School {
   plan: string | null;
   billing_status: string | null;
   subscription_ends_at: string | null;
+  /** Family-first accounts: pupils from this level and below get no login (null = every pupil has a login) */
+  student_accounts_from?: string | null;
   active: boolean;
   created_at: string;
   updated_at?: string | null;

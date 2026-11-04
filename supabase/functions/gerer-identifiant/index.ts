@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { LOCKED_BAN_DURATION, lockedPassword } from "../_shared/famille.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -127,9 +128,120 @@ Deno.serve(async (req) => {
 
     const { data: profil } = await admin
       .from("profils")
-      .select("email")
+      .select("email, family_managed")
       .eq("id", targetUserId)
       .maybeSingle();
+
+    const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
+      new Response(JSON.stringify(payload), {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+
+    // nov3: a family-managed pupil has a locked account. A password reset or a recovery link would
+    // quietly open it, so both are refused: the school must first choose "Donner un compte à l'élève".
+    if ((action === "reset_password" || action === "recovery_link") && profil?.family_managed) {
+      return jsonResponse(
+        {
+          error:
+            "Cet élève n'a pas de compte : le parent est le seul compte. Utilisez « Donner un compte à l'élève » si besoin.",
+        },
+        400,
+      );
+    }
+
+    if (action === "give_account" || action === "make_family_managed") {
+      if (targetRole.role !== "student") {
+        return jsonResponse({ error: "Cette action concerne uniquement les élèves" }, 400);
+      }
+
+      if (action === "give_account") {
+        // family -> own login: new temporary password, account unlocked
+        const tempPassword = randomPassword(10);
+        const { error } = await admin.auth.admin.updateUserById(targetUserId, {
+          password: tempPassword,
+          ban_duration: "none",
+          user_metadata: { must_change_password: true },
+        });
+        if (error) throw error;
+        const { error: upError } = await admin
+          .from("profils")
+          .update({ family_managed: false, must_change_password: true, active: true })
+          .eq("id", targetUserId);
+        if (upError) throw upError;
+
+        const username =
+          (profil?.email?.endsWith("@edufaso.local")
+            ? profil.email.replace("@edufaso.local", "")
+            : profil?.email) ?? targetUserId.slice(0, 8);
+        const { data: existingCred } = await admin
+          .from("identifiants_temporaires")
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+        if (existingCred?.id) {
+          await admin
+            .from("identifiants_temporaires")
+            .update({ temp_password_hint: tempPassword, used: false, username })
+            .eq("id", existingCred.id);
+        } else {
+          await admin.from("identifiants_temporaires").insert({
+            user_id: targetUserId,
+            username,
+            temp_password_hint: tempPassword,
+            used: false,
+          });
+        }
+        await admin.from("audit_logs").insert({
+          actor_id: user.id,
+          action: "give_student_account",
+          entity_type: "user",
+          entity_id: targetUserId,
+          details: { school_id: schoolId, via: "gerer-identifiant" },
+        });
+        return jsonResponse({
+          success: true,
+          username,
+          tempPassword,
+          message: "Compte élève activé : communiquez ces identifiants",
+        });
+      }
+
+      // make_family_managed: own login -> parent only. Needs a parent, otherwise nobody could see the pupil.
+      const { count: parentCount } = await admin
+        .from("liens_parent_eleve")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", targetUserId);
+      if (!parentCount) {
+        return jsonResponse(
+          { error: "Reliez d'abord un parent à cet élève (menu Parents), sinon personne ne pourra le suivre." },
+          400,
+        );
+      }
+      const { error } = await admin.auth.admin.updateUserById(targetUserId, {
+        password: lockedPassword(),
+        ban_duration: LOCKED_BAN_DURATION,
+        user_metadata: { must_change_password: false },
+      });
+      if (error) throw error;
+      const { error: upError } = await admin
+        .from("profils")
+        .update({ family_managed: true, must_change_password: false })
+        .eq("id", targetUserId);
+      if (upError) throw upError;
+      await admin.from("identifiants_temporaires").delete().eq("user_id", targetUserId);
+      await admin.from("audit_logs").insert({
+        actor_id: user.id,
+        action: "make_student_family_managed",
+        entity_type: "user",
+        entity_id: targetUserId,
+        details: { school_id: schoolId, via: "gerer-identifiant" },
+      });
+      return jsonResponse({
+        success: true,
+        message: "Compte famille : le login de l'élève est fermé, les parents gardent leur accès",
+      });
+    }
 
     if (action === "reset_password") {
       const tempPassword = randomPassword(10);

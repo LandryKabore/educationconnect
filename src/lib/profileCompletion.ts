@@ -64,6 +64,8 @@ export function getMissingProfileFields(
   role: AppRole | null | undefined,
 ): ProfileFieldDef[] {
   if (!profile || !role) return [];
+  // family-first pupils never log in: the school fills their file
+  if (profile.family_managed) return [];
   if (!ROLES_NEEDING_COMPLETION.includes(role)) return [];
   const defs = PROFILE_FIELDS_BY_ROLE[role] ?? [];
   return defs.filter((f) => f.required && isBlank(getProfileFieldValue(profile, f.key)));

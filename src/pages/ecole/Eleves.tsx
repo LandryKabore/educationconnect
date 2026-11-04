@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { Download, KeyRound, Link2, Upload, User } from "lucide-react";
+import { Download, KeyRound, Link2, LogOut, Undo2, Upload, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection } from "@/lib/types";
@@ -14,8 +14,10 @@ import {
   fetchClassStudentCounts,
   fetchStudentsPage,
   fetchStudentsWithoutClass,
+  exitReasonLabel,
   type StudentPageRow,
 } from "@/lib/scaleApi";
+import { ReintegrerModal, SortieEleveModal } from "@/components/SortieEleve";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePageParams } from "@/hooks/usePageParams";
 import { useRowSelection } from "@/hooks/useRowSelection";
@@ -55,6 +57,8 @@ import {
 interface CreateResult {
   username: string;
   tempPassword: string;
+  /** family-first school: no login was created, the parent is the only account */
+  familyManaged?: boolean;
 }
 
 interface ImportCredential {
@@ -63,6 +67,24 @@ interface ImportCredential {
   className: string;
   username: string;
   tempPassword: string;
+  familyManaged?: boolean;
+}
+
+interface ImportParent {
+  childName: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  username: string;
+  tempPassword: string;
+  existing: boolean;
+}
+
+interface ImportWarning {
+  line: number | null;
+  firstName: string;
+  lastName: string;
+  message: string;
 }
 
 interface StudentCredential {
@@ -74,6 +96,20 @@ interface StudentCredential {
 type StudentRow = StudentPageRow;
 
 function accountStatus(s: StudentRow, cred: StudentCredential) {
+  if (s.exit) {
+    return {
+      label: `Sorti(e) le ${format(new Date(s.exit.leftAt), "d MMM yyyy", { locale: fr })}`,
+      tone: "warning" as const,
+      detail: `${exitReasonLabel(s.exit.reason)}${s.exit.className ? ` · ${s.exit.className}` : ""}`,
+    };
+  }
+  if (s.family_managed) {
+    return {
+      label: "Compte famille",
+      tone: "info" as const,
+      detail: "Pas de connexion élève : le parent suit son enfant",
+    };
+  }
   if (!s.must_change_password && (cred.used || s.last_login_at)) {
     return {
       label: "Mot de passe modifié",
@@ -172,10 +208,14 @@ export default function Eleves() {
   const [importDone, setImportDone] = useState(0);
   const [importTotal, setImportTotal] = useState(0);
   const [importCreds, setImportCreds] = useState<ImportCredential[]>([]);
+  const [importParents, setImportParents] = useState<ImportParent[]>([]);
+  const [importWarnings, setImportWarnings] = useState<ImportWarning[]>([]);
   const [importFailed, setImportFailed] = useState<
     { line: number | null; firstName: string; lastName: string; error: string }[]
   >([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [exitTarget, setExitTarget] = useState<StudentRow | null>(null);
+  const [reinstateTarget, setReinstateTarget] = useState<StudentRow | null>(null);
   const [bulkClassId, setBulkClassId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
 
@@ -263,6 +303,7 @@ export default function Eleves() {
 
   const selectedClassLabel = useMemo(() => {
     if (selectedClassId === "__none__") return "Sans classe";
+    if (selectedClassId === "__former__") return "Anciens élèves";
     return classes.find((c) => c.id === selectedClassId)?.name ?? "";
   }, [selectedClassId, classes]);
 
@@ -341,6 +382,8 @@ export default function Eleves() {
     void qc.invalidateQueries({ queryKey: ["eleves-sans-classe", schoolId] });
     void qc.invalidateQueries({ queryKey: ["school-setup", schoolId] });
     void qc.invalidateQueries({ queryKey: ["ecole-stats", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["departs", schoolId] });
+    void qc.invalidateQueries({ queryKey: ["family-overview", schoolId] });
   };
 
   const exportCredentials = (source: StudentRow[], slug: string) => {
@@ -458,23 +501,53 @@ export default function Eleves() {
       : "/eleves",
   };
 
-  const studentMenu = (s: StudentRow) => [
-    {
+  const studentMenu = (s: StudentRow) => {
+    const profileItem = {
       label: "Voir le profil",
       icon: <User className="h-4 w-4" />,
       onSelect: () => navigate(`/eleves/${s.id}`, { state: listState }),
-    },
-    {
-      label: "Nouveau mot de passe",
-      icon: <KeyRound className="h-4 w-4" />,
-      onSelect: () => void runCredentialAction(s, "reset_password"),
-    },
-    {
-      label: "Lien oublié",
-      icon: <Link2 className="h-4 w-4" />,
-      onSelect: () => void runCredentialAction(s, "recovery_link"),
-    },
-  ];
+    };
+    // former pupil: profile + return to school
+    if (s.exit) {
+      return [
+        profileItem,
+        {
+          label: "Réintégrer",
+          icon: <Undo2 className="h-4 w-4" />,
+          onSelect: () => setReinstateTarget(s),
+        },
+      ];
+    }
+    // family-first pupil: no password to reset (the parent is the only login)
+    if (s.family_managed) {
+      return [
+        profileItem,
+        {
+          label: "Sortie de l'élève",
+          icon: <LogOut className="h-4 w-4" />,
+          onSelect: () => setExitTarget(s),
+        },
+      ];
+    }
+    return [
+      profileItem,
+      {
+        label: "Nouveau mot de passe",
+        icon: <KeyRound className="h-4 w-4" />,
+        onSelect: () => void runCredentialAction(s, "reset_password"),
+      },
+      {
+        label: "Lien oublié",
+        icon: <Link2 className="h-4 w-4" />,
+        onSelect: () => void runCredentialAction(s, "recovery_link"),
+      },
+      {
+        label: "Sortie de l'élève",
+        icon: <LogOut className="h-4 w-4" />,
+        onSelect: () => setExitTarget(s),
+      },
+    ];
+  };
 
   const studentColumns: DataTableColumn<StudentRow>[] = [
     {
@@ -507,7 +580,9 @@ export default function Eleves() {
       key: "classe",
       header: "Classe",
       cell: (s) =>
-        s.className ? (
+        s.exit ? (
+          <span className="text-sm text-slate-600">{s.exit.className ?? "—"}</span>
+        ) : s.className ? (
           <ClassColorBadge id={s.classSectionId} name={s.className} />
         ) : (
           <span className="text-xs font-medium text-amber-700">Sans classe</span>
@@ -518,6 +593,7 @@ export default function Eleves() {
       header: "Identifiant",
       hideBelowLg: true,
       cell: (s) => {
+        if (s.family_managed || s.exit) return <span className="text-xs text-slate-400">—</span>;
         const cred = credentialFor(s);
         return (
           <div className="flex flex-col items-start gap-1">
@@ -590,12 +666,14 @@ export default function Eleves() {
               )}
               <Badge tone={status.tone}>{status.label}</Badge>
             </span>
-            <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-              {cred.username}
-              {cred.tempPassword && !cred.used ? (
-                <Badge tone="warning">{cred.tempPassword}</Badge>
-              ) : null}
-            </span>
+            {s.family_managed || s.exit ? null : (
+              <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                {cred.username}
+                {cred.tempPassword && !cred.used ? (
+                  <Badge tone="warning">{cred.tempPassword}</Badge>
+                ) : null}
+              </span>
+            )}
           </span>
         </Link>
         <RowMenu
@@ -648,9 +726,11 @@ export default function Eleves() {
         setCreating(false);
         return;
       }
+      const fam = (data as { familyManaged?: boolean }).familyManaged === true;
       setResult({
         username: res.username ?? "—",
         tempPassword: res.tempPassword ?? "—",
+        familyManaged: fam,
       });
       toast.success("Élève créé et inscrit en classe");
       invalidateStudentQueries();
@@ -672,6 +752,8 @@ export default function Eleves() {
     setPreviewRows([]);
     setParseErrors([]);
     setImportCreds([]);
+    setImportParents([]);
+    setImportWarnings([]);
     setImportFailed([]);
     setImportDone(0);
     setImportTotal(0);
@@ -684,6 +766,8 @@ export default function Eleves() {
     setParseErrors(parsed.errors);
     setPreviewRows(parsed.rows);
     setImportCreds([]);
+    setImportParents([]);
+    setImportWarnings([]);
     setImportFailed([]);
     setImportDone(0);
     setImportTotal(0);
@@ -711,9 +795,13 @@ export default function Eleves() {
     setImportDone(0);
     setImportTotal(total);
     setImportCreds([]);
+    setImportParents([]);
+    setImportWarnings([]);
     setImportFailed([]);
 
     const created: ImportCredential[] = [];
+    const createdParents: ImportParent[] = [];
+    const warnings: ImportWarning[] = [];
     const failed: typeof importFailed = [];
 
     for (let i = 0; i < previewRows.length; i += batchSize) {
@@ -728,6 +816,12 @@ export default function Eleves() {
             lastName: r.lastName,
             className: r.className || undefined,
             phone: r.phone || null,
+            gender: r.gender || null,
+            dateOfBirth: r.dateOfBirth || null,
+            matricule: r.matricule || null,
+            parentFirstName: r.parentFirstName || null,
+            parentLastName: r.parentLastName || null,
+            parentPhone: r.parentPhone || null,
           })),
         },
       });
@@ -746,6 +840,8 @@ export default function Eleves() {
           error?: string;
           created?: ImportCredential[];
           failed?: typeof importFailed;
+          parents?: ImportParent[];
+          warnings?: ImportWarning[];
         };
         if (res.error) {
           for (const r of batch) {
@@ -759,6 +855,8 @@ export default function Eleves() {
         } else {
           created.push(...(res.created ?? []));
           failed.push(...(res.failed ?? []));
+          createdParents.push(...(res.parents ?? []));
+          warnings.push(...(res.warnings ?? []));
         }
       }
 
@@ -767,6 +865,8 @@ export default function Eleves() {
 
     setImporting(false);
     setImportCreds(created);
+    setImportParents(createdParents);
+    setImportWarnings(warnings);
     setImportFailed(failed);
 
     const ok = created.length;
@@ -774,6 +874,7 @@ export default function Eleves() {
     if (ok > 0) {
       toast.success(`${ok} élève(s) importé(s)`);
       invalidateStudentQueries();
+      void qc.invalidateQueries({ queryKey: ["parents", schoolId] });
     }
     if (errCount > 0) {
       toast.message(`${errCount} ligne(s) en erreur`);
@@ -783,12 +884,28 @@ export default function Eleves() {
     }
   };
 
+  // import result: pupils with their own login vs "compte famille" pupils (no login), plus the parents
+  const loginCreds = importCreds.filter((c) => !c.familyManaged);
+  const familyCount = importCreds.length - loginCreds.length;
+  const importCsvRows = [
+    ...loginCreds,
+    ...importParents
+      .filter((p) => !p.existing && p.username)
+      .map((p) => ({
+        firstName: p.firstName,
+        lastName: p.lastName,
+        className: `Parent de ${p.childName}`,
+        username: p.username,
+        tempPassword: p.tempPassword,
+      })),
+  ];
+
   return (
     <div>
       <SetupGuideBar />
       <PageHeader
         title="Élèves"
-        subtitle="Comptes, identifiants et import CSV / Excel"
+        subtitle="Comptes, identifiants, anciens élèves et import CSV / Excel"
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -865,32 +982,49 @@ export default function Eleves() {
               <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-medium text-brand-900">
-                    Import terminé — {importCreds.length} compte(s) créé(s)
+                    Import terminé — {importCreds.length} élève(s) importé(s)
+                    {importParents.length > 0
+                      ? ` · ${importParents.filter((p) => !p.existing).length} parent(s) créé(s), ${importParents.filter((p) => p.existing).length} parent(s) déjà connu(s) relié(s)`
+                      : ""}
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      downloadTextFile(
-                        "identifiants-eleves-edufaso.csv",
-                        credentialsToCsv(importCreds),
-                      )
-                    }
-                  >
-                    <Download className="mr-1 h-4 w-4" />
-                    Télécharger les identifiants
-                  </Button>
+                  {importCsvRows.length > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        downloadTextFile(
+                          "identifiants-eleves-edufaso.csv",
+                          credentialsToCsv(importCsvRows),
+                        )
+                      }
+                    >
+                      <Download className="mr-1 h-4 w-4" />
+                      Télécharger les identifiants
+                    </Button>
+                  ) : null}
                 </div>
+                {familyCount > 0 ? (
+                  <p className="mt-2 text-sm text-brand-900">
+                    {familyCount} élève(s) en <strong>compte famille</strong> : pas de connexion élève, le parent
+                    suit son enfant avec son propre compte.
+                  </p>
+                ) : null}
                 <p className="mt-2 text-xs text-brand-800">
                   Conservez ce fichier : les mots de passe temporaires ne
                   seront plus affichés ensuite.
                 </p>
                 <div className="mt-3 max-h-48 overflow-auto text-sm">
-                  {importCreds.slice(0, 20).map((c) => (
-                    <p key={c.username} className="py-0.5">
+                  {importCreds.slice(0, 20).map((c, i) => (
+                    <p key={`${c.username}-${i}`} className="py-0.5">
                       {fullName(c.firstName, c.lastName)} ·{" "}
-                      <Badge>{c.username}</Badge> ·{" "}
-                      <Badge tone="warning">{c.tempPassword}</Badge>
+                      {c.familyManaged ? (
+                        <Badge tone="info">Compte famille</Badge>
+                      ) : (
+                        <>
+                          <Badge>{c.username}</Badge> ·{" "}
+                          <Badge tone="warning">{c.tempPassword}</Badge>
+                        </>
+                      )}
                     </p>
                   ))}
                   {importCreds.length > 20 ? (
@@ -898,6 +1032,20 @@ export default function Eleves() {
                   ) : null}
                 </div>
               </div>
+
+              {importWarnings.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                  <p className="font-medium text-amber-950">{importWarnings.length} point(s) à vérifier</p>
+                  <ul className="mt-2 max-h-32 space-y-1 overflow-auto text-amber-900">
+                    {importWarnings.map((w, i) => (
+                      <li key={`${w.line}-w${i}`}>
+                        {w.line ? `Ligne ${w.line} · ` : ""}
+                        {fullName(w.firstName, w.lastName)} — {w.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {importFailed.length > 0 ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
@@ -924,6 +1072,8 @@ export default function Eleves() {
                   variant="outline"
                   onClick={() => {
                     setImportCreds([]);
+                    setImportParents([]);
+                    setImportWarnings([]);
                     setImportFailed([]);
                     setPreviewRows([]);
                     setParseErrors([]);
@@ -956,8 +1106,14 @@ export default function Eleves() {
             en-tête : <code className="text-xs">prenom</code>,{" "}
             <code className="text-xs">nom</code>,{" "}
             <code className="text-xs">classe</code>,{" "}
-            <code className="text-xs">telephone</code>. Première feuille
-            Excel. Max 200 élèves.
+            <code className="text-xs">telephone</code>, et en plus (facultatif) :{" "}
+            <code className="text-xs">sexe</code> (M/F),{" "}
+            <code className="text-xs">date_naissance</code> (jj/mm/aaaa),{" "}
+            <code className="text-xs">matricule</code>,{" "}
+            <code className="text-xs">parent_prenom</code>,{" "}
+            <code className="text-xs">parent_nom</code>,{" "}
+            <code className="text-xs">parent_telephone</code>. Deux frères avec le même
+            téléphone de parent partagent le même parent. Première feuille Excel. Max 200 élèves.
           </p>
 
           <div className="mt-4">
@@ -1047,6 +1203,9 @@ export default function Eleves() {
                       <th className="px-3 py-2">Nom</th>
                       <th className="px-3 py-2">Classe</th>
                       <th className="px-3 py-2">Tél.</th>
+                      <th className="px-3 py-2">Sexe</th>
+                      <th className="px-3 py-2">Naissance</th>
+                      <th className="px-3 py-2">Parent</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1061,6 +1220,15 @@ export default function Eleves() {
                           )}
                         </td>
                         <td className="px-3 py-1.5 text-slate-500">{r.phone || "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-500">{r.gender || "—"}</td>
+                        <td className="px-3 py-1.5 text-slate-500">
+                          {r.dateOfBirth ? r.dateOfBirth.split("-").reverse().join("/") : "—"}
+                        </td>
+                        <td className="px-3 py-1.5 text-slate-500">
+                          {r.parentPhone
+                            ? `${r.parentFirstName} ${r.parentLastName} · ${r.parentPhone}`.trim()
+                            : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1212,7 +1380,18 @@ export default function Eleves() {
             </div>
           </form>
 
-          {result ? (
+          {result?.familyManaged ? (
+            <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm">
+              <p className="font-medium text-brand-800">Élève créé en compte famille</p>
+              <p className="mt-2 text-slate-700">
+                Dans cette classe, l'élève n'a pas de connexion : c'est le parent qui suit son enfant.
+                Créez maintenant le compte du parent pour qu'il puisse voir l'élève.
+              </p>
+              <Link to="/parents" className="mt-2 inline-block font-medium text-brand-700 underline">
+                Aller à la page Parents →
+              </Link>
+            </div>
+          ) : result ? (
             <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm">
               <p className="font-medium text-brand-800">Identifiants créés</p>
               <p className="mt-2">
@@ -1258,6 +1437,7 @@ export default function Eleves() {
                   counts={classCounts}
                   total={totalStudents}
                   withoutClassCount={sansClasseCount}
+                  showFormer
                 />
               </div>
             </div>
@@ -1298,7 +1478,9 @@ export default function Eleves() {
                       ? `Aucun élève ne correspond à « ${debouncedSearch.trim()} ». Essayez le prénom seul, ou un autre filtre de classe.`
                       : selectedClassId === "__none__"
                         ? "Aucun élève sans classe."
-                        : "Aucun élève dans cette classe."
+                        : selectedClassId === "__former__"
+                          ? "Aucun ancien élève : personne n'est sorti de l'école."
+                          : "Aucun élève dans cette classe."
                   }
                 />
                 {search.trim() || selectedClassId ? (
@@ -1337,6 +1519,32 @@ export default function Eleves() {
           </Card>
         </div>
       )}
+
+      {exitTarget ? (
+        <SortieEleveModal
+          open
+          studentId={exitTarget.id}
+          studentName={fullName(exitTarget.first_name, exitTarget.last_name)}
+          onClose={() => setExitTarget(null)}
+          onDone={() => {
+            selection.clear();
+            invalidateStudentQueries();
+          }}
+        />
+      ) : null}
+      {reinstateTarget ? (
+        <ReintegrerModal
+          open
+          studentId={reinstateTarget.id}
+          studentName={fullName(reinstateTarget.first_name, reinstateTarget.last_name)}
+          classes={classes}
+          onClose={() => setReinstateTarget(null)}
+          onDone={() => {
+            selection.clear();
+            invalidateStudentQueries();
+          }}
+        />
+      ) : null}
 
       <BulkBar count={selection.count} noun="élève" onClear={selection.clear}>
         {canSelectAllResults ? (

@@ -1,5 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  dobIsPlausible,
+  LOCKED_BAN_DURATION,
+  lockedPassword,
+  normalizeDob,
+  normalizeGender,
+} from "../_shared/famille.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,20 +217,51 @@ Deno.serve(async (req) => {
       }
     }
 
+    // nov3: identity of a pupil is validated here too (the browser form is not trusted)
+    let storedGender = gender;
+    let storedDob: string | null = dateOfBirth ? String(dateOfBirth) : null;
+    if (role === "student") {
+      if (gender) storedGender = normalizeGender(gender) ?? (gender === "other" ? "other" : null);
+      if (gender && !storedGender) {
+        return new Response(JSON.stringify({ error: "Sexe non reconnu (M ou F)" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (storedDob) {
+        const iso = normalizeDob(storedDob);
+        if (!iso || !dobIsPlausible(iso)) {
+          return new Response(
+            JSON.stringify({ error: "Date de naissance invalide (âge entre 3 et 35 ans)" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        storedDob = iso;
+      }
+    }
+
+    // nov3: family-first school. The database is the only place that knows the level order.
+    let familyManaged = false;
+    if (role === "student" && classId) {
+      const { data: isFam } = await admin.rpc("ef_class_is_family_level", { p_class: classId });
+      familyManaged = isFam === true;
+    }
+
     const base = `${slugify(firstName)}.${slugify(lastName)}` || "utilisateur";
     const suffix = Math.floor(Math.random() * 900 + 100);
     const username = `${base}${suffix}`;
     const email = `${username}@edufaso.local`;
-    const tempPassword = randomPassword(10);
+    const tempPassword = familyManaged ? lockedPassword() : randomPassword(10);
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password: tempPassword,
       email_confirm: true,
+      ...(familyManaged ? { ban_duration: LOCKED_BAN_DURATION } : {}),
       user_metadata: {
         first_name: firstName,
         last_name: lastName,
-        must_change_password: true,
+        must_change_password: !familyManaged,
       },
       app_metadata: {
         role,
@@ -251,11 +289,12 @@ Deno.serve(async (req) => {
         last_name: lastName,
         email: role === "parent" && contactEmail ? contactEmail : email,
         phone,
-        date_of_birth: dateOfBirth || null,
-        gender,
+        date_of_birth: storedDob,
+        gender: storedGender,
         address,
         matricule,
-        must_change_password: true,
+        must_change_password: !familyManaged,
+        family_managed: familyManaged,
         active: true,
       });
 
@@ -266,12 +305,14 @@ Deno.serve(async (req) => {
       active: true,
     });
 
-    await admin.from("identifiants_temporaires").insert({
-      user_id: newUserId,
-      username,
-      temp_password_hint: tempPassword,
-      used: false,
-    });
+    if (!familyManaged) {
+      await admin.from("identifiants_temporaires").insert({
+        user_id: newUserId,
+        username,
+        temp_password_hint: tempPassword,
+        used: false,
+      });
+    }
 
     // F-15: audit trail for account creation (best effort).
     await admin.from("audit_logs").insert({
@@ -279,7 +320,11 @@ Deno.serve(async (req) => {
       action: "create_user",
       entity_type: "user",
       entity_id: newUserId,
-      details: { role, school_id: role === "super_admin" ? null : schoolId },
+      details: {
+        role,
+        school_id: role === "super_admin" ? null : schoolId,
+        ...(familyManaged ? { family_managed: true } : {}),
+      },
     });
 
     if (role === "student" && classId) {
@@ -322,10 +367,12 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         userId: newUserId,
-        username,
-        tempPassword,
+        // family-first pupil: no login exists, nothing to hand out (the parent is the only account)
+        username: familyManaged ? "" : username,
+        tempPassword: familyManaged ? "" : tempPassword,
         email,
         role,
+        familyManaged,
       }),
       {
         status: 200,

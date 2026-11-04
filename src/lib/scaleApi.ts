@@ -29,6 +29,8 @@ export type StudentPageRow = Profile & {
   className: string | null;
   classSectionId: string | null;
   cred: Cred;
+  /** only set in the "Anciens élèves" list */
+  exit?: { leftAt: string; reason: string; className: string | null } | null;
 };
 
 export type ParentPageRow = Profile & {
@@ -38,7 +40,7 @@ export type ParentPageRow = Profile & {
 
 export const PAGE_SIZE = 100;
 
-/** `classId`: "" = all, "__none__" = students without a class, else a class id. */
+/** `classId`: "" = all, "__none__" = students without a class, "__former__" = former pupils (left the school), else a class id. */
 export function fetchStudentsPage(
   schoolId: string,
   opts: { classId?: string; search?: string; limit?: number; offset?: number } = {},
@@ -321,4 +323,204 @@ export async function fetchAllTeachers(
     if (page.rows.length < step || out.length >= page.total) break;
   }
   return out;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * nov3: départs & parcours (#30), cahier de textes (#31), statistiques (#32), compte famille (#33)
+ * (see supabase/migrations/2026110310*, 2026110311*, 2026110312*, 2026110313*)
+ * ---------------------------------------------------------------------------------------------- */
+
+export const EXIT_REASONS = [
+  { value: "transfert", label: "Transfert vers une autre école" },
+  { value: "abandon", label: "Abandon" },
+  { value: "demenagement", label: "Déménagement" },
+  { value: "exclusion", label: "Exclusion" },
+  { value: "deces", label: "Décès" },
+  { value: "autre", label: "Autre motif" },
+] as const;
+
+export function exitReasonLabel(reason: string | null | undefined): string {
+  return EXIT_REASONS.find((r) => r.value === reason)?.label ?? "—";
+}
+
+export type StudentExitInfo = { leftAt: string; reason: string; className: string | null };
+
+export function studentExit(studentId: string, reason: string, leftAt: string, note?: string) {
+  return rpc<{ ok: boolean }>("ef_student_exit", {
+    p_student: studentId,
+    p_reason: reason,
+    p_left_at: leftAt,
+    p_note: note?.trim() ? note.trim() : null,
+  });
+}
+
+export function studentReinstate(studentId: string, classId?: string | null) {
+  return rpc<{ ok: boolean }>("ef_student_reinstate", {
+    p_student: studentId,
+    p_class: classId || null,
+  });
+}
+
+export function fetchDeparturesSummary(schoolId: string) {
+  return rpc<{ total: number; byReason: Record<string, number> }>("ef_departures_summary", {
+    p_school: schoolId,
+  });
+}
+
+export type ParcoursRow = {
+  id: string;
+  class_name: string | null;
+  year_label: string | null;
+  from_date: string;
+  to_date: string | null;
+  entry_kind: "inscription" | "changement_classe" | "reintegration";
+  end_kind: "changement_classe" | "sortie" | null;
+  exit_reason: string | null;
+};
+
+/** Class history of one pupil (row-level security: pupil, parents, school admin). */
+export async function fetchParcours(studentId: string): Promise<ParcoursRow[]> {
+  const { data, error } = await supabase
+    .from("parcours_eleve")
+    .select("id, class_name, year_label, from_date, to_date, entry_kind, end_kind, exit_reason")
+    .eq("student_id", studentId)
+    .order("from_date", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []) as ParcoursRow[];
+}
+
+export type HomeworkItem = {
+  id: string;
+  entryDate: string;
+  dueDate: string | null;
+  classId: string;
+  className: string;
+  subject: string;
+  teacher: string | null;
+  homework: string;
+  content: string | null;
+  children: { id: string; name: string }[];
+};
+
+/** Homework due between two dates (yyyy-mm-dd) for the pupil or the parent's children. */
+export function fetchHomeworkUpcoming(from: string, to: string) {
+  return rpc<HomeworkItem[]>("ef_homework_upcoming", { p_from: from, p_to: to });
+}
+
+export type CahierFeedItem = {
+  id: string;
+  entryDate: string;
+  dueDate: string | null;
+  subject: string;
+  subjectId: string;
+  teacher: string | null;
+  teacherId: string;
+  content: string | null;
+  homework: string | null;
+  creneauId: string | null;
+};
+
+export function fetchCahierFeed(classId: string, opts: { from?: string; to?: string; limit?: number } = {}) {
+  return rpc<CahierFeedItem[]>("ef_cahier_feed", {
+    p_class: classId,
+    p_from: opts.from ?? null,
+    p_to: opts.to ?? null,
+    p_limit: opts.limit ?? 100,
+  });
+}
+
+export type CahierCoverageRow = {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subject: string;
+  teacherId: string | null;
+  teacher: string | null;
+  entries: number;
+  lastDate: string | null;
+  slotsPerWeek: number;
+};
+
+export function fetchCahierCoverage(schoolId: string, from: string, to: string) {
+  return rpc<CahierCoverageRow[]>("ef_cahier_coverage", { p_school: schoolId, p_from: from, p_to: to });
+}
+
+export type SchoolStatistics = {
+  year: { id: string; label: string; startDate: string; endDate: string; isCurrent: boolean } | null;
+  totals?: { students: number; male: number; female: number; unknownSex: number; unknownBirth: number; classes: number };
+  byClass?: {
+    classId: string; name: string; grade: string | null; total: number; male: number; female: number; unknownSex: number;
+    attendanceRecords: number; absent: number; late: number; excused: number;
+    graded: number; passed: number; average: number | null;
+  }[];
+  byLevel?: {
+    grade: string | null; classes: number; total: number; male: number; female: number; unknownSex: number;
+    graded: number; passed: number; average: number | null;
+    gradedMale: number; passedMale: number; gradedFemale: number; passedFemale: number;
+  }[];
+  ages?: { age: number; male: number; female: number; unknownSex: number }[];
+  departures?: { total: number; male: number; female: number; unknownSex: number; byReason: Record<string, number> };
+  attendance?: { records: number; absent: number; late: number; excused: number };
+  results?: {
+    graded: number; passed: number; gradedMale: number; passedMale: number;
+    gradedFemale: number; passedFemale: number; average: number | null;
+  };
+};
+
+export function fetchSchoolStatistics(schoolId: string, yearId?: string | null) {
+  return rpc<SchoolStatistics>("ef_school_statistics", { p_school: schoolId, p_year: yearId || null });
+}
+
+export type IdentityGaps = {
+  total: number;
+  missingGender: number;
+  missingDob: number;
+  rows: { id: string; firstName: string; lastName: string; className: string; gender: string | null; dateOfBirth: string | null }[];
+};
+
+export function fetchIdentityGaps(schoolId: string, limit = 50, offset = 0) {
+  return rpc<IdentityGaps>("ef_identity_gaps", { p_school: schoolId, p_limit: limit, p_offset: offset });
+}
+
+export function setStudentIdentity(studentId: string, gender: string | null, dob: string | null) {
+  return rpc<{ ok: boolean }>("ef_set_student_identity", {
+    p_student: studentId,
+    p_gender: gender || null,
+    p_dob: dob || null,
+  });
+}
+
+/** "Own account from this level": pupils in lower levels only have the parent account. */
+export const FAMILY_LEVELS = [
+  { value: "cp2", label: "CP2" },
+  { value: "ce1", label: "CE1" },
+  { value: "ce2", label: "CE2" },
+  { value: "cm1", label: "CM1" },
+  { value: "cm2", label: "CM2" },
+  { value: "6eme", label: "6e" },
+  { value: "5eme", label: "5e" },
+  { value: "4eme", label: "4e" },
+  { value: "3eme", label: "3e" },
+  { value: "seconde", label: "Seconde" },
+  { value: "premiere", label: "Première" },
+  { value: "terminale", label: "Terminale" },
+] as const;
+
+export type FamilyOverview = {
+  level: string | null;
+  managed: number;
+  belowLevelWithLogin: number;
+  belowLevelNeverLoggedIn: number;
+  managedWithoutParent: number;
+  withoutParentSample: { id: string; name: string; className: string | null }[];
+};
+
+export function fetchFamilyOverview(schoolId: string) {
+  return rpc<FamilyOverview>("ef_family_overview", { p_school: schoolId });
+}
+
+/** level = null turns the setting off. */
+export function setFamilyAccountsLevel(schoolId: string, level: string | null) {
+  return rpc<{ ok: boolean }>("ef_set_family_accounts_level", { p_school: schoolId, p_level: level });
 }
