@@ -35,7 +35,8 @@ import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCou
 import { useUnreadMessagesCount, useMessagesHomeRealtime, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
 import { useParentChildren } from "@/hooks/useParentHome";
-import { readSelectedChild, writeSelectedChild, SELECTED_CHILD_EVENT } from "@/lib/parentHome";
+import { writeSelectedChild } from "@/lib/parentHome";
+import { Modal } from "@/components/Modal";
 import {
   useExercicesPendingChanges,
   useParentExamsRealtime,
@@ -79,6 +80,8 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
+  /** Parent "Mes enfants" page: asks which child, then opens /enfants/:id/<childPage>. */
+  childPage?: string;
   badgeKey?:
     | "eleves-sans-classe"
     | "messages-unread"
@@ -348,8 +351,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
 };
 
 /** Parent sidebar (Designer layout): Accueil / Mes enfants / Communication. */
-function buildParentGroups(childId: string | null): NavGroup[] {
-  const c = `/enfants/${childId}`;
+function buildParentGroups(): NavGroup[] {
   const all: NavItem = { to: "/enfants", label: "Tous mes enfants", icon: <Users className="h-4 w-4" />, badgeKey: "enfants-attention", exact: true };
   return [
     {
@@ -361,13 +363,11 @@ function buildParentGroups(childId: string | null): NavGroup[] {
       label: "Mes enfants",
       items: [
         all,
-        ...(!childId ? [] : ([
-        { to: `${c}/notes`, label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
-        { to: `${c}/presences`, label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
-        { to: `${c}/devoirs`, label: "Devoirs", icon: <FileText className="h-4 w-4" /> },
-        { to: `${c}/bulletin`, label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
-        { to: `${c}/emploi-du-temps`, label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" />, badgeKey: "edt-updates" },
-        ] as NavItem[])),
+        { to: `/enfants/:child/notes`, childPage: "notes", label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
+        { to: `/enfants/:child/presences`, childPage: "presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
+        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Devoirs", icon: <FileText className="h-4 w-4" /> },
+        { to: `/enfants/:child/bulletin`, childPage: "bulletin", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
+        { to: `/enfants/:child/emploi-du-temps`, childPage: "emploi-du-temps", label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" />, badgeKey: "edt-updates" },
       ],
     },
     {
@@ -445,34 +445,29 @@ export function AppShell() {
   // ---- parent: selected child (shared with the home page picker, kept in localStorage)
   const isParent = role === "parent";
   const { data: parentChildren } = useParentChildren(isParent ? user?.id : undefined);
-  const [pickedChild, setPickedChild] = useState<string | null>(() => readSelectedChild());
-  useEffect(() => {
-    const onChange = (e: Event) => setPickedChild((e as CustomEvent<string>).detail);
-    window.addEventListener(SELECTED_CHILD_EVENT, onChange);
-    return () => window.removeEventListener(SELECTED_CHILD_EVENT, onChange);
-  }, []);
-  // Opening a child's page (from Enfants, a card…) makes that child the selected one.
+  // Opening a child's page keeps the home page picker in sync (it reads localStorage).
   const routeChildId = /^\/enfants\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
   useEffect(() => {
     if (!isParent || !routeChildId || !parentChildren) return;
-    if (parentChildren.some((c) => c.id === routeChildId)) {
-      setPickedChild(routeChildId);
-      writeSelectedChild(routeChildId);
-    }
+    if (parentChildren.some((c) => c.id === routeChildId)) writeSelectedChild(routeChildId);
   }, [isParent, routeChildId, parentChildren]);
-  // Only trust ids this parent's own children list returned; fall back to the first child.
-  const selectedChild =
-    (parentChildren ?? []).find((c) => c.id === pickedChild) ?? parentChildren?.[0] ?? null;
-  const pickChild = (id: string) => {
-    setPickedChild(id);
-    writeSelectedChild(id);
-    const m = /^\/enfants\/[^/]+\/(.+)$/.exec(location.pathname);
-    if (m) navigate(`/enfants/${id}/${m[1]}`);
+  // "Notes — quel enfant ?" dialog (skipped when the parent has a single child).
+  const [childAsk, setChildAsk] = useState<NavItem | null>(null);
+  const openChildPage = (item: NavItem) => {
+    const kids = parentChildren ?? [];
+    setOpen(false);
+    if (kids.length === 1) {
+      navigate(`/enfants/${kids[0].id}/${item.childPage}`);
+    } else if (kids.length > 1) {
+      setChildAsk(item);
+    } else {
+      navigate("/enfants");
+    }
   };
 
   const roleGroups = role
     ? isParent
-      ? buildParentGroups(selectedChild?.id ?? null)
+      ? buildParentGroups()
       : NAV_GROUPS_BY_ROLE[role]
     : [];
   const navGroups: NavGroup[] = [
@@ -697,33 +692,10 @@ export function AppShell() {
                     {group.label}
                   </p>
                 ) : null}
-                {isParent && group.label === "Mes enfants" && selectedChild ? (
-                  (parentChildren?.length ?? 0) > 1 ? (
-                    <div className="px-3 pb-1.5">
-                      <label className="sr-only" htmlFor="sidebar-child">Enfant sélectionné</label>
-                      <select
-                        id="sidebar-child"
-                        value={selectedChild.id}
-                        onChange={(e) => pickChild(e.target.value)}
-                        className="w-full truncate rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-700 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:text-slate-200"
-                      >
-                        {parentChildren!.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {personName(c.first_name, c.last_name)}
-                            {c.className ? ` · ${c.className}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <p className="truncate px-3 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {personName(selectedChild.first_name, selectedChild.last_name)}
-                    </p>
-                  )
-                ) : null}
                 {group.items.map((item) => {
-                  const active =
-                    location.pathname === item.to ||
+                  const active = item.childPage
+                    ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(location.pathname)
+                    : location.pathname === item.to ||
                     (!item.exact &&
                       item.to !== "/tableau-de-bord" &&
                       item.to !== "/ecole" &&
@@ -731,6 +703,43 @@ export function AppShell() {
                       location.pathname.startsWith(item.to));
                   const badge = badgeFor(item);
                   return (
+                    item.childPage ? (
+                    <button
+                      key={item.to}
+                      type="button"
+                      onClick={() => openChildPage(item)}
+                      aria-haspopup={(parentChildren?.length ?? 0) > 1 ? "dialog" : undefined}
+                      className={cn(
+                        "flex w-full text-left items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
+                        active
+                          ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
+                          : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "shrink-0",
+                          active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
+                        )}
+                      >
+                        {item.icon}
+                      </span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {badge != null ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white",
+                            badge.tone === "rose" && "bg-rose-500",
+                            badge.tone === "amber" && "bg-amber-500",
+                            badge.tone === "brand" && "bg-brand-600",
+                          )}
+                          title={badge.title}
+                        >
+                          {badge.count > 99 ? "99+" : badge.count}
+                        </span>
+                      ) : null}
+                    </button>
+                    ) : (
                     <Link
                       key={item.to}
                       to={item.to}
@@ -765,6 +774,7 @@ export function AppShell() {
                         </span>
                       ) : null}
                     </Link>
+                    )
                   );
                 })}
               </div>
@@ -857,6 +867,40 @@ export function AppShell() {
           </Suspense>
         ) : null}
       </div>
+      {isParent ? (
+        <Modal
+          open={!!childAsk}
+          title={childAsk ? `${childAsk.label} — quel enfant ?` : ""}
+          onClose={() => setChildAsk(null)}
+        >
+          <div className="space-y-2">
+            {(parentChildren ?? []).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  const page = childAsk?.childPage;
+                  setChildAsk(null);
+                  if (page) navigate(`/enfants/${c.id}/${page}`);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-brand-300 hover:bg-brand-50 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:hover:bg-brand-950/40"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800 dark:bg-brand-900/60 dark:text-brand-200">
+                  {(c.first_name?.[0] ?? "?").toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {personName(c.first_name, c.last_name)}
+                  </span>
+                  {c.className ? (
+                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{c.className}</span>
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
