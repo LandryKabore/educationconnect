@@ -71,6 +71,12 @@ export function gradeTone(v: number | null): string {
   return "text-rose-700 dark:text-rose-400";
 }
 
+/** French decimal, two digits (as on the Notes page): 12,48 */
+export function fmt2(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return value.toFixed(2).replace(".", ",");
+}
+
 /** « 29 oct. » */
 export function shortDateFr(iso: string | null | undefined): string {
   const d = parseValidDate(iso?.length === 10 ? `${iso}T12:00:00` : iso);

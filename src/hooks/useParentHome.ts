@@ -6,7 +6,7 @@ import { fetchMyChildrenSummary, type ChildSummary } from "@/lib/scaleApi";
 import { useAttendancePeriods } from "@/hooks/useAttendancePeriods";
 import { attendanceRate, type AttendanceTotals } from "@/lib/attendance";
 import {
-  computeWeightedAverage,
+  computeAnnualAverage,
   programmeToCoefMap,
   type GradeWithSubject,
 } from "@/lib/averages";
@@ -15,7 +15,6 @@ import {
   LOW_GRADE_WINDOW_DAYS,
   TODO_WINDOW_DAYS,
   buildAttendanceStrip,
-  pickAveragePeriod,
   plural,
   scoreOn20,
   shortDateFr,
@@ -78,11 +77,10 @@ export function useChildrenMeta(userId: string | undefined, childIds: string[]) 
 }
 
 export type ChildSnapshot = {
+  /** T1/T2/T3 + yearly average — same formula as the Notes page « Moyenne annuelle » */
   average: {
-    period: string;
-    value: number | null;
-    previousPeriod: string | null;
-    delta: number | null;
+    trimesters: { period: string; value: number | null }[];
+    annual: number | null;
   } | null;
   attendance: {
     periodLabel: string;
@@ -158,33 +156,24 @@ export function useChildSnapshot(childId: string, classSectionId: string | undef
           .limit(4),
       ]);
 
-      // average of the current trimester (same weighted formula as the Notes / Bulletin screens)
+      // T1/T2/T3 + yearly average (same formula as the Notes page « Moyenne annuelle »)
       const grades = (gradesRes.data ?? []) as unknown as (GradeWithSubject & {
         period_label: string;
       })[];
       const coefs = programmeToCoefMap(
         ((coefRes as { data: { subject_id: string; coefficient: number }[] | null }).data ?? []),
       );
-      const withGrades = new Set(
-        grades.filter((g) => !g.is_absent && g.period_label).map((g) => g.period_label),
-      );
-      const { current, previous } = pickAveragePeriod(withGrades, period?.label);
-      const avgOf = (label: string) =>
-        computeWeightedAverage(
-          grades.filter((g) => g.period_label === label),
-          { coefficientBySubject: coefs },
-        ).generalAverage;
-      let average: ChildSnapshot["average"] = null;
-      if (current) {
-        const value = avgOf(current);
-        const prev = previous ? avgOf(previous) : null;
-        average = {
-          period: current,
-          value,
-          previousPeriod: previous,
-          delta: value !== null && prev !== null ? value - prev : null,
-        };
-      }
+      const annualRes = computeAnnualAverage(grades, { coefficientBySubject: coefs });
+      const average: ChildSnapshot["average"] =
+        annualRes.trimesterCount > 0
+          ? {
+              trimesters: annualRes.trimesters.map((t) => ({
+                period: t.periodLabel,
+                value: t.generalAverage,
+              })),
+              annual: annualRes.annualAverage,
+            }
+          : null;
 
       const absRows = (absRes.data ?? []) as unknown as {
         date: string;

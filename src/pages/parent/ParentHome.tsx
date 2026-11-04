@@ -42,6 +42,7 @@ import {
   CHILD_COLORS,
   ageLabel,
   fmt1,
+  fmt2,
   gradeTone,
   initials,
   plural,
@@ -109,7 +110,7 @@ function ChildChip({
   const { data: snapshot } = useChildSnapshot(child.id, classSectionId);
   const todos = useChildTodos(child.id, child, snapshot);
   const attention = todos.length;
-  const avg = snapshot?.average?.value ?? null;
+  const avg = snapshot?.average?.annual ?? null;
   const rate = snapshot?.attendance?.rate ?? null;
 
   return (
@@ -254,7 +255,7 @@ function AverageCard({
   loading: boolean;
 }) {
   const avg = snapshot?.average;
-  const value = avg?.value ?? null;
+  const value = avg?.annual ?? null;
   return (
     <Link to={`/enfants/${childId}/notes`} className="block h-full">
       <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
@@ -262,7 +263,7 @@ function AverageCard({
           <CardSkeleton />
         ) : (
           <>
-            <p className={CARD_LABEL}>Moyenne{avg ? ` · ${avg.period}` : ""}</p>
+            <p className={CARD_LABEL}>Moyennes · année</p>
             <div className="mt-2 flex items-center gap-3">
               <ProgressRing
                 fraction={value === null ? null : value / 20}
@@ -270,21 +271,31 @@ function AverageCard({
                 tone={averageTone(value)}
               />
               <div className="min-w-0 text-xs text-slate-600 dark:text-slate-300">
-                <p>/20</p>
-                {avg?.delta != null ? (
-                  <p
-                    className={cn(
-                      "mt-1 font-semibold",
-                      avg.delta >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400",
-                    )}
-                  >
-                    {avg.delta >= 0 ? "▲ +" : "▼ "}
-                    {fmt1(avg.delta)} vs {avg.previousPeriod?.replace("Trimestre ", "T")}
-                  </p>
-                ) : null}
+                <p className="font-semibold text-slate-900 dark:text-slate-100">Moyenne annuelle</p>
+                <p>
+                  <span className={cn("font-bold", gradeTone(value))}>{fmt2(value)}</span> /20
+                </p>
               </div>
             </div>
-            {!avg ? <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucune note publiée.</p> : null}
+            {avg ? (
+              <dl className="mt-3 grid grid-cols-3 gap-1.5 text-center">
+                {avg.trimesters.map((t) => (
+                  <div
+                    key={t.period}
+                    className="rounded-lg bg-slate-50 px-1 py-1.5 dark:bg-slate-800"
+                  >
+                    <dt className="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-300">
+                      {t.period.replace("Trimestre ", "T")}
+                    </dt>
+                    <dd className={cn("text-sm font-bold tabular-nums", gradeTone(t.value))}>
+                      {fmt2(t.value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucune note publiée.</p>
+            )}
           </>
         )}
       </Card>
