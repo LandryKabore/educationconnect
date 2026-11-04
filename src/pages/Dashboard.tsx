@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ROLE_LABELS } from "@/lib/types";
@@ -5,14 +6,21 @@ import { Card, PageHeader } from "@/components/ui";
 import { PortalGreeting } from "@/components/PortalGreeting";
 import StudentHome from "@/pages/eleve/StudentHome";
 import TeacherHome from "@/pages/enseignant/TeacherHome";
-import ParentHome from "@/pages/parent/ParentHome";
+
+const ParentHome = lazy(() => import("@/pages/parent/ParentHome"));
 
 export default function Dashboard() {
   const { role, schoolId } = useAuth();
 
   if (role === "student") return <StudentHome />;
   if (role === "teacher") return <TeacherHome />;
-  if (role === "parent") return <ParentHome />;
+  if (role === "parent") {
+    return (
+      <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+        <ParentHome />
+      </Suspense>
+    );
+  }
 
   return (
     <div>

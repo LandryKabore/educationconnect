@@ -1,43 +1,668 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Bell,
   BookOpen,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  GraduationCap,
   MessageSquare,
-  User,
+  NotebookPen,
   Users,
 } from "lucide-react";
 import {
-  MetricCard,
   Panel,
   PanelEmpty,
-  PortalHomeHeader,
-  QuickLink,
   relativeFr,
   snippet,
-  type InboxPreview,
 } from "@/components/PortalHomeKit";
-import { Button } from "@/components/ui";
 import { HomeworkTomorrowCard } from "@/components/HomeworkTomorrowCard";
+import { ProgressRing } from "@/components/ProgressRing";
+import { Button, Card } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  useAttendanceStrip,
+  useChildSnapshot,
+  useChildTodos,
+  useChildrenMeta,
+  useParentChildren,
+  useParentInbox,
+  useWeekHomework,
+  type ChildSnapshot,
+} from "@/hooks/useParentHome";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
+import type { ChildSummary } from "@/lib/scaleApi";
+import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";
-import { supabase } from "@/lib/supabase";
-import { fetchMyChildrenSummary } from "@/lib/scaleApi";
+import { getTimeGreeting } from "@/lib/greeting";
+import {
+  CHILD_COLORS,
+  ageLabel,
+  fmt1,
+  gradeTone,
+  initials,
+  plural,
+  readSelectedChild,
+  scoreOn20,
+  shortDateFr,
+  weekdayDateFr,
+  writeSelectedChild,
+  type TodoItem,
+} from "@/lib/parentHome";
+import type { AttendanceStatus } from "@/lib/types";
 import { cn, fullName, personName } from "@/lib/utils";
 
-type ChildCard = {
-  id: string;
-  name: string;
-  className: string;
-  notesCount: number;
-  absences: number;
-  recentNote: {
-    subject: string;
-    scoreOn20: string;
-    period: string;
-  } | null;
+const CARD_LABEL =
+  "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300";
+
+const STRIP_CELL: Record<AttendanceStatus, string> = {
+  present: "bg-emerald-200 dark:bg-emerald-700/70",
+  absent: "bg-rose-500",
+  late: "bg-amber-400",
+  excused: "bg-sky-400",
 };
+
+function rateTone(rate: number | null) {
+  if (rate === null) return "text-slate-300";
+  if (rate >= 90) return "text-emerald-600";
+  if (rate >= 80) return "text-amber-500";
+  return "text-rose-600";
+}
+
+function averageTone(v: number | null) {
+  if (v === null) return "text-slate-300";
+  if (v >= 12) return "text-emerald-600";
+  if (v >= 10) return "text-brand-600";
+  if (v >= 8) return "text-amber-500";
+  return "text-rose-600";
+}
+
+function CardSkeleton() {
+  return (
+    <div className="space-y-2" aria-hidden="true">
+      <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+      <div className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ switcher */
+
+function ChildChip({
+  child,
+  index,
+  age,
+  classSectionId,
+  selected,
+  onSelect,
+}: {
+  child: ChildSummary;
+  index: number;
+  age: string | null;
+  classSectionId: string | undefined;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { data: snapshot } = useChildSnapshot(child.id, classSectionId);
+  const todos = useChildTodos(child.id, child, snapshot);
+  const attention = todos.length;
+  const avg = snapshot?.average?.value ?? null;
+  const rate = snapshot?.attendance?.rate ?? null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        "relative flex min-h-[3.5rem] min-w-[13rem] shrink-0 items-center gap-3 rounded-2xl border bg-white p-3 text-left shadow-sm transition md:min-w-0 md:shrink",
+        selected
+          ? "border-navy-700 ring-2 ring-navy-700/20 dark:border-brand-400 dark:ring-brand-400/30"
+          : "border-slate-200 hover:border-brand-300 dark:border-slate-600",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+          CHILD_COLORS[index % CHILD_COLORS.length],
+        )}
+        aria-hidden="true"
+      >
+        {initials(child.first_name, child.last_name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-bold text-slate-900 dark:text-slate-100">
+          {child.first_name}
+        </span>
+        <span className="block truncate text-xs text-slate-600 dark:text-slate-300">
+          {[child.className ?? "Sans classe", age].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+      <span className="hidden shrink-0 gap-3 text-center md:flex">
+        <span>
+          <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">{fmt1(avg)}</span>
+          <span className="block text-[10px] text-slate-500 dark:text-slate-300">moy.</span>
+        </span>
+        <span>
+          <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+            {rate === null ? "—" : `${Math.round(rate)} %`}
+          </span>
+          <span className="block text-[10px] text-slate-500 dark:text-slate-300">prés.</span>
+        </span>
+        <span>
+          <span
+            className={cn(
+              "block text-sm font-bold",
+              attention > 0 ? "text-rose-600" : "text-slate-900 dark:text-slate-100",
+            )}
+          >
+            {attention}
+          </span>
+          <span className="block text-[10px] text-slate-500 dark:text-slate-300">à faire</span>
+        </span>
+      </span>
+      {attention > 0 ? (
+        <span
+          className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-bold leading-none text-white md:hidden"
+          title={`${attention} à faire`}
+        >
+          {attention}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ banner */
+
+function TodoBanner({
+  todos,
+  unreadDiscussions,
+}: {
+  todos: TodoItem[];
+  unreadDiscussions: number;
+}) {
+  const items: TodoItem[] = [...todos];
+  if (unreadDiscussions > 0) {
+    items.push({
+      key: "unread",
+      tone: "info",
+      text: `${unreadDiscussions} ${plural(unreadDiscussions, "message non lu", "messages non lus")}`,
+      to: "/messages",
+      cta: "Lire",
+    });
+  }
+  if (items.length === 0) return null;
+  const danger = items.some((i) => i.tone === "danger");
+  return (
+    <section
+      aria-label="À faire"
+      className={cn(
+        "rounded-2xl border p-3 sm:p-4",
+        danger
+          ? "border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40"
+          : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40",
+      )}
+    >
+      <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-200">
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />À faire
+      </p>
+      <ul className="divide-y divide-black/5 dark:divide-white/10">
+        {items.map((it) => (
+          <li key={it.key} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "text-sm font-bold",
+                  it.tone === "danger"
+                    ? "text-rose-800 dark:text-rose-200"
+                    : it.tone === "warning"
+                      ? "text-amber-900 dark:text-amber-200"
+                      : "text-slate-900 dark:text-slate-100",
+                )}
+              >
+                {it.text}
+              </p>
+              {it.detail ? (
+                <p className="truncate text-xs text-slate-600 dark:text-slate-300">{it.detail}</p>
+              ) : null}
+            </div>
+            <Link to={it.to} className="shrink-0">
+              <Button variant="secondary" className="min-h-11 px-3 text-sm">
+                {it.cta}
+              </Button>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ cards */
+
+function AverageCard({
+  childId,
+  snapshot,
+  loading,
+}: {
+  childId: string;
+  snapshot: ChildSnapshot | undefined;
+  loading: boolean;
+}) {
+  const avg = snapshot?.average;
+  const value = avg?.value ?? null;
+  return (
+    <Link to={`/enfants/${childId}/notes`} className="block h-full">
+      <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
+        {loading ? (
+          <CardSkeleton />
+        ) : (
+          <>
+            <p className={CARD_LABEL}>Moyenne{avg ? ` · ${avg.period}` : ""}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <ProgressRing
+                fraction={value === null ? null : value / 20}
+                label={fmt1(value)}
+                tone={averageTone(value)}
+              />
+              <div className="min-w-0 text-xs text-slate-600 dark:text-slate-300">
+                <p>/20</p>
+                {avg?.delta != null ? (
+                  <p
+                    className={cn(
+                      "mt-1 font-semibold",
+                      avg.delta >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400",
+                    )}
+                  >
+                    {avg.delta >= 0 ? "▲ +" : "▼ "}
+                    {fmt1(avg.delta)} vs {avg.previousPeriod?.replace("Trimestre ", "T")}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {!avg ? <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucune note publiée.</p> : null}
+          </>
+        )}
+      </Card>
+    </Link>
+  );
+}
+
+function PresenceCard({
+  childId,
+  snapshot,
+  loading,
+}: {
+  childId: string;
+  snapshot: ChildSnapshot | undefined;
+  loading: boolean;
+}) {
+  const att = snapshot?.attendance;
+  const rate = att?.rate ?? null;
+  const absences = att ? att.totals.absent + att.totals.excused : 0;
+  return (
+    <Link to={`/enfants/${childId}/presences`} className="block h-full">
+      <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
+        {loading ? (
+          <CardSkeleton />
+        ) : (
+          <>
+            <p className={CARD_LABEL}>Présence{att ? ` · ${att.periodLabel}` : ""}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <ProgressRing
+                fraction={rate === null ? null : rate / 100}
+                label={rate === null ? "—" : `${Math.round(rate)} %`}
+                tone={rateTone(rate)}
+              />
+              {att && att.totals.total > 0 ? (
+                <div className="min-w-0 text-xs text-slate-600 dark:text-slate-300">
+                  <p>
+                    {absences} {plural(absences, "absence", "absences")}
+                  </p>
+                  <p>
+                    {att.totals.late} {plural(att.totals.late, "retard", "retards")}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            {!att || att.totals.total === 0 ? (
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucun cours enregistré.</p>
+            ) : null}
+          </>
+        )}
+      </Card>
+    </Link>
+  );
+}
+
+function StripCard({ childId }: { childId: string }) {
+  const { data: strip, isLoading, isError } = useAttendanceStrip(childId);
+  return (
+    <Card className="col-span-2 p-4 lg:col-span-1">
+      <div className="flex items-start justify-between gap-2">
+        <p className={CARD_LABEL}>Assiduité · 4 dernières semaines</p>
+        <Link to={`/enfants/${childId}/presences`} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline">
+          Détails
+        </Link>
+      </div>
+      {isLoading ? (
+        <div className="mt-3 h-6 animate-pulse rounded bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
+      ) : isError ? (
+        <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Indisponible pour le moment.</p>
+      ) : !strip || strip.length === 0 ? (
+        <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Aucun cours enregistré ces 4 dernières semaines.</p>
+      ) : (
+        <>
+          <div
+            className="mt-3 flex flex-wrap gap-1"
+            role="img"
+            aria-label={`${strip.length} jours de classe : ${strip.filter((d) => d.status === "absent").length} absence(s), ${strip.filter((d) => d.status === "late").length} retard(s)`}
+          >
+            {strip.map((d) => (
+              <span
+                key={d.date}
+                title={`${weekdayDateFr(d.date)} · ${ATTENDANCE_LABELS[d.status]}`}
+                className={cn("h-4 w-4 rounded-[4px]", STRIP_CELL[d.status])}
+              />
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-slate-600 dark:text-slate-300">
+            Vert présent · rouge absent · jaune retard · bleu justifié (un carré par jour de classe)
+          </p>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function HomeworkPanel({
+  childId,
+  classSectionId,
+}: {
+  childId: string;
+  classSectionId: string | undefined;
+}) {
+  const { data, isLoading, isError } = useWeekHomework(childId, classSectionId);
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <Panel
+      icon={ClipboardList}
+      title="Devoirs de la semaine"
+      subtitle="Exercices et devoirs des 7 prochains jours"
+      action={
+        <Link to={`/enfants/${childId}/exercices`} className="block">
+          <Button variant="secondary" className="min-h-11 w-full">
+            Tous les exercices
+          </Button>
+        </Link>
+      }
+    >
+      {isLoading ? (
+        <CardSkeleton />
+      ) : isError ? (
+        <PanelEmpty message="Devoirs indisponibles pour le moment." />
+      ) : !classSectionId ? (
+        <PanelEmpty message="Cet enfant n’est pas encore inscrit dans une classe." />
+      ) : !data || data.length === 0 ? (
+        <PanelEmpty message="Rien à rendre cette semaine." />
+      ) : (
+        <ul className="space-y-2">
+          {data.map((w) => (
+            <li key={w.id}>
+              <Link
+                to={`/enfants/${childId}/${w.type === "examen" ? "devoirs" : "exercices"}`}
+                className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 transition hover:bg-brand-50/60 dark:bg-[var(--surface-2)]"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {[w.subject, w.title].filter(Boolean).join(" · ")}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    {w.type === "examen" ? "Devoir" : "Exercice"}
+                    {w.start_time ? ` · ${w.start_time.slice(0, 5)}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                    w.eval_date === today
+                      ? "bg-rose-100 text-rose-800 dark:bg-rose-700 dark:text-rose-50"
+                      : "bg-amber-100 text-amber-900 dark:bg-amber-600 dark:text-amber-50",
+                  )}
+                >
+                  {w.eval_date === today ? "Aujourd’hui" : weekdayDateFr(w.eval_date)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function LatestGradesPanel({ child }: { child: ChildSummary }) {
+  const grades = child.recentNotes.filter((n) => !n.is_absent).slice(0, 4);
+  return (
+    <Panel
+      icon={BookOpen}
+      title="Dernières notes"
+      subtitle={`Publiées pour ${child.first_name}`}
+      action={
+        <Link to={`/enfants/${child.id}/notes`} className="block">
+          <Button variant="secondary" className="min-h-11 w-full">
+            Toutes les notes
+          </Button>
+        </Link>
+      }
+    >
+      {grades.length === 0 ? (
+        <PanelEmpty message="Aucune note publiée pour le moment." />
+      ) : (
+        <ul className="space-y-2">
+          {grades.map((n) => {
+            const v = scoreOn20(n.score, n.max_score);
+            return (
+              <li key={n.id}>
+                <Link
+                  to={`/enfants/${child.id}/notes`}
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 transition hover:bg-brand-50/60 dark:bg-[var(--surface-2)]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {n.subject ?? "Matière"}
+                    </p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      {n.period_label} · {shortDateFr(n.created_at)}
+                    </p>
+                  </div>
+                  <p className={cn("shrink-0 text-lg font-bold", gradeTone(v))}>
+                    {fmt1(v)}
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-300"> / 20</span>
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function MessagesPanel({ userId }: { userId: string | undefined }) {
+  const { data, isLoading, isError } = useParentInbox(userId);
+  return (
+    <Panel
+      icon={MessageSquare}
+      title="Messages"
+      subtitle="École et enseignants"
+      action={
+        <Link to="/messages" className="block">
+          <Button variant="secondary" className="min-h-11 w-full">
+            <MessageSquare className="h-4 w-4" />
+            Voir tous les messages
+          </Button>
+        </Link>
+      }
+    >
+      {isLoading ? (
+        <CardSkeleton />
+      ) : isError ? (
+        <PanelEmpty message="Messages indisponibles pour le moment." />
+      ) : !data || data.messages.length === 0 ? (
+        <PanelEmpty message="Aucun message pour le moment." />
+      ) : (
+        <ul className="space-y-2">
+          {data.messages.map((m) => {
+            const sender = m.sender ? fullName(m.sender.first_name, m.sender.last_name) : "Expéditeur";
+            const unread = !m.read_at;
+            return (
+              <li key={m.id}>
+                <Link
+                  to="/messages"
+                  className={cn(
+                    "block rounded-xl px-3 py-2.5 transition hover:bg-brand-50/60",
+                    unread ? "bg-brand-50/40 ring-1 ring-brand-100" : "bg-slate-50 dark:bg-[var(--surface-2)]",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {sender}
+                      {unread ? <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand-500 align-middle" /> : null}
+                    </p>
+                    <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-300">{relativeFr(m.created_at)}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                    {m.subject?.trim() || "Sans objet"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{snippet(m.body, 64)}</p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function AnnouncementsPanel({ userId }: { userId: string | undefined }) {
+  const { data } = useParentInbox(userId);
+  const items = data?.announcements ?? [];
+  return (
+    <Panel
+      icon={Bell}
+      title="Annonces de l’école"
+      subtitle="Infos officielles de l’administration"
+      action={
+        <Link to="/annonces" className="block">
+          <Button variant="secondary" className="min-h-11 w-full">
+            <Bell className="h-4 w-4" />
+            Voir les annonces
+          </Button>
+        </Link>
+      }
+    >
+      {items.length === 0 ? (
+        <PanelEmpty message="Aucune annonce pour le moment." />
+      ) : (
+        <ul className="space-y-2">
+          {items.map((m) => (
+            <li key={m.id} className="rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-[var(--surface-2)]">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.subject?.trim() || "Annonce"}</p>
+                <span className="shrink-0 text-[11px] text-slate-500 dark:text-slate-300">
+                  {formatDateSafe(m.created_at, "d/MM/yyyy")}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{snippet(m.body, 110)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function ChildQuickLinks({ childId }: { childId: string }) {
+  const links = [
+    { to: "notes", label: "Notes", icon: BookOpen },
+    { to: "bulletin", label: "Bulletin", icon: FileText },
+    { to: "presences", label: "Présences", icon: CalendarCheck },
+    { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
+    { to: "devoirs", label: "Devoirs", icon: ClipboardList },
+    { to: "exercices", label: "Exercices", icon: NotebookPen },
+    { to: "compositions", label: "Compositions", icon: GraduationCap },
+  ];
+  return (
+    <Card className="p-4">
+      <p className={CARD_LABEL}>Accès rapide</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
+        {links.map(({ to, label, icon: Icon }) => (
+          <Link
+            key={to}
+            to={`/enfants/${childId}/${to}`}
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 transition hover:border-brand-300 hover:text-brand-800 dark:border-slate-600 dark:bg-transparent dark:text-slate-100 dark:hover:text-brand-300"
+          >
+            <Icon className="h-4 w-4 shrink-0 text-brand-700" aria-hidden="true" />
+            <span className="min-w-0 leading-tight">{label}</span>
+          </Link>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ one child */
+
+function ChildDashboard({
+  child,
+  classSectionId,
+  userId,
+  unreadDiscussions,
+}: {
+  child: ChildSummary;
+  classSectionId: string | undefined;
+  userId: string | undefined;
+  unreadDiscussions: number;
+}) {
+  const { data: snapshot, isLoading } = useChildSnapshot(child.id, classSectionId);
+  const todos = useChildTodos(child.id, child, snapshot);
+
+  return (
+    <div className="space-y-4">
+      <TodoBanner todos={todos} unreadDiscussions={unreadDiscussions} />
+
+      <HomeworkTomorrowCard userId={userId} moreHref={`/enfants/${child.id}/cahier`} />
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <AverageCard childId={child.id} snapshot={snapshot} loading={isLoading} />
+        <PresenceCard childId={child.id} snapshot={snapshot} loading={isLoading} />
+        <StripCard childId={child.id} />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <HomeworkPanel childId={child.id} classSectionId={classSectionId} />
+        <LatestGradesPanel child={child} />
+        <MessagesPanel userId={userId} />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <AnnouncementsPanel userId={userId} />
+        </div>
+        <ChildQuickLinks childId={child.id} />
+      </section>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ page */
 
 export default function ParentHome() {
   const { user, profile, schools, schoolId } = useAuth();
@@ -45,394 +670,89 @@ export default function ParentHome() {
   const name = personName(profile?.first_name, profile?.last_name);
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["parent-home", user?.id],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const uid = user!.id;
+  const { data: children, isLoading, isError } = useParentChildren(user?.id);
+  const childIds = useMemo(() => (children ?? []).map((c) => c.id), [children]);
+  const { data: meta } = useChildrenMeta(user?.id, childIds);
 
-      // One SQL call for all children (the old page made 5 requests per child, one after
-      // the other, and counted absences/grades from capped lists).
-      const summary = await fetchMyChildrenSummary();
-
-      const children: ChildCard[] = [];
-      let totalNotes = 0;
-      let totalAbsences = 0;
-      const activity: {
-        id: string;
-        childName: string;
-        childId: string;
-        subject: string;
-        scoreOn20: string;
-        period: string;
-        created_at: string;
-      }[] = [];
-      const scoreOn20 = (score: number, max: number) =>
-        max > 0 ? ((score / max) * 20).toFixed(1) : "—";
-
-      for (const child of summary) {
-        const childName = fullName(child.first_name, child.last_name);
-        const notes = child.recentNotes;
-        const abs = Number(child.absences) || 0;
-        const nCount = Number(child.notesCount) || 0;
-        totalAbsences += abs;
-        totalNotes += nCount;
-
-        const latest = notes.find((n) => !n.is_absent);
-
-        children.push({
-          id: child.id,
-          name: childName,
-          className: child.className ?? "Sans classe",
-          notesCount: nCount,
-          absences: abs,
-          recentNote: latest
-            ? {
-                subject: latest.subject ?? "Matière",
-                scoreOn20: scoreOn20(latest.score, latest.max_score),
-                period: latest.period_label,
-              }
-            : null,
-        });
-
-        for (const n of notes) {
-          activity.push({
-            id: n.id,
-            childName,
-            childId: child.id,
-            subject: n.subject ?? "Matière",
-            scoreOn20: scoreOn20(n.score, n.max_score),
-            period: n.period_label,
-            created_at: n.created_at,
-          });
-        }
-      }
-
-      activity.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-
-      const { data: msgData } = await supabase
-        .from("messages")
-        .select(
-          "id, subject, body, created_at, read_at, is_announcement, sender:profils!messages_sender_id_fkey(first_name, last_name)",
-        )
-        .eq("recipient_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(30);
-
-      const allMsgs = (msgData ?? []) as InboxPreview[];
-
-      return {
-        children,
-        totalNotes,
-        totalAbsences,
-        recentActivity: activity.slice(0, 4),
-        announcements: allMsgs.filter((m) => m.is_announcement).slice(0, 3),
-        recentMessages: allMsgs.filter((m) => !m.is_announcement).slice(0, 3),
-      };
-    },
-  });
+  const [picked, setPicked] = useState<string | null>(() => readSelectedChild());
+  // Only ever show a child the database returned for THIS parent (stored id is just a hint).
+  const selected = (children ?? []).find((c) => c.id === picked) ?? children?.[0];
+  useEffect(() => {
+    if (selected && selected.id !== picked) setPicked(selected.id);
+  }, [selected, picked]);
 
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;
   }
 
-  if (!data) {
-    return (
-      <p className="text-slate-500">Impossible de charger votre aperçu.</p>
-    );
+  if (isError || !children) {
+    return <p className="text-slate-500">Impossible de charger votre aperçu.</p>;
   }
 
   return (
-    <div className="space-y-6">
-      <PortalHomeHeader
-        icon={Users}
-        name={name}
-        context={[schoolName, "Parent"].filter(Boolean).join(" · ")}
-        unreadInbox={unreadInbox}
-      />
-
-      <HomeworkTomorrowCard
-        userId={user?.id}
-        moreHref={data.children.length === 1 ? `/enfants/${data.children[0].id}/cahier` : "/enfants"}
-      />
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Enfants"
-          value={String(data.children.length)}
-          hint="Liés à votre compte"
-          valueClass="text-brand-600"
-          to="/enfants"
-        />
-        <MetricCard
-          label="Notes"
-          value={String(data.totalNotes)}
-          hint="Publiées au total"
-          valueClass="text-sky-600"
-          to="/enfants"
-        />
-        <MetricCard
-          label="Absences"
-          value={String(data.totalAbsences)}
-          hint="Tous enfants confondus"
-          valueClass={
-            data.totalAbsences > 0 ? "text-rose-600" : "text-slate-500 dark:text-slate-300"
-          }
-          to="/enfants"
-        />
-        <MetricCard
-          label="Messages"
-          value={String(unreadInbox.discussions)}
-          hint="Non lus"
-          valueClass={unreadInbox.discussions > 0 ? "text-amber-600" : "text-slate-500 dark:text-slate-300"}
-          to="/messages"
-        />
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          icon={Users}
-          title="Mes enfants"
-          subtitle="Suivi scolaire en un coup d’œil"
-          action={
-            <Link to="/enfants" className="block">
-              <Button className="w-full">Voir tous les enfants</Button>
-            </Link>
-          }
-        >
-          {data.children.length === 0 ? (
-            <PanelEmpty message="Aucun enfant lié à votre compte." />
-          ) : (
-            <ul className="space-y-2">
-              {data.children.map((child) => (
-                <li
-                  key={child.id}
-                  className="rounded-xl bg-slate-50 px-3 py-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {child.name}
-                      </p>
-                      <p className="text-xs text-slate-500">{child.className}</p>
-                    </div>
-                    <div className="flex shrink-0 gap-3 text-center">
-                      <div>
-                        <p className="text-sm font-bold text-sky-600">
-                          {child.notesCount}
-                        </p>
-                        <p className="text-[10px] text-slate-400">notes</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-rose-600">
-                          {child.absences}
-                        </p>
-                        <p className="text-[10px] text-slate-400">abs.</p>
-                      </div>
-                    </div>
-                  </div>
-                  {child.recentNote ? (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Dernière note · {child.recentNote.subject}{" "}
-                      <span className="font-semibold text-brand-700">
-                        {child.recentNote.scoreOn20}/20
-                      </span>
-                    </p>
-                  ) : null}
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs font-medium text-brand-700">
-                    <Link
-                      to={`/enfants/${child.id}/notes`}
-                      className="hover:underline"
-                    >
-                      Notes →
-                    </Link>
-                    <Link
-                      to={`/enfants/${child.id}/presences`}
-                      className="hover:underline"
-                    >
-                      Présences →
-                    </Link>
-                    <Link
-                      to={`/enfants/${child.id}/bulletin`}
-                      className="hover:underline"
-                    >
-                      Bulletin →
-                    </Link>
-                    <Link
-                      to={`/enfants/${child.id}/emploi-du-temps`}
-                      className="hover:underline"
-                    >
-                      EDT →
-                    </Link>
-                    <Link
-                      to={`/enfants/${child.id}/devoirs`}
-                      className="hover:underline"
-                    >
-                      Devoirs →
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
+    <div className="space-y-4">
+      <header>
+        <p className="text-sm font-medium text-brand-700">
+          {getTimeGreeting()}{" "}
+          <span className="animate-greeting-wave inline-block" aria-hidden>
+            👋
+          </span>
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+          {name || (
+            <span className="inline-block h-8 w-40 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
           )}
-        </Panel>
+        </h1>
+        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+          {[schoolName, "Parent"].filter(Boolean).join(" · ")}
+        </p>
+      </header>
 
-        <Panel
-          icon={BookOpen}
-          title="Activité récente"
-          subtitle="Dernières notes de vos enfants"
-          action={
-            <Link to="/enfants" className="block">
-              <Button className="w-full">Suivi des enfants</Button>
-            </Link>
-          }
-        >
-          {data.recentActivity.length === 0 ? (
-            <PanelEmpty message="Aucune note publiée pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.recentActivity.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    to={`/enfants/${a.childId}/notes`}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 transition hover:bg-brand-50/60"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {a.childName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {a.subject} · {a.period}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-lg font-bold text-brand-700">
-                      {a.scoreOn20}
-                      <span className="text-xs font-medium text-slate-400">
-                        {" "}
-                        / 20
-                      </span>
-                    </p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </section>
+      {children.length === 0 || !selected ? (
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Aucun enfant lié à votre compte</h2>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Demandez à l’école de lier votre compte à vos enfants. Vous retrouverez ici leurs notes, présences et devoirs.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <nav
+            aria-label="Choisir un enfant"
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 pt-2 md:mx-0 md:grid md:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] md:overflow-visible md:px-0"
+          >
+            {children.map((c, i) => (
+              <ChildChip
+                key={c.id}
+                child={c}
+                index={i}
+                age={ageLabel(meta?.dob[c.id])}
+                classSectionId={meta?.classId[c.id]}
+                selected={c.id === selected.id}
+                onSelect={() => {
+                  setPicked(c.id);
+                  writeSelectedChild(c.id);
+                }}
+              />
+            ))}
+          </nav>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          icon={Bell}
-          title="Annonces de l’école"
-          subtitle="Infos officielles de l’administration"
-          action={
-            <Link to="/annonces" className="block">
-              <Button className="w-full">
-                <Bell className="h-4 w-4" />
-                Voir les annonces
-              </Button>
-            </Link>
-          }
-        >
-          {data.announcements.length === 0 ? (
-            <PanelEmpty message="Aucune annonce pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.announcements.map((m) => (
-                <li key={m.id} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {m.subject?.trim() || "Annonce"}
-                    </p>
-                    <span className="shrink-0 text-[11px] text-slate-400">
-                      {formatDateSafe(m.created_at, "d/MM/yyyy")}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    {snippet(m.body, 110)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel
-          icon={MessageSquare}
-          title="Messages récents"
-          subtitle="Échanges avec l’école et les enseignants"
-          action={
-            <Link to="/messages" className="block">
-              <Button className="w-full">
-                <MessageSquare className="h-4 w-4" />
-                Voir tous les messages
-              </Button>
-            </Link>
-          }
-        >
-          {data.recentMessages.length === 0 ? (
-            <PanelEmpty message="Aucun message pour le moment." />
-          ) : (
-            <ul className="space-y-2">
-              {data.recentMessages.map((m) => {
-                const sender = m.sender
-                  ? fullName(m.sender.first_name, m.sender.last_name)
-                  : "Expéditeur";
-                const unread = !m.read_at;
-                return (
-                  <li key={m.id}>
-                    <Link
-                      to="/messages"
-                      className={cn(
-                        "block rounded-xl px-3 py-2.5 transition hover:bg-brand-50/60",
-                        unread
-                          ? "bg-brand-50/40 ring-1 ring-brand-100"
-                          : "bg-slate-50",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {sender}
-                          {unread ? (
-                            <span className="ml-2 inline-block h-2 w-2 rounded-full bg-brand-500 align-middle" />
-                          ) : null}
-                        </p>
-                        <span className="shrink-0 text-[11px] text-slate-400">
-                          {relativeFr(m.created_at)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-sm font-medium text-slate-700">
-                        {m.subject?.trim() || "Sans objet"}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {snippet(m.body)}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-      </section>
-
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <QuickLink to="/enfants" label="Mes enfants" icon={Users} />
-        <QuickLink to="/messages" label="Messages" icon={MessageSquare} />
-        <QuickLink to="/profil" label="Mon profil" icon={User} />
-        <QuickLink
-          to={
-            data.children[0]
-              ? `/enfants/${data.children[0].id}/notes`
-              : "/enfants"
-          }
-          label="Notes"
-          icon={BookOpen}
-        />
-      </section>
+          <ChildDashboard
+            key={selected.id}
+            child={selected}
+            classSectionId={meta?.classId[selected.id]}
+            userId={user?.id}
+            unreadDiscussions={unreadInbox.discussions}
+          />
+        </>
+      )}
     </div>
   );
 }
