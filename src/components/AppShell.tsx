@@ -34,6 +34,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount, useMessagesHomeRealtime, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
+import { useParentChildren } from "@/hooks/useParentHome";
+import { readSelectedChild, writeSelectedChild, SELECTED_CHILD_EVENT } from "@/lib/parentHome";
 import {
   useExercicesPendingChanges,
   useParentExamsRealtime,
@@ -88,6 +90,8 @@ interface NavItem {
     | "exercices-updates"
     | "compositions-updates"
     | "enfants-attention";
+  /** Only highlight on an exact path match. */
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -339,32 +343,42 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
       ],
     },
   ],
-  parent: [
+  // Parent sidebar is built per selected child — see buildParentGroups().
+  parent: [],
+};
+
+/** Parent sidebar (Designer layout): Accueil / Mes enfants / Communication. */
+function buildParentGroups(childId: string | null): NavGroup[] {
+  const c = `/enfants/${childId}`;
+  const all: NavItem = { to: "/enfants", label: "Tous mes enfants", icon: <Users className="h-4 w-4" />, badgeKey: "enfants-attention", exact: true };
+  return [
     {
       items: [
-        { to: "/tableau-de-bord", label: "Tableau de bord", icon: <LayoutDashboard className="h-4 w-4" /> },
-        {
-          to: "/enfants",
-          label: "Enfants",
-          icon: <Users className="h-4 w-4" />,
-          badgeKey: "enfants-attention",
-        },
-        {
-          to: "/messages",
-          label: "Messages",
-          icon: <MessageSquare className="h-4 w-4" />,
-          badgeKey: "messages-unread",
-        },
-        {
-          to: "/annonces",
-          label: "Annonces",
-          icon: <Megaphone className="h-4 w-4" />,
-          badgeKey: "annonces-unread",
-        },
+        { to: "/tableau-de-bord", label: "Accueil", icon: <LayoutDashboard className="h-4 w-4" /> },
       ],
     },
-  ],
-};
+    {
+      label: "Mes enfants",
+      items: [
+        all,
+        ...(!childId ? [] : ([
+        { to: `${c}/notes`, label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
+        { to: `${c}/presences`, label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
+        { to: `${c}/devoirs`, label: "Devoirs", icon: <FileText className="h-4 w-4" /> },
+        { to: `${c}/bulletin`, label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
+        { to: `${c}/emploi-du-temps`, label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" />, badgeKey: "edt-updates" },
+        ] as NavItem[])),
+      ],
+    },
+    {
+      label: "Communication",
+      items: [
+        { to: "/messages", label: "Messages", icon: <MessageSquare className="h-4 w-4" />, badgeKey: "messages-unread" },
+        { to: "/annonces", label: "Annonces", icon: <Megaphone className="h-4 w-4" />, badgeKey: "annonces-unread" },
+      ],
+    },
+  ];
+}
 
 const ACCOUNT_GROUP: NavGroup = {
   label: "Compte",
@@ -384,6 +398,7 @@ const GlobalSearch = lazy(() =>
 
 export function AppShell() {
   const {
+    user,
     profile,
     role,
     schools,
@@ -427,7 +442,39 @@ export function AppShell() {
     };
   }, [location.pathname, location.search, role]);
 
-  const roleGroups = role ? NAV_GROUPS_BY_ROLE[role] : [];
+  // ---- parent: selected child (shared with the home page picker, kept in localStorage)
+  const isParent = role === "parent";
+  const { data: parentChildren } = useParentChildren(isParent ? user?.id : undefined);
+  const [pickedChild, setPickedChild] = useState<string | null>(() => readSelectedChild());
+  useEffect(() => {
+    const onChange = (e: Event) => setPickedChild((e as CustomEvent<string>).detail);
+    window.addEventListener(SELECTED_CHILD_EVENT, onChange);
+    return () => window.removeEventListener(SELECTED_CHILD_EVENT, onChange);
+  }, []);
+  // Opening a child's page (from Enfants, a card…) makes that child the selected one.
+  const routeChildId = /^\/enfants\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
+  useEffect(() => {
+    if (!isParent || !routeChildId || !parentChildren) return;
+    if (parentChildren.some((c) => c.id === routeChildId)) {
+      setPickedChild(routeChildId);
+      writeSelectedChild(routeChildId);
+    }
+  }, [isParent, routeChildId, parentChildren]);
+  // Only trust ids this parent's own children list returned; fall back to the first child.
+  const selectedChild =
+    (parentChildren ?? []).find((c) => c.id === pickedChild) ?? parentChildren?.[0] ?? null;
+  const pickChild = (id: string) => {
+    setPickedChild(id);
+    writeSelectedChild(id);
+    const m = /^\/enfants\/[^/]+\/(.+)$/.exec(location.pathname);
+    if (m) navigate(`/enfants/${id}/${m[1]}`);
+  };
+
+  const roleGroups = role
+    ? isParent
+      ? buildParentGroups(selectedChild?.id ?? null)
+      : NAV_GROUPS_BY_ROLE[role]
+    : [];
   const navGroups: NavGroup[] = [
     ...roleGroups,
     {
@@ -650,10 +697,35 @@ export function AppShell() {
                     {group.label}
                   </p>
                 ) : null}
+                {isParent && group.label === "Mes enfants" && selectedChild ? (
+                  (parentChildren?.length ?? 0) > 1 ? (
+                    <div className="px-3 pb-1.5">
+                      <label className="sr-only" htmlFor="sidebar-child">Enfant sélectionné</label>
+                      <select
+                        id="sidebar-child"
+                        value={selectedChild.id}
+                        onChange={(e) => pickChild(e.target.value)}
+                        className="w-full truncate rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-700 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:text-slate-200"
+                      >
+                        {parentChildren!.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {personName(c.first_name, c.last_name)}
+                            {c.className ? ` · ${c.className}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="truncate px-3 pb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {personName(selectedChild.first_name, selectedChild.last_name)}
+                    </p>
+                  )
+                ) : null}
                 {group.items.map((item) => {
                   const active =
                     location.pathname === item.to ||
-                    (item.to !== "/tableau-de-bord" &&
+                    (!item.exact &&
+                      item.to !== "/tableau-de-bord" &&
                       item.to !== "/ecole" &&
                       item.to !== "/admin" &&
                       location.pathname.startsWith(item.to));

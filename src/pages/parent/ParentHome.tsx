@@ -47,6 +47,7 @@ import {
   initials,
   plural,
   readSelectedChild,
+  SELECTED_CHILD_EVENT,
   scoreOn20,
   shortDateFr,
   weekdayDateFr,
@@ -691,6 +692,11 @@ export default function ParentHome() {
   useEffect(() => {
     if (selected && selected.id !== picked) setPicked(selected.id);
   }, [selected, picked]);
+  useEffect(() => {
+    const onChange = (e: Event) => setPicked((e as CustomEvent<string>).detail);
+    window.addEventListener(SELECTED_CHILD_EVENT, onChange);
+    return () => window.removeEventListener(SELECTED_CHILD_EVENT, onChange);
+  }, []);
 
   if (isLoading) {
     return <p className="text-slate-500">Chargement…</p>;

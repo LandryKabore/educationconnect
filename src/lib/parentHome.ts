@@ -11,6 +11,8 @@ export const LOW_GRADE_ON_20 = 8;
 export const TODO_WINDOW_DAYS = 30;
 export const LOW_GRADE_WINDOW_DAYS = 14;
 const SELECTED_CHILD_KEY = "edufaso:parent-home-child";
+/** Fired on window when the selected child changes (home picker ↔ sidebar stay in sync). */
+export const SELECTED_CHILD_EVENT = "edufaso:parent-child-changed";
 
 export function readSelectedChild(): string | null {
   try {
@@ -22,7 +24,13 @@ export function readSelectedChild(): string | null {
 
 export function writeSelectedChild(id: string): void {
   try {
+    if (localStorage.getItem(SELECTED_CHILD_KEY) === id) return;
     localStorage.setItem(SELECTED_CHILD_KEY, id);
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(SELECTED_CHILD_EVENT, { detail: id }));
   } catch {
     /* ignore */
   }
