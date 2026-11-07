@@ -4,6 +4,7 @@ import { ArrowRight, Check, ListChecks, X } from "lucide-react";
 import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
 import {
   SCHOOL_SETUP_STEPS,
+  setupGuideHref,
   type SetupStepId,
 } from "@/lib/schoolSetup";
 import { Button } from "@/components/ui";
@@ -30,8 +31,7 @@ function stepFromPath(pathname: string): SetupStepId | null {
 }
 
 function withSetupQuery(to: string) {
-  const sep = to.includes("?") ? "&" : "?";
-  return `${to}${sep}setup=1`;
+  return setupGuideHref(to);
 }
 
 export function enterSetupGuide() {

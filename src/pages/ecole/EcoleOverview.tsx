@@ -29,11 +29,13 @@ import { fetchDeparturesSummary, fetchSchoolHomeStats } from "@/lib/scaleApi";
 import { Badge, Button, EmptyState } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
+import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, joinProfile, personName } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
+import { SetupIncompleteCallout } from "@/components/SetupIncompleteCallout";
 import type { AttendanceStatus } from "@/lib/types";
 
 function dbDayOfWeek(date = new Date()) {
@@ -70,6 +72,9 @@ export default function EcoleOverview() {
   const { schoolId, schools, user, profile } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
   const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
+  // Same query as the callout, started with the rest of the overview so the
+  // banner can appear with the page instead of one round-trip later.
+  useSchoolSetupProgress();
   const { data: sansClasse = 0 } = useStudentsWithoutClassCount();
   const { data: pendingExams = 0 } = usePendingExamsCount();
   // pupils who left the school this year (kept in the database but not in the headcount)
@@ -339,6 +344,8 @@ export default function EcoleOverview() {
           ) : null}
         </div>
       </div>
+
+      <SetupIncompleteCallout />
 
       {pendingExams > 0 ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/40">

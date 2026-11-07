@@ -416,7 +416,8 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .animate-greeting,
   .animate-greeting-name,
-  .animate-greeting-wave {
+  .animate-greeting-wave,
+  .skeleton-pulse {
     animation: none;
   }
 }
