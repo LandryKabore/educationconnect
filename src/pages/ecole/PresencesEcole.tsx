@@ -5,6 +5,7 @@ import { format, subDays } from "date-fns";
 import { toast } from "sonner";
 import { CheckCircle2, Undo2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import {
   ATTENDANCE_LABELS,
   ATTENDANCE_TONE,
@@ -70,6 +71,7 @@ const fmtDay = (iso: string) => {
 
 export default function PresencesEcole() {
   const { schoolId, user } = useAuth();
+  const allowVersionWrite = useAllowVersionWrite();
   const qc = useQueryClient();
   const { page, pageSize, setPage, setPageSize } = usePageParams();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -230,6 +232,7 @@ export default function PresencesEcole() {
       .filter((r) => (dialog.kind === "justify" ? r.status === "absent" : r.status === "excused"))
       .map((r) => r.id);
     if (ids.length === 0) return;
+    if (!allowVersionWrite()) return;
     const note =
       dialog.kind === "justify"
         ? [reason, extra.trim()].filter(Boolean).join(" — ")

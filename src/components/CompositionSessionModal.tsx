@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -72,6 +73,7 @@ export function CompositionSessionModal({
   const [endsOn, setEndsOn] = useState("");
   const [papers, setPapers] = useState<PaperDraft[]>([]);
   const [saving, setSaving] = useState(false);
+  const allowVersionWrite = useAllowVersionWrite();
 
   const { data: programme = [], isLoading: programmeLoading } = useQuery({
     queryKey: ["programme-classe", classId],
@@ -232,6 +234,8 @@ export function CompositionSessionModal({
         return;
       }
     }
+
+    if (!allowVersionWrite()) return;
 
     setSaving(true);
     const now = new Date().toISOString();

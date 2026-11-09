@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, History, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { supabase } from "@/lib/supabase";
 import type { Evaluation, Profile } from "@/lib/types";
@@ -78,6 +79,7 @@ export default function NotesSaisie() {
   const { user } = useAuth();
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
+  const allowVersionWrite = useAllowVersionWrite();
 
   const [grades, setGrades] = useState<Record<string, GradeState>>({});
   const [savingGrades, setSavingGrades] = useState(false);
@@ -287,6 +289,7 @@ export default function NotesSaisie() {
 
   const saveGrades = async () => {
     if (!openEval || !id || !user) return;
+    if (!allowVersionWrite()) return;
     setSavingGrades(true);
     try {
       const existingByStudent = new Map(openGrades.map((g) => [g.student_id, g]));

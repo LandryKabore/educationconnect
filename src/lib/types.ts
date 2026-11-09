@@ -60,6 +60,12 @@ export interface PlatformSettings {
   app_name: string;
   support_email: string | null;
   default_year_label: string | null;
+  /** Latest hand-installed desktop build. Null until a super admin sets it. */
+  latest_version_bureau?: string | null;
+  latest_version_android?: string | null;
+  min_supported_version?: string | null;
+  download_url_bureau?: string | null;
+  download_url_android?: string | null;
   updated_at: string;
   updated_by: string | null;
 }

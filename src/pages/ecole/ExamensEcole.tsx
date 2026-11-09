@@ -5,6 +5,7 @@ import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { TRIMESTER_PERIODS } from "@/lib/averages";
 import { ClassColorDot } from "@/components/ClassColor";
@@ -68,6 +69,7 @@ type ExamRow = Evaluation & {
 
 export default function ExamensEcole() {
   const { schoolId, user } = useAuth();
+  const allowVersionWrite = useAllowVersionWrite();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<StatusFilter>("upcoming");
   const [classId, setClassId] = useState("");
@@ -321,6 +323,8 @@ export default function ExamensEcole() {
       return;
     }
 
+    if (!allowVersionWrite()) return;
+
     setExamSaving(true);
     const now = new Date().toISOString();
     const { error } = await supabase.from("evaluations").insert({
@@ -365,6 +369,7 @@ export default function ExamensEcole() {
 
   const setConfirmed = async (exam: ExamRow, confirmed: boolean) => {
     if (!user) return;
+    if (!allowVersionWrite()) return;
     setBusyId(exam.id);
     const { error } = await supabase
       .from("evaluations")
@@ -395,6 +400,7 @@ export default function ExamensEcole() {
   };
 
   const deleteExam = async (exam: ExamRow) => {
+    if (!allowVersionWrite()) return;
     setBusyId(exam.id);
     const { error } = await supabase.from("evaluations").delete().eq("id", exam.id);
     setBusyId(null);

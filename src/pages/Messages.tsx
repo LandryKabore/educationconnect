@@ -7,6 +7,7 @@ import { fr } from "date-fns/locale";
 import { ArrowLeft, Check, CheckCheck, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, MessageRow, Profile } from "@/lib/types";
@@ -149,6 +150,7 @@ export default function Messages({
   view?: MessagesView;
 }) {
   const { user, schoolId, role } = useAuth();
+  const allowVersionWrite = useAllowVersionWrite();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -854,6 +856,7 @@ export default function Messages({
     if (!user || !schoolId || !selectedOtherId) return;
     const text = chatInput.trim();
     if (!text) return;
+    if (!allowVersionWrite()) return;
 
     setChatSending(true);
     const { error } = await supabase.from("messages").insert({
@@ -884,6 +887,7 @@ export default function Messages({
       toast.error("Écrivez le message");
       return;
     }
+    if (!allowVersionWrite()) return;
 
     setSending(true);
     const threadId = crypto.randomUUID();
@@ -975,6 +979,7 @@ export default function Messages({
       toast.error("Écrivez le message de l’annonce");
       return;
     }
+    if (!allowVersionWrite()) return;
 
     setAnnounceSending(true);
     const subjectText =

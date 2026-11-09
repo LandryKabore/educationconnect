@@ -8,6 +8,7 @@ import { PeriodClosedBanner } from "@/components/PeriodClosedBanner";
 import { usePeriodClosed } from "@/hooks/usePeriodClosed";
 import { ArrowLeft, CheckCircle2, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { formatExamSchedule, formatTimeHm } from "@/lib/assignmentKinds";
 import { supabase } from "@/lib/supabase";
@@ -55,6 +56,7 @@ export default function Notes() {
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const allowVersionWrite = useAllowVersionWrite();
   /** Admins never need a second admin to confirm their own exam. */
   const autoConfirmExam = role === "school_admin";
 
@@ -453,6 +455,8 @@ export default function Notes() {
       }
     }
 
+    if (!allowVersionWrite()) return;
+
     setSaving(true);
     const existing = editingId
       ? evaluations.find((e) => e.id === editingId)
@@ -561,6 +565,7 @@ export default function Notes() {
   };
 
   const handleDelete = async (ev: Evaluation) => {
+    if (!allowVersionWrite()) return;
     setDeletingId(ev.id);
     const { error } = await supabase.from("evaluations").delete().eq("id", ev.id);
     setDeletingId(null);
