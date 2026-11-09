@@ -15,3 +15,10 @@ export function platformLabel(): string {
   const standalone = window.matchMedia?.("(display-mode: standalone)").matches;
   return standalone ? "pwa" : "web";
 }
+
+/** Installed desktop or Android copy. Web and PWA update themselves and return null. */
+export function nativePlatform(): "bureau" | "android" | null {
+  const label = platformLabel();
+  if (label === "bureau" || label === "android") return label;
+  return null;
+}

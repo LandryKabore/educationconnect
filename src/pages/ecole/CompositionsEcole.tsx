@@ -7,6 +7,7 @@ import { CompositionSessionModal } from "@/components/CompositionSessionModal";
 import { ClassColorDot } from "@/components/ClassColor";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import {
@@ -51,6 +52,7 @@ type SessionRow = {
 
 export default function CompositionsEcole() {
   const { schoolId, user } = useAuth();
+  const allowVersionWrite = useAllowVersionWrite();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -212,6 +214,7 @@ export default function CompositionsEcole() {
   };
 
   const handleDelete = async (session: SessionRow) => {
+    if (!allowVersionWrite()) return;
     setDeletingId(session.id);
     // Papers have session_id ON DELETE SET NULL — delete papers first, then session.
     const { error: papersError } = await supabase

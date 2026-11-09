@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { VersionPolicyProvider } from "@/contexts/VersionPolicyContext";
+import { VersionNotices } from "@/components/VersionNotices";
 import { AppToaster } from "@/components/AppToaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import App from "@/App";
@@ -50,10 +52,13 @@ if (!rootEl) {
           storageKey="edufaso-theme"
         >
           <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <App />
-              <AppToaster />
-            </AuthProvider>
+            <VersionPolicyProvider>
+              <AuthProvider>
+                <VersionNotices />
+                <App />
+                <AppToaster />
+              </AuthProvider>
+            </VersionPolicyProvider>
           </QueryClientProvider>
         </ThemeProvider>
       </ErrorBoundary>

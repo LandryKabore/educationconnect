@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { ROLE_LABELS, type AppRole } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import { Badge, Button, Card, EmptyState, PageHeader, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Label, PageHeader, Select, Textarea } from "@/components/ui";
 
 type Status = "nouveau" | "vu" | "en_cours" | "resolu";
 
@@ -45,23 +45,74 @@ function when(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
+type VersionCount = { app_version: string; total: number };
+
+const EMPTY_VERSION = "__empty__";
+
+function versionKey(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? "";
+  return trimmed ? trimmed : "";
+}
+
+function versionLabel(value: string) {
+  return value ? value : "Non renseignée";
+}
+
+function groupVersions(values: (string | null)[]): VersionCount[] {
+  const map = new Map<string, number>();
+  for (const value of values) {
+    const key = versionKey(value);
+    map.set(key, (map.get(key) ?? 0) + 1);
+  }
+  return [...map.entries()]
+    .map(([app_version, total]) => ({ app_version, total }))
+    .sort((a, b) => b.total - a.total || a.app_version.localeCompare(b.app_version, "fr"));
+}
+
+const REPORT_SELECT =
+  "id, created_at, role, route, app_version, platform, online, viewport, user_agent, error_messages, message, status, admin_note, handled_at, " +
+  "auteur:profils!signalements_user_id_fkey(first_name, last_name), ecole:ecoles(name)";
+
 /** Reports sent with « Signaler un problème ». School admins see their school, super admins see all. */
 export default function Signalements() {
   const { role } = useAuth();
   const isSuper = role === "super_admin";
   const [filter, setFilter] = useState<"ouverts" | Status | "tous">("ouverts");
+  const [versionFilter, setVersionFilter] = useState("");
+
+  const { data: versionCounts = [] } = useQuery({
+    queryKey: ["signalements", "par-version"],
+    queryFn: async (): Promise<VersionCount[]> => {
+      const { data, error } = await supabase.rpc("ef_signalements_par_version");
+      if (!error && Array.isArray(data)) {
+        return (data as { app_version: string | null; total: number | string }[]).map((row) => ({
+          app_version: versionKey(row.app_version),
+          total: Number(row.total) || 0,
+        }));
+      }
+      const { data: raw, error: listError } = await supabase
+        .from("signalements")
+        .select("app_version")
+        .limit(2000);
+      if (listError) return [];
+      return groupVersions((raw ?? []).map((row) => (row as { app_version: string | null }).app_version));
+    },
+  });
 
   const { data: rows = [], isLoading, error } = useQuery({
-    queryKey: ["signalements", "admin"],
+    queryKey: ["signalements", "admin", versionFilter],
     queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("signalements")
-        .select(
-          "id, created_at, role, route, app_version, platform, online, viewport, user_agent, error_messages, message, status, admin_note, handled_at, " +
-            "auteur:profils!signalements_user_id_fkey(first_name, last_name), ecole:ecoles(name)",
-        )
+        .select(REPORT_SELECT)
         .order("created_at", { ascending: false })
         .limit(200);
+      if (versionFilter === EMPTY_VERSION) {
+        query = query.or("app_version.is.null,app_version.eq.");
+      } else if (versionFilter) {
+        query = query.eq("app_version", versionFilter);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -82,18 +133,82 @@ export default function Signalements() {
             : "Problèmes signalés par les utilisateurs de votre école."
         }
         actions={
-          <div className="w-full sm:w-56">
-            <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
-              <option value="ouverts">À traiter{newCount ? ` (${newCount} nouveau${newCount > 1 ? "x" : ""})` : ""}</option>
-              <option value="nouveau">Nouveaux</option>
-              <option value="vu">Vus</option>
-              <option value="en_cours">En cours</option>
-              <option value="resolu">Résolus</option>
-              <option value="tous">Tous</option>
-            </Select>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div className="w-full sm:w-52">
+              <Label htmlFor="signalements-version" className="sr-only">
+                Version
+              </Label>
+              <Select
+                id="signalements-version"
+                aria-label="Version"
+                value={versionFilter}
+                onChange={(e) => setVersionFilter(e.target.value)}
+              >
+                <option value="">Toutes les versions</option>
+                {versionCounts.map((row) => (
+                  <option key={row.app_version || EMPTY_VERSION} value={row.app_version || EMPTY_VERSION}>
+                    {versionLabel(row.app_version)} ({row.total})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-full sm:w-56">
+              <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+                <option value="ouverts">À traiter{newCount ? ` (${newCount} nouveau${newCount > 1 ? "x" : ""})` : ""}</option>
+                <option value="nouveau">Nouveaux</option>
+                <option value="vu">Vus</option>
+                <option value="en_cours">En cours</option>
+                <option value="resolu">Résolus</option>
+                <option value="tous">Tous</option>
+              </Select>
+            </div>
           </div>
         }
       />
+      <Card className="mb-4 p-4">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Signalements par version
+        </h2>
+        {versionCounts.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">Aucun signalement à compter.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-slate-500 dark:border-slate-700">
+                  <th className="pb-2 pr-3 font-medium">Version</th>
+                  <th className="pb-2 font-medium">Nombre</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versionCounts.map((row) => {
+                  const value = row.app_version || EMPTY_VERSION;
+                  const selected = versionFilter === value;
+                  return (
+                    <tr key={value} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-2 pr-3">
+                        <button
+                          type="button"
+                          className={
+                            "font-medium underline-offset-2 hover:underline " +
+                            (selected ? "text-brand-800 dark:text-brand-200" : "text-slate-800 dark:text-slate-100")
+                          }
+                          onClick={() => setVersionFilter(selected ? "" : value)}
+                        >
+                          {versionLabel(row.app_version)}
+                        </button>
+                      </td>
+                      <td className="py-2 tabular-nums text-slate-700 dark:text-slate-200">
+                        {row.total} signalement{row.total > 1 ? "s" : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
       ) : error ? (
@@ -149,11 +264,29 @@ function ReportCard({ row, showSchool }: { row: Row; showSchool: boolean }) {
 
       <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{row.message}</p>
 
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+        <div>
+          <dt className="text-slate-400">Version</dt>
+          <dd className="font-medium text-slate-800 dark:text-slate-100">
+            {versionLabel(versionKey(row.app_version))}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Appareil</dt>
+          <dd className="text-slate-700 dark:text-slate-200">{row.platform ?? "?"}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Page</dt>
+          <dd className="truncate text-slate-700 dark:text-slate-200">{row.route ?? "?"}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Connexion</dt>
+          <dd className="text-slate-700 dark:text-slate-200">
+            {row.online === null ? "Inconnue" : row.online ? "En ligne" : "Hors ligne"}
+          </dd>
+        </div>
+      </dl>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-        <span>Page : {row.route ?? "?"}</span>
-        <span>Version : {row.app_version ?? "?"}</span>
-        <span>Appareil : {row.platform ?? "?"}</span>
-        <span>{row.online === null ? "Connexion inconnue" : row.online ? "En ligne" : "Hors ligne"}</span>
         {errors.length > 0 || row.user_agent ? (
           <button type="button" className="font-medium text-brand-700 underline" onClick={() => setDetails((v) => !v)}>
             {details ? "Masquer les détails" : "Détails techniques"}

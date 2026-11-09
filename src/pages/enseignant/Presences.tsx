@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { ArrowLeft, Lock, Search, TriangleAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAllowVersionWrite } from "@/contexts/VersionPolicyContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { supabase } from "@/lib/supabase";
@@ -69,6 +70,7 @@ export default function Presences() {
   const { user, role } = useAuth();
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
+  const allowVersionWrite = useAllowVersionWrite();
   const isAdmin = role === "school_admin";
   /** Admin acting for a specific teacher — behave like that teacher for subjects. */
   const asTeacher = !isAdmin || isProxy;
@@ -252,6 +254,7 @@ export default function Presences() {
       );
       return;
     }
+    if (!allowVersionWrite()) return;
 
     setSaving(true);
     // Only rows that are new or changed are written: a re-validation never touches
