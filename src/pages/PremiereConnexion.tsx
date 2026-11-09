@@ -11,6 +11,8 @@ import {
   passwordStrengthError,
 } from "@/lib/passwordRules";
 import { cn, fromAuthEmail } from "@/lib/utils";
+import { BrandLogo } from "@/components/BrandLogo";
+import { FirstRunSteps } from "@/components/FirstRunSteps";
 import { Badge, Button, Card, Label, PasswordInput } from "@/components/ui";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -77,9 +79,14 @@ export default function PremiereConnexion() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-      <Card className="w-full max-w-md">
-        <h1 className="text-xl font-bold text-slate-900">{t("premiere.title")}</h1>
+      <Card className="w-full max-w-md border-t-4 border-t-navy-700">
+        <BrandLogo
+          file="edufaso-logo-tight.png"
+          className="mx-auto h-20 w-auto max-w-[12rem]"
+        />
+        <h1 className="mt-2 text-xl font-bold text-slate-900">{t("premiere.title")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("premiere.subtitle")}</p>
+        <FirstRunSteps current={1} />
         {identifiant || displayName ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
             {displayName ? (

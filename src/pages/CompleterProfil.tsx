@@ -18,6 +18,8 @@ import {
   Label,
   Select,
 } from "@/components/ui";
+import { BrandLogo } from "@/components/BrandLogo";
+import { FirstRunSteps } from "@/components/FirstRunSteps";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { fullName } from "@/lib/utils";
@@ -123,14 +125,19 @@ export default function CompleterProfil() {
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
-      <Card className="w-full max-w-lg">
-        <h1 className="text-xl font-bold text-slate-900">
+      <Card className="w-full max-w-lg border-t-4 border-t-navy-700">
+        <BrandLogo
+          file="edufaso-logo-tight.png"
+          className="mx-auto h-20 w-auto max-w-[12rem]"
+        />
+        <h1 className="mt-2 text-xl font-bold text-slate-900">
           Complétez votre profil
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Première connexion : renseignez les informations manquantes pour
           continuer.
         </p>
+        <FirstRunSteps current={2} />
 
         {profile ? (
           <div className="mt-5">

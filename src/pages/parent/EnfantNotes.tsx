@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
@@ -105,6 +106,7 @@ export default function EnfantNotes() {
             ? `Notes — ${fullName(child.first_name, child.last_name)}`
             : "Notes"
         }
+        belowTitle={<ParentChildSwitcher />}
       />
 
       {isLoading ? (

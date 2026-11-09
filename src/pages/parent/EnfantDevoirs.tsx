@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { PageHeader } from "@/components/ui";
 import {
   DevoirsClearList,
@@ -96,6 +97,7 @@ export default function EnfantDevoirs({ isExam }: Props) {
                 ? "Devoirs confirmés par l’établissement"
                 : "Travaux à faire à la maison"
           }
+          belowTitle={<ParentChildSwitcher />}
         />
 
         {!enrollment && !linkLoading && !isLoading ? (

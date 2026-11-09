@@ -23,6 +23,8 @@ type Props = {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** Called with the chosen pupil, or null when the choice is cleared. */
+  onPicked?: (student: StudentOption | null) => void;
 };
 
 export function StudentSearchPicker({
@@ -33,6 +35,7 @@ export function StudentSearchPicker({
   required,
   disabled,
   placeholder = "Rechercher un élève (nom, classe…)",
+  onPicked,
 }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -105,6 +108,7 @@ export function StudentSearchPicker({
             className="shrink-0 text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
             onClick={() => {
               onChange("");
+              onPicked?.(null);
               setQuery("");
               setOpen(true);
             }}
@@ -144,6 +148,7 @@ export function StudentSearchPicker({
                     onClick={() => {
                       setPicked(s);
                       onChange(s.id);
+                      onPicked?.(s);
                       setOpen(false);
                       setQuery("");
                     }}

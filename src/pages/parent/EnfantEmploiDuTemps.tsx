@@ -13,6 +13,7 @@ import {
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import {
   ParentChildBackLink,
@@ -126,6 +127,7 @@ export default function EnfantEmploiDuTemps() {
               ? `Classe ${enrollment.classes.name} · lundi → samedi`
               : "Planning de la classe"
           }
+          belowTitle={<ParentChildSwitcher />}
           actions={
             <Button
               type="button"
