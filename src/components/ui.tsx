@@ -598,15 +598,19 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  belowTitle,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  /** Sits under the title (parent child switcher, for example). */
+  belowTitle?: React.ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+        {belowTitle}
         {subtitle ? <p className="mt-1 text-slate-500">{subtitle}</p> : null}
       </div>
       {actions}

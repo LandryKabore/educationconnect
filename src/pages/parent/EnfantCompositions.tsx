@@ -7,6 +7,7 @@ import { useCompositionsPendingChanges } from "@/hooks/useCompositionRealtime";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import {
   ParentChildBackLink,
@@ -121,6 +122,7 @@ export default function EnfantCompositions() {
               : "Compositions"
           }
           subtitle="Programme des compositions planifiées par l’établissement"
+          belowTitle={<ParentChildSwitcher />}
         />
 
         <p className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, subDays } from "date-fns";
+import { format, parseISO, subDays } from "date-fns";
+import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { CheckCircle2, Undo2 } from "lucide-react";
+import { CheckCircle2, SlidersHorizontal, Undo2, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ATTENDANCE_LABELS,
@@ -15,7 +16,7 @@ import {
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus, ClassSection } from "@/lib/types";
-import { cn, joinProfile } from "@/lib/utils";
+import { cn, fullName, joinProfile } from "@/lib/utils";
 import { usePageParams } from "@/hooks/usePageParams";
 import { useRowSelection } from "@/hooks/useRowSelection";
 import { BulkBar } from "@/components/BulkBar";
@@ -68,6 +69,95 @@ const fmtDay = (iso: string) => {
   return `${d}/${m}/${y}`;
 };
 
+/** « 1–8 nov. » when the month matches, otherwise « 28 oct. – 8 nov. ». */
+function periodChipLabel(fromIso: string, toIso: string): string {
+  const start = parseISO(fromIso);
+  const end = parseISO(toIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return `${fromIso} – ${toIso}`;
+  }
+  const sameMonth =
+    start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth();
+  if (sameMonth) {
+    return `${format(start, "d", { locale: fr })}–${format(end, "d MMM", { locale: fr })}`;
+  }
+  return `${format(start, "d MMM", { locale: fr })} – ${format(end, "d MMM", { locale: fr })}`;
+}
+
+function FilterSheet({
+  open,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    const onWide = (e: MediaQueryListEvent) => {
+      if (e.matches) onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    const wide = window.matchMedia("(min-width: 1024px)");
+    wide.addEventListener("change", onWide);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = window.requestAnimationFrame(() => panelRef.current?.focus());
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      wide.removeEventListener("change", onWide);
+      document.body.style.overflow = prev;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 lg:hidden"
+      role="presentation"
+      onClick={() => onCloseRef.current()}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pe-filters-title"
+        tabIndex={-1}
+        className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 pb-6 shadow-xl outline-none dark:border-slate-600 dark:bg-[var(--surface)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 id="pe-filters-title" className="text-base font-semibold text-slate-900">
+            Filtres
+          </h2>
+          <button
+            type="button"
+            onClick={() => onCloseRef.current()}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {children}
+        <Button type="button" className="mt-4 w-full" onClick={() => onCloseRef.current()}>
+          Voir les résultats
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function PresencesEcole() {
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
@@ -75,6 +165,10 @@ export default function PresencesEcole() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [from, setFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
   const [to, setTo] = useState(today);
+  const [defaultFrom] = useState(from);
+  const [defaultTo] = useState(to);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [studentLabel, setStudentLabel] = useState("");
   const [classId, setClassId] = useState("");
   const [subjectId, setSubjectId] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -340,6 +434,165 @@ export default function PresencesEcole() {
     [dialog],
   );
 
+  const rememberStudent = (student: { first_name: string; last_name: string } | null) => {
+    setStudentLabel(student ? fullName(student.first_name, student.last_name) : "");
+  };
+
+  const activeFilters: { key: string; label: string; clear: () => void }[] = [];
+  if (status !== "all") {
+    activeFilters.push({
+      key: "status",
+      label: STATUS_FILTERS.find((s) => s.value === status)?.label ?? "Statut",
+      clear: () => onFilter(setStatus)("all"),
+    });
+  }
+  if (from !== defaultFrom || to !== defaultTo) {
+    activeFilters.push({
+      key: "range",
+      label: periodChipLabel(from, to),
+      clear: () => {
+        setFrom(defaultFrom);
+        setTo(defaultTo);
+        resetPage();
+        selection.clear();
+      },
+    });
+  }
+  if (classId) {
+    activeFilters.push({
+      key: "class",
+      label: classes.find((c) => c.id === classId)?.name ?? "Classe",
+      clear: () => onFilter(setClassId)(""),
+    });
+  }
+  if (subjectId) {
+    activeFilters.push({
+      key: "subject",
+      label: subjects.find((s) => s.id === subjectId)?.name ?? "Matière",
+      clear: () => onFilter(setSubjectId)(""),
+    });
+  }
+  if (studentId) {
+    activeFilters.push({
+      key: "student",
+      label: studentLabel || "Élève",
+      clear: () => {
+        setStudentLabel("");
+        onFilter(setStudentId)("");
+      },
+    });
+  }
+
+  const quickFilters: {
+    value: StatusFilter;
+    label: string;
+    figure: string;
+    tone: string;
+    pressed: string;
+  }[] = [
+    {
+      value: "absent",
+      label: "À justifier",
+      figure: totals ? totals.absent.toLocaleString("fr-FR") : "…",
+      tone: "text-rose-600",
+      pressed: "border-rose-600 bg-rose-50 dark:border-rose-500 dark:bg-rose-950/30",
+    },
+    {
+      value: "late",
+      label: "Retards",
+      figure: totals ? totals.late.toLocaleString("fr-FR") : "…",
+      tone: "text-amber-600",
+      pressed: "border-amber-500 bg-amber-50 dark:border-amber-400 dark:bg-amber-950/30",
+    },
+    {
+      value: "excused",
+      label: "Justifiées",
+      figure: totals ? totals.excused.toLocaleString("fr-FR") : "…",
+      tone: "text-sky-600",
+      pressed: "border-sky-500 bg-sky-50 dark:border-sky-400 dark:bg-sky-950/30",
+    },
+    {
+      value: "all",
+      label: "Présence",
+      figure: rate === null ? "—" : `${rate.toLocaleString("fr-FR")} %`,
+      tone: "text-emerald-700",
+      pressed: "border-emerald-600 bg-emerald-50 dark:border-emerald-400 dark:bg-emerald-950/30",
+    },
+  ];
+
+  const filterFields = (idPrefix: string) => (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div>
+        <Label htmlFor={`${idPrefix}-from`}>Du</Label>
+        <Input
+          id={`${idPrefix}-from`}
+          type="date"
+          max={to || undefined}
+          value={from}
+          onChange={(e) => onFilter(setFrom)(e.target.value)}
+        />
+      </div>
+      <div>
+        <Label htmlFor={`${idPrefix}-to`}>Au</Label>
+        <Input
+          id={`${idPrefix}-to`}
+          type="date"
+          min={from || undefined}
+          value={to}
+          onChange={(e) => onFilter(setTo)(e.target.value)}
+        />
+      </div>
+      <div>
+        <Label htmlFor={`${idPrefix}-class`}>Classe</Label>
+        <Select id={`${idPrefix}-class`} value={classId} onChange={(e) => onFilter(setClassId)(e.target.value)}>
+          <option value="">Toutes les classes</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor={`${idPrefix}-subject`}>Matière</Label>
+        <Select id={`${idPrefix}-subject`} value={subjectId} onChange={(e) => onFilter(setSubjectId)(e.target.value)}>
+          <option value="">Toutes les matières</option>
+          {subjects.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="col-span-2 lg:col-span-1">
+        <Label htmlFor={`${idPrefix}-status`}>Statut</Label>
+        <Select
+          id={`${idPrefix}-status`}
+          value={status}
+          onChange={(e) => onFilter(setStatus)(e.target.value as StatusFilter)}
+        >
+          {STATUS_FILTERS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="col-span-2 lg:col-span-1">
+        <Label>Élève</Label>
+        {schoolId ? (
+          <StudentSearchPicker
+            schoolId={schoolId}
+            value={studentId}
+            onChange={onFilter(setStudentId)}
+            onPicked={rememberStudent}
+            placeholder="Rechercher un élève"
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <div className={cn(selection.count > 0 && "pb-24")}>
       <PageHeader
@@ -347,67 +600,73 @@ export default function PresencesEcole() {
         subtitle="Passez en revue les absences et justifiez-les en lot"
       />
 
-      <Card className="mb-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-          <div>
-            <Label htmlFor="pe-from">Du</Label>
-            <Input id="pe-from" type="date" max={to || undefined} value={from} onChange={(e) => onFilter(setFrom)(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="pe-to">Au</Label>
-            <Input id="pe-to" type="date" min={from || undefined} value={to} onChange={(e) => onFilter(setTo)(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="pe-class">Classe</Label>
-            <Select id="pe-class" value={classId} onChange={(e) => onFilter(setClassId)(e.target.value)}>
-              <option value="">Toutes les classes</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="pe-subject">Matière</Label>
-            <Select id="pe-subject" value={subjectId} onChange={(e) => onFilter(setSubjectId)(e.target.value)}>
-              <option value="">Toutes les matières</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="col-span-2 lg:col-span-1">
-            <Label htmlFor="pe-status">Statut</Label>
-            <Select id="pe-status" value={status} onChange={(e) => onFilter(setStatus)(e.target.value as StatusFilter)}>
-              {STATUS_FILTERS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="col-span-2 lg:col-span-1">
-            <Label>Élève</Label>
-            {schoolId ? (
-              <StudentSearchPicker
-                schoolId={schoolId}
-                value={studentId}
-                onChange={onFilter(setStudentId)}
-                placeholder="Rechercher un élève"
-              />
-            ) : null}
-          </div>
+      <div className="mb-4 lg:hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-700 px-3 text-sm font-bold text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-300 dark:hover:bg-brand-950/40"
+            aria-haspopup="dialog"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4" aria-hidden />
+            Filtres ({activeFilters.length})
+          </button>
+          {activeFilters.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={chip.clear}
+              className="inline-flex min-h-10 items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 text-xs font-semibold text-brand-800 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
+            >
+              {chip.label}
+              <X className="h-3.5 w-3.5" aria-hidden />
+              <span className="sr-only">Retirer le filtre {chip.label}</span>
+            </button>
+          ))}
         </div>
-      </Card>
+      </div>
+
+      <Card className="mb-4 hidden lg:block">{filterFields("pe")}</Card>
+
+      <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+        {filterFields("pe-m")}
+      </FilterSheet>
 
       {!rangeOk ? (
         <EmptyState message="Choisissez une période valide (la date de début doit précéder la date de fin)." />
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            {quickFilters.map((item) => {
+              const pressed = status === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-pressed={pressed}
+                  onClick={() => {
+                    if (!pressed) onFilter(setStatus)(item.value);
+                  }}
+                  className={cn(
+                    "flex min-h-11 shrink-0 flex-col justify-center rounded-xl border-2 px-3 py-1.5 text-left",
+                    pressed
+                      ? item.pressed
+                      : "border-slate-200 bg-white dark:border-slate-600 dark:bg-[var(--surface)]",
+                  )}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    {item.label}
+                  </span>
+                  <span className={cn("text-lg font-extrabold leading-tight tabular-nums", item.tone)}>
+                    {item.figure}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mb-4 hidden gap-3 lg:grid lg:grid-cols-4">
             <Card className="py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Présence</p>
               <p className="mt-1 text-2xl font-bold text-emerald-700">{rate === null ? "—" : `${rate.toLocaleString("fr-FR")} %`}</p>
@@ -480,9 +739,31 @@ export default function PresencesEcole() {
                       {r.matieres?.name ? ` · ${r.matieres.name}` : ""}
                     </p>
                     {r.status === "excused" && r.note ? <p className="text-xs text-slate-500">{r.note}</p> : null}
-                    <div className="flex items-center gap-3">
-                      {rowAction(r)}
-                      <Link to={`/classes/${r.class_section_id}/presences?date=${r.date}`} className="text-xs font-medium text-brand-700 hover:underline">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {r.status === "absent" ? (
+                        <Button
+                          type="button"
+                          size="md"
+                          variant="outline"
+                          className="border-brand-700 text-brand-700 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-200"
+                          onClick={() => setDialog({ kind: "justify", rows: [r] })}
+                        >
+                          Justifier
+                        </Button>
+                      ) : r.status === "excused" ? (
+                        <Button
+                          type="button"
+                          size="md"
+                          variant="outline"
+                          onClick={() => setDialog({ kind: "undo", rows: [r] })}
+                        >
+                          Retirer
+                        </Button>
+                      ) : null}
+                      <Link
+                        to={`/classes/${r.class_section_id}/presences?date=${r.date}`}
+                        className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-100"
+                      >
                         Voir l’appel
                       </Link>
                     </div>

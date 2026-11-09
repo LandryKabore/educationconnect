@@ -14,6 +14,7 @@ import {
 } from "@/lib/gradingPeriod";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import {
   Button,
   Card,
@@ -140,6 +141,7 @@ export default function EnfantBulletin() {
         <PageHeader
           title={childName ? `Bulletin — ${childName}` : "Bulletin"}
           subtitle="Téléchargez le bulletin scolaire en PDF"
+          belowTitle={<ParentChildSwitcher />}
         />
 
         {isLoading ? (

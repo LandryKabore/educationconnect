@@ -7,6 +7,7 @@ import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
 import { fullName } from "@/lib/utils";
 import { AttendanceOverview } from "@/components/AttendanceOverview";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { EmptyState, PageHeader } from "@/components/ui";
 
 export default function EnfantPresences() {
@@ -57,6 +58,7 @@ export default function EnfantPresences() {
             : "Présences"
         }
         subtitle="Taux de présence, absences et retards"
+        belowTitle={<ParentChildSwitcher />}
       />
 
       <AttendanceOverview

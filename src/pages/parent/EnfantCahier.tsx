@@ -1,4 +1,5 @@
 import { CahierFeedView } from "@/components/CahierFeedView";
+import { ParentChildSwitcher } from "@/components/ParentChildSwitcher";
 import { EmptyState, PageHeader } from "@/components/ui";
 import {
   ParentChildBackLink,
@@ -23,6 +24,7 @@ export default function EnfantCahier() {
         <PageHeader
           title={childName ? `Cahier de textes — ${childName}` : "Cahier de textes"}
           subtitle={enrollment?.classes?.name ? `Classe ${enrollment.classes.name} · cours et travail à faire` : undefined}
+          belowTitle={<ParentChildSwitcher />}
         />
         {isLoading ? (
           <p className="text-slate-500">Chargement…</p>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookMarked,
@@ -7,6 +7,7 @@ import {
   BookOpenCheck,
   CalendarDays,
   CalendarRange,
+  Check,
   CheckCircle2,
   ClipboardList,
   Download,
@@ -35,7 +36,15 @@ import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCou
 import { useUnreadMessagesCount, useMessagesHomeRealtime, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { usePendingExamsCount } from "@/hooks/usePendingExamsCount";
 import { useParentChildren } from "@/hooks/useParentHome";
-import { writeSelectedChild } from "@/lib/parentHome";
+import {
+  childAlertLine,
+  childAlertTotal,
+  emptyChildAlerts,
+  orderWithLastViewed,
+  presenceAlertKind,
+  type ChildAlertCounts,
+} from "@/lib/parentChildAlerts";
+import { readSelectedChild, writeSelectedChild } from "@/lib/parentHome";
 import { Modal } from "@/components/Modal";
 import {
   useExercicesPendingChanges,
@@ -510,9 +519,12 @@ export function AppShell() {
   useParentPresenceRealtime();
   useSchoolPresenceRealtime();
   const { pendingCount: edtUpdatesCount = 0 } = useEdtPendingChanges();
-  const { pendingCount: notesUpdatesCount = 0 } = useNotesPendingChanges();
-  const { pendingCount: presenceUpdatesCount = 0 } =
-    usePresencePendingChanges();
+  const { pendingCount: notesUpdatesCount = 0, pending: notesPending = [] } =
+    useNotesPendingChanges();
+  const {
+    pendingCount: presenceUpdatesCount = 0,
+    pending: presencePending = [],
+  } = usePresencePendingChanges();
   const { pendingCount: exercicesUpdatesCount = 0 } =
     useExercicesPendingChanges();
   const { pendingCount: compositionsUpdatesCount = 0 } =
@@ -523,6 +535,46 @@ export function AppShell() {
     edtUpdatesCount +
     exercicesUpdatesCount +
     compositionsUpdatesCount;
+
+  // Per-child unseen alerts already stored by the presence and notes hooks.
+  const alertsByChild = useMemo(() => {
+    const map = new Map<string, ChildAlertCounts>();
+    const bucket = (childId: string) => {
+      let counts = map.get(childId);
+      if (!counts) {
+        counts = emptyChildAlerts();
+        map.set(childId, counts);
+      }
+      return counts;
+    };
+    for (const item of presencePending) {
+      if (!item.childId) continue;
+      const counts = bucket(item.childId);
+      const kind = presenceAlertKind(item.label);
+      if (kind === "absence") counts.absences += 1;
+      else if (kind === "late") counts.lates += 1;
+      else counts.other += 1;
+    }
+    for (const item of notesPending) {
+      if (!item.childId) continue;
+      bucket(item.childId).notes += 1;
+    }
+    return map;
+  }, [presencePending, notesPending]);
+
+  const lastViewedChildId = isParent ? readSelectedChild() : null;
+  const pickerChildren = useMemo(
+    () => orderWithLastViewed(parentChildren ?? [], lastViewedChildId),
+    [parentChildren, lastViewedChildId],
+  );
+  const preferredChildRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!childAsk) return;
+    const frame = window.requestAnimationFrame(() => {
+      preferredChildRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [childAsk]);
 
   const badgeFor = (item: NavItem): { count: number; title: string; tone: "amber" | "rose" | "brand" } | null => {
     if (item.badgeKey === "eleves-sans-classe" && sansClasseCount > 0) {
@@ -874,30 +926,61 @@ export function AppShell() {
           onClose={() => setChildAsk(null)}
         >
           <div className="space-y-2">
-            {(parentChildren ?? []).map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  const page = childAsk?.childPage;
-                  setChildAsk(null);
-                  if (page) navigate(`/enfants/${c.id}/${page}`);
-                }}
-                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-brand-300 hover:bg-brand-50 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:hover:bg-brand-950/40"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800 dark:bg-brand-900/60 dark:text-brand-200">
-                  {(c.first_name?.[0] ?? "?").toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {personName(c.first_name, c.last_name)}
+            {pickerChildren.map((c, index) => {
+              const lastViewed = c.id === lastViewedChildId;
+              const alerts = alertsByChild.get(c.id) ?? emptyChildAlerts();
+              const alertCount = childAlertTotal(alerts);
+              const alertLine = childAlertLine(alerts);
+              const detail = [c.className, alertLine].filter(Boolean).join(" · ");
+              return (
+                <button
+                  key={c.id}
+                  ref={index === 0 ? preferredChildRef : undefined}
+                  type="button"
+                  onClick={() => {
+                    const page = childAsk?.childPage;
+                    setChildAsk(null);
+                    if (page) navigate(`/enfants/${c.id}/${page}`);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
+                    lastViewed
+                      ? "border-2 border-brand-700 bg-brand-50 dark:border-brand-400 dark:bg-brand-950/40"
+                      : "border border-slate-200 bg-white hover:border-brand-300 hover:bg-brand-50 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:hover:bg-brand-950/40",
+                  )}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800 dark:bg-brand-900/60 dark:text-brand-200">
+                    {(c.first_name?.[0] ?? "?").toUpperCase()}
                   </span>
-                  {c.className ? (
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{c.className}</span>
+                  <span className="min-w-0 flex-1">
+                    {lastViewed ? (
+                      <span className="block text-[10px] font-bold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                        Consulté en dernier
+                      </span>
+                    ) : null}
+                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {personName(c.first_name, c.last_name)}
+                    </span>
+                    {detail ? (
+                      <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                        {detail}
+                      </span>
+                    ) : null}
+                  </span>
+                  {alertCount > 0 ? (
+                    <span
+                      className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-bold text-white"
+                      aria-hidden
+                    >
+                      {alertCount}
+                    </span>
                   ) : null}
-                </span>
-              </button>
-            ))}
+                  {lastViewed ? (
+                    <Check className="h-5 w-5 shrink-0 text-brand-700 dark:text-brand-300" aria-hidden />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </Modal>
       ) : null}
