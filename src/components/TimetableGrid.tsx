@@ -1,6 +1,12 @@
 import { X } from "lucide-react";
 import { useMemo } from "react";
+import { addDays, format, startOfWeek } from "date-fns";
+import { fr } from "date-fns/locale";
 import { timeToMinutes } from "@/lib/timetableConflicts";
+import {
+  computeScheduleFocus,
+  dbDayOfWeek,
+} from "@/lib/timetableSchedule";
 import { cn } from "@/lib/utils";
 
 export type TimetableGridSlot = {
@@ -103,6 +109,44 @@ function buildSubjectColorMap(subjectNames: string[]): Map<string, string> {
     }
     used.add(idx);
     map.set(name, SLOT_COLORS[idx]);
+  }
+  return map;
+}
+
+const DAY_ACCENTS = [
+  "bg-sky-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-violet-500",
+  "bg-teal-500",
+  "bg-orange-500",
+  "bg-purple-500",
+  "bg-cyan-500",
+  "bg-lime-600",
+  "bg-pink-500",
+  "bg-yellow-500",
+];
+
+function buildSubjectAccentMap(subjectNames: string[]): Map<string, string> {
+  const unique = [
+    ...new Set(subjectNames.map((n) => (n || "Cours").trim() || "Cours")),
+  ];
+  const used = new Set<number>();
+  const map = new Map<string, string>();
+  for (const name of unique) {
+    let idx = subjectHash(name) % DAY_ACCENTS.length;
+    if (used.has(idx)) {
+      for (let step = 1; step < DAY_ACCENTS.length; step++) {
+        const next = (idx + step) % DAY_ACCENTS.length;
+        if (!used.has(next)) {
+          idx = next;
+          break;
+        }
+      }
+    }
+    used.add(idx);
+    map.set(name, DAY_ACCENTS[idx]!);
   }
   return map;
 }
@@ -444,6 +488,240 @@ export function TimetableGrid({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+type DayViewProps = {
+  slots: TimetableGridSlot[];
+  highlightIds?: string[];
+  /** 1 = Monday … 6 = Saturday. */
+  selectedDay: number;
+  onSelectDay: (day: number) => void;
+  onShowWeek?: () => void;
+};
+
+function hm(value: string) {
+  return value.slice(0, 5);
+}
+
+function relativePhrase(minutes: number, current: boolean): string {
+  if (current) {
+    if (minutes <= 1) return "finit bientôt";
+    return `encore ${minutes} min`;
+  }
+  if (minutes <= 0) return "maintenant";
+  if (minutes < 60) return `dans ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `dans ${hours} h` : `dans ${hours} h ${String(rest).padStart(2, "0")}`;
+}
+
+/** Phone day list: one weekday, next class on top, pauses called out in text. */
+export function TimetableDayView({
+  slots,
+  highlightIds = [],
+  selectedDay,
+  onSelectDay,
+  onShowWeek,
+}: DayViewProps) {
+  const now = new Date();
+  const today = dbDayOfWeek(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const monday = startOfWeek(now, { weekStartsOn: 1 });
+  const highlight = new Set(highlightIds);
+  const focus = computeScheduleFocus(slots, now);
+  const accents = useMemo(
+    () => buildSubjectAccentMap(slots.map((s) => s.subjectName)),
+    [slots],
+  );
+
+  const days = [1, 2, 3, 4, 5, 6].map((day) => {
+    const date = addDays(monday, day - 1);
+    const raw = format(date, "EEE", { locale: fr }).replace(".", "");
+    return {
+      day,
+      num: format(date, "d"),
+      short: raw.charAt(0).toLocaleUpperCase("fr") + raw.slice(1, 3),
+      full: format(date, "EEEE d MMMM", { locale: fr }),
+    };
+  });
+
+  const selectedDate = addDays(monday, selectedDay - 1);
+  const selectedIsPast =
+    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() <
+    new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const daySlots = slots
+    .filter((s) => s.day_of_week === selectedDay)
+    .sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time));
+
+  const entries: (
+    | { kind: "slot"; slot: TimetableGridSlot }
+    | { kind: "pause"; from: string; to: string }
+  )[] = [];
+  for (let i = 0; i < daySlots.length; i++) {
+    const slot = daySlots[i]!;
+    const prev = daySlots[i - 1];
+    if (prev) {
+      const gap = timeToMinutes(slot.start_time) - timeToMinutes(prev.end_time);
+      if (gap >= 20) {
+        entries.push({ kind: "pause", from: hm(prev.end_time), to: hm(slot.start_time) });
+      }
+    }
+    entries.push({ kind: "slot", slot });
+  }
+
+  let focusKicker: string | null = null;
+  if (focus && selectedDay === today) {
+    if (focus.isLaterDay) {
+      focusKicker = `Prochain cours · ${focus.dayLabel}`;
+    } else if (focus.kind === "current") {
+      const left = timeToMinutes(focus.slot.end_time) - nowMinutes;
+      focusKicker = `Cours en cours · ${relativePhrase(left, true)}`;
+    } else {
+      const until = timeToMinutes(focus.slot.start_time) - nowMinutes;
+      focusKicker = `Prochain cours · ${relativePhrase(until, false)}`;
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-600 dark:bg-[var(--surface)]">
+      <div className="mb-3 flex justify-end">
+        {onShowWeek ? (
+          <button
+            type="button"
+            onClick={onShowWeek}
+            className="rounded-full border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-200 dark:hover:bg-brand-900/30"
+          >
+            Semaine
+          </button>
+        ) : null}
+      </div>
+
+      <div role="tablist" aria-label="Jour de la semaine" className="grid grid-cols-6 gap-1.5">
+        {days.map((day) => {
+          const selected = day.day === selectedDay;
+          return (
+            <button
+              key={day.day}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-current={day.day === today ? "date" : undefined}
+              onClick={() => onSelectDay(day.day)}
+              className={cn(
+                "flex h-14 flex-col items-center justify-center rounded-2xl text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                selected
+                  ? "bg-brand-700 text-white"
+                  : "border border-slate-200 bg-white text-slate-700 dark:border-slate-600 dark:bg-[var(--surface-2)] dark:text-slate-100",
+              )}
+            >
+              <span className="sr-only">{day.full}</span>
+              <span aria-hidden className="text-xs font-medium">
+                {day.short}
+              </span>
+              <span aria-hidden className="text-base leading-tight">
+                {day.num}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div role="tabpanel" className="mt-4 space-y-3">
+        {focus && focusKicker ? (
+          <div className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 dark:border-emerald-700 dark:bg-emerald-950/30">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+              {focusKicker}
+            </p>
+            <p className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-50">
+              {focus.slot.subjectName}
+            </p>
+            <p className="text-sm text-slate-700 dark:text-slate-200">
+              {hm(focus.slot.start_time)} – {hm(focus.slot.end_time)}
+              {focus.slot.room ? ` · Salle ${focus.slot.room}` : ""}
+              {focus.slot.teacherName ? ` · ${focus.slot.teacherName}` : ""}
+            </p>
+          </div>
+        ) : null}
+
+        {entries.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-600 dark:text-slate-300">
+            Aucun cours ce jour-là.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {entries.map((entry, index) => {
+              if (entry.kind === "pause") {
+                return (
+                  <li
+                    key={`pause-${entry.from}-${index}`}
+                    className="py-1 text-center text-sm text-slate-600 dark:text-slate-300"
+                  >
+                    Pause · {entry.from} – {entry.to}
+                  </li>
+                );
+              }
+              const slot = entry.slot;
+              const past =
+                selectedIsPast ||
+                (selectedDay === today && timeToMinutes(slot.end_time) <= nowMinutes);
+              const changed = highlight.has(slot.id);
+              const subjectKey = (slot.subjectName || "Cours").trim() || "Cours";
+              const roomLine = [
+                slot.room ? `Salle ${slot.room}` : null,
+                slot.teacherName,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <li key={slot.id}>
+                  <article
+                    className={cn(
+                      "flex gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-600 dark:bg-[var(--surface)]",
+                      past && "opacity-60",
+                      focus?.slot.id === slot.id &&
+                        selectedDay === focus.slot.day_of_week &&
+                        "border-brand-600",
+                    )}
+                  >
+                    <div className="w-14 shrink-0 text-sm font-semibold tabular-nums leading-tight text-slate-700 dark:text-slate-200">
+                      <p>{hm(slot.start_time)}</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {hm(slot.end_time)}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "w-1 shrink-0 self-stretch rounded-full",
+                        accents.get(subjectKey) ?? "bg-slate-400",
+                      )}
+                      aria-hidden
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {slot.subjectName}
+                        </p>
+                        {changed ? (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-950 dark:bg-amber-600 dark:text-amber-50">
+                            Modifié
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+                        {roomLine || "Salle et enseignant non précisés"}
+                      </p>
+                      {past ? <span className="sr-only">Cours passé</span> : null}
+                    </div>
+                  </article>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

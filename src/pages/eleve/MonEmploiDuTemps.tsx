@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { fullName, personName } from "@/lib/utils";
 import {
+  TimetableDayView,
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
@@ -21,6 +22,8 @@ export default function MonEmploiDuTemps() {
   const { pending, pendingCount, markSeen } = useEdtPendingChanges();
   const [showChanges, setShowChanges] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [mobileView, setMobileView] = useState<"jour" | "semaine">("jour");
+  const [selectedDay, setSelectedDay] = useState(() => dbDayOfWeek());
 
   useEffect(() => {
     if (pendingCount > 0) setShowChanges(true);
@@ -145,7 +148,11 @@ export default function MonEmploiDuTemps() {
     <div>
       <PageHeader
         title="Mon emploi du temps"
-        subtitle="Planning de la semaine (lundi → samedi) · mise à jour en direct"
+        subtitle={
+          enrollmentMeta?.classes?.name
+            ? `Classe ${enrollmentMeta.classes.name} · mis à jour en direct`
+            : "Planning de la semaine (lundi → samedi) · mise à jour en direct"
+        }
         actions={
           <Button
             type="button"
@@ -203,16 +210,64 @@ export default function MonEmploiDuTemps() {
       ) : null}
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <TimetableSkeleton />
       ) : slots.length === 0 ? (
         <EmptyState message="Aucun créneau planifié." />
       ) : (
-        <TimetableGrid
-          slots={gridSlots}
-          highlightIds={highlightIds}
-          highlightDay={dbDayOfWeek()}
-        />
+        <>
+          <div className="sm:hidden">
+            {mobileView === "jour" ? (
+              <TimetableDayView
+                slots={gridSlots}
+                highlightIds={highlightIds}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+                onShowWeek={() => setMobileView("semaine")}
+              />
+            ) : (
+              <div>
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setMobileView("jour")}
+                    className="rounded-full border border-brand-600 px-3 py-1.5 text-sm font-medium text-brand-800 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-200"
+                  >
+                    Jour
+                  </button>
+                </div>
+                <TimetableGrid
+                  slots={gridSlots}
+                  highlightIds={highlightIds}
+                  highlightDay={dbDayOfWeek()}
+                />
+              </div>
+            )}
+          </div>
+          <div className="hidden sm:block">
+            <TimetableGrid
+              slots={gridSlots}
+              highlightIds={highlightIds}
+              highlightDay={dbDayOfWeek()}
+            />
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+function TimetableSkeleton() {
+  return (
+    <div className="space-y-3" role="status" aria-live="polite">
+      <p className="sr-only">Chargement de l’emploi du temps…</p>
+      <div className="h-14 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700" />
+      <div className="h-24 animate-pulse rounded-2xl bg-emerald-100 dark:bg-emerald-950/40" />
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-16 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+        />
+      ))}
     </div>
   );
 }
