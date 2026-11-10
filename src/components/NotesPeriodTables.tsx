@@ -49,11 +49,98 @@ function coefFor(
   return map?.[g.subject_id] ?? g.matieres?.coefficient ?? 1;
 }
 
+type ScoreLevel = "high" | "pass" | "low";
+
+function scoreLevel(on20: number | null): ScoreLevel | null {
+  if (on20 === null || Number.isNaN(on20)) return null;
+  if (on20 >= 14) return "high";
+  if (on20 >= 10) return "pass";
+  return "low";
+}
+
+const LEVEL_TEXT: Record<ScoreLevel, string> = {
+  high: "Bien",
+  pass: "Passable",
+  low: "Sous la moyenne",
+};
+
+const LEVEL_MARK: Record<ScoreLevel, string> = {
+  high: "▲",
+  pass: "✓",
+  low: "▼",
+};
+
+function levelPhrase(level: ScoreLevel): string {
+  return LEVEL_TEXT[level].toLocaleLowerCase("fr");
+}
+
+function spokenAverage(label: string, on20: number | null): string {
+  const level = scoreLevel(on20);
+  if (on20 === null || !level) return `${label}, moyenne indisponible`;
+  const value = formatAverage(on20).replace(".", ",");
+  return `${label}, moyenne ${value} sur 20, ${levelPhrase(level)}`;
+}
+
 function scoreTone(on20: number | null): string {
-  if (on20 === null) return "text-slate-500";
+  if (on20 === null) return "text-slate-600 dark:text-slate-300";
   if (on20 >= 14) return "text-emerald-700 dark:text-emerald-400";
-  if (on20 >= 10) return "text-brand-700";
+  if (on20 >= 10) return "text-brand-700 dark:text-brand-300";
   return "text-amber-700 dark:text-amber-400";
+}
+
+function ScoreBadge({ level }: { level: ScoreLevel }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+        level === "high" &&
+          "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-100",
+        level === "pass" &&
+          "bg-teal-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-100",
+        level === "low" &&
+          "bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-50",
+      )}
+    >
+      <span aria-hidden>{LEVEL_MARK[level]}</span>
+      {LEVEL_TEXT[level]}
+    </span>
+  );
+}
+
+function ScoreMeter({ label, on20 }: { label: string; on20: number | null }) {
+  const level = scoreLevel(on20);
+  const spoken = spokenAverage(label, on20);
+  const value = on20 === null ? 0 : Math.min(20, Math.max(0, on20));
+  return (
+    <div className="relative mt-2.5 pb-5">
+      <div
+        role="progressbar"
+        aria-label={spoken}
+        aria-valuemin={0}
+        aria-valuemax={20}
+        aria-valuenow={Math.round(value * 10) / 10}
+        aria-valuetext={spoken}
+        className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+      >
+        <div
+          className={cn(
+            "h-full rounded-full",
+            level === "high" && "bg-emerald-500",
+            level === "pass" && "bg-brand-500",
+            level === "low" && "bg-amber-500",
+          )}
+          style={{ width: scoreBarWidth(on20) }}
+        />
+      </div>
+      <span
+        className="pointer-events-none absolute top-0 left-1/2 h-2 w-0.5 -translate-x-1/2 bg-slate-800 dark:bg-slate-100"
+        aria-hidden
+      />
+      <span className="absolute top-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300">
+        repère 10 / 20
+      </span>
+    </div>
+  );
 }
 
 function scoreBarWidth(on20: number | null): string {
@@ -128,7 +215,7 @@ export function NotesPeriodTables({
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               Moyenne annuelle
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
               Moyenne générale des trimestres · (T1 + T2 + T3) /{" "}
               {annual.trimesterCount || 3}
               {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
@@ -142,13 +229,18 @@ export function NotesPeriodTables({
               )}
             >
               {formatAverage(annual.annualAverage)}{" "}
-              <span className="text-base font-semibold text-slate-400">
+              <span className="text-base font-semibold text-slate-600 dark:text-slate-300">
                 / 20
               </span>
             </p>
-            <Badge tone={annual.passed ? "success" : "warning"}>
-              {formatPassDecision(annual)}
-            </Badge>
+            <div className="mt-1 flex flex-wrap items-center justify-end gap-1.5">
+              {scoreLevel(annual.annualAverage) ? (
+                <ScoreBadge level={scoreLevel(annual.annualAverage)!} />
+              ) : null}
+              <Badge tone={annual.passed ? "success" : "warning"}>
+                {formatPassDecision(annual)}
+              </Badge>
+            </div>
           </div>
         </div>
       ) : null}
@@ -165,19 +257,27 @@ export function NotesPeriodTables({
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {period}
               </h2>
-              <p className="text-sm text-slate-500">
-                Moyenne générale{" "}
-                <span
-                  className={cn(
-                    "ml-1 text-xl font-bold tabular-nums",
-                    scoreTone(avg.generalAverage),
-                  )}
-                >
-                  {avg.generalAverage !== null
-                    ? formatAverage(avg.generalAverage)
-                    : "—"}
+              <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <span>
+                  Moyenne générale{" "}
+                  <span
+                    className={cn(
+                      "ml-1 text-xl font-bold tabular-nums",
+                      scoreTone(avg.generalAverage),
+                    )}
+                  >
+                    {avg.generalAverage !== null
+                      ? formatAverage(avg.generalAverage)
+                      : "—"}
+                  </span>
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                    {" "}
+                    / 20
+                  </span>
                 </span>
-                <span className="text-slate-400"> / 20</span>
+                {scoreLevel(avg.generalAverage) ? (
+                  <ScoreBadge level={scoreLevel(avg.generalAverage)!} />
+                ) : null}
               </p>
             </div>
 
@@ -193,7 +293,7 @@ export function NotesPeriodTables({
                         <h3 className="truncate font-semibold text-slate-900 dark:text-slate-100">
                           {subject.subjectName}
                         </h3>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                           Coef. {subject.coefficient}
                           {subject.grades.length > 1
                             ? ` · ${subject.grades.length} notes`
@@ -201,7 +301,7 @@ export function NotesPeriodTables({
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
                           Moyenne
                         </p>
                         <p
@@ -213,30 +313,22 @@ export function NotesPeriodTables({
                           {subject.averageOn20 !== null
                             ? formatAverage(subject.averageOn20)
                             : "—"}
-                          <span className="text-sm font-semibold text-slate-400">
+                          <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
                             {" "}
                             / 20
                           </span>
                         </p>
+                        {scoreLevel(subject.averageOn20) ? (
+                          <div className="mt-1">
+                            <ScoreBadge level={scoreLevel(subject.averageOn20)!} />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-[width]",
-                          subject.averageOn20 !== null &&
-                            subject.averageOn20 >= 14
-                            ? "bg-emerald-500"
-                            : subject.averageOn20 !== null &&
-                                subject.averageOn20 >= 10
-                              ? "bg-brand-500"
-                              : "bg-amber-500",
-                        )}
-                        style={{
-                          width: scoreBarWidth(subject.averageOn20),
-                        }}
-                      />
-                    </div>
+                    <ScoreMeter
+                      label={subject.subjectName}
+                      on20={subject.averageOn20}
+                    />
                   </div>
 
                   <ul className="divide-y divide-slate-100 dark:divide-[var(--border)]">
@@ -296,7 +388,7 @@ export function NotesPeriodTables({
                                 <Badge tone="warning">Absent</Badge>
                               ) : (
                                 <>
-                                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                                  <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
                                     Note
                                   </p>
                                   <p
@@ -304,16 +396,21 @@ export function NotesPeriodTables({
                                       "mt-0.5 text-sm font-bold tabular-nums",
                                       scoreTone(on20),
                                     )}
+                                    aria-label={
+                                      on20 !== null && scoreLevel(on20)
+                                        ? `${g.score} sur ${g.max_score}, ${levelPhrase(scoreLevel(on20)!)}`
+                                        : `${g.score} sur ${g.max_score}`
+                                    }
                                   >
                                     {g.score}
-                                    <span className="font-medium text-slate-400">
+                                    <span className="font-medium text-slate-600 dark:text-slate-300">
                                       {" "}
                                       / {g.max_score}
                                     </span>
                                   </p>
                                   {g.max_score !== 20 && on20 !== null ? (
-                                    <p className="text-[11px] tabular-nums text-slate-400">
-                                      soit {on20.toFixed(1)} / 20
+                                    <p className="text-xs tabular-nums text-slate-600 dark:text-slate-300">
+                                      soit {on20.toFixed(1).replace(".", ",")} / 20
                                     </p>
                                   ) : null}
                                 </>
