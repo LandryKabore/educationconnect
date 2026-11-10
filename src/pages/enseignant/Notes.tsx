@@ -64,11 +64,19 @@ export default function Notes() {
   );
   /** Once we have applied URL or smart default, don't override the teacher's choice. */
   const defaultApplied = useRef(Boolean(paramSubject));
+  const wantCreate = searchParams.get("nouveau") === "1";
+  const createOpened = useRef(false);
 
   // Create / edit form.
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const periodClosed = usePeriodClosed(id, period);
+
+  useEffect(() => {
+    if (!wantCreate || createOpened.current || !subjectId || periodClosed) return;
+    createOpened.current = true;
+    setShowForm(true);
+  }, [wantCreate, subjectId, periodClosed]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newType, setNewType] = useState<EvaluationType>("devoir");
   const [newTitle, setNewTitle] = useState("");
