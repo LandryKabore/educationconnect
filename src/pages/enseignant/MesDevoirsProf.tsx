@@ -6,7 +6,6 @@ import { fr } from "date-fns/locale";
 import { ChevronDown, ClipboardList, FileText, Plus } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatDateSafe } from "@/lib/dateFr";
-import { evaluationTypeLabel } from "@/lib/evaluationTypes";
 import type { EvaluationType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
@@ -69,6 +68,22 @@ function createEvalPath(classId: string) {
 
 function gradePath(classId: string, evalId: string) {
   return `/classes/${classId}/notes/${evalId}?from=devoirs`;
+}
+
+function typeCountLabel(type: EvaluationType, count: number): string {
+  const one: Record<EvaluationType, string> = {
+    interrogation: "interrogation",
+    devoir: "exercice de maison",
+    composition: "composition",
+    examen: "devoir",
+  };
+  const many: Record<EvaluationType, string> = {
+    interrogation: "interrogations",
+    devoir: "exercices de maison",
+    composition: "compositions",
+    examen: "devoirs",
+  };
+  return `${count} ${count > 1 ? many[type] : one[type]}`;
 }
 
 function ageLabel(iso: string): string {
@@ -300,7 +315,9 @@ export default function MesDevoirsProf() {
                 >
                   {showAllQueue
                     ? "Masquer"
-                    : `Voir les ${hiddenCount} autre${hiddenCount > 1 ? "s" : ""}`}
+                    : hiddenCount === 1
+                      ? "Voir l’autre"
+                      : `Voir les ${hiddenCount} autres`}
                   <ChevronDown
                     className={cn("h-4 w-4 transition", showAllQueue && "rotate-180")}
                     aria-hidden
@@ -346,8 +363,7 @@ export default function MesDevoirsProf() {
                           key={t}
                           className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
                         >
-                          {c.byType[t]} {evaluationTypeLabel(t).toLowerCase()}
-                          {c.byType[t] > 1 ? "s" : ""}
+                          {typeCountLabel(t, c.byType[t])}
                         </span>
                       ))}
                   </div>
@@ -407,7 +423,7 @@ function QueueRow({ item }: { item: UngradedEval }) {
     <li className="flex items-center gap-3 rounded-xl border border-amber-100 bg-white px-3 py-3 dark:border-amber-900/40 dark:bg-[var(--surface)]">
       <span className="h-10 w-1 shrink-0 rounded-full bg-amber-500" aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-slate-900 dark:text-slate-100">
+        <p className="font-semibold text-slate-900 dark:text-slate-100">
           {item.title}
           <span className="font-normal text-slate-600 dark:text-slate-300">
             {" "}
