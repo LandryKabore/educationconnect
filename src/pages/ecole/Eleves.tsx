@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -94,6 +94,17 @@ interface StudentCredential {
 }
 
 type StudentRow = StudentPageRow;
+
+function frenchList(names: string[], max = 6): string {
+  const shown = names.slice(0, max);
+  const rest = names.length - shown.length;
+  const head =
+    shown.length <= 1
+      ? (shown[0] ?? "")
+      : `${shown.slice(0, -1).join(", ")} et ${shown[shown.length - 1]}`;
+  if (rest <= 0) return head;
+  return `${head} et ${rest} autre${rest > 1 ? "s" : ""}`;
+}
 
 function accountStatus(s: StudentRow, cred: StudentCredential) {
   if (s.exit) {
@@ -218,6 +229,8 @@ export default function Eleves() {
   const [reinstateTarget, setReinstateTarget] = useState<StudentRow | null>(null);
   const [bulkClassId, setBulkClassId] = useState("");
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [confirmAssign, setConfirmAssign] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
 
   const { data: classesRaw = [] } = useQuery({
     queryKey: ["classes", schoolId],
@@ -235,6 +248,23 @@ export default function Eleves() {
     () => sortClassesByProgression(classesRaw),
     [classesRaw],
   );
+
+  const { data: yearLabels = {} } = useQuery({
+    queryKey: ["annees-labels", schoolId],
+    enabled: !!schoolId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("annees_scolaires")
+        .select("id, label")
+        .eq("school_id", schoolId!);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of (data ?? []) as unknown as { id: string; label: string }[]) {
+        if (row.id && row.label) map[row.id] = row.label;
+      }
+      return map;
+    },
+  });
 
   // One page at a time (all students by default), searched and counted by the database.
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -308,9 +338,10 @@ export default function Eleves() {
   }, [selectedClassId, classes]);
 
   const selection = useRowSelection<StudentRow>();
-  // Only students without a class can be assigned (a second class would double-enrol them).
-  const selectedWithClass = selection.rows.filter((s) => s.classSectionId).length;
-  const canBulkAssign = selection.count > 0 && selectedWithClass === 0;
+  // A second active class would double-enrol a pupil, so only the ones
+  // without a class are written. Mixed selections stay actionable.
+  const selectedWithout = selection.rows.filter((s) => !s.classSectionId);
+  const selectedWithClass = selection.count - selectedWithout.length;
   const pageFullySelected =
     filteredStudents.length > 0 && filteredStudents.every((s) => selection.ids.has(s.id));
   const canSelectAllResults = pageFullySelected && filteredTotal > selection.count;
@@ -329,15 +360,9 @@ export default function Eleves() {
     }
   };
 
-  const handleBulkAssignClass = async () => {
-    if (selection.count === 0) {
-      toast.error("Sélectionnez au moins un élève");
-      return;
-    }
-    if (!canBulkAssign) {
-      toast.error(
-        "Seuls les élèves sans classe peuvent être affectés — décochez ceux qui ont déjà une classe",
-      );
+  const openBulkAssign = () => {
+    if (selectedWithout.length === 0) {
+      toast.error("Aucun élève sans classe dans la sélection");
       return;
     }
     if (!bulkClassId) {
@@ -349,22 +374,76 @@ export default function Eleves() {
       toast.error("Cette classe n’a pas d’année scolaire");
       return;
     }
+    setConfirmAssign(true);
+  };
+
+  const keepOnlyWithoutClass = () => {
+    selection.setMany(
+      selection.rows.filter((s) => s.classSectionId),
+      false,
+    );
+  };
+
+  const undoCreatedEnrollments = async (ids: string[], className: string) => {
+    const { error } = await supabase.from("inscriptions").delete().in("id", ids);
+    if (error) {
+      toast.error(error.message || "Annulation impossible");
+      return;
+    }
+    toast.success(
+      `Affectation annulée : ${ids.length} élève${ids.length > 1 ? "s" : ""} retiré${ids.length > 1 ? "s" : ""} de ${className}`,
+    );
+    invalidateStudentQueries();
+  };
+
+  const confirmBulkAssign = async () => {
+    const target = classes.find((c) => c.id === bulkClassId);
+    const pupils = selection.rows.filter((s) => !s.classSectionId);
+    if (!target?.academic_year_id || pupils.length === 0) {
+      setConfirmAssign(false);
+      return;
+    }
 
     setBulkAssigning(true);
     try {
-      const payload = selection.rows.map((s) => ({
+      const payload = pupils.map((s) => ({
         student_id: s.id,
-        class_section_id: bulkClassId,
+        class_section_id: target.id,
         academic_year_id: target.academic_year_id,
-        status: "active",
+        status: "active" as const,
       }));
-      const { error } = await supabase.from("inscriptions").insert(payload);
+      const { data, error } = await supabase
+        .from("inscriptions")
+        .insert(payload)
+        .select("id");
       if (error) throw error;
-      toast.success(
-        `${payload.length} élève${payload.length > 1 ? "s" : ""} affecté${payload.length > 1 ? "s" : ""} en ${target.name}`,
-      );
+      const createdIds = ((data ?? []) as unknown as { id: string }[])
+        .map((row) => row.id)
+        .filter((id): id is string => Boolean(id));
+      const n = createdIds.length || payload.length;
+      const message = `${n} élève${n > 1 ? "s" : ""} affecté${n > 1 ? "s" : ""} en ${target.name}`;
+      if (createdIds.length > 0) {
+        let undone = false;
+        toast.success(message, {
+          duration: 10_000,
+          action: {
+            label: "Annuler",
+            onClick: () => {
+              if (undone) return;
+              undone = true;
+              void undoCreatedEnrollments(createdIds, target.name);
+            },
+          },
+        });
+      } else {
+        toast.success(message, {
+          description:
+            "L’annulation n’est pas disponible : les inscriptions créées n’ont pas renvoyé d’identifiant.",
+        });
+      }
       selection.clear();
       setBulkClassId("");
+      setConfirmAssign(false);
       invalidateStudentQueries();
     } catch (err) {
       toast.error(
@@ -374,6 +453,16 @@ export default function Eleves() {
       setBulkAssigning(false);
     }
   };
+
+  useEffect(() => {
+    if (!confirmAssign) return;
+    if (selectedWithout.length === 0 || !bulkClassId) setConfirmAssign(false);
+  }, [confirmAssign, selectedWithout.length, bulkClassId]);
+
+  useEffect(() => {
+    if (!confirmAssign) return;
+    confirmRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [confirmAssign]);
 
   const invalidateStudentQueries = () => {
     void qc.invalidateQueries({ queryKey: ["eleves", schoolId] });
@@ -1432,6 +1521,7 @@ export default function Eleves() {
                     setSelectedClassId(value);
                     selection.clear();
                     setBulkClassId("");
+                    setConfirmAssign(false);
                   }}
                   classes={classes}
                   counts={classCounts}
@@ -1442,6 +1532,28 @@ export default function Eleves() {
               </div>
             </div>
           </Card>
+
+          {confirmAssign && bulkClassId ? (
+            <AssignConfirm
+              panelRef={confirmRef}
+              className={classes.find((c) => c.id === bulkClassId)?.name ?? "cette classe"}
+              yearLabel={
+                yearLabels[
+                  classes.find((c) => c.id === bulkClassId)?.academic_year_id ?? ""
+                ]
+              }
+              names={selectedWithout.map((s) => fullName(s.first_name, s.last_name))}
+              untouched={selection.rows
+                .filter((s) => s.classSectionId)
+                .map((s) => fullName(s.first_name, s.last_name))}
+              current={Number(classCounts[bulkClassId] ?? 0) || 0}
+              adding={selectedWithout.length}
+              capacity={classes.find((c) => c.id === bulkClassId)?.capacity ?? null}
+              busy={bulkAssigning}
+              onConfirm={() => void confirmBulkAssign()}
+              onBack={() => setConfirmAssign(false)}
+            />
+          ) : null}
 
           <Card className="overflow-hidden p-0">
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
@@ -1546,7 +1658,14 @@ export default function Eleves() {
         />
       ) : null}
 
-      <BulkBar count={selection.count} noun="élève" onClear={selection.clear}>
+      <BulkBar
+        count={selection.count}
+        noun="élève"
+        onClear={() => {
+          selection.clear();
+          setConfirmAssign(false);
+        }}
+      >
         {canSelectAllResults ? (
           <button
             type="button"
@@ -1556,35 +1675,57 @@ export default function Eleves() {
             Sélectionner les {filteredTotal} résultats
           </button>
         ) : null}
-        {canBulkAssign ? (
-          <>
-            <Select
-              aria-label="Classe cible"
-              className="h-9 w-auto max-w-[14rem] py-0 text-sm text-slate-900"
-              value={bulkClassId}
-              onChange={(e) => setBulkClassId(e.target.value)}
-            >
-              <option value="">Affecter à…</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-            <Button
-              type="button"
-              size="sm"
-              disabled={bulkAssigning || !bulkClassId || classes.length === 0}
-              onClick={() => void handleBulkAssignClass()}
-            >
-              {bulkAssigning ? "Affectation…" : `Affecter (${selection.count})`}
-            </Button>
-          </>
-        ) : (
+        {selectedWithClass > 0 ? (
           <span className="text-xs text-slate-300">
-            Affectation possible uniquement pour des élèves sans classe.
+            dont {selectedWithout.length} sans classe
           </span>
-        )}
+        ) : null}
+        <Select
+          aria-label="Classe cible"
+          className="h-9 w-auto max-w-[14rem] py-0 text-sm text-slate-900"
+          value={bulkClassId}
+          onChange={(e) => setBulkClassId(e.target.value)}
+        >
+          <option value="">Affecter à…</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Button
+          type="button"
+          size="sm"
+          disabled={
+            bulkAssigning ||
+            !bulkClassId ||
+            classes.length === 0 ||
+            selectedWithout.length === 0
+          }
+          onClick={openBulkAssign}
+        >
+          {bulkAssigning
+            ? "Affectation…"
+            : selectedWithClass > 0
+              ? `Affecter les ${selectedWithout.length} sans classe`
+              : `Affecter (${selectedWithout.length})`}
+        </Button>
+        {selectedWithClass > 0 && selectedWithout.length > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-white/40 bg-transparent text-white hover:bg-white/10"
+            onClick={keepOnlyWithoutClass}
+          >
+            Ne garder que les sans classe
+          </Button>
+        ) : null}
+        {selectedWithClass > 0 && selectedWithout.length === 0 ? (
+          <span className="text-xs text-slate-300">
+            Aucun élève sans classe dans la sélection.
+          </span>
+        ) : null}
         <Button
           type="button"
           size="sm"
@@ -1595,6 +1736,100 @@ export default function Eleves() {
           Identifiants (CSV)
         </Button>
       </BulkBar>
+    </div>
+  );
+}
+
+function AssignConfirm({
+  panelRef,
+  className,
+  yearLabel,
+  names,
+  untouched,
+  current,
+  adding,
+  capacity,
+  busy,
+  onConfirm,
+  onBack,
+}: {
+  panelRef: RefObject<HTMLDivElement | null>;
+  className: string;
+  yearLabel?: string;
+  names: string[];
+  untouched: string[];
+  current: number;
+  adding: number;
+  capacity: number | null;
+  busy: boolean;
+  onConfirm: () => void;
+  onBack: () => void;
+}) {
+  const after = current + adding;
+  const hasCapacity = capacity != null && capacity > 0;
+  const over = hasCapacity && after > capacity;
+  const pct = hasCapacity ? Math.min(100, Math.round((after / capacity) * 100)) : 0;
+  const effectif = hasCapacity
+    ? `Effectif de ${className} après affectation : ${after} / ${capacity}`
+    : `Effectif de ${className} après affectation : ${after}`;
+  const untouchedText =
+    untouched.length === 1
+      ? `${untouched[0]} a déjà une classe : cet élève ne sera pas modifié.`
+      : `${frenchList(untouched)} ont déjà une classe : ils ne seront pas modifiés.`;
+
+  return (
+    <div ref={panelRef} id="confirm-affectation">
+      <Card className="border-brand-200">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          Affecter {adding} élève{adding > 1 ? "s" : ""} à {className} ?
+        </h2>
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-200">
+          <li>{frenchList(names, 8)}</li>
+          <li>Année scolaire {yearLabel ?? "de la classe"}</li>
+          {untouched.length > 0 ? <li>{untouchedText}</li> : null}
+        </ul>
+        <div className="mt-4">
+          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{effectif}</p>
+          {hasCapacity ? (
+            <div
+              className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              role="meter"
+              aria-valuemin={0}
+              aria-valuemax={capacity}
+              aria-valuenow={Math.min(after, capacity)}
+              aria-label={effectif}
+              aria-valuetext={
+                over ? `${effectif}. Capacité dépassée.` : effectif
+              }
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  over ? "bg-amber-500" : "bg-brand-600",
+                )}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              Cette classe n’a pas de capacité renseignée.
+            </p>
+          )}
+          {over ? (
+            <p className="mt-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+              La capacité de la classe ({capacity}) sera dépassée.
+            </p>
+          ) : null}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" disabled={busy} onClick={onConfirm}>
+            {busy ? "Affectation…" : "Confirmer l’affectation"}
+          </Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={onBack}>
+            Retour
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
