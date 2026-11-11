@@ -282,6 +282,24 @@ textarea {
 .dark [data-edt-slot].dark\:\!bg-teal-900 {
   background-color: #134e4a !important;
 }
+.dark [data-edt-slot].dark\:\!bg-orange-900 {
+  background-color: #7c2d12 !important;
+}
+.dark [data-edt-slot].dark\:\!bg-purple-900 {
+  background-color: #581c87 !important;
+}
+.dark [data-edt-slot].dark\:\!bg-cyan-900 {
+  background-color: #164e63 !important;
+}
+.dark [data-edt-slot].dark\:\!bg-lime-900 {
+  background-color: #365314 !important;
+}
+.dark [data-edt-slot].dark\:\!bg-pink-900 {
+  background-color: #831843 !important;
+}
+.dark [data-edt-slot].dark\:\!bg-yellow-800 {
+  background-color: #854d0e !important;
+}
 
 /* Per-class colors: pastel + dark ink (light) / solid + light ink (dark) */
 [data-class-color].class-color-surface {
