@@ -6,7 +6,6 @@ import { fr } from "date-fns/locale";
 import {
   Bell,
   BookOpen,
-  Calendar,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -34,11 +33,7 @@ import {
 } from "@/lib/teacherNow";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
-import {
-  computeScheduleFocus,
-  dbDayOfWeek,
-  WEEKDAY_LABELS,
-} from "@/lib/timetableSchedule";
+import { computeScheduleFocus, dbDayOfWeek } from "@/lib/timetableSchedule";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
@@ -458,7 +453,10 @@ export default function TeacherHome() {
           context={[schoolName, "Enseignant"].filter(Boolean).join(" · ")}
           unreadInbox={unreadInbox}
         />
-        <div className="h-48 animate-pulse rounded-2xl bg-slate-200 md:hidden dark:bg-slate-700" />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-48 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700" />
+          <div className="hidden h-48 animate-pulse rounded-2xl bg-slate-200 md:block dark:bg-slate-700" />
+        </div>
         <div className="flex gap-2 overflow-hidden md:hidden">
           {Array.from({ length: 4 }, (_, index) => (
             <div
@@ -478,6 +476,19 @@ export default function TeacherHome() {
       </div>
     );
   }
+
+  const timetableClassIds = new Set<string>();
+  if (mobileSchedule?.featured?.slot.classId) {
+    timetableClassIds.add(mobileSchedule.featured.slot.classId);
+  }
+  for (const row of mobileSchedule?.rest ?? []) {
+    if (row.slot.classId) timetableClassIds.add(row.slot.classId);
+  }
+  // Counts for classes already listed in Maintenant / Ensuite stay out of this panel
+  // until an appel has actually been recorded.
+  const presenceRows = data.attendanceToday.filter(
+    (row) => row.recorded > 0 || !timetableClassIds.has(row.classId),
+  );
 
   return (
     <div className="space-y-6">
@@ -553,106 +564,7 @@ export default function TeacherHome() {
         />
       </section>
 
-      <section className="hidden gap-4 md:grid lg:grid-cols-2">
-        <Panel
-          icon={Calendar}
-          title={`Aujourd’hui · ${WEEKDAY_LABELS[todayDow]}`}
-          subtitle={
-            scheduleFocus?.kind === "current"
-              ? "Cours en cours"
-              : scheduleFocus?.isLaterDay
-                ? `Prochain : ${scheduleFocus.dayLabel}`
-                : scheduleFocus?.kind === "next"
-                  ? "Prochain cours"
-                  : "Vos cours du jour"
-          }
-          action={
-            <Link to="/mon-emploi-du-temps" className="block">
-              <Button className="w-full">Emploi du temps</Button>
-            </Link>
-          }
-        >
-          {todaySlots.length === 0 && !scheduleFocus ? (
-            <PanelEmpty message="Aucun cours planifié cette semaine." />
-          ) : (
-            <div className="space-y-3">
-              {todaySlots.length === 0 && scheduleFocus?.isLaterDay ? (
-                <p className="text-xs font-medium text-slate-500">
-                  Pas de cours aujourd’hui — prochain :{" "}
-                  {scheduleFocus.dayLabel.toLowerCase()}.
-                </p>
-              ) : null}
-              {todaySlots.length > 0 ? (
-                <ul className="space-y-2">
-                  {todaySlots.slice(0, 5).map((s) => {
-                    const isFocus =
-                      !scheduleFocus?.isLaterDay &&
-                      scheduleFocus?.slot.id === s.id;
-                    return (
-                      <li
-                        key={s.id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                          isFocus
-                            ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700"
-                            : "bg-slate-50 dark:bg-[var(--surface-2)]",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "w-24 shrink-0 text-xs font-semibold tabular-nums",
-                            isFocus ? "text-brand-800" : "text-slate-600",
-                          )}
-                        >
-                          {s.start_time?.slice(0, 5)}
-                          {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            {[s.classes?.name, s.matieres?.name]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                          {s.room ? (
-                            <p className="text-xs text-slate-500">
-                              Salle {s.room}
-                            </p>
-                          ) : null}
-                        </div>
-                        {isFocus ? (
-                          <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                            {scheduleFocus?.kind === "current"
-                              ? "En cours"
-                              : "Prochain"}
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : scheduleFocus?.isLaterDay ? (
-                <div className="rounded-xl bg-brand-50 px-3 py-2.5 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {[scheduleFocus.slot.classes?.name, scheduleFocus.slot.matieres?.name]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {scheduleFocus.slot.start_time?.slice(0, 5)}
-                    {scheduleFocus.slot.end_time
-                      ? `–${scheduleFocus.slot.end_time.slice(0, 5)}`
-                      : ""}
-                    {" · "}
-                    {scheduleFocus.dayLabel}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </Panel>
-      </section>
-
-      {/* Asymmetric: présences wide + prochains examens rail */}
+      {/* Présences : effectifs, sans répéter l’état d’appel déjà porté par Maintenant / Ensuite. */}
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Panel
@@ -663,50 +575,35 @@ export default function TeacherHome() {
               <Link to="/presences" className="block">
                 <Button className="w-full">
                   <ClipboardList className="h-4 w-4" />
-                  Prendre les présences
+                  Détail des présences
                 </Button>
               </Link>
             }
           >
-            {data.attendanceToday.length === 0 ? (
-              <PanelEmpty message="Aucune classe pour l’appel du jour." />
+            {presenceRows.length === 0 ? (
+              <PanelEmpty message="Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »." />
             ) : (
               <ul className="space-y-2">
-                {data.attendanceToday.slice(0, 6).map((c) => (
+                {presenceRows.slice(0, 6).map((c) => (
                   <li key={c.classId}>
                     <Link
                       to={`/classes/${c.classId}/presences`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700 focus-visible:ring-offset-2 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {c.className}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
                           {c.recorded === 0
-                            ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
-                            : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
+                            ? `${c.studentCount} élève${c.studentCount === 1 ? "" : "s"} · pas encore d’appel`
+                            : `${c.present} présent${c.present === 1 ? "" : "s"} · ${c.absent} absent${c.absent === 1 ? "" : "s"}${
                                 c.late > 0
-                                  ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
+                                  ? ` · ${c.late} retard${c.late === 1 ? "" : "s"}`
                                   : ""
                               }`}
                         </p>
                       </div>
-                      <Badge
-                        tone={
-                          c.status === "done"
-                            ? "success"
-                            : c.status === "partial"
-                              ? "warning"
-                              : "info"
-                        }
-                      >
-                        {c.status === "done"
-                          ? "Fait"
-                          : c.status === "partial"
-                            ? "En cours"
-                            : "À faire"}
-                      </Badge>
                     </Link>
                   </li>
                 ))}

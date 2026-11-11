@@ -63,7 +63,7 @@ function emptyCopy(
     default:
       return {
         title: "Plus de cours aujourd’hui",
-        body: "Tous les créneaux du jour sont passés. Les appels restants sont listés plus bas.",
+        body: "Tous les créneaux du jour sont passés. Les appels du jour sont dans « Ensuite aujourd’hui ».",
       };
   }
 }
@@ -103,7 +103,7 @@ function EmptyNow({
   return (
     <section
       aria-labelledby="maintenant-empty-title"
-      className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+      className="h-full rounded-2xl border border-slate-200 bg-white p-4 md:p-5 dark:border-[var(--border)] dark:bg-[var(--surface)]"
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
         Maintenant
@@ -132,7 +132,7 @@ function NowCard({ view, todayIso }: { view: SlotView; todayIso: string }) {
   return (
     <section
       aria-labelledby="maintenant-title"
-      className="rounded-2xl border-2 border-brand-700 bg-brand-50 p-4 dark:border-brand-400 dark:bg-brand-900/30"
+      className="flex h-full flex-col rounded-2xl border-2 border-brand-700 bg-brand-50 p-4 md:p-5 dark:border-brand-400 dark:bg-brand-900/30"
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-800 dark:text-brand-100">
         {kindLabel}
@@ -212,7 +212,7 @@ function EnsuiteList({
   return (
     <section
       aria-labelledby="ensuite-heading"
-      className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+      className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 md:p-5 dark:border-[var(--border)] dark:bg-[var(--surface)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -341,13 +341,18 @@ export function TeacherMobileHome({
     schedule.empty !== "no-class-today";
 
   return (
-    <div className="space-y-3 md:hidden">
+    <div
+      className={cn(
+        "space-y-3",
+        showEnsuite && "md:grid md:grid-cols-2 md:items-start md:gap-4 md:space-y-0",
+      )}
+    >
       {edtLoading ? (
         <NowSkeleton />
       ) : edtError ? (
         <section
           aria-labelledby="maintenant-error-title"
-          className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+          className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 dark:border-[var(--border)] dark:bg-[var(--surface)]"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
             Maintenant
@@ -371,7 +376,9 @@ export function TeacherMobileHome({
         <EmptyNow kind={schedule.empty} nextDayLabel={schedule.nextDayLabel} />
       ) : null}
 
-      <TeacherMetricStrip chips={chips} />
+      <div className="md:hidden">
+        <TeacherMetricStrip chips={chips} />
+      </div>
 
       {showEnsuite && schedule ? (
         <EnsuiteList
