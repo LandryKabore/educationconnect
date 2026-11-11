@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isPast } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -11,10 +11,8 @@ import { ClassColorDot } from "@/components/ClassColor";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
-import {
-  initialGradingPeriod,
-  writeStoredGradingPeriod,
-} from "@/lib/gradingPeriod";
+import { periodOptionLabel, writeStoredGradingPeriod } from "@/lib/gradingPeriod";
+import { useResolvedGradingPeriod } from "@/hooks/useGradingPeriodState";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Evaluation, Profile, Subject } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
@@ -77,9 +75,14 @@ export default function ExamensEcole() {
   const [examClassId, setExamClassId] = useState("");
   const [examSubjectId, setExamSubjectId] = useState("");
   const [examTeacherId, setExamTeacherId] = useState("");
-  const [examPeriod, setExamPeriod] = useState(() =>
-    initialGradingPeriod(TRIMESTER_PERIODS),
-  );
+  const { suggested: suggestedPeriod, closedLabels, ready: periodsReady } =
+    useResolvedGradingPeriod(TRIMESTER_PERIODS, { schoolId });
+  const examPeriodTouched = useRef(false);
+  const [examPeriod, setExamPeriod] = useState(suggestedPeriod);
+  useEffect(() => {
+    if (!periodsReady || examPeriodTouched.current) return;
+    setExamPeriod(suggestedPeriod);
+  }, [periodsReady, suggestedPeriod]);
   const [examTitle, setExamTitle] = useState("");
   const [examDescription, setExamDescription] = useState("");
   const [examDueDate, setExamDueDate] = useState("");
@@ -242,7 +245,8 @@ export default function ExamensEcole() {
     setExamClassId("");
     setExamSubjectId("");
     setExamTeacherId("");
-    setExamPeriod(initialGradingPeriod(TRIMESTER_PERIODS));
+    examPeriodTouched.current = false;
+    setExamPeriod(suggestedPeriod);
     setExamTitle("");
     setExamDescription("");
     setExamDueDate("");
@@ -254,7 +258,8 @@ export default function ExamensEcole() {
     setExamClassId(classId || classes[0]?.id || "");
     setExamSubjectId("");
     setExamTeacherId("");
-    setExamPeriod(initialGradingPeriod(TRIMESTER_PERIODS));
+    examPeriodTouched.current = false;
+    setExamPeriod(suggestedPeriod);
     setExamTitle("");
     setExamDescription("");
     setExamDueDate("");
@@ -717,6 +722,7 @@ export default function ExamensEcole() {
               <Select
                 value={examPeriod}
                 onChange={(e) => {
+                  examPeriodTouched.current = true;
                   const next = e.target.value;
                   setExamPeriod(next);
                   writeStoredGradingPeriod(next);
@@ -725,7 +731,7 @@ export default function ExamensEcole() {
               >
                 {TRIMESTER_PERIODS.map((p) => (
                   <option key={p} value={p}>
-                    {p}
+                    {periodOptionLabel(p, closedLabels.has(p))}
                   </option>
                 ))}
               </Select>

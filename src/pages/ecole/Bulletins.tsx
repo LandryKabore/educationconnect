@@ -11,10 +11,8 @@ import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
-import {
-  initialGradingPeriod,
-  writeStoredGradingPeriod,
-} from "@/lib/gradingPeriod";
+import { periodOptionLabel } from "@/lib/gradingPeriod";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import {
   fetchAllStudents,
@@ -51,9 +49,6 @@ export default function Bulletins() {
   const school = schools.find((s) => s.id === schoolId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [studentId, setStudentId] = useState("");
-  const [period, setPeriod] = useState(() =>
-    initialGradingPeriod(BULLETIN_PERIODS),
-  );
   const [generating, setGenerating] = useState(false);
   const [classProgress, setClassProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -61,6 +56,12 @@ export default function Bulletins() {
   // "" = tous les élèves, "__none__" = sans classe, sinon l'id d'une classe
   const selectedClassId = searchParams.get("classe") ?? "";
   const search = searchParams.get("q") ?? "";
+  const classForPeriod =
+    selectedClassId && selectedClassId !== "__none__" ? selectedClassId : null;
+  const { period, selectPeriod, closedLabels } = useGradingPeriodState(
+    BULLETIN_PERIODS,
+    { schoolId, classSectionId: classForPeriod },
+  );
 
   const setSelectedClassId = (value: string) => {
     setStudentId("");
@@ -421,18 +422,19 @@ export default function Bulletins() {
                 <Select
                   id="period-bulletins"
                   value={period}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setPeriod(next);
-                    writeStoredGradingPeriod(next);
-                  }}
+                  onChange={(e) => selectPeriod(e.target.value)}
                 >
                   {TRIMESTER_PERIODS.map((p) => (
                     <option key={p} value={p}>
-                      {p}
+                      {periodOptionLabel(p, closedLabels.has(p))}
                     </option>
                   ))}
-                  <option value={ANNUAL_PERIOD_LABEL}>Année (moyenne annuelle)</option>
+                  <option value={ANNUAL_PERIOD_LABEL}>
+                    {periodOptionLabel(
+                      "Année (moyenne annuelle)",
+                      closedLabels.has(ANNUAL_PERIOD_LABEL),
+                    )}
+                  </option>
                 </Select>
               </div>
             </div>
