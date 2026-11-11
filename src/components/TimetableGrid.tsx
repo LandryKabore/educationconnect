@@ -5,7 +5,9 @@ import { timeToMinutes } from "@/lib/timetableConflicts";
 import {
   clickableHours,
   formatClock,
+  formatHourShort,
   formatPauseLabel,
+  formatRangeFr,
   formatRoomLabel,
   layoutTimetable,
 } from "@/lib/timetableLayout";
@@ -104,6 +106,8 @@ type Props = {
   conflictDays?: number[];
   /** Créneau currently open in the editor. */
   activeId?: string | null;
+  /** Limit the grid to these weekdays (1=Mon … 6=Sat). Default: the full week. */
+  visibleDays?: number[];
 };
 
 export function TimetableGrid({
@@ -119,8 +123,13 @@ export function TimetableGrid({
   conflictBadges = {},
   conflictDays = [],
   activeId = null,
+  visibleDays,
 }: Props) {
-  const days = includeSaturday ? DAY_META : DAY_META.filter((d) => d.day <= 5);
+  const weekdays = includeSaturday ? DAY_META : DAY_META.filter((d) => d.day <= 5);
+  const days = visibleDays?.length
+    ? weekdays.filter((d) => visibleDays.includes(d.day))
+    : weekdays;
+  const singleDay = days.length <= 1;
   const highlight = new Set(highlightIds);
   const conflictDaySet = new Set(conflictDays);
 
@@ -152,7 +161,7 @@ export function TimetableGrid({
       ) : null}
 
       <div className="overflow-x-auto">
-        <div className="min-w-[40rem]">
+        <div className={singleDay ? "min-w-0" : "min-w-[40rem]"}>
           <div
             style={{
               display: "grid",
@@ -201,14 +210,21 @@ export function TimetableGrid({
             }}
           >
             <div className="relative border-r border-slate-200 bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
+              {scale.halfHourMarks.map((mark) => (
+                <div
+                  key={`half-${mark}`}
+                  className="pointer-events-none absolute right-0 left-3 border-t border-dashed border-slate-200/80 dark:border-slate-700/80"
+                  style={{ top: scale.minuteToY(mark) }}
+                />
+              ))}
               {scale.hourMarks.map((mark) => (
                 <div
                   key={mark}
-                  className="absolute right-0 left-0 border-t border-slate-200 first:border-t-0 dark:border-[var(--border)]"
+                  className="absolute right-0 left-0 border-t border-slate-200 dark:border-[var(--border)]"
                   style={{ top: scale.minuteToY(mark) }}
                 >
-                  <span className="absolute top-0 right-1.5 -translate-y-1/2 text-[11px] font-semibold tabular-nums text-slate-500 dark:text-slate-300">
-                    {formatClock(mark)}
+                  <span className="absolute top-1 right-1.5 text-[11px] font-medium tabular-nums text-slate-400 dark:text-slate-400">
+                    {formatHourShort(mark)}
                   </span>
                 </div>
               ))}
@@ -225,10 +241,17 @@ export function TimetableGrid({
                     isToday && "bg-brand-50/40",
                   )}
                 >
+                  {scale.halfHourMarks.map((mark) => (
+                    <div
+                      key={`half-${mark}`}
+                      className="pointer-events-none absolute right-0 left-0 border-t border-dashed border-slate-100 dark:border-slate-700/80"
+                      style={{ top: scale.minuteToY(mark) }}
+                    />
+                  ))}
                   {scale.hourMarks.map((mark) => (
                     <div
                       key={mark}
-                      className="pointer-events-none absolute right-0 left-0 border-t border-slate-200 first:border-t-0 dark:border-slate-700"
+                      className="pointer-events-none absolute right-0 left-0 border-t border-slate-200 dark:border-slate-700"
                       style={{ top: scale.minuteToY(mark) }}
                     />
                   ))}
@@ -255,14 +278,20 @@ export function TimetableGrid({
                   {daySlots.map((slot) => {
                     const start = timeToMinutes(slot.start_time);
                     const end = timeToMinutes(slot.end_time);
-                    const top = scale.minuteToY(start);
-                    const height = Math.max(52, scale.minuteToY(end) - top - 3);
+                    const startY = scale.minuteToY(start);
+                    const endY = scale.minuteToY(end);
+                    const top = startY + 3;
+                    const height = Math.max(0, endY - startY - 6);
                     const swatch = subjectSwatch(slot.subjectName);
                     const subject = slot.subjectName?.trim() || "Cours";
                     const teacher = slot.teacherName?.trim() || null;
                     const klass = slot.className?.trim() || null;
                     const room = formatRoomLabel(slot.room);
-                    const timeLabel = `${slot.start_time.slice(0, 5)}–${slot.end_time.slice(0, 5)}`;
+                    const timeLabel = formatRangeFr(slot.start_time, slot.end_time);
+                    // 1h cards (~75 px) drop the room so « Salle 6A » isn't clipped.
+                    const showKlass = Boolean(klass) && height >= 70;
+                    const showTeacher = Boolean(teacher) && height >= 70;
+                    const showRoom = Boolean(room) && height >= 84;
                     const badges = conflictBadges[slot.id] ?? [];
                     const clashing = badges.length > 0;
                     const tip = [
@@ -303,7 +332,7 @@ export function TimetableGrid({
                             : undefined
                         }
                         className={cn(
-                          "absolute right-1 left-1 z-[3] overflow-hidden rounded-md border-2 px-1.5 py-1 shadow-sm",
+                          "absolute right-1.5 left-1.5 z-[3] overflow-hidden rounded-lg border-2 px-2 py-1.5 shadow-sm",
                           swatch.card,
                           onSelect &&
                             "cursor-pointer transition hover:z-20 hover:brightness-95 dark:hover:brightness-110",
@@ -320,7 +349,12 @@ export function TimetableGrid({
                         title={tip}
                       >
                         <div className="flex items-start justify-between gap-1">
-                          <p className="edt-slot-title min-w-0 flex-1 truncate text-xs font-bold leading-snug text-slate-900">
+                          <p
+                            className={cn(
+                              "edt-slot-title min-w-0 flex-1 truncate font-bold leading-snug text-slate-900",
+                              singleDay ? "text-sm" : "text-xs",
+                            )}
+                          >
                             {subject}
                           </p>
                           {onRemove ? (
@@ -337,21 +371,41 @@ export function TimetableGrid({
                             </button>
                           ) : null}
                         </div>
-                        <p className="edt-slot-body truncate text-[10px] font-medium leading-tight text-slate-700 tabular-nums">
+                        <p
+                          className={cn(
+                            "edt-slot-muted truncate font-normal leading-tight text-slate-500 tabular-nums",
+                            singleDay ? "text-xs" : "text-[10px]",
+                          )}
+                        >
                           {timeLabel}
                         </p>
-                        {klass ? (
-                          <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-700">
+                        {showKlass ? (
+                          <p
+                            className={cn(
+                              "edt-slot-body truncate leading-tight text-slate-700",
+                              singleDay ? "text-xs" : "text-[10px]",
+                            )}
+                          >
                             {klass}
                           </p>
                         ) : null}
-                        {teacher ? (
-                          <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-700">
+                        {showTeacher ? (
+                          <p
+                            className={cn(
+                              "edt-slot-body truncate leading-tight text-slate-700",
+                              singleDay ? "text-xs" : "text-[10px]",
+                            )}
+                          >
                             {teacher}
                           </p>
                         ) : null}
-                        {room ? (
-                          <p className="edt-slot-muted truncate text-[10px] leading-tight text-slate-600">
+                        {showRoom ? (
+                          <p
+                            className={cn(
+                              "edt-slot-muted truncate leading-tight text-slate-500",
+                              singleDay ? "text-xs" : "text-[10px]",
+                            )}
+                          >
                             {room}
                           </p>
                         ) : null}
@@ -370,6 +424,34 @@ export function TimetableGrid({
                       </div>
                     );
                   })}
+
+                  {singleDay && daySlots.length === 0 ? (
+                    <div className="absolute inset-x-3 top-1/2 z-[1] -translate-y-1/2 text-center text-sm font-medium text-slate-400">
+                      Pas de cours ce jour
+                    </div>
+                  ) : null}
+
+                  {singleDay && daySlots.length > 0
+                    ? scale.pauses.map((pause) => {
+                        const hasAfternoon = daySlots.some(
+                          (slot) => timeToMinutes(slot.start_time) >= pause.endMin,
+                        );
+                        if (hasAfternoon) return null;
+                        const top = scale.minuteToY(pause.endMin) + 8;
+                        const bottom = scale.height - 8;
+                        const blockHeight = bottom - top;
+                        if (blockHeight < 32) return null;
+                        return (
+                          <div
+                            key={`empty-pm-${pause.endMin}`}
+                            className="absolute right-3 left-3 z-[1] flex items-center justify-center text-sm font-medium text-slate-400"
+                            style={{ top, height: blockHeight }}
+                          >
+                            Pas de cours cet après-midi
+                          </div>
+                        );
+                      })
+                    : null}
                 </div>
               );
             })}
@@ -404,15 +486,9 @@ export function TimetableGrid({
 function PauseBand({ label, height }: { label: string; height: number }) {
   return (
     <div className="flex w-full" style={{ height }}>
-      <div className="w-[4.5rem] shrink-0 border-y border-dashed border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-[var(--surface-2)]" />
-      <div
-        className="flex flex-1 items-center justify-center border-y border-dashed border-slate-300 bg-slate-50 text-[12px] font-medium text-slate-500 dark:border-slate-600 dark:bg-[var(--surface-2)] dark:text-slate-300"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(148,163,184,0.28) 5px, rgba(148,163,184,0.28) 6px)",
-        }}
-      >
-        — {label} —
+      <div className="w-[4.5rem] shrink-0 border-y border-slate-200 bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface-2)]" />
+      <div className="flex flex-1 items-center justify-center border-y border-slate-200 bg-slate-50 text-[12px] font-semibold text-slate-500 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:text-slate-300">
+        {label}
       </div>
     </div>
   );
