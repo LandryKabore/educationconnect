@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useMemo } from "react";
 import type { SlotConflictBadge } from "@/lib/timetableConflicts";
 import { timeToMinutes } from "@/lib/timetableConflicts";
@@ -47,6 +48,8 @@ type Props = {
   conflictBadges?: Record<string, SlotConflictBadge[]>;
   conflictDays?: number[];
   onSelectSlot?: (id: string) => void;
+  /** Top-right ×. Omitted on read-only timetables. */
+  onRemove?: (id: string) => void;
   onAdd?: () => void;
   addLabel?: string;
 };
@@ -58,6 +61,7 @@ export function TimetableDayAgenda({
   conflictBadges = {},
   conflictDays = [],
   onSelectSlot,
+  onRemove,
   onAdd,
   addLabel = "Ajouter un cours ce jour",
 }: Props) {
@@ -157,7 +161,7 @@ export function TimetableDayAgenda({
               .join(" · ");
 
             return (
-              <li key={slot.id}>
+              <li key={slot.id} className="relative">
                 <button
                   type="button"
                   onClick={onSelectSlot ? () => onSelectSlot(slot.id) : undefined}
@@ -165,6 +169,7 @@ export function TimetableDayAgenda({
                     "flex w-full items-stretch gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 dark:bg-[var(--surface)] dark:ring-[var(--border)]",
                     badges.length > 0 && "ring-red-400",
                     onSelectSlot && "cursor-pointer",
+                    onRemove && "pr-9",
                   )}
                 >
                   <span
@@ -208,6 +213,16 @@ export function TimetableDayAgenda({
                     </span>
                   ) : null}
                 </button>
+                {onRemove ? (
+                  <button
+                    type="button"
+                    className="absolute top-2 right-2 rounded p-0.5 text-slate-600 hover:bg-slate-100 hover:text-red-700"
+                    aria-label="Supprimer le créneau"
+                    onClick={() => onRemove(slot.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </li>
             );
           })}

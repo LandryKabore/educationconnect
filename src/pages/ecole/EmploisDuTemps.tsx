@@ -911,6 +911,7 @@ export default function EmploisDuTemps() {
                 slots={gridSlots}
                 title=""
                 onSelect={openEdit}
+                onRemove={(id) => setPendingRemoveId(id)}
                 onEmptyClick={(day, startMin) => openCreate({ day, startMin })}
                 highlightDay={todayDow}
                 conflictBadges={conflictBadges}
@@ -932,6 +933,7 @@ export default function EmploisDuTemps() {
                 conflictBadges={conflictBadges}
                 conflictDays={conflictDays}
                 onSelectSlot={openEdit}
+                onRemove={(id) => setPendingRemoveId(id)}
                 onAdd={() =>
                   openCreate({
                     day: selectedDay,

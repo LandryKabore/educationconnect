@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { useMemo } from "react";
 import type { SlotConflictBadge } from "@/lib/timetableConflicts";
 import { timeToMinutes } from "@/lib/timetableConflicts";
@@ -38,9 +38,6 @@ const BADGE_LABEL: Record<SlotConflictBadge, string> = {
   salle: "Salle",
   classe: "Classe",
 };
-
-/** Time is written on the card only when the lesson lasts at least two hours. */
-const LONG_SLOT_MIN = 120;
 
 export function SubjectLegend({
   names,
@@ -90,6 +87,8 @@ type Props = {
   slots: TimetableGridSlot[];
   title?: string;
   onSelect?: (id: string) => void;
+  /** Top-right × on each card. Omitted on read-only timetables. */
+  onRemove?: (id: string) => void;
   /** Click an empty hour to add a créneau. Omitted on read-only timetables. */
   onEmptyClick?: (day: number, startMin: number) => void;
   className?: string;
@@ -111,6 +110,7 @@ export function TimetableGrid({
   slots,
   title = "Emploi du temps",
   onSelect,
+  onRemove,
   onEmptyClick,
   className,
   includeSaturday = true,
@@ -255,16 +255,14 @@ export function TimetableGrid({
                   {daySlots.map((slot) => {
                     const start = timeToMinutes(slot.start_time);
                     const end = timeToMinutes(slot.end_time);
-                    const durationMin = Math.max(end - start, 1);
                     const top = scale.minuteToY(start);
-                    const height = Math.max(32, scale.minuteToY(end) - top - 3);
+                    const height = Math.max(52, scale.minuteToY(end) - top - 3);
                     const swatch = subjectSwatch(slot.subjectName);
                     const subject = slot.subjectName?.trim() || "Cours";
                     const teacher = slot.teacherName?.trim() || null;
                     const klass = slot.className?.trim() || null;
                     const room = formatRoomLabel(slot.room);
                     const timeLabel = `${slot.start_time.slice(0, 5)}–${slot.end_time.slice(0, 5)}`;
-                    const showTime = durationMin >= LONG_SLOT_MIN;
                     const badges = conflictBadges[slot.id] ?? [];
                     const clashing = badges.length > 0;
                     const tip = [
@@ -305,10 +303,10 @@ export function TimetableGrid({
                             : undefined
                         }
                         className={cn(
-                          "absolute right-1 left-1 z-[3] overflow-hidden rounded-lg shadow-sm",
+                          "absolute right-1 left-1 z-[3] overflow-hidden rounded-md border-2 px-1.5 py-1 shadow-sm",
                           swatch.card,
                           onSelect &&
-                            "cursor-pointer transition hover:z-20 hover:brightness-[0.98] dark:hover:brightness-110",
+                            "cursor-pointer transition hover:z-20 hover:brightness-95 dark:hover:brightness-110",
                           clashing && "ring-2 ring-red-500",
                           !clashing &&
                             activeId === slot.id &&
@@ -321,45 +319,44 @@ export function TimetableGrid({
                         style={{ top, height }}
                         title={tip}
                       >
-                        <span
-                          className={cn(
-                            "absolute inset-y-0 left-0 w-1",
-                            clashing ? "bg-red-600" : swatch.edge,
-                          )}
-                          aria-hidden
-                        />
-                        <div
-                          className={cn(
-                            "flex h-full flex-col px-1.5 py-1 pl-2.5",
-                            badges.length > 0 && "pb-5",
-                          )}
-                        >
-                          <p className="edt-slot-title truncate text-[13px] font-bold leading-tight text-slate-900">
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="edt-slot-title min-w-0 flex-1 truncate text-xs font-bold leading-snug text-slate-900">
                             {subject}
                           </p>
-                          {klass ? (
-                            <p className="edt-slot-body truncate text-[11.5px] leading-snug text-slate-700">
-                              {klass}
-                            </p>
-                          ) : null}
-                          {teacher ? (
-                            <p className="edt-slot-body truncate text-[11.5px] leading-snug text-slate-700">
-                              {teacher}
-                            </p>
-                          ) : null}
-                          {room ? (
-                            <p className="edt-slot-body truncate text-[11.5px] leading-snug text-slate-600">
-                              {room}
-                            </p>
-                          ) : null}
-                          {showTime ? (
-                            <p className="edt-slot-muted truncate text-[11px] leading-tight text-slate-500 tabular-nums">
-                              {timeLabel}
-                            </p>
+                          {onRemove ? (
+                            <button
+                              type="button"
+                              className="edt-slot-muted -mr-0.5 -mt-0.5 shrink-0 rounded p-0.5 text-slate-600 hover:bg-black/10 hover:text-red-700 dark:hover:bg-white/15 dark:hover:text-red-300"
+                              aria-label="Supprimer le créneau"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onRemove(slot.id);
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           ) : null}
                         </div>
+                        <p className="edt-slot-body truncate text-[10px] font-medium leading-tight text-slate-700 tabular-nums">
+                          {timeLabel}
+                        </p>
+                        {klass ? (
+                          <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-700">
+                            {klass}
+                          </p>
+                        ) : null}
+                        {teacher ? (
+                          <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-700">
+                            {teacher}
+                          </p>
+                        ) : null}
+                        {room ? (
+                          <p className="edt-slot-muted truncate text-[10px] leading-tight text-slate-600">
+                            {room}
+                          </p>
+                        ) : null}
                         {badges.length > 0 ? (
-                          <div className="absolute right-1 bottom-0.5 flex flex-wrap justify-end gap-0.5">
+                          <div className="mt-0.5 flex flex-wrap gap-0.5">
                             {badges.map((badge) => (
                               <span
                                 key={badge}
