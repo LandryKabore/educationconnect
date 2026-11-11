@@ -6,7 +6,6 @@ import { fr } from "date-fns/locale";
 import {
   Bell,
   BookOpen,
-  Calendar,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -22,13 +21,19 @@ import {
   snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import {
+  TeacherMobileHome,
+  type MetricChipModel,
+} from "@/pages/enseignant/TeacherMobileHome";
+import {
+  buildMobileSchedule,
+  frCount,
+  isSunday,
+  type NowSlot,
+} from "@/lib/teacherNow";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
-import {
-  computeScheduleFocus,
-  dbDayOfWeek,
-  WEEKDAY_LABELS,
-} from "@/lib/timetableSchedule";
+import { computeScheduleFocus, dbDayOfWeek } from "@/lib/timetableSchedule";
 import { Badge, Button } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
@@ -133,15 +138,17 @@ export default function TeacherHome() {
         total: number;
       };
       const byStatus = new Map<string, StatusCounts>();
+      const recordedBySubject: Record<string, number> = {};
       if (uniqueClassIds.length > 0) {
         const { data: pres } = await supabase
           .from("presences")
-          .select("class_section_id, status")
+          .select("class_section_id, subject_id, status")
           .in("class_section_id", uniqueClassIds)
           .eq("date", today);
         for (const row of pres ?? []) {
           const r = row as {
             class_section_id: string;
+            subject_id: string | null;
             status: "present" | "absent" | "late" | "excused";
           };
           const cur = byStatus.get(r.class_section_id) ?? {
@@ -154,6 +161,10 @@ export default function TeacherHome() {
           cur[r.status] += 1;
           cur.total += 1;
           byStatus.set(r.class_section_id, cur);
+          if (r.subject_id) {
+            const key = `${r.class_section_id}:${r.subject_id}`;
+            recordedBySubject[key] = (recordedBySubject[key] ?? 0) + 1;
+          }
         }
       }
 
@@ -242,6 +253,8 @@ export default function TeacherHome() {
         attendanceToday,
         attendancePending,
         attendanceDone,
+        studentCountByClass: Object.fromEntries(studentCountByClass),
+        recordedBySubject,
         today,
         recentDevoirs: (recentDevoirs ?? []) as {
           id: string;
@@ -267,25 +280,31 @@ export default function TeacherHome() {
   });
 
   // Fetch EDT in parallel query to keep home load snappy
-  const { data: weekSlots = [] } = useQuery({
+  const {
+    data: weekSlots = [],
+    isLoading: edtLoading,
+    isError: edtError,
+  } = useQuery({
     queryKey: ["teacher-home-edt", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creneaux_edt")
         .select(
-          "id, day_of_week, start_time, end_time, room, matieres(name), classes(name)",
+          "id, day_of_week, start_time, end_time, room, class_section_id, subject_id, matieres(name), classes(name)",
         )
         .eq("teacher_id", user!.id)
         .order("day_of_week")
         .order("start_time");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         day_of_week: number;
         start_time: string;
         end_time: string;
         room: string | null;
+        class_section_id: string | null;
+        subject_id: string | null;
         matieres: { name: string } | null;
         classes: { name: string } | null;
       }[];
@@ -302,15 +321,174 @@ export default function TeacherHome() {
     [weekSlots],
   );
 
-  if (isLoading) {
-    return <p className="text-slate-500">Chargement…</p>;
-  }
+  const mobileSchedule = useMemo(() => {
+    if (!data) return null;
+    const now = new Date();
+    const sunday = isSunday(now);
+    const slots: NowSlot[] = sunday
+      ? []
+      : todaySlots.map((slot) => ({
+          id: slot.id,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          room: slot.room,
+          classId: slot.class_section_id,
+          subjectId: slot.subject_id,
+          subjectName: slot.matieres?.name ?? null,
+          className: slot.classes?.name ?? null,
+        }));
+    return buildMobileSchedule({
+      isSunday: sunday,
+      weekCount: weekSlots.length,
+      todaySlots: slots,
+      now,
+      studentCountByClass: data.studentCountByClass,
+      recordedBySubject: data.recordedBySubject,
+      recordedByClass: Object.fromEntries(
+        data.attendanceToday.map((row) => [row.classId, row.recorded]),
+      ),
+      nextDayLabel:
+        !sunday && scheduleFocus?.isLaterDay ? scheduleFocus.dayLabel : null,
+    });
+  }, [data, todaySlots, weekSlots.length, scheduleFocus]);
 
-  if (!data) {
+  const metricChips = useMemo((): MetricChipModel[] => {
+    if (!data) return [];
+    const unread = unreadInbox.discussions;
+    const pending = data.attendancePending;
+    const appel =
+      pending > 0
+        ? {
+            value: String(pending),
+            label: `${pending === 1 ? "appel" : "appels"} à faire`,
+            valueClass: "text-amber-800 dark:text-amber-200",
+            ariaLabel: `${frCount(pending, "appel", "appels")} à faire aujourd’hui`,
+          }
+        : {
+            value: String(data.attendanceDone),
+            label:
+              data.uniqueClasses === 0
+                ? "appels"
+                : data.attendanceDone === 1
+                  ? "appel fait"
+                  : "appels faits",
+            valueClass: "text-emerald-800 dark:text-emerald-200",
+            ariaLabel:
+              data.uniqueClasses === 0
+                ? "Aucune classe"
+                : `${frCount(data.attendanceDone, "appel fait", "appels faits")} aujourd’hui`,
+          };
+    return [
+      {
+        key: "appels",
+        to: "/presences",
+        ...appel,
+      },
+      {
+        key: "messages",
+        to: "/messages",
+        value: String(unread),
+        label: unread === 1 ? "non lu" : "non lus",
+        valueClass:
+          unread > 0
+            ? "text-rose-800 dark:text-rose-200"
+            : "text-slate-600 dark:text-slate-300",
+        ariaLabel: frCount(unread, "message non lu", "messages non lus"),
+      },
+      {
+        key: "exercices",
+        to: "/devoirs",
+        value: String(data.exercicesCount),
+        label: data.exercicesCount === 1 ? "exercice" : "exercices",
+        valueClass: "text-amber-800 dark:text-amber-200",
+        ariaLabel: frCount(
+          data.exercicesCount,
+          "exercice de maison",
+          "exercices de maison",
+        ),
+      },
+      {
+        key: "devoirs",
+        to: "/devoirs",
+        value: String(data.examensCount),
+        label: data.examensCount === 1 ? "devoir" : "devoirs",
+        valueClass: "text-violet-800 dark:text-violet-200",
+        ariaLabel: frCount(
+          data.examensCount,
+          "devoir surveillé",
+          "devoirs surveillés",
+        ),
+      },
+      {
+        key: "classes",
+        to: "/mes-classes",
+        value: String(data.uniqueClasses),
+        label: data.uniqueClasses === 1 ? "classe" : "classes",
+        valueClass: "text-brand-800 dark:text-brand-200",
+        ariaLabel: `${frCount(data.uniqueClasses, "classe", "classes")}, ${frCount(data.assignmentCount, "affectation", "affectations")}`,
+      },
+      {
+        key: "eleves",
+        to: "/mes-eleves",
+        value: String(data.studentsCount),
+        label: data.studentsCount === 1 ? "élève" : "élèves",
+        valueClass: "text-sky-800 dark:text-sky-200",
+        ariaLabel: `${frCount(data.studentsCount, "élève", "élèves")} dans vos classes`,
+      },
+    ];
+  }, [data, unreadInbox.discussions]);
+
+  if (isLoading || !data) {
+    if (!isLoading) {
+      return (
+        <p className="text-slate-500">Impossible de charger votre aperçu.</p>
+      );
+    }
     return (
-      <p className="text-slate-500">Impossible de charger votre aperçu.</p>
+      <div className="space-y-6" aria-busy="true">
+        <p className="sr-only">Chargement de l’accueil…</p>
+        <PortalHomeHeader
+          icon={BookOpen}
+          name={name}
+          context={[schoolName, "Enseignant"].filter(Boolean).join(" · ")}
+          unreadInbox={unreadInbox}
+        />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-48 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700" />
+          <div className="hidden h-48 animate-pulse rounded-2xl bg-slate-200 md:block dark:bg-slate-700" />
+        </div>
+        <div className="flex gap-2 overflow-hidden md:hidden">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div
+              key={index}
+              className="h-11 w-28 shrink-0 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700"
+            />
+          ))}
+        </div>
+        <div className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div
+              key={index}
+              className="h-28 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+            />
+          ))}
+        </div>
+      </div>
     );
   }
+
+  const timetableClassIds = new Set<string>();
+  if (mobileSchedule?.featured?.slot.classId) {
+    timetableClassIds.add(mobileSchedule.featured.slot.classId);
+  }
+  for (const row of mobileSchedule?.rest ?? []) {
+    if (row.slot.classId) timetableClassIds.add(row.slot.classId);
+  }
+  // Counts for classes already listed in Maintenant / Ensuite stay out of this panel
+  // until an appel has actually been recorded.
+  const presenceRows = data.attendanceToday.filter(
+    (row) => row.recorded > 0 || !timetableClassIds.has(row.classId),
+  );
 
   return (
     <div className="space-y-6">
@@ -321,7 +499,15 @@ export default function TeacherHome() {
         unreadInbox={unreadInbox}
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <TeacherMobileHome
+        schedule={mobileSchedule}
+        chips={metricChips}
+        todayIso={data.today}
+        edtLoading={edtLoading}
+        edtError={edtError}
+      />
+
+      <section className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MetricCard
           label="Classes"
           value={String(data.uniqueClasses)}
@@ -356,7 +542,7 @@ export default function TeacherHome() {
           to="/presences"
         />
         <MetricCard
-          label="Devoirs"
+          label="Exercices"
           value={String(data.exercicesCount)}
           hint="De maison"
           valueClass="text-amber-600"
@@ -365,7 +551,7 @@ export default function TeacherHome() {
         <MetricCard
           label="Devoirs"
           value={String(data.examensCount)}
-          hint="Créés au total"
+          hint="Surveillés"
           valueClass="text-violet-600"
           to="/devoirs"
         />
@@ -378,106 +564,7 @@ export default function TeacherHome() {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          icon={Calendar}
-          title={`Aujourd’hui · ${WEEKDAY_LABELS[todayDow]}`}
-          subtitle={
-            scheduleFocus?.kind === "current"
-              ? "Cours en cours"
-              : scheduleFocus?.isLaterDay
-                ? `Prochain : ${scheduleFocus.dayLabel}`
-                : scheduleFocus?.kind === "next"
-                  ? "Prochain cours"
-                  : "Vos cours du jour"
-          }
-          action={
-            <Link to="/mon-emploi-du-temps" className="block">
-              <Button className="w-full">Emploi du temps</Button>
-            </Link>
-          }
-        >
-          {todaySlots.length === 0 && !scheduleFocus ? (
-            <PanelEmpty message="Aucun cours planifié cette semaine." />
-          ) : (
-            <div className="space-y-3">
-              {todaySlots.length === 0 && scheduleFocus?.isLaterDay ? (
-                <p className="text-xs font-medium text-slate-500">
-                  Pas de cours aujourd’hui — prochain :{" "}
-                  {scheduleFocus.dayLabel.toLowerCase()}.
-                </p>
-              ) : null}
-              {todaySlots.length > 0 ? (
-                <ul className="space-y-2">
-                  {todaySlots.slice(0, 5).map((s) => {
-                    const isFocus =
-                      !scheduleFocus?.isLaterDay &&
-                      scheduleFocus?.slot.id === s.id;
-                    return (
-                      <li
-                        key={s.id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                          isFocus
-                            ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700"
-                            : "bg-slate-50 dark:bg-[var(--surface-2)]",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "w-24 shrink-0 text-xs font-semibold tabular-nums",
-                            isFocus ? "text-brand-800" : "text-slate-600",
-                          )}
-                        >
-                          {s.start_time?.slice(0, 5)}
-                          {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            {[s.classes?.name, s.matieres?.name]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                          {s.room ? (
-                            <p className="text-xs text-slate-500">
-                              Salle {s.room}
-                            </p>
-                          ) : null}
-                        </div>
-                        {isFocus ? (
-                          <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                            {scheduleFocus?.kind === "current"
-                              ? "En cours"
-                              : "Prochain"}
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : scheduleFocus?.isLaterDay ? (
-                <div className="rounded-xl bg-brand-50 px-3 py-2.5 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {[scheduleFocus.slot.classes?.name, scheduleFocus.slot.matieres?.name]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {scheduleFocus.slot.start_time?.slice(0, 5)}
-                    {scheduleFocus.slot.end_time
-                      ? `–${scheduleFocus.slot.end_time.slice(0, 5)}`
-                      : ""}
-                    {" · "}
-                    {scheduleFocus.dayLabel}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </Panel>
-      </section>
-
-      {/* Asymmetric: présences wide + prochains examens rail */}
+      {/* Présences : effectifs, sans répéter l’état d’appel déjà porté par Maintenant / Ensuite. */}
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Panel
@@ -488,50 +575,35 @@ export default function TeacherHome() {
               <Link to="/presences" className="block">
                 <Button className="w-full">
                   <ClipboardList className="h-4 w-4" />
-                  Prendre les présences
+                  Détail des présences
                 </Button>
               </Link>
             }
           >
-            {data.attendanceToday.length === 0 ? (
-              <PanelEmpty message="Aucune classe pour l’appel du jour." />
+            {presenceRows.length === 0 ? (
+              <PanelEmpty message="Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »." />
             ) : (
               <ul className="space-y-2">
-                {data.attendanceToday.slice(0, 6).map((c) => (
+                {presenceRows.slice(0, 6).map((c) => (
                   <li key={c.classId}>
                     <Link
                       to={`/classes/${c.classId}/presences`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-brand-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-700 focus-visible:ring-offset-2 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700 dark:hover:bg-slate-800/40"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {c.className}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
                           {c.recorded === 0
-                            ? `${c.studentCount} élève${c.studentCount > 1 ? "s" : ""} · pas d’appel`
-                            : `${c.present} présent${c.present > 1 ? "s" : ""} · ${c.absent} absent${c.absent > 1 ? "s" : ""}${
+                            ? `${c.studentCount} élève${c.studentCount === 1 ? "" : "s"} · pas encore d’appel`
+                            : `${c.present} présent${c.present === 1 ? "" : "s"} · ${c.absent} absent${c.absent === 1 ? "" : "s"}${
                                 c.late > 0
-                                  ? ` · ${c.late} retard${c.late > 1 ? "s" : ""}`
+                                  ? ` · ${c.late} retard${c.late === 1 ? "" : "s"}`
                                   : ""
                               }`}
                         </p>
                       </div>
-                      <Badge
-                        tone={
-                          c.status === "done"
-                            ? "success"
-                            : c.status === "partial"
-                              ? "warning"
-                              : "info"
-                        }
-                      >
-                        {c.status === "done"
-                          ? "Fait"
-                          : c.status === "partial"
-                            ? "En cours"
-                            : "À faire"}
-                      </Badge>
                     </Link>
                   </li>
                 ))}

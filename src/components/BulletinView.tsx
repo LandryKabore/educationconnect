@@ -18,6 +18,7 @@ import {
 } from "@/lib/bulletinFormat";
 import type { BulletinClassStats } from "@/lib/pdfBulletin";
 import type { AnnualAverageResult } from "@/lib/averages";
+import { periodOptionLabel } from "@/lib/gradingPeriod";
 import { cn } from "@/lib/utils";
 import { Button, Card, EmptyState } from "@/components/ui";
 
@@ -34,6 +35,8 @@ export type BulletinViewBodyProps = {
   periods: readonly string[];
   period: string;
   onPeriodChange: (p: string) => void;
+  /** Periods closed by the school (shown as « (clôturé) », still selectable). */
+  closedPeriods?: ReadonlySet<string>;
   stats: BulletinClassStats | null | undefined;
   annual?: Annual | null;
   loading?: boolean;
@@ -50,6 +53,7 @@ export function BulletinViewBody({
   periods,
   period,
   onPeriodChange,
+  closedPeriods,
   stats,
   annual,
   loading,
@@ -78,13 +82,14 @@ export function BulletinViewBody({
       >
         {periods.map((p) => {
           const active = p === period;
+          const closed = closedPeriods?.has(p) ?? false;
           return (
             <button
               key={p}
               role="tab"
               type="button"
               aria-selected={active}
-              title={p}
+              title={periodOptionLabel(p, closed)}
               onClick={() => {
                 setShowAll(false);
                 onPeriodChange(p);
@@ -97,6 +102,9 @@ export function BulletinViewBody({
               )}
             >
               {periodTabLabel(p)}
+              {closed ? (
+                <span className="ml-1 text-xs font-medium opacity-75">(clôturé)</span>
+              ) : null}
             </button>
           );
         })}
@@ -301,6 +309,8 @@ export type BulletinViewProps = {
   periods: readonly string[];
   period: string;
   onPeriodChange: (p: string) => void;
+  /** Periods closed by the school (shown as « (clôturé) », still selectable). */
+  closedPeriods?: ReadonlySet<string>;
   /** Builds the official PDF (registers its QR code). Only called on download / share. */
   buildPdf: () => Promise<jsPDF>;
   fileName: string;
@@ -317,6 +327,7 @@ export function BulletinView({
   periods,
   period,
   onPeriodChange,
+  closedPeriods,
   buildPdf,
   fileName,
   stickyActions,
@@ -361,6 +372,7 @@ export function BulletinView({
       periods={periods}
       period={period}
       onPeriodChange={onPeriodChange}
+      closedPeriods={closedPeriods}
       stats={data?.stats}
       annual={data?.annual}
       loading={isLoading}

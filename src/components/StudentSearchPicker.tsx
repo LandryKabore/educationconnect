@@ -23,6 +23,8 @@ type Props = {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** Shown when `value` is set before a search result is loaded (deep link). */
+  selectedOption?: StudentOption | null;
 };
 
 export function StudentSearchPicker({
@@ -33,6 +35,7 @@ export function StudentSearchPicker({
   required,
   disabled,
   placeholder = "Rechercher un élève (nom, classe…)",
+  selectedOption = null,
 }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -52,8 +55,9 @@ export function StudentSearchPicker({
   const selected = useMemo(
     () =>
       students.find((s) => s.id === value) ??
-      (picked && picked.id === value ? picked : null),
-    [students, value, picked],
+      (picked && picked.id === value ? picked : null) ??
+      (selectedOption && selectedOption.id === value ? selectedOption : null),
+    [students, value, picked, selectedOption],
   );
 
   const filtered = useMemo(() => {

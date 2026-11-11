@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Camera, Loader2, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,20 @@ type Props = {
   editable?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Extra classes on the circle (wins over the size preset). */
+  circleClassName?: string;
   onChanged?: () => void;
+  /**
+   * "inline" (default): buttons beside the avatar.
+   * "badge": the avatar itself opens the existing picker, with a camera badge.
+   */
+  layout?: "inline" | "badge";
+  /** When false, the badge is visible but does not open the picker. */
+  interactive?: boolean;
+};
+
+export type ProfileAvatarHandle = {
+  remove: () => void;
 };
 
 const SIZE_CLASS = {
@@ -32,16 +45,23 @@ function initials(name?: string) {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-export function ProfileAvatar({
-  userId,
-  avatarUrl,
-  name,
-  invalidateKeys = [],
-  editable = false,
-  size = "md",
-  className,
-  onChanged,
-}: Props) {
+export const ProfileAvatar = forwardRef<ProfileAvatarHandle, Props>(
+  function ProfileAvatar(
+    {
+      userId,
+      avatarUrl,
+      name,
+      invalidateKeys = [],
+      editable = false,
+      size = "md",
+      className,
+      circleClassName,
+      onChanged,
+      layout = "inline",
+      interactive = true,
+    },
+    ref,
+  ) {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -131,47 +151,100 @@ export function ProfileAvatar({
     }
   };
 
+  useImperativeHandle(ref, () => ({
+    remove: () => {
+      if (!editable || !interactive) return;
+      void onRemove();
+    },
+  }));
+
+  const openPicker = () => {
+    if (!editable || !interactive || busy) return;
+    inputRef.current?.click();
+  };
+
+  const face = (
+    <span
+      className={cn(
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border text-slate-500",
+        layout === "badge" && !displayUrl
+          ? "border-brand-800 bg-brand-700 text-white"
+          : "border-slate-200 bg-slate-100",
+        SIZE_CLASS[size],
+        circleClassName,
+      )}
+    >
+      {displayUrl ? (
+        <img
+          src={displayUrl}
+          alt={layout === "badge" ? "" : name ? `Photo de ${name}` : "Photo de profil"}
+          className="h-full w-full object-cover"
+        />
+      ) : label ? (
+        <span className={cn("font-semibold", layout === "badge" ? "text-white" : "text-brand-800")}>
+          {label}
+        </span>
+      ) : (
+        <User className="h-1/2 w-1/2" aria-hidden />
+      )}
+      {busy ? (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <Loader2 className="h-5 w-5 animate-spin text-white" />
+        </span>
+      ) : null}
+    </span>
+  );
+
+  const fileInput = editable ? (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp,image/heic,image/*"
+      className="hidden"
+      tabIndex={-1}
+      onChange={(e) => void onPick(e.target.files?.[0] ?? null)}
+    />
+  ) : null;
+
+  if (layout === "badge") {
+    const photoLabel = displayUrl ? `Changer la photo de ${name || "l'élève"}` : `Ajouter une photo${name ? ` pour ${name}` : ""}`;
+    return (
+      <div className={cn("relative inline-flex shrink-0", className)}>
+        {fileInput}
+        <button
+          type="button"
+          className="relative rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:opacity-60"
+          aria-label={photoLabel}
+          disabled={!editable || busy}
+          onClick={openPicker}
+        >
+          {face}
+          <span
+            className="pointer-events-none absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm ring-2 ring-white"
+            aria-hidden
+          >
+            <Camera className="h-3.5 w-3.5" />
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <div
-        className={cn(
-          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-slate-500",
-          SIZE_CLASS[size],
-        )}
-      >
-        {displayUrl ? (
-          <img
-            src={displayUrl}
-            alt={name ? `Photo de ${name}` : "Photo de profil"}
-            className="h-full w-full object-cover"
-          />
-        ) : label ? (
-          <span className="font-semibold text-brand-800">{label}</span>
-        ) : (
-          <User className="h-1/2 w-1/2" />
-        )}
-        {busy ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <Loader2 className="h-5 w-5 animate-spin text-white" />
-          </div>
-        ) : null}
+      <div className="shrink-0">
+        {face}
       </div>
 
       {editable ? (
         <div className="flex flex-wrap gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/*"
-            className="hidden"
-            onChange={(e) => void onPick(e.target.files?.[0] ?? null)}
-          />
+          {fileInput}
           <Button
             type="button"
             size="sm"
             variant="outline"
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
+            disabled={busy || !interactive}
+            onClick={openPicker}
           >
             <Camera className="h-4 w-4" />
             {displayUrl ? "Changer la photo" : "Ajouter une photo"}
@@ -181,18 +254,19 @@ export function ProfileAvatar({
               type="button"
               size="sm"
               variant="ghost"
-              disabled={busy}
+              disabled={busy || !interactive}
               onClick={() => void onRemove()}
             >
               <Trash2 className="h-4 w-4" />
               Retirer
             </Button>
           ) : null}
-          <p className="w-full text-xs text-slate-400">
+          <p className="w-full text-xs text-slate-600">
             Compressée automatiquement (~512 px, JPEG/WebP).
           </p>
         </div>
       ) : null}
     </div>
   );
-}
+},
+);

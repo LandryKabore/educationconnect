@@ -25,7 +25,7 @@ export function ParcoursCard({ studentId }: { studentId: string }) {
       {isLoading ? (
         <p className="mt-3 text-sm text-slate-500">Chargement…</p>
       ) : data.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-400">Aucun historique de classe pour le moment.</p>
+        <p className="mt-3 text-sm text-slate-600">Aucun historique de classe pour le moment.</p>
       ) : (
         <ol className="mt-3 space-y-3 border-l-2 border-slate-100 pl-4 dark:border-slate-700">
           {data.map((row) => (

@@ -5,6 +5,7 @@
 import {
   ANNUAL_PERIOD_LABEL,
   PASSING_AVERAGE,
+  bulletinMention,
   formatAverageFr,
   formatPassDecision,
   type AnnualAverageResult,
@@ -19,15 +20,8 @@ export function fmtEcartFr(n: number | null | undefined): string {
   return `${sign}${Math.abs(n).toFixed(2).replace(".", ",")}`;
 }
 
-/** Auto mention from moyenne générale — never blank because of missing teacher text. */
-export function bulletinMention(avg: number | null | undefined): string {
-  if (avg === null || avg === undefined || Number.isNaN(avg)) return "—";
-  if (avg >= 16) return "Félicitations";
-  if (avg >= 14) return "Encouragements";
-  if (avg >= 12) return "Compliments";
-  if (avg >= PASSING_AVERAGE) return "Passable";
-  return "Insuffisant";
-}
+/** Auto mention from moyenne générale (shared with the student file, defined in averages). */
+export { bulletinMention };
 
 /** Auto appréciation per subject, from the subject average (never blank). */
 export function subjectAppreciation(avg: number | null | undefined): string {

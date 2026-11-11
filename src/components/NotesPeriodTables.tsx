@@ -142,7 +142,7 @@ export function NotesPeriodTables({
               )}
             >
               {formatAverage(annual.annualAverage)}{" "}
-              <span className="text-base font-semibold text-slate-400">
+              <span className="text-base font-semibold text-slate-600">
                 / 20
               </span>
             </p>
@@ -177,7 +177,7 @@ export function NotesPeriodTables({
                     ? formatAverage(avg.generalAverage)
                     : "—"}
                 </span>
-                <span className="text-slate-400"> / 20</span>
+                <span className="text-slate-600"> / 20</span>
               </p>
             </div>
 
@@ -201,7 +201,7 @@ export function NotesPeriodTables({
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-600">
                           Moyenne
                         </p>
                         <p
@@ -213,7 +213,7 @@ export function NotesPeriodTables({
                           {subject.averageOn20 !== null
                             ? formatAverage(subject.averageOn20)
                             : "—"}
-                          <span className="text-sm font-semibold text-slate-400">
+                          <span className="text-sm font-semibold text-slate-600">
                             {" "}
                             / 20
                           </span>
@@ -296,7 +296,7 @@ export function NotesPeriodTables({
                                 <Badge tone="warning">Absent</Badge>
                               ) : (
                                 <>
-                                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-600">
                                     Note
                                   </p>
                                   <p
@@ -306,13 +306,13 @@ export function NotesPeriodTables({
                                     )}
                                   >
                                     {g.score}
-                                    <span className="font-medium text-slate-400">
+                                    <span className="font-medium text-slate-600">
                                       {" "}
                                       / {g.max_score}
                                     </span>
                                   </p>
                                   {g.max_score !== 20 && on20 !== null ? (
-                                    <p className="text-[11px] tabular-nums text-slate-400">
+                                    <p className="text-[11px] tabular-nums text-slate-600">
                                       soit {on20.toFixed(1)} / 20
                                     </p>
                                   ) : null}

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { buildBulletinPdf } from "@/lib/bulletinData";
@@ -6,10 +5,7 @@ import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
-import {
-  initialGradingPeriod,
-  writeStoredGradingPeriod,
-} from "@/lib/gradingPeriod";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
@@ -20,9 +16,6 @@ const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 export default function MonBulletin() {
   const { user, profile, schoolId, schools } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const [period, setPeriod] = useState(() =>
-    initialGradingPeriod(BULLETIN_PERIODS),
-  );
 
   const { data: enrollment, isLoading } = useQuery({
     queryKey: ["mon-inscription-bulletin", user?.id],
@@ -65,6 +58,12 @@ export default function MonBulletin() {
       ];
     },
   });
+
+  const periodLabels = periods.length > 0 ? periods : BULLETIN_PERIODS;
+  const { period, selectPeriod, closedLabels } = useGradingPeriodState(
+    periodLabels,
+    { classSectionId: enrollment?.class_section_id, schoolId },
+  );
 
   /** Official PDF (registers the QR code) — only on download / share. */
   const buildPdf = async () => {
@@ -112,12 +111,10 @@ export default function MonBulletin() {
           <BulletinView
             studentId={user!.id}
             classSectionId={enrollment.class_section_id}
-            periods={periods.length ? periods : BULLETIN_PERIODS}
+            periods={periodLabels}
             period={period}
-            onPeriodChange={(next) => {
-              setPeriod(next);
-              writeStoredGradingPeriod(next);
-            }}
+            onPeriodChange={selectPeriod}
+            closedPeriods={closedLabels}
             buildPdf={buildPdf}
             fileName={`bulletin-${profile?.last_name ?? "eleve"}-${filePeriod}.pdf`}
           />

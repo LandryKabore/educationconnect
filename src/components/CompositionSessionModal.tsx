@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -9,8 +9,10 @@ import { Button, Input, Label, Select, TimeInput24 } from "@/components/ui";
 import { TRIMESTER_PERIODS } from "@/lib/averages";
 import {
   initialGradingPeriod,
+  periodOptionLabel,
   writeStoredGradingPeriod,
 } from "@/lib/gradingPeriod";
+import { useResolvedGradingPeriod } from "@/hooks/useGradingPeriodState";
 
 const PERIODS = TRIMESTER_PERIODS;
 
@@ -67,6 +69,10 @@ export function CompositionSessionModal({
   onSaved,
 }: Props) {
   const [title, setTitle] = useState("");
+  const { suggested, closedLabels, ready } = useResolvedGradingPeriod(PERIODS, {
+    classSectionId: classId,
+  });
+  const periodTouched = useRef(false);
   const [period, setPeriod] = useState(() => resolvePeriod(defaultPeriod));
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
@@ -172,12 +178,18 @@ export function CompositionSessionModal({
 
   useEffect(() => {
     if (!open) return;
+    periodTouched.current = false;
     setTitle("");
     setPeriod(resolvePeriod(defaultPeriod));
     setStartsOn("");
     setEndsOn("");
     // Papers are rebuilt by the effect above (classId → teachers of that class).
   }, [open, classId, defaultPeriod]);
+
+  useEffect(() => {
+    if (!open || !ready || periodTouched.current) return;
+    setPeriod(suggested);
+  }, [open, ready, suggested]);
 
   const updatePaper = (subjectId: string, patch: Partial<PaperDraft>) => {
     setPapers((prev) =>
@@ -339,6 +351,7 @@ export function CompositionSessionModal({
             <Select
               value={period}
               onChange={(e) => {
+                periodTouched.current = true;
                 const next = e.target.value;
                 setPeriod(next);
                 writeStoredGradingPeriod(next);
@@ -346,7 +359,7 @@ export function CompositionSessionModal({
             >
               {PERIODS.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {periodOptionLabel(p, closedLabels.has(p))}
                 </option>
               ))}
             </Select>
