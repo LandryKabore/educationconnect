@@ -28,6 +28,7 @@ import { fullName } from "@/lib/utils";
 import { ClassColorBadge } from "@/components/ClassColor";
 import { ClassFilter } from "@/components/ClassFilter";
 import { DocumentsRegister } from "@/components/DocumentsRegister";
+import { BulletinView } from "@/components/BulletinView";
 import { SearchField } from "@/components/SearchField";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
@@ -165,18 +166,10 @@ export default function Bulletins() {
     students.find((s) => s.id === studentId) ??
     (pickedStudent?.id === studentId ? pickedStudent : undefined);
 
-  const handleGenerate = async () => {
-    if (!studentId || !school) {
-      toast.error("Sélectionnez un élève");
-      return;
-    }
-    setGenerating(true);
-
+  /** Official PDF for the selected pupil (registers its QR code). */
+  const buildSelectedPdf = async () => {
     const student = selectedStudent;
-    if (!student) {
-      setGenerating(false);
-      return;
-    }
+    if (!studentId || !school || !student) throw new Error("Sélectionnez un élève");
 
     const { data: enrollment } = await supabase
       .from("inscriptions")
@@ -190,13 +183,9 @@ export default function Bulletins() {
       student.classSectionId ??
       undefined;
 
-    if (!classSectionId) {
-      toast.error("Cet élève n’est pas inscrit dans une classe");
-      setGenerating(false);
-      return;
-    }
+    if (!classSectionId) throw new Error("Cet élève n’est pas inscrit dans une classe");
 
-    let coefficientBySubject: Record<string, number> = {};
+    const coefficientBySubject: Record<string, number> = {};
     const { data: programme } = await supabase
       .from("programme_classe")
       .select("subject_id, coefficient")
@@ -210,19 +199,28 @@ export default function Bulletins() {
       student.className ??
       "—";
 
-    try {
-      const doc = await buildBulletinPdf({
-        school: school as School,
-        student,
-        classSectionId,
-        className,
-        periodLabel: period,
-        coefficientBySubject,
-      });
+    return buildBulletinPdf({
+      school: school as School,
+      student,
+      classSectionId,
+      className,
+      periodLabel: period,
+      coefficientBySubject,
+    });
+  };
 
-      const filePeriod =
-        period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
-      doc.save(`bulletin-${student.last_name}-${filePeriod}.pdf`);
+  const filePeriod =
+    period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
+
+  const handleGenerate = async () => {
+    if (!studentId || !school || !selectedStudent) {
+      toast.error("Sélectionnez un élève");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const doc = await buildSelectedPdf();
+      doc.save(`bulletin-${selectedStudent.last_name}-${filePeriod}.pdf`);
       toast.success("Bulletin téléchargé");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Génération impossible");
@@ -252,8 +250,6 @@ export default function Bulletins() {
         coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
       }
 
-      const filePeriod =
-        period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
       const files: Record<string, Uint8Array> = {};
       const failed: string[] = [];
       let done = 0;
@@ -438,9 +434,9 @@ export default function Bulletins() {
                 </Select>
               </div>
             </div>
-            <p className="text-xs text-slate-500">
-              Moyennes par matière avec comparaison classe (élève / clas. / min / max /
-              écart). Mention automatique selon la moyenne générale.
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Bulletin A4 officiel : moyenne, total, rang et appréciation automatique par
+              matière ; mention et appréciation du conseil selon la moyenne générale.
             </p>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-700">
@@ -477,6 +473,32 @@ export default function Bulletins() {
               </Button>
             </div>
           </Card>
+
+          {selectedStudent?.classSectionId ? (
+            <Card className="space-y-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Aperçu — {fullName(selectedStudent.first_name, selectedStudent.last_name)}
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Ce que voient l’élève et ses parents. Le code QR n’est créé qu’au téléchargement du PDF.
+                </p>
+              </div>
+              <div className="max-w-2xl">
+                <BulletinView
+                  studentId={selectedStudent.id}
+                  classSectionId={selectedStudent.classSectionId}
+                  periods={BULLETIN_PERIODS}
+                  period={period}
+                  onPeriodChange={selectPeriod}
+                  closedPeriods={closedLabels}
+                  buildPdf={buildSelectedPdf}
+                  fileName={`bulletin-${selectedStudent.last_name}-${filePeriod}.pdf`}
+                  stickyActions={false}
+                />
+              </div>
+            </Card>
+          ) : null}
 
           {students.length === 0 ? (
             <Card className="space-y-3 p-4">

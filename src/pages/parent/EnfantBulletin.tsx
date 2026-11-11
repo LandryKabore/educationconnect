@@ -1,25 +1,15 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
-import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { buildBulletinPdf } from "@/lib/bulletinData";
 import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
-import { periodOptionLabel } from "@/lib/gradingPeriod";
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
+import { BulletinView } from "@/components/BulletinView";
 import {
   ParentChildBackLink,
   ParentChildGate,
@@ -35,7 +25,6 @@ export default function EnfantBulletin() {
   const id = useParentChildParams();
   const { schools, schoolId } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const [generating, setGenerating] = useState(false);
 
   const { data: link, isLoading: linkLoading } = useParentChildLink(id);
   const child = link?.profils;
@@ -77,60 +66,53 @@ export default function EnfantBulletin() {
     { classSectionId: enrollment?.class_section_id, schoolId },
   );
 
-  const handleGenerate = async () => {
+  /** Official PDF (registers the QR code) — only on download / share. */
+  const buildPdf = async () => {
     if (!id || !child || !school || !enrollment?.class_section_id) {
-      toast.error("Profil, classe ou école introuvable");
-      return;
+      throw new Error("Profil, classe ou école introuvable");
     }
-    setGenerating(true);
-    try {
-      let coefficientBySubject: Record<string, number> = {};
-      const { data: programme } = await supabase
-        .from("programme_classe")
-        .select("subject_id, coefficient")
-        .eq("class_section_id", enrollment.class_section_id);
-      for (const row of programme ?? []) {
-        coefficientBySubject[row.subject_id as string] = Number(
-          row.coefficient,
-        );
-      }
-
-      const studentProfile = {
-        id: child.id,
-        first_name: child.first_name,
-        last_name: child.last_name,
-        email: child.email ?? null,
-        phone: null,
-        avatar_url: null,
-        matricule: child.matricule ?? null,
-        must_change_password: false,
-        active: true,
-        created_at: "",
-      } as Profile;
-
-      const doc = await buildBulletinPdf({
-        school: school as School,
-        student: studentProfile,
-        classSectionId: enrollment.class_section_id,
-        className: enrollment.classes?.name ?? "—",
-        periodLabel: period,
-        coefficientBySubject,
-      });
-
-      const filePeriod =
-        period === ANNUAL_PERIOD_LABEL
-          ? "annee"
-          : period.replace(/\s+/g, "-");
-      doc.save(
-        `bulletin-${child.last_name ?? "eleve"}-${filePeriod}.pdf`,
-      );
-      toast.success("Bulletin téléchargé");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Génération impossible");
-    } finally {
-      setGenerating(false);
+    const coefficientBySubject: Record<string, number> = {};
+    const { data: programme } = await supabase
+      .from("programme_classe")
+      .select("subject_id, coefficient")
+      .eq("class_section_id", enrollment.class_section_id);
+    for (const row of programme ?? []) {
+      coefficientBySubject[row.subject_id as string] = Number(row.coefficient);
     }
+
+    // the link query selects the whole profile row: pass birth date / gender when present
+    const extra = child as typeof child & {
+      date_of_birth?: string | null;
+      gender?: string | null;
+      avatar_url?: string | null;
+    };
+    const studentProfile = {
+      id: child.id,
+      first_name: child.first_name,
+      last_name: child.last_name,
+      email: child.email ?? null,
+      phone: null,
+      avatar_url: extra.avatar_url ?? null,
+      date_of_birth: extra.date_of_birth ?? null,
+      gender: extra.gender ?? null,
+      matricule: child.matricule ?? null,
+      must_change_password: false,
+      active: true,
+      created_at: "",
+    } as Profile;
+
+    return buildBulletinPdf({
+      school: school as School,
+      student: studentProfile,
+      classSectionId: enrollment.class_section_id,
+      className: enrollment.classes?.name ?? "—",
+      periodLabel: period,
+      coefficientBySubject,
+    });
   };
+
+  const filePeriod =
+    period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
 
   const isLoading = linkLoading || enrollLoading;
 
@@ -140,47 +122,30 @@ export default function EnfantBulletin() {
         <ParentChildBackLink childName={childName} />
         <PageHeader
           title={childName ? `Bulletin — ${childName}` : "Bulletin"}
-          subtitle="Téléchargez le bulletin scolaire en PDF"
+          subtitle={
+            enrollment?.classes?.name
+              ? `${enrollment.classes.name} · ${period}`
+              : "Moyennes, rang et bulletin PDF"
+          }
         />
 
         {isLoading ? (
-          <p className="text-slate-500">Chargement…</p>
-        ) : !enrollment ? (
+          <PageLoadingState message="Chargement du bulletin…" />
+        ) : !enrollment || !id ? (
           <EmptyState message="Cet élève n’est pas encore inscrit dans une classe." />
         ) : (
-          <Card className="max-w-lg space-y-4">
-            <p className="text-sm text-slate-600">
-              Classe :{" "}
-              <span className="font-medium text-slate-900 dark:text-slate-100">
-                {enrollment.classes?.name ?? "—"}
-              </span>
-            </p>
-            <div>
-              <Label>Période</Label>
-              <Select value={period} onChange={(e) => selectPeriod(e.target.value)}>
-                {periods.map((p) => (
-                  <option key={p} value={p}>
-                    {periodOptionLabel(
-                      p === ANNUAL_PERIOD_LABEL ? "Année (moyenne annuelle)" : p,
-                      closedLabels.has(p),
-                    )}
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-1 text-xs text-slate-500">
-                Moyennes par matière avec comparaison classe (élève / clas. /
-                min / max / écart). Mention automatique selon la moyenne
-                générale.
-              </p>
-            </div>
-            <Button
-              onClick={() => void handleGenerate()}
-              disabled={generating || !school}
-            >
-              <Download className="h-4 w-4" />
-              {generating ? "Génération…" : "Télécharger le bulletin PDF"}
-            </Button>
-          </Card>
+          <div className="max-w-2xl">
+            <BulletinView
+              studentId={id}
+              classSectionId={enrollment.class_section_id}
+              periods={periodLabels}
+              period={period}
+              onPeriodChange={selectPeriod}
+              closedPeriods={closedLabels}
+              buildPdf={buildPdf}
+              fileName={`bulletin-${child?.last_name ?? "eleve"}-${filePeriod}.pdf`}
+            />
+          </div>
         )}
       </div>
     </ParentChildGate>

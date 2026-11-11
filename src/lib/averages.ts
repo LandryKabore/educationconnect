@@ -125,6 +125,14 @@ export function formatAverage(value: number | null, digits = 2): string {
   return value.toFixed(digits);
 }
 
+/** Same as `formatAverage`, with the French decimal comma used on paper bulletins (13,16). */
+export function formatAverageFr(
+  value: number | null | undefined,
+  digits = 2,
+): string {
+  return formatAverage(value ?? null, digits).replace(".", ",");
+}
+
 /** Build subject_id → coefficient map from programme_classe rows. */
 export function programmeToCoefMap(
   rows: { subject_id: string; coefficient: number }[],
