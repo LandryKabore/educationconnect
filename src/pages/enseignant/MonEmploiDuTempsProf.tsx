@@ -13,10 +13,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { cn, personName } from "@/lib/utils";
-import {
-  TimetableGrid,
-  type TimetableGridSlot,
-} from "@/components/TimetableGrid";
+import { ReadOnlyTimetable } from "@/components/ReadOnlyTimetable";
+import { type TimetableGridSlot } from "@/components/TimetableGrid";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 
 type SlotRow = TimetableSlot & {
@@ -255,10 +253,9 @@ export default function MonEmploiDuTempsProf() {
             </p>
           ) : null}
 
-          <TimetableGrid
+          <ReadOnlyTimetable
             slots={gridSlots}
             title="Planning hebdomadaire"
-            highlightDay={todayDow}
           />
         </>
       )}

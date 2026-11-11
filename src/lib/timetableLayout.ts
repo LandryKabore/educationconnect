@@ -1,7 +1,11 @@
 import { timeToMinutes } from "@/lib/timetableConflicts";
 
 export const PX_PER_MIN = 1.35;
-export const PAUSE_BAND_PX = 30;
+export const PAUSE_BAND_PX = 40;
+/** Space above the first hour so cards don't sit on the day header. */
+export const HEADER_PAD = 14;
+/** Space below the last hour mark. */
+export const BOTTOM_PAD = 22;
 /** Empty stretch with no lesson on any visible day, collapsed into a pause band. */
 export const PAUSE_GAP_MIN = 120;
 
@@ -23,8 +27,26 @@ export function formatClock(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** "7h", "7h30". Axis and card times; keep formatClock for forms and PDFs. */
+export function formatHourShort(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return `${h}h`;
+  return `${h}h${String(m).padStart(2, "0")}`;
+}
+
+/** "7h – 9h" from "HH:MM" / "HH:MM:SS" or minutes past midnight. */
+export function formatRangeFr(
+  start: string | number,
+  end: string | number,
+): string {
+  const startMin = typeof start === "string" ? timeToMinutes(start) : start;
+  const endMin = typeof end === "string" ? timeToMinutes(end) : end;
+  return `${formatHourShort(startMin)} – ${formatHourShort(endMin)}`;
+}
+
 export function formatPauseLabel(startMin: number, endMin: number): string {
-  return `Pause ${formatClock(startMin)} – ${formatClock(endMin)}`;
+  return `Pause · ${formatHourShort(startMin)} – ${formatHourShort(endMin)}`;
 }
 
 /** "9 h", "1 h 30", "45 min". */
@@ -63,6 +85,7 @@ export type TimeScale = {
   height: number;
   minuteToY: (minutes: number) => number;
   hourMarks: number[];
+  halfHourMarks: number[];
 };
 
 type SlotTime = { start_time: string; end_time: string };
@@ -138,7 +161,7 @@ export function buildTimeScale(args: {
   const { rangeStart, rangeEnd, pauses, pxPerMin, pausePx } = args;
   const regions: TimeRegion[] = [];
   let cursor = rangeStart;
-  let y = 0;
+  let y = HEADER_PAD;
 
   const ordered = [...pauses].sort((a, b) => a.startMin - b.startMin);
   for (const pause of ordered) {
@@ -178,7 +201,7 @@ export function buildTimeScale(args: {
     y += height;
   }
 
-  const height = Math.max(y, 60);
+  const height = Math.max(y, 60) + BOTTOM_PAD;
 
   const minuteToY = (minutes: number) => {
     const clamped = Math.min(rangeEnd, Math.max(rangeStart, minutes));
@@ -207,6 +230,14 @@ export function buildTimeScale(args: {
     if (!inside) hourMarks.push(m);
   }
 
+  const halfHourMarks: number[] = [];
+  for (let m = rangeStart + 30; m < rangeEnd; m += 60) {
+    const inside = covered.some(
+      (pause) => m > pause.startMin && m < pause.endMin,
+    );
+    if (!inside) halfHourMarks.push(m);
+  }
+
   return {
     rangeStart,
     rangeEnd,
@@ -215,6 +246,7 @@ export function buildTimeScale(args: {
     height,
     minuteToY,
     hourMarks,
+    halfHourMarks,
   };
 }
 
