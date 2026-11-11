@@ -22,7 +22,11 @@ export type BulletinFetchInput = {
   coefficientBySubject?: Record<string, number>;
 };
 
-async function fetchClassStats(
+/**
+ * Anonymized class stats for one pupil and one period (read-only RPC).
+ * Safe for on-screen views: it does NOT register a document or issue a QR code.
+ */
+export async function fetchBulletinStats(
   studentId: string,
   classSectionId: string,
   periodLabel: string,
@@ -60,7 +64,7 @@ export async function buildBulletinPdf(
 ): Promise<ReturnType<typeof generateBulletinPdf>> {
   const { school, student, classSectionId, className, periodLabel } = input;
 
-  const stats = await fetchClassStats(
+  const stats = await fetchBulletinStats(
     student.id,
     classSectionId,
     periodLabel,
@@ -91,6 +95,8 @@ export async function buildBulletinPdf(
     verification = { code, url, qrDataUrl: await qrPngDataUrl(url) };
   }
 
+  const logoDataUrl = await loadBulletinLogo();
+
   return generateBulletinPdf({
     school,
     student,
@@ -99,5 +105,39 @@ export async function buildBulletinPdf(
     stats,
     annual,
     verification,
+    logoDataUrl,
   });
+}
+
+let logoPromise: Promise<string | null> | null = null;
+
+/**
+ * Logo printed at the top of the bulletin. Schools have no logo field yet, so this is the
+ * EduFaso mark, downscaled once (keeps each PDF small when a whole class is zipped).
+ */
+export function loadBulletinLogo(): Promise<string | null> {
+  if (logoPromise) return logoPromise;
+  logoPromise = (async () => {
+    try {
+      const base = import.meta.env.BASE_URL || "/";
+      const res = await fetch(`${base}edufaso-logo-tight.png`);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const bitmap = await createImageBitmap(blob);
+      const maxSide = 280;
+      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  })();
+  return logoPromise;
 }
