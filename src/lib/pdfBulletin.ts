@@ -1,7 +1,7 @@
 import type { Profile, School } from "@/lib/types";
 import {
   ANNUAL_PERIOD_LABEL,
-  PASSING_AVERAGE,
+  bulletinMention,
   formatAverage,
   formatPassDecision,
   type AnnualAverageResult,
@@ -74,16 +74,6 @@ export interface BulletinData {
   > | null;
   /** Authenticity QR code (public verification page). Omitted when the register is unavailable. */
   verification?: { code: string; url: string; qrDataUrl: string } | null;
-}
-
-/** Auto mention from moyenne générale — never blank because of missing teacher text. */
-export function bulletinMention(avg: number | null | undefined): string {
-  if (avg === null || avg === undefined || Number.isNaN(avg)) return "—";
-  if (avg >= 16) return "Félicitations";
-  if (avg >= 14) return "Encouragements";
-  if (avg >= 12) return "Compliments";
-  if (avg >= PASSING_AVERAGE) return "Passable";
-  return "Insuffisant";
 }
 
 function fmt(n: number | null | undefined, digits = 2): string {

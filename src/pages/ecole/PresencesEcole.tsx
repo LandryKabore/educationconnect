@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import { toast } from "sonner";
@@ -68,17 +68,32 @@ const fmtDay = (iso: string) => {
   return `${d}/${m}/${y}`;
 };
 
+const STATUS_VALUES = new Set<StatusFilter>(STATUS_FILTERS.map((s) => s.value));
+
+function readStatus(raw: string | null): StatusFilter {
+  if (raw && STATUS_VALUES.has(raw as StatusFilter)) return raw as StatusFilter;
+  return "absent";
+}
+
+function readIsoDate(raw: string | null, fallback: string): string {
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : fallback;
+}
+
 export default function PresencesEcole() {
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
   const { page, pageSize, setPage, setPageSize } = usePageParams();
+  const [searchParams] = useSearchParams();
   const today = format(new Date(), "yyyy-MM-dd");
-  const [from, setFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
-  const [to, setTo] = useState(today);
+  // Deep link from the student file (« Justifier ») : ?eleve=&statut=&du=&au=
+  const [from, setFrom] = useState(() =>
+    readIsoDate(searchParams.get("du"), format(subDays(new Date(), 29), "yyyy-MM-dd")),
+  );
+  const [to, setTo] = useState(() => readIsoDate(searchParams.get("au"), today));
   const [classId, setClassId] = useState("");
   const [subjectId, setSubjectId] = useState("");
-  const [studentId, setStudentId] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("absent");
+  const [studentId, setStudentId] = useState(() => searchParams.get("eleve") ?? "");
+  const [status, setStatus] = useState<StatusFilter>(() => readStatus(searchParams.get("statut")));
   const selection = useRowSelection<PresenceRow>();
 
   // the confirm dialog: rows to justify / to put back to « absent »
@@ -118,6 +133,20 @@ export default function PresencesEcole() {
         .order("name");
       if (error) throw error;
       return (data ?? []) as { id: string; name: string }[];
+    },
+  });
+
+  const { data: pinnedStudent } = useQuery({
+    queryKey: ["presence-pin-student", studentId],
+    enabled: !!studentId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profils")
+        .select("id, first_name, last_name")
+        .eq("id", studentId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; first_name: string; last_name: string } | null;
     },
   });
 
@@ -397,6 +426,15 @@ export default function PresencesEcole() {
                 value={studentId}
                 onChange={onFilter(setStudentId)}
                 placeholder="Rechercher un élève"
+                selectedOption={
+                  pinnedStudent
+                    ? {
+                        id: pinnedStudent.id,
+                        first_name: pinnedStudent.first_name,
+                        last_name: pinnedStudent.last_name,
+                      }
+                    : null
+                }
               />
             ) : null}
           </div>
