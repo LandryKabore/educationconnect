@@ -23,6 +23,14 @@ android/captures
 *.apk
 *.aab
 
+# Capacitor / iOS
+ios/App/Pods
+ios/App/build
+ios/App/output
+ios/DerivedData
+*.ipa
+*.xcarchive
+
 # Electron
 release
 dist-electron

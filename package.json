@@ -20,11 +20,14 @@
     "dist:desktop": "npm run build:electron && electron-builder --win nsis --mac dmg",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:add:android": "npx cap add android"
+    "cap:ios": "npx cap open ios",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
     "@capacitor/core": "^7.6.8",
+    "@capacitor/ios": "^7.6.10",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/supabase-js": "^2.110.6",
     "@tanstack/react-query": "^5.101.2",
@@ -71,7 +74,10 @@
     "appId": "bf.edufaso.desktop",
     "productName": "EduFaso",
     "compression": "maximum",
-    "electronLanguages": ["fr", "en-US"],
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "directories": {
       "output": "release"
     },

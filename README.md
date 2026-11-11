@@ -7,7 +7,7 @@ Système de gestion scolaire installable (français), multi-écoles, multi-rôle
 - Vite + React + TypeScript + Tailwind
 - Supabase (Auth, Postgres, RLS, Edge Functions)
 - PWA (`vite-plugin-pwa`)
-- Capacitor (APK Android)
+- Capacitor (APK Android / IPA iOS)
 
 ## Démarrage
 
@@ -50,6 +50,27 @@ npx cap open android
 ```
 
 Dans Android Studio : Build → Build APK(s). Déposez l'APK sur une page de téléchargement plus tard.
+
+## Build iOS (iPhone / iPad)
+
+Prérequis : macOS avec Xcode, CocoaPods (`sudo gem install cocoapods`), et un compte Apple Developer pour installer sur appareil / App Store.
+
+```bash
+npm install
+# renseigner .env (VITE_SUPABASE_*)
+npm run build
+npx cap add ios      # une seule fois (déjà fait dans ce dépôt : dossier ios/)
+npx cap sync ios
+npx cap open ios     # ou : npm run cap:ios
+```
+
+Dans Xcode :
+1. Sélectionner le target **App**, onglet **Signing & Capabilities**
+2. Choisir votre Team Apple
+3. Product → Destination → iPhone simulateur ou appareil
+4. Product → Run (⌘R), ou Archive pour une IPA / TestFlight
+
+Le projet Xcode est dans `ios/App/App.xcworkspace` (ouvrir le **workspace**, pas le `.xcodeproj`). Bundle ID : `bf.edufaso.app`.
 
 ## Variables d'environnement
 
