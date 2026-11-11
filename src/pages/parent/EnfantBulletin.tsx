@@ -8,10 +8,8 @@ import {
   ANNUAL_PERIOD_LABEL,
   TRIMESTER_PERIODS,
 } from "@/lib/averages";
-import {
-  initialGradingPeriod,
-  writeStoredGradingPeriod,
-} from "@/lib/gradingPeriod";
+import { periodOptionLabel } from "@/lib/gradingPeriod";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import {
@@ -37,9 +35,6 @@ export default function EnfantBulletin() {
   const id = useParentChildParams();
   const { schools, schoolId } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
-  const [period, setPeriod] = useState(() =>
-    initialGradingPeriod(BULLETIN_PERIODS),
-  );
   const [generating, setGenerating] = useState(false);
 
   const { data: link, isLoading: linkLoading } = useParentChildLink(id);
@@ -75,6 +70,12 @@ export default function EnfantBulletin() {
       ];
     },
   });
+
+  const periodLabels = periods.length > 0 ? periods : BULLETIN_PERIODS;
+  const { period, selectPeriod, closedLabels } = useGradingPeriodState(
+    periodLabels,
+    { classSectionId: enrollment?.class_section_id, schoolId },
+  );
 
   const handleGenerate = async () => {
     if (!id || !child || !school || !enrollment?.class_section_id) {
@@ -156,19 +157,13 @@ export default function EnfantBulletin() {
             </p>
             <div>
               <Label>Période</Label>
-              <Select
-                value={period}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setPeriod(next);
-                  writeStoredGradingPeriod(next);
-                }}
-              >
+              <Select value={period} onChange={(e) => selectPeriod(e.target.value)}>
                 {periods.map((p) => (
                   <option key={p} value={p}>
-                    {p === ANNUAL_PERIOD_LABEL
-                      ? "Année (moyenne annuelle)"
-                      : p}
+                    {periodOptionLabel(
+                      p === ANNUAL_PERIOD_LABEL ? "Année (moyenne annuelle)" : p,
+                      closedLabels.has(p),
+                    )}
                   </option>
                 ))}
               </Select>

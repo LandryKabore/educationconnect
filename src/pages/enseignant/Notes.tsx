@@ -18,10 +18,8 @@ import {
   evaluationTypeTone,
 } from "@/lib/evaluationTypes";
 import { formatDateSafe } from "@/lib/dateFr";
-import {
-  initialGradingPeriod,
-  writeStoredGradingPeriod,
-} from "@/lib/gradingPeriod";
+import { periodOptionLabel } from "@/lib/gradingPeriod";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import { fullName, joinProfile } from "@/lib/utils";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import {
@@ -59,9 +57,10 @@ export default function Notes() {
   const autoConfirmExam = role === "school_admin";
 
   const [subjectId, setSubjectId] = useState(paramSubject ?? "");
-  const [period, setPeriod] = useState(() =>
-    initialGradingPeriod(PERIODS, paramPeriod),
-  );
+  const { period, selectPeriod, closedLabels } = useGradingPeriodState(PERIODS, {
+    explicit: paramPeriod,
+    classSectionId: id,
+  });
   /** Once we have applied URL or smart default, don't override the teacher's choice. */
   const defaultApplied = useRef(Boolean(paramSubject));
 
@@ -88,11 +87,6 @@ export default function Notes() {
     if (isProxy && proxyTeacherId) params.set("teacherId", proxyTeacherId);
     const q = params.toString();
     return `/classes/${id}/notes/${evalId}${q ? `?${q}` : ""}`;
-  };
-
-  const selectPeriod = (next: string) => {
-    setPeriod(next);
-    writeStoredGradingPeriod(next);
   };
 
   const { data: proxyProfile } = useQuery({
@@ -703,7 +697,7 @@ export default function Notes() {
           >
             {PERIODS.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {periodOptionLabel(p, closedLabels.has(p))}
               </option>
             ))}
           </Select>
