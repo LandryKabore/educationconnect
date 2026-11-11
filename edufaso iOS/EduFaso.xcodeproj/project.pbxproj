@@ -1,0 +1,444 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B8AB6A25A524482BBC75DEDA /* EduFasoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCD69164A6B4DE2915C73F6 /* EduFasoApp.swift */; };
+		D218213AF7B54ED6A6AD2A76 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFEDC925C94A4110B4A64893 /* RootView.swift */; };
+		AE9B2D4F07C94FB4BDF8D2DC /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1333B647EEF40DDB4EF465F /* AppConfig.swift */; };
+		E57C39DC7F0144C6ACC46444 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1167C90F9CDC4BBD8AA82F6E /* ChangePasswordView.swift */; };
+		132B9E8D83824CF3B77861E8 /* CompleteProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 293B524C208F4A34B83E403D /* CompleteProfileView.swift */; };
+		7324AE2462574345AE30EB24 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571A938CC93B4884B0D761BC /* LoginView.swift */; };
+		89DB379AA8A349FDBEA0AC4A /* ParentTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B2C78EAC87448D8668D783 /* ParentTabView.swift */; };
+		1A1DDD0D40A24FF881F46285 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE180CA1AEA4B219E83BA39 /* MessagesView.swift */; };
+		47BE6BEC31EC407793B190BA /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 333205FEC17F454CA7B10117 /* ProfileView.swift */; };
+		F17DBA89BDD44EE2898EC22D /* StudentDataViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00381630789A4FF8B0BD3098 /* StudentDataViews.swift */; };
+		10A33D42C7864B33AD0E3314 /* StudentTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACBCA87B5864D02AB0C17A5 /* StudentTabView.swift */; };
+		E9550CE4707C4698BB4FBFED /* TeacherTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D50C4F3D908C425997534D9F /* TeacherTabView.swift */; };
+		0DC3AB790E444702B82CD779 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 627C70BAD683446F81DBAD2D /* Models.swift */; };
+		1B71F2B49C064443838E4921 /* AuthHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC3265BEC10141A0A915A991 /* AuthHelpers.swift */; };
+		D15E85A17F3B46419F306830 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB513005C8294AD7AE9FF7B0 /* AuthStore.swift */; };
+		C9ED2B18291E48A1B6AA08F1 /* SchoolDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE2A7E52AB34523A7EAA7D0 /* SchoolDataService.swift */; };
+		34368D8C03AC4582A1B0C19A /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C903A49D525B45339054CC6B /* SupabaseManager.swift */; };
+		DFD0266EAAF54BE0997CA14C /* Brand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CEA4BC9638A4A90B1F576ED /* Brand.swift */; };
+		6C5D3907A96D45A59242014A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9E71534E52584AD5A83AB713 /* Assets.xcassets */; };
+		5A190E66E4F746E8832C7B41 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 83D1EFB5E01540C4AC3EDC7E /* Supabase */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AB70B0E73B0249C3BAB31135 /* EduFaso.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EduFaso.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3FCD69164A6B4DE2915C73F6 /* EduFasoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduFasoApp.swift; sourceTree = "<group>"; };
+		AFEDC925C94A4110B4A64893 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		F1333B647EEF40DDB4EF465F /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		1167C90F9CDC4BBD8AA82F6E /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
+		293B524C208F4A34B83E403D /* CompleteProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompleteProfileView.swift; sourceTree = "<group>"; };
+		571A938CC93B4884B0D761BC /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		08B2C78EAC87448D8668D783 /* ParentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParentTabView.swift; sourceTree = "<group>"; };
+		BDE180CA1AEA4B219E83BA39 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
+		333205FEC17F454CA7B10117 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		00381630789A4FF8B0BD3098 /* StudentDataViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentDataViews.swift; sourceTree = "<group>"; };
+		0ACBCA87B5864D02AB0C17A5 /* StudentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabView.swift; sourceTree = "<group>"; };
+		D50C4F3D908C425997534D9F /* TeacherTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeacherTabView.swift; sourceTree = "<group>"; };
+		627C70BAD683446F81DBAD2D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		AC3265BEC10141A0A915A991 /* AuthHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthHelpers.swift; sourceTree = "<group>"; };
+		EB513005C8294AD7AE9FF7B0 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		3AE2A7E52AB34523A7EAA7D0 /* SchoolDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchoolDataService.swift; sourceTree = "<group>"; };
+		C903A49D525B45339054CC6B /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
+		0CEA4BC9638A4A90B1F576ED /* Brand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brand.swift; sourceTree = "<group>"; };
+		9E71534E52584AD5A83AB713 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		341B3AEB08314FFF861A1D8D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		50CBFD125DD948F59B8868CB /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
+		19FA6E9A5B9C4FB2A74177E1 /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C340D190DE424E55AC574A4C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A190E66E4F746E8832C7B41 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		94F4D50A216340828B6A8AD9 = {
+			isa = PBXGroup;
+			children = (
+				1B976299462449BAA7D13DAF /* EduFaso */,
+				2765F16252BB4487AF32F762 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2765F16252BB4487AF32F762 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AB70B0E73B0249C3BAB31135 /* EduFaso.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3BB202D42F6F418E97E2D890 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				1167C90F9CDC4BBD8AA82F6E /* ChangePasswordView.swift */,
+				293B524C208F4A34B83E403D /* CompleteProfileView.swift */,
+				571A938CC93B4884B0D761BC /* LoginView.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		80AC89E6274844A5AC99FC1E /* Student */ = {
+			isa = PBXGroup;
+			children = (
+				0ACBCA87B5864D02AB0C17A5 /* StudentTabView.swift */,
+			);
+			path = Student;
+			sourceTree = "<group>";
+		};
+		99271E82E28D40FCBE5A2E2F /* Parent */ = {
+			isa = PBXGroup;
+			children = (
+				08B2C78EAC87448D8668D783 /* ParentTabView.swift */,
+			);
+			path = Parent;
+			sourceTree = "<group>";
+		};
+		4C9319591F4543289911C362 /* Teacher */ = {
+			isa = PBXGroup;
+			children = (
+				D50C4F3D908C425997534D9F /* TeacherTabView.swift */,
+			);
+			path = Teacher;
+			sourceTree = "<group>";
+		};
+		7987D462904E48DDA74899DE /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				BDE180CA1AEA4B219E83BA39 /* MessagesView.swift */,
+				333205FEC17F454CA7B10117 /* ProfileView.swift */,
+				00381630789A4FF8B0BD3098 /* StudentDataViews.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		78217C5BEF4E46739BC08DA1 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				3BB202D42F6F418E97E2D890 /* Auth */,
+				80AC89E6274844A5AC99FC1E /* Student */,
+				99271E82E28D40FCBE5A2E2F /* Parent */,
+				4C9319591F4543289911C362 /* Teacher */,
+				7987D462904E48DDA74899DE /* Shared */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D69B2F1756604A1EBADB3E37 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				3FCD69164A6B4DE2915C73F6 /* EduFasoApp.swift */,
+				AFEDC925C94A4110B4A64893 /* RootView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A86DE0BDA87D42A28AA6E487 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				341B3AEB08314FFF861A1D8D /* Info.plist */,
+				50CBFD125DD948F59B8868CB /* Secrets.xcconfig */,
+				19FA6E9A5B9C4FB2A74177E1 /* Secrets.example.xcconfig */,
+				F1333B647EEF40DDB4EF465F /* AppConfig.swift */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		49E08F6D96714DD08FCC55E9 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				0CEA4BC9638A4A90B1F576ED /* Brand.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		A1303365C4A348AA842AFC60 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				627C70BAD683446F81DBAD2D /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6F11BA9ACA474013B4D04CC0 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AC3265BEC10141A0A915A991 /* AuthHelpers.swift */,
+				EB513005C8294AD7AE9FF7B0 /* AuthStore.swift */,
+				3AE2A7E52AB34523A7EAA7D0 /* SchoolDataService.swift */,
+				C903A49D525B45339054CC6B /* SupabaseManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		560E26CF259140B384EF3146 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9E71534E52584AD5A83AB713 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		1B976299462449BAA7D13DAF /* EduFaso */ = {
+			isa = PBXGroup;
+			children = (
+				D69B2F1756604A1EBADB3E37 /* App */,
+				A86DE0BDA87D42A28AA6E487 /* Config */,
+				49E08F6D96714DD08FCC55E9 /* Theme */,
+				A1303365C4A348AA842AFC60 /* Models */,
+				6F11BA9ACA474013B4D04CC0 /* Services */,
+				78217C5BEF4E46739BC08DA1 /* Features */,
+				560E26CF259140B384EF3146 /* Resources */,
+			);
+			path = EduFaso;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B18EE023FBC9426C95659FE9 /* EduFaso */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 549E52DCBA7D430AB6F4B832 /* Build configuration list for PBXNativeTarget "EduFaso" */;
+			buildPhases = (
+				782848A055884421BCF62633 /* Sources */,
+				C340D190DE424E55AC574A4C /* Frameworks */,
+				63DEE42FD636479BAB705E32 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EduFaso;
+			packageProductDependencies = (
+				83D1EFB5E01540C4AC3EDC7E /* Supabase */,
+			);
+			productName = EduFaso;
+			productReference = AB70B0E73B0249C3BAB31135 /* EduFaso.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		44AE6569FAEB47CE8A4FCE12 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					B18EE023FBC9426C95659FE9 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 8B3BF80CD0E54A1F950033E5 /* Build configuration list for PBXProject "EduFaso" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = fr;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				fr,
+				Base,
+				en,
+			);
+			mainGroup = 94F4D50A216340828B6A8AD9;
+			packageReferences = (
+				6646E60086434D5285C33181 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
+			productRefGroup = 2765F16252BB4487AF32F762 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B18EE023FBC9426C95659FE9 /* EduFaso */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		63DEE42FD636479BAB705E32 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C5D3907A96D45A59242014A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		782848A055884421BCF62633 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8AB6A25A524482BBC75DEDA /* EduFasoApp.swift in Sources */,
+				D218213AF7B54ED6A6AD2A76 /* RootView.swift in Sources */,
+				AE9B2D4F07C94FB4BDF8D2DC /* AppConfig.swift in Sources */,
+				E57C39DC7F0144C6ACC46444 /* ChangePasswordView.swift in Sources */,
+				132B9E8D83824CF3B77861E8 /* CompleteProfileView.swift in Sources */,
+				7324AE2462574345AE30EB24 /* LoginView.swift in Sources */,
+				89DB379AA8A349FDBEA0AC4A /* ParentTabView.swift in Sources */,
+				1A1DDD0D40A24FF881F46285 /* MessagesView.swift in Sources */,
+				47BE6BEC31EC407793B190BA /* ProfileView.swift in Sources */,
+				F17DBA89BDD44EE2898EC22D /* StudentDataViews.swift in Sources */,
+				10A33D42C7864B33AD0E3314 /* StudentTabView.swift in Sources */,
+				E9550CE4707C4698BB4FBFED /* TeacherTabView.swift in Sources */,
+				0DC3AB790E444702B82CD779 /* Models.swift in Sources */,
+				1B71F2B49C064443838E4921 /* AuthHelpers.swift in Sources */,
+				D15E85A17F3B46419F306830 /* AuthStore.swift in Sources */,
+				C9ED2B18291E48A1B6AA08F1 /* SchoolDataService.swift in Sources */,
+				34368D8C03AC4582A1B0C19A /* SupabaseManager.swift in Sources */,
+				DFD0266EAAF54BE0997CA14C /* Brand.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BE0A83AE3707445CBF1689EE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50CBFD125DD948F59B8868CB /* Secrets.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		60F8B7E4B35C410EAEC535E3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50CBFD125DD948F59B8868CB /* Secrets.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+		E9239D3A06584E72A3822DFC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EduFaso/Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = bf.edufaso.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		937C3D3E5B0545C6B3A025F4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EduFaso/Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = bf.edufaso.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		8B3BF80CD0E54A1F950033E5 /* Build configuration list for PBXProject "EduFaso" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE0A83AE3707445CBF1689EE /* Debug */,
+				60F8B7E4B35C410EAEC535E3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		549E52DCBA7D430AB6F4B832 /* Build configuration list for PBXNativeTarget "EduFaso" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9239D3A06584E72A3822DFC /* Debug */,
+				937C3D3E5B0545C6B3A025F4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6646E60086434D5285C33181 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		83D1EFB5E01540C4AC3EDC7E /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6646E60086434D5285C33181 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 44AE6569FAEB47CE8A4FCE12 /* Project object */;
+}
