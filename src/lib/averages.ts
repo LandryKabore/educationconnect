@@ -149,6 +149,20 @@ export const ANNUAL_PERIOD_LABEL = "Année";
 /** Passing threshold for the annual average (/20). */
 export const PASSING_AVERAGE = 10;
 
+/**
+ * Mention shown next to a moyenne générale.
+ * Same scale as the bulletin (Félicitations → Insuffisant), so the number
+ * is never the only way to read the result.
+ */
+export function bulletinMention(avg: number | null | undefined): string {
+  if (avg === null || avg === undefined || Number.isNaN(avg)) return "—";
+  if (avg >= 16) return "Félicitations";
+  if (avg >= 14) return "Encouragements";
+  if (avg >= 12) return "Compliments";
+  if (avg >= PASSING_AVERAGE) return "Passable";
+  return "Insuffisant";
+}
+
 export type TrimesterAverage = {
   periodLabel: string;
   generalAverage: number | null;

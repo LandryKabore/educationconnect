@@ -12,18 +12,19 @@ import {
 import { formatFrDateInput, frToIso, isoToFr } from "@/lib/dateFr";
 import { cn } from "@/lib/utils";
 
-export function Button({
-  className,
-  variant = "primary",
-  size = "md",
-  type = "button",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
-  size?: "sm" | "md" | "lg";
-}) {
+export const Button = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
+    size?: "sm" | "md" | "lg";
+  }
+>(function Button(
+  { className, variant = "primary", size = "md", type = "button", ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-50",
@@ -43,7 +44,7 @@ export function Button({
       {...props}
     />
   );
-}
+});
 
 export const Input = React.forwardRef<
   HTMLInputElement,
@@ -618,16 +619,21 @@ export function PageHeader({
 export function BackLink({
   to,
   label = "Retour",
+  className,
 }: {
   to: string;
   label?: string;
+  className?: string;
 }) {
   const navigate = useNavigate();
   return (
     <button
       type="button"
       onClick={() => navigate(to)}
-      className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+      className={cn(
+        "mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
+        className,
+      )}
     >
       <ArrowLeft className="h-4 w-4" />
       {label}
