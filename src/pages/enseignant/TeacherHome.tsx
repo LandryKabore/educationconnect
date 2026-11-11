@@ -22,6 +22,16 @@ import {
   snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import {
+  TeacherMobileHome,
+  type MetricChipModel,
+} from "@/pages/enseignant/TeacherMobileHome";
+import {
+  buildMobileSchedule,
+  frCount,
+  isSunday,
+  type NowSlot,
+} from "@/lib/teacherNow";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import {
@@ -133,15 +143,17 @@ export default function TeacherHome() {
         total: number;
       };
       const byStatus = new Map<string, StatusCounts>();
+      const recordedBySubject: Record<string, number> = {};
       if (uniqueClassIds.length > 0) {
         const { data: pres } = await supabase
           .from("presences")
-          .select("class_section_id, status")
+          .select("class_section_id, subject_id, status")
           .in("class_section_id", uniqueClassIds)
           .eq("date", today);
         for (const row of pres ?? []) {
           const r = row as {
             class_section_id: string;
+            subject_id: string | null;
             status: "present" | "absent" | "late" | "excused";
           };
           const cur = byStatus.get(r.class_section_id) ?? {
@@ -154,6 +166,10 @@ export default function TeacherHome() {
           cur[r.status] += 1;
           cur.total += 1;
           byStatus.set(r.class_section_id, cur);
+          if (r.subject_id) {
+            const key = `${r.class_section_id}:${r.subject_id}`;
+            recordedBySubject[key] = (recordedBySubject[key] ?? 0) + 1;
+          }
         }
       }
 
@@ -242,6 +258,8 @@ export default function TeacherHome() {
         attendanceToday,
         attendancePending,
         attendanceDone,
+        studentCountByClass: Object.fromEntries(studentCountByClass),
+        recordedBySubject,
         today,
         recentDevoirs: (recentDevoirs ?? []) as {
           id: string;
@@ -267,25 +285,31 @@ export default function TeacherHome() {
   });
 
   // Fetch EDT in parallel query to keep home load snappy
-  const { data: weekSlots = [] } = useQuery({
+  const {
+    data: weekSlots = [],
+    isLoading: edtLoading,
+    isError: edtError,
+  } = useQuery({
     queryKey: ["teacher-home-edt", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creneaux_edt")
         .select(
-          "id, day_of_week, start_time, end_time, room, matieres(name), classes(name)",
+          "id, day_of_week, start_time, end_time, room, class_section_id, subject_id, matieres(name), classes(name)",
         )
         .eq("teacher_id", user!.id)
         .order("day_of_week")
         .order("start_time");
       if (error) throw error;
-      return (data ?? []) as {
+      return (data ?? []) as unknown as {
         id: string;
         day_of_week: number;
         start_time: string;
         end_time: string;
         room: string | null;
+        class_section_id: string | null;
+        subject_id: string | null;
         matieres: { name: string } | null;
         classes: { name: string } | null;
       }[];
@@ -302,13 +326,156 @@ export default function TeacherHome() {
     [weekSlots],
   );
 
-  if (isLoading) {
-    return <p className="text-slate-500">Chargement…</p>;
-  }
+  const mobileSchedule = useMemo(() => {
+    if (!data) return null;
+    const now = new Date();
+    const sunday = isSunday(now);
+    const slots: NowSlot[] = sunday
+      ? []
+      : todaySlots.map((slot) => ({
+          id: slot.id,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          room: slot.room,
+          classId: slot.class_section_id,
+          subjectId: slot.subject_id,
+          subjectName: slot.matieres?.name ?? null,
+          className: slot.classes?.name ?? null,
+        }));
+    return buildMobileSchedule({
+      isSunday: sunday,
+      weekCount: weekSlots.length,
+      todaySlots: slots,
+      now,
+      studentCountByClass: data.studentCountByClass,
+      recordedBySubject: data.recordedBySubject,
+      recordedByClass: Object.fromEntries(
+        data.attendanceToday.map((row) => [row.classId, row.recorded]),
+      ),
+      nextDayLabel:
+        !sunday && scheduleFocus?.isLaterDay ? scheduleFocus.dayLabel : null,
+    });
+  }, [data, todaySlots, weekSlots.length, scheduleFocus]);
 
-  if (!data) {
+  const metricChips = useMemo((): MetricChipModel[] => {
+    if (!data) return [];
+    const unread = unreadInbox.discussions;
+    const pending = data.attendancePending;
+    const appel =
+      pending > 0
+        ? {
+            value: String(pending),
+            label: `${pending === 1 ? "appel" : "appels"} à faire`,
+            valueClass: "text-amber-800 dark:text-amber-200",
+            ariaLabel: `${frCount(pending, "appel", "appels")} à faire aujourd’hui`,
+          }
+        : {
+            value: String(data.attendanceDone),
+            label:
+              data.uniqueClasses === 0
+                ? "appels"
+                : data.attendanceDone === 1
+                  ? "appel fait"
+                  : "appels faits",
+            valueClass: "text-emerald-800 dark:text-emerald-200",
+            ariaLabel:
+              data.uniqueClasses === 0
+                ? "Aucune classe"
+                : `${frCount(data.attendanceDone, "appel fait", "appels faits")} aujourd’hui`,
+          };
+    return [
+      {
+        key: "appels",
+        to: "/presences",
+        ...appel,
+      },
+      {
+        key: "messages",
+        to: "/messages",
+        value: String(unread),
+        label: unread === 1 ? "non lu" : "non lus",
+        valueClass:
+          unread > 0
+            ? "text-rose-800 dark:text-rose-200"
+            : "text-slate-600 dark:text-slate-300",
+        ariaLabel: frCount(unread, "message non lu", "messages non lus"),
+      },
+      {
+        key: "exercices",
+        to: "/devoirs",
+        value: String(data.exercicesCount),
+        label: data.exercicesCount === 1 ? "exercice" : "exercices",
+        valueClass: "text-amber-800 dark:text-amber-200",
+        ariaLabel: frCount(
+          data.exercicesCount,
+          "exercice de maison",
+          "exercices de maison",
+        ),
+      },
+      {
+        key: "devoirs",
+        to: "/devoirs",
+        value: String(data.examensCount),
+        label: data.examensCount === 1 ? "devoir" : "devoirs",
+        valueClass: "text-violet-800 dark:text-violet-200",
+        ariaLabel: frCount(
+          data.examensCount,
+          "devoir surveillé",
+          "devoirs surveillés",
+        ),
+      },
+      {
+        key: "classes",
+        to: "/mes-classes",
+        value: String(data.uniqueClasses),
+        label: data.uniqueClasses === 1 ? "classe" : "classes",
+        valueClass: "text-brand-800 dark:text-brand-200",
+        ariaLabel: `${frCount(data.uniqueClasses, "classe", "classes")}, ${frCount(data.assignmentCount, "affectation", "affectations")}`,
+      },
+      {
+        key: "eleves",
+        to: "/mes-eleves",
+        value: String(data.studentsCount),
+        label: data.studentsCount === 1 ? "élève" : "élèves",
+        valueClass: "text-sky-800 dark:text-sky-200",
+        ariaLabel: `${frCount(data.studentsCount, "élève", "élèves")} dans vos classes`,
+      },
+    ];
+  }, [data, unreadInbox.discussions]);
+
+  if (isLoading || !data) {
+    if (!isLoading) {
+      return (
+        <p className="text-slate-500">Impossible de charger votre aperçu.</p>
+      );
+    }
     return (
-      <p className="text-slate-500">Impossible de charger votre aperçu.</p>
+      <div className="space-y-6" aria-busy="true">
+        <p className="sr-only">Chargement de l’accueil…</p>
+        <PortalHomeHeader
+          icon={BookOpen}
+          name={name}
+          context={[schoolName, "Enseignant"].filter(Boolean).join(" · ")}
+          unreadInbox={unreadInbox}
+        />
+        <div className="h-48 animate-pulse rounded-2xl bg-slate-200 md:hidden dark:bg-slate-700" />
+        <div className="flex gap-2 overflow-hidden md:hidden">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div
+              key={index}
+              className="h-11 w-28 shrink-0 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700"
+            />
+          ))}
+        </div>
+        <div className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div
+              key={index}
+              className="h-28 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+            />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -321,7 +488,15 @@ export default function TeacherHome() {
         unreadInbox={unreadInbox}
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <TeacherMobileHome
+        schedule={mobileSchedule}
+        chips={metricChips}
+        todayIso={data.today}
+        edtLoading={edtLoading}
+        edtError={edtError}
+      />
+
+      <section className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <MetricCard
           label="Classes"
           value={String(data.uniqueClasses)}
@@ -356,7 +531,7 @@ export default function TeacherHome() {
           to="/presences"
         />
         <MetricCard
-          label="Devoirs"
+          label="Exercices"
           value={String(data.exercicesCount)}
           hint="De maison"
           valueClass="text-amber-600"
@@ -365,7 +540,7 @@ export default function TeacherHome() {
         <MetricCard
           label="Devoirs"
           value={String(data.examensCount)}
-          hint="Créés au total"
+          hint="Surveillés"
           valueClass="text-violet-600"
           to="/devoirs"
         />
@@ -378,7 +553,7 @@ export default function TeacherHome() {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="hidden gap-4 md:grid lg:grid-cols-2">
         <Panel
           icon={Calendar}
           title={`Aujourd’hui · ${WEEKDAY_LABELS[todayDow]}`}
