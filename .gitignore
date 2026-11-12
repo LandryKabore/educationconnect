@@ -50,3 +50,14 @@ test-creds*.json
 .env
 .env.*
 !.env.example
+
+# iOS native secrets
+EduFaso IOS/EduFaso/EduFaso/Config/AppConfig.swift
+EduFaso IOS/**/Secrets.xcconfig
+
+EduFaso IOS/**/DerivedData/
+
+# Xcode user state
+**/xcuserdata/
+**/*.xcuserstate
+
