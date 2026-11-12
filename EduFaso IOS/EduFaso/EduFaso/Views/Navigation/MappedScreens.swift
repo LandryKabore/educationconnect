@@ -207,25 +207,27 @@ struct EvaluationsBrowser: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(EduTheme.loginBackground)
 
-                        ScrollView {
-                            LazyVStack(spacing: 10) {
-                                if filteredRows.isEmpty {
-                                    Text("Rien à afficher avec ce filtre.")
-                                        .font(.subheadline)
-                                        .foregroundStyle(EduTheme.muted)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(16)
-                                        .background(cardBackground)
-                                } else {
-                                    ForEach(filteredRows) { row in
-                                        evaluationCard(row)
+                        TimelineView(.periodic(from: .now, by: 30)) { context in
+                            ScrollView {
+                                LazyVStack(spacing: 10) {
+                                    if filteredRows.isEmpty {
+                                        Text("Rien à afficher avec ce filtre.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(EduTheme.muted)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(16)
+                                            .background(cardBackground)
+                                    } else {
+                                        ForEach(filteredRows) { row in
+                                            evaluationCard(row, now: context.date)
+                                        }
                                     }
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 24)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 24)
+                            .refreshable { await load(isRefresh: true) }
                         }
-                        .refreshable { await load(isRefresh: true) }
                     }
                 }
             }
@@ -315,7 +317,7 @@ struct EvaluationsBrowser: View {
     }
 
     @ViewBuilder
-    private func evaluationCard(_ row: EvaluationRow) -> some View {
+    private func evaluationCard(_ row: EvaluationRow, now: Date) -> some View {
         let graded = gradedIds.contains(row.id)
         let expanded = expandedIds.contains(row.id)
         let canEnter = allowEntry && row.classSectionId != nil && row.subjectId != nil
@@ -328,7 +330,7 @@ struct EvaluationsBrowser: View {
                 NavigationLink {
                     GradeEntryView(evaluation: row, recordedBy: recordedBy)
                 } label: {
-                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true, swatch: swatch)
+                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true, swatch: swatch, now: now)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -342,7 +344,7 @@ struct EvaluationsBrowser: View {
                         }
                     }
                 } label: {
-                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails, swatch: swatch)
+                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails, swatch: swatch, now: now)
                 }
                 .buttonStyle(.plain)
 
@@ -377,7 +379,8 @@ struct EvaluationsBrowser: View {
         expanded: Bool,
         expandable: Bool,
         showsChevron: Bool = false,
-        swatch: SubjectPalette.Swatch
+        swatch: SubjectPalette.Swatch,
+        now: Date
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             if isExamMode {
@@ -409,28 +412,33 @@ struct EvaluationsBrowser: View {
                         .background(swatch.border.opacity(0.12), in: Capsule())
                 }
 
-                if isExamMode {
-                    if let time = timeRange(row) {
-                        Label(time, systemImage: "clock")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(EduTheme.navy)
-                    }
-                    if let period = row.periodLabel, !period.isEmpty {
-                        Text(period)
-                            .font(.caption2)
-                            .foregroundStyle(EduTheme.muted)
-                    }
-                } else {
-                    if !row.whenLabel.isEmpty {
+                HStack(spacing: 8) {
+                    if isExamMode {
+                        if let time = timeRange(row) {
+                            Label(time, systemImage: "clock")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(EduTheme.navy)
+                        }
+                    } else if !row.whenLabel.isEmpty {
                         Label(prettyWhen(row), systemImage: "calendar")
                             .font(.caption)
                             .foregroundStyle(EduTheme.muted)
                     }
-                    if let period = row.periodLabel, !period.isEmpty {
-                        Text(period)
-                            .font(.caption2)
-                            .foregroundStyle(EduTheme.muted)
+
+                    if let countdown = countdownChip(for: row, now: now) {
+                        Text(countdown.text)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(countdown.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(countdown.color.opacity(0.12), in: Capsule())
                     }
+                }
+
+                if let period = row.periodLabel, !period.isEmpty {
+                    Text(period)
+                        .font(.caption2)
+                        .foregroundStyle(EduTheme.muted)
                 }
             }
 
@@ -548,6 +556,60 @@ struct EvaluationsBrowser: View {
         if end.isEmpty { return start }
         if start.isEmpty { return end }
         return "\(start) – \(end)"
+    }
+
+    private func dueMoment(for row: EvaluationRow) -> Date? {
+        guard let day = eventDay(row) else { return nil }
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 3 else { return nil }
+        var comps = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        let timeSource = row.startTime ?? ""
+        let timeParts = timeSource.split(separator: ":").compactMap { Int($0) }
+        if timeParts.count >= 2 {
+            comps.hour = timeParts[0]
+            comps.minute = timeParts[1]
+        } else {
+            // End of day for date-only homework due dates
+            comps.hour = 23
+            comps.minute = 59
+        }
+        return Calendar.current.date(from: comps)
+    }
+
+    private func countdownChip(for row: EvaluationRow, now: Date) -> (text: String, color: Color)? {
+        guard !gradedIds.contains(row.id), let target = dueMoment(for: row) else { return nil }
+        let seconds = target.timeIntervalSince(now)
+        if seconds >= 0 {
+            let totalMin = Int(seconds / 60)
+            let days = totalMin / (60 * 24)
+            let hours = (totalMin % (60 * 24)) / 60
+            let mins = totalMin % 60
+            let text: String
+            if days > 0 {
+                text = days == 1 ? "Dans 1 j" : "Dans \(days) j"
+            } else if hours > 0 {
+                text = hours == 1 ? "Dans 1 h" : "Dans \(hours) h"
+            } else if mins > 0 {
+                text = mins == 1 ? "Dans 1 min" : "Dans \(mins) min"
+            } else {
+                text = "Maintenant"
+            }
+            let color: Color = days == 0 ? Color.orange : EduTheme.navy
+            return (text, color)
+        } else {
+            let lateMin = Int((-seconds) / 60)
+            let days = lateMin / (60 * 24)
+            let hours = (lateMin % (60 * 24)) / 60
+            let text: String
+            if days > 0 {
+                text = days == 1 ? "En retard · 1 j" : "En retard · \(days) j"
+            } else if hours > 0 {
+                text = hours == 1 ? "En retard · 1 h" : "En retard · \(hours) h"
+            } else {
+                text = "En retard"
+            }
+            return (text, EduTheme.fasoRed)
+        }
     }
 
     private var cardBackground: some View {
