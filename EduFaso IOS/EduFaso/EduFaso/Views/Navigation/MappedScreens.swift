@@ -72,12 +72,15 @@ struct ChildGate<Content: View>: View {
 
 struct EvaluationsBrowser: View {
     private enum StatusFilter: String, CaseIterable, Identifiable {
-        case all, todo, graded
+        case all, todo, upcoming, past, graded
         var id: String { rawValue }
-        var label: String {
+
+        func label(for type: String?) -> String {
             switch self {
             case .all: return "Tout"
             case .todo: return "À faire"
+            case .upcoming: return "À venir"
+            case .past: return "Passés"
             case .graded: return "Notés"
             }
         }
@@ -105,6 +108,14 @@ struct EvaluationsBrowser: View {
 
     private var resolvedStudentId: String? { studentId ?? (teacherId == nil && !allowEntry ? auth.userId : nil) }
     private var isStudentAudience: Bool { resolvedStudentId != nil && !allowEntry }
+    private var isExamMode: Bool { type == "examen" }
+
+    private var availableFilters: [StatusFilter] {
+        if isExamMode {
+            return [.all, .upcoming, .past, .graded]
+        }
+        return [.all, .todo, .graded]
+    }
 
     private var emptyTitle: String {
         switch type {
@@ -146,11 +157,30 @@ struct EvaluationsBrowser: View {
         rows.filter { gradedIds.contains($0.id) }.count
     }
 
+    private var upcomingCount: Int {
+        rows.filter { isUpcoming($0) }.count
+    }
+
     private var filteredRows: [EvaluationRow] {
+        let base: [EvaluationRow]
         switch statusFilter {
-        case .all: return rows
-        case .todo: return rows.filter { !gradedIds.contains($0.id) }
-        case .graded: return rows.filter { gradedIds.contains($0.id) }
+        case .all: base = rows
+        case .todo: base = rows.filter { !gradedIds.contains($0.id) }
+        case .upcoming: base = rows.filter { isUpcoming($0) }
+        case .past: base = rows.filter { !isUpcoming($0) }
+        case .graded: base = rows.filter { gradedIds.contains($0.id) }
+        }
+        return base.sorted { lhs, rhs in
+            let l = eventDay(lhs) ?? "9999"
+            let r = eventDay(rhs) ?? "9999"
+            if isExamMode {
+                // Upcoming first (soonest), then past (most recent)
+                let lUp = isUpcoming(lhs)
+                let rUp = isUpcoming(rhs)
+                if lUp != rUp { return lUp && !rUp }
+                return lUp ? l < r : l > r
+            }
+            return l > r
         }
     }
 
@@ -209,7 +239,7 @@ struct EvaluationsBrowser: View {
             ZStack {
                 Circle()
                     .fill(accent.opacity(0.12))
-                Image(systemName: type == "devoir" ? "list.clipboard.fill" : "doc.text.fill")
+                Image(systemName: summaryIcon)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(accent)
             }
@@ -224,9 +254,15 @@ struct EvaluationsBrowser: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(EduTheme.ink)
                 if isStudentAudience {
-                    Text("\(pendingCount) à faire · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
+                    if isExamMode {
+                        Text("\(upcomingCount) à venir · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    } else {
+                        Text("\(pendingCount) à faire · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
                 } else if let className, !className.isEmpty {
                     Text(className)
                         .font(.caption)
@@ -239,32 +275,42 @@ struct EvaluationsBrowser: View {
         .background(cardBackground)
     }
 
+    private var summaryIcon: String {
+        switch type {
+        case "devoir": return "list.clipboard.fill"
+        case "examen": return "pencil.and.list.clipboard"
+        case "composition": return "graduationcap.fill"
+        default: return "doc.text.fill"
+        }
+    }
+
     private var statusChips: some View {
-        HStack(spacing: 8) {
-            ForEach(StatusFilter.allCases) { chip in
-                Button {
-                    statusFilter = chip
-                } label: {
-                    Text(chip.label)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
-                        .background(
-                            Capsule()
-                                .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(
-                                    statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
-                                    lineWidth: 1
-                                )
-                        )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(availableFilters) { chip in
+                    Button {
+                        statusFilter = chip
+                    } label: {
+                        Text(chip.label(for: type))
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
+                            .background(
+                                Capsule()
+                                    .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(
+                                        statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
+                                        lineWidth: 1
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            Spacer(minLength: 0)
         }
     }
 
@@ -334,10 +380,14 @@ struct EvaluationsBrowser: View {
         swatch: SubjectPalette.Swatch
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(swatch.border)
-                .frame(width: 4)
-                .padding(.vertical, 2)
+            if isExamMode {
+                dateBadge(row, swatch: swatch)
+            } else {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(swatch.border)
+                    .frame(width: 4)
+                    .padding(.vertical, 2)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -359,16 +409,28 @@ struct EvaluationsBrowser: View {
                         .background(swatch.border.opacity(0.12), in: Capsule())
                 }
 
-                if !row.whenLabel.isEmpty {
-                    Label(prettyWhen(row), systemImage: "calendar")
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                }
-
-                if let period = row.periodLabel, !period.isEmpty {
-                    Text(period)
-                        .font(.caption2)
-                        .foregroundStyle(EduTheme.muted)
+                if isExamMode {
+                    if let time = timeRange(row) {
+                        Label(time, systemImage: "clock")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(EduTheme.navy)
+                    }
+                    if let period = row.periodLabel, !period.isEmpty {
+                        Text(period)
+                            .font(.caption2)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                } else {
+                    if !row.whenLabel.isEmpty {
+                        Label(prettyWhen(row), systemImage: "calendar")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                    if let period = row.periodLabel, !period.isEmpty {
+                        Text(period)
+                            .font(.caption2)
+                            .foregroundStyle(EduTheme.muted)
+                    }
                 }
             }
 
@@ -384,6 +446,25 @@ struct EvaluationsBrowser: View {
         .contentShape(Rectangle())
     }
 
+    private func dateBadge(_ row: EvaluationRow, swatch: SubjectPalette.Swatch) -> some View {
+        let upcoming = isUpcoming(row)
+        return VStack(spacing: 2) {
+            Text(dayNumber(row))
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(upcoming ? swatch.border : EduTheme.ink)
+            Text(monthShort(row))
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(EduTheme.muted)
+                .textCase(.uppercase)
+        }
+        .frame(width: 48)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(upcoming ? swatch.fill.opacity(0.9) : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+        )
+    }
+
     @ViewBuilder
     private func statusBadge(_ row: EvaluationRow, graded: Bool, swatch: SubjectPalette.Swatch) -> some View {
         if graded {
@@ -393,6 +474,17 @@ struct EvaluationsBrowser: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(EduTheme.teal.opacity(0.12), in: Capsule())
+        } else if isExamMode {
+            let label = relativeDayLabel(row)
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(label == "Passé" ? EduTheme.muted : swatch.border)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    (label == "Passé" ? EduTheme.muted : swatch.border).opacity(0.12),
+                    in: Capsule()
+                )
         } else if isStudentAudience {
             Text("À faire")
                 .font(.caption2.weight(.bold))
@@ -408,6 +500,54 @@ struct EvaluationsBrowser: View {
                 .padding(.vertical, 3)
                 .background(Color.orange.opacity(0.12), in: Capsule())
         }
+    }
+
+    private func eventDay(_ row: EvaluationRow) -> String? {
+        let raw = row.evalDate ?? row.dueDate
+        guard let raw, !raw.isEmpty else { return nil }
+        return String(raw.prefix(10))
+    }
+
+    private func isUpcoming(_ row: EvaluationRow) -> Bool {
+        guard let day = eventDay(row) else { return true }
+        return day >= EduDates.day()
+    }
+
+    private func relativeDayLabel(_ row: EvaluationRow) -> String {
+        guard let day = eventDay(row) else { return "Planifié" }
+        let today = EduDates.day()
+        if day == today { return "Aujourd’hui" }
+        if let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+            if day == EduDates.day(tomorrow) { return "Demain" }
+        }
+        return day >= today ? "À venir" : "Passé"
+    }
+
+    private func dayNumber(_ row: EvaluationRow) -> String {
+        guard let day = eventDay(row) else { return "—" }
+        let parts = day.split(separator: "-")
+        return parts.count >= 3 ? String(parts[2]) : "—"
+    }
+
+    private func monthShort(_ row: EvaluationRow) -> String {
+        guard let day = eventDay(row) else { return "" }
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 3 else { return "" }
+        let comps = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        guard let date = Calendar.current.date(from: comps) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "MMM"
+        return f.string(from: date)
+    }
+
+    private func timeRange(_ row: EvaluationRow) -> String? {
+        let start = row.startTime.map { String($0.prefix(5)) } ?? ""
+        let end = row.endTime.map { String($0.prefix(5)) } ?? ""
+        if start.isEmpty && end.isEmpty { return nil }
+        if end.isEmpty { return start }
+        if start.isEmpty { return end }
+        return "\(start) – \(end)"
     }
 
     private var cardBackground: some View {
