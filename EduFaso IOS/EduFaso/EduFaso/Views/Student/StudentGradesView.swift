@@ -87,16 +87,16 @@ struct StudentGradesView: View {
 
                         ScrollView {
                             LazyVStack(spacing: 10) {
-                                if grouped.isEmpty {
-                                    emptyPeriodCard
-                                } else {
-                                    ForEach(grouped, id: \.subject) { group in
-                                        subjectDropdown(
-                                            subject: group.subject,
-                                            grades: group.grades,
-                                            average: group.average
-                                        )
-                                    }
+                                if !filtered.isEmpty {
+                                    statsRow
+                                }
+
+                                ForEach(grouped, id: \.subject) { group in
+                                    subjectDropdown(
+                                        subject: group.subject,
+                                        grades: group.grades,
+                                        average: group.average
+                                    )
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -123,10 +123,7 @@ struct StudentGradesView: View {
 
             if let averageOn20 {
                 averageCard(averageOn20)
-                statsRow
-            } else if !filtered.isEmpty {
-                statsRow
-            } else {
+            } else if filtered.isEmpty {
                 emptyPeriodCard
             }
         }
