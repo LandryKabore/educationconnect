@@ -7,13 +7,16 @@ import { AppToaster } from "@/components/AppToaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import App from "@/App";
 import { recordClientError } from "@/lib/errorBuffer";
+import { isNativeApp } from "@/lib/platform";
 import "@/i18n";
 import "./index.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: isNativeApp() ? 60_000 : 30_000,
+      // keep screens cached for a while in the app: going back shows data instantly
+      gcTime: isNativeApp() ? 30 * 60_000 : 5 * 60_000,
       retry: 1,
     },
   },

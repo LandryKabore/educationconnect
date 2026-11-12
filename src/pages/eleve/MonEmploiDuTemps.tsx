@@ -13,6 +13,10 @@ import {
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
+import { TimetableNative } from "@/components/TimetableNative";
+import { QueryError } from "@/components/QueryError";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { isNativeApp } from "@/lib/platform";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 
 export default function MonEmploiDuTemps() {
@@ -43,7 +47,13 @@ export default function MonEmploiDuTemps() {
     },
   });
 
-  const { data: slots = [], isLoading } = useQuery({
+  const native = isNativeApp();
+  const {
+    data: slots = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["mon-edt", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -74,10 +84,7 @@ export default function MonEmploiDuTemps() {
   });
 
   const highlightIds = useMemo(
-    () =>
-      pending
-        .filter((c) => c.kind !== "removed")
-        .map((c) => c.slotId),
+    () => pending.filter((c) => c.kind !== "removed").map((c) => c.slotId),
     [pending],
   );
 
@@ -143,22 +150,24 @@ export default function MonEmploiDuTemps() {
 
   return (
     <div>
-      <PageHeader
-        title="Mon emploi du temps"
-        subtitle="Planning de la semaine (lundi → samedi) · mise à jour en direct"
-        actions={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={isLoading || slots.length === 0 || exporting}
-            onClick={handleDownload}
-          >
-            <Download className="h-4 w-4" />
-            {exporting ? "Export…" : "Télécharger PDF"}
-          </Button>
-        }
-      />
+      {native ? null : (
+        <PageHeader
+          title="Mon emploi du temps"
+          subtitle="Planning de la semaine (lundi → samedi) · mise à jour en direct"
+          actions={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={isLoading || slots.length === 0 || exporting}
+              onClick={handleDownload}
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Export…" : "Télécharger PDF"}
+            </Button>
+          }
+        />
+      )}
 
       {showChanges && pending.length > 0 ? (
         <div className="mb-5 rounded-2xl border border-brand-200 bg-brand-50 p-4 dark:border-brand-500/40">
@@ -203,9 +212,23 @@ export default function MonEmploiDuTemps() {
       ) : null}
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        native ? (
+          <ScreenSkeleton
+            variant="timeline"
+            label="Chargement de l’emploi du temps…"
+          />
+        ) : (
+          <p className="text-slate-500">Chargement…</p>
+        )
+      ) : isError ? (
+        <QueryError
+          message="Impossible de charger l’emploi du temps."
+          onRetry={() => void refetch()}
+        />
       ) : slots.length === 0 ? (
         <EmptyState message="Aucun créneau planifié." />
+      ) : native ? (
+        <TimetableNative slots={gridSlots} changedIds={highlightIds} />
       ) : (
         <TimetableGrid
           slots={gridSlots}

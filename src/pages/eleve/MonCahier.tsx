@@ -3,11 +3,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { CahierFeedView } from "@/components/CahierFeedView";
 import { EmptyState, PageHeader } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { QueryError } from "@/components/QueryError";
 
 /** Student: the lesson log of his/her class. */
 export default function MonCahier() {
   const { user } = useAuth();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["mon-cahier-classe", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -28,7 +30,9 @@ export default function MonCahier() {
         subtitle={data?.classes?.name ? `Classe ${data.classes.name} · cours et travail à faire` : "Cours et travail à faire"}
       />
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton />
+      ) : isError ? (
+        <QueryError message="Impossible de charger le cahier de textes." onRetry={() => void refetch()} />
       ) : !data ? (
         <EmptyState message="Vous n'êtes inscrit dans aucune classe pour le moment." />
       ) : (

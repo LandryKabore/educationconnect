@@ -13,6 +13,7 @@ import {
 } from "@/lib/attendance";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, EmptyState, Select } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
 
 const STATUS_CHIPS = [
   { value: "", label: "Tout" },
@@ -134,7 +135,7 @@ export function AttendanceOverview({
       ) : null}
 
       {ov.isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton variant="cards" label="Chargement des présences…" />
       ) : ov.isError ? (
         <EmptyState message="Impossible de charger les présences. Réessayez plus tard." />
       ) : !t || t.total === 0 ? (

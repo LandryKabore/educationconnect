@@ -9,6 +9,8 @@ import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { QueryError } from "@/components/QueryError";
 
 type Paper = {
   id: string;
@@ -49,7 +51,7 @@ export default function MesCompositions() {
     markSeen();
   }, [markSeen]);
 
-  const { data: sessions = [], isLoading } = useQuery({
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["mes-compositions", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -124,7 +126,9 @@ export default function MesCompositions() {
       </p>
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton />
+      ) : isError ? (
+        <QueryError message="Impossible de charger les compositions." onRetry={() => void refetch()} />
       ) : sessions.length === 0 ? (
         <EmptyState message="Aucune composition programmée pour le moment." />
       ) : (

@@ -4,6 +4,8 @@ import { addDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { fetchCahierFeed } from "@/lib/scaleApi";
 import { Badge, Card, EmptyState, Select } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { QueryError } from "@/components/QueryError";
 
 const longDate = (s: string) => format(new Date(`${s}T12:00:00`), "EEEE d MMMM", { locale: fr });
 
@@ -11,7 +13,7 @@ const longDate = (s: string) => format(new Date(`${s}T12:00:00`), "EEEE d MMMM",
 export function CahierFeedView({ classId }: { classId: string }) {
   const [subject, setSubject] = useState("");
   const from = format(addDays(new Date(), -45), "yyyy-MM-dd");
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["cahier-feed", classId],
     queryFn: () => fetchCahierFeed(classId, { from, limit: 150 }),
   });
@@ -30,7 +32,10 @@ export function CahierFeedView({ classId }: { classId: string }) {
     return [...g.entries()];
   }, [data, subject]);
 
-  if (isLoading) return <p className="text-slate-500">Chargement…</p>;
+  if (isLoading) return <ScreenSkeleton />;
+  if (isError) {
+    return <QueryError message="Impossible de charger le cahier de textes." onRetry={() => void refetch()} />;
+  }
   if (data.length === 0) {
     return <EmptyState message="Les professeurs n'ont rien écrit dans le cahier de textes ces 45 derniers jours." />;
   }

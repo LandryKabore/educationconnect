@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { fullName, joinProfile } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
 import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { QueryError } from "@/components/QueryError";
 
 type AssignmentRow = {
   id: string;
@@ -26,7 +28,7 @@ type TeacherCard = {
 export default function MesProfs() {
   const { user } = useAuth();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["mes-profs", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -103,7 +105,9 @@ export default function MesProfs() {
       <PageHeader title="Mes profs" subtitle={subtitle} />
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton />
+      ) : isError ? (
+        <QueryError message="Impossible de charger vos enseignants." onRetry={() => void refetch()} />
       ) : !className ? (
         <EmptyState message="Vous n’êtes inscrit dans aucune classe pour le moment." />
       ) : teachers.length === 0 ? (

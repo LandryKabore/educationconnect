@@ -74,7 +74,12 @@ import { Button } from "@/components/ui";
 import { cn, personName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
-import { isDesktopApp } from "@/lib/platform";
+import { isDesktopApp, isNativeApp } from "@/lib/platform";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNativeBack } from "@/lib/nativeBack";
+import { useSwipeNav } from "@/hooks/useSwipeNav";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
 interface NavItem {
   to: string;
@@ -380,6 +385,44 @@ function buildParentGroups(): NavGroup[] {
   ];
 }
 
+/**
+ * Android app, student: same menu structure as the native iOS app
+ * (Scolarité / Travaux & cahier / Communication / Compte).
+ */
+function buildNativeStudentGroups(): NavGroup[] {
+  const flat = NAV_GROUPS_BY_ROLE.student.flatMap((g) => g.items);
+  const pick = (...paths: string[]) =>
+    paths
+      .map((to) => flat.find((i) => i.to === to))
+      .filter((i): i is NavItem => !!i);
+  return [
+    { items: pick("/tableau-de-bord") },
+    {
+      label: "Scolarité",
+      items: pick("/mes-notes", "/mon-bulletin", "/mes-presences", "/mon-emploi-du-temps", "/mes-profs"),
+    },
+    {
+      label: "Travaux & cahier",
+      items: pick("/mon-cahier", "/mes-exercices", "/mes-devoirs", "/mes-compositions"),
+    },
+    { label: "Communication", items: pick("/messages", "/annonces") },
+  ];
+}
+
+/** Title shown in the Android top bar: label of the menu entry that matches the current page. */
+function titleForPath(pathname: string, groups: NavGroup[]): string {
+  let best: { label: string; len: number } | null = null;
+  for (const item of groups.flatMap((g) => g.items)) {
+    const match = item.childPage
+      ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(pathname)
+      : pathname === item.to || (item.to.length > 1 && pathname.startsWith(`${item.to}/`));
+    if (match && (!best || item.to.length > best.len)) {
+      best = { label: item.label, len: item.to.length };
+    }
+  }
+  return best?.label ?? "EduFaso";
+}
+
 const ACCOUNT_GROUP: NavGroup = {
   label: "Compte",
   items: [{ to: "/profil", label: "Profil", icon: <User className="h-4 w-4" /> }],
@@ -413,6 +456,8 @@ export function AppShell() {
   const [pageOpening, setPageOpening] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const canSearch = role === "school_admin" && !!schoolId;
+  const native = isNativeApp();
+  const queryClient = useQueryClient();
 
   // Ctrl/Cmd + K opens the school search
   useEffect(() => {
@@ -468,7 +513,9 @@ export function AppShell() {
   const roleGroups = role
     ? isParent
       ? buildParentGroups()
-      : NAV_GROUPS_BY_ROLE[role]
+      : native && role === "student"
+        ? buildNativeStudentGroups()
+        : NAV_GROUPS_BY_ROLE[role]
     : [];
   const navGroups: NavGroup[] = [
     ...roleGroups,
@@ -476,10 +523,33 @@ export function AppShell() {
       ...ACCOUNT_GROUP,
       items: [
         ...ACCOUNT_GROUP.items,
-        ...(isDesktopApp() ? [] : [DOWNLOAD_ITEM]),
+        // no « Télécharger l'app » inside the desktop or Android app itself
+        ...(isDesktopApp() || native ? [] : [DOWNLOAD_ITEM]),
       ],
     },
   ];
+
+  const pageTitle = titleForPath(location.pathname, navGroups);
+  const onDashboard = location.pathname === "/tableau-de-bord";
+
+  // Android: back button closes the drawer first
+  useNativeBack(() => setOpen(false), native && open);
+  // Android: swipe right = menu, swipe left = close the menu, or profile from the home page
+  useSwipeNav({
+    enabled: native,
+    onRight: () => {
+      if (!open && !searchOpen && !childAsk) setOpen(true);
+    },
+    onLeft: () => {
+      if (open) setOpen(false);
+      else if (onDashboard && !searchOpen && !childAsk) navigate("/profil");
+    },
+  });
+  // Android: pull down to refresh the data of the current screen
+  const { indicator: pullIndicator } = usePullToRefresh(
+    () => queryClient.invalidateQueries(),
+    native,
+  );
 
   const handleLogout = async () => {
     await signOut();
@@ -651,7 +721,8 @@ export function AppShell() {
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
+            aria-label="Fermer le menu"
             onClick={() => setOpen(false)}
           >
             <X className="h-5 w-5" />
@@ -710,7 +781,7 @@ export function AppShell() {
                       onClick={() => openChildPage(item)}
                       aria-haspopup={(parentChildren?.length ?? 0) > 1 ? "dialog" : undefined}
                       className={cn(
-                        "flex w-full text-left items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
+                        "flex min-h-11 w-full text-left items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
                         active
                           ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
                           : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
@@ -745,7 +816,7 @@ export function AppShell() {
                       to={item.to}
                       onClick={() => setOpen(false)}
                       className={cn(
-                        "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
+                        "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
                         active
                           ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
                           : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
@@ -829,36 +900,88 @@ export function AppShell() {
             </div>
           </>
         ) : null}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
-          <button
-            type="button"
-            className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-            onClick={() => setOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <BrandLogo className="h-9 w-auto max-w-[9rem] flex-1 rounded-md" />
-          {canSearch ? (
+        {native ? (
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-1 border-b border-slate-200 bg-white px-2 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
+            <button
+              type="button"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Ouvrir le menu"
+              onClick={() => setOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="flex min-w-0 flex-1 items-center justify-center">
+              {onDashboard ? (
+                <BrandLogo className="h-9 w-auto max-w-[9rem]" imgClassName="h-9" />
+              ) : (
+                <h1 className="truncate px-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {pageTitle}
+                </h1>
+              )}
+            </div>
+            {canSearch ? (
+              <button
+                type="button"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Rechercher"
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search className="h-5 w-5" />
+              </button>
+            ) : null}
+            <Link
+              to="/profil"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-brand-700 hover:bg-slate-100 dark:text-brand-300 dark:hover:bg-slate-800"
+              aria-label="Profil"
+            >
+              <User className="h-5 w-5" />
+            </Link>
+          </header>
+        ) : (
+          <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
             <button
               type="button"
               className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Rechercher"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => setOpen(true)}
             >
-              <Search className="h-5 w-5" />
+              <Menu className="h-5 w-5" />
             </button>
-          ) : null}
-          <HelpLauncher compact />
-          <ThemeToggle compact />
-        </header>
+            <BrandLogo className="h-9 w-auto max-w-[9rem] flex-1 rounded-md" />
+            {canSearch ? (
+              <button
+                type="button"
+                className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="Rechercher"
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search className="h-5 w-5" />
+              </button>
+            ) : null}
+            <HelpLauncher compact />
+            <ThemeToggle compact />
+          </header>
+        )}
+        {native ? <OfflineBanner /> : null}
+        {pullIndicator}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main
+          className={cn(
+            "flex-1 p-4 sm:p-6 lg:p-8",
+            native && "pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+          )}
+        >
           <ErrorBoundary
             scope="page"
             compact
             resetKeys={[location.pathname, location.search]}
           >
-            <Outlet />
+            {native ? (
+              <div key={location.pathname} className="native-page-enter">
+                <Outlet />
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </ErrorBoundary>
         </main>
         {canSearch && searchOpen ? (

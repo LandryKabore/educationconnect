@@ -33,7 +33,14 @@
     "savedTitle": "Comptes enregistrés",
     "savedTap": "Appuyer pour remplir",
     "savedTapLogin": "Appuyer pour se connecter",
-    "savedRemove": "Supprimer ce compte enregistré"
+    "savedRemove": "Supprimer ce compte enregistré",
+    "savedRemoveTitle": "Supprimer ce compte enregistré ?",
+    "savedRemoveBody": "« {{identifiant}} » sera retiré de cet appareil. Vous devrez retaper l’identifiant et le mot de passe pour vous connecter.",
+    "savedRemoveYes": "Oui, supprimer",
+    "savedRemoveNo": "Annuler",
+    "savedRemoved": "Compte enregistré supprimé",
+    "identifiantRequired": "Veuillez saisir votre identifiant ou votre e-mail.",
+    "passwordRequired": "Veuillez saisir votre mot de passe."
   },
   "premiere": {
     "title": "Première connexion",

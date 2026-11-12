@@ -637,3 +637,42 @@ textarea {
     transform: none;
   }
 }
+
+/* ---- Android app (Capacitor): fluid page change, no rubber-band, no tap flash ---- */
+@keyframes native-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.native-app .native-page-enter {
+  animation: native-page-in 0.18s ease-out both;
+}
+
+.native-app {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.native-app a,
+.native-app button {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-app .native-page-enter {
+    animation: none;
+  }
+}
+
+/* Android phone: the top bar already shows the page title, keep only the subtitle */
+@media (max-width: 1023px) {
+  .native-app .native-hide-title {
+    display: none;
+  }
+}

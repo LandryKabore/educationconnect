@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNativeBack } from "@/lib/nativeBack";
 
 type ModalProps = {
   open: boolean;
@@ -46,6 +47,9 @@ export function Modal({
       document.body.style.overflow = prev;
     };
   }, [open, closeDisabled]);
+
+  // Android back button closes the dialog
+  useNativeBack(() => onCloseRef.current(), open && !closeDisabled);
 
   if (!open) return null;
 
