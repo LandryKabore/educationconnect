@@ -20,10 +20,15 @@ import {
   Select,
 } from "@/components/ui";
 import { fromAuthEmail, fullName } from "@/lib/utils";
+import { isNativeApp } from "@/lib/platform";
+import { ROLE_LABELS } from "@/lib/types";
+import { INK, MUTED } from "@/components/native/ios";
+import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 
 export default function Profil() {
   const { t } = useTranslation();
-  const { profile, role, realRole, refreshProfile } = useAuth();
+  const { profile, role, realRole, refreshProfile, signOut, schools, schoolId } = useAuth();
   const effectiveRole = role ?? realRole;
   const fieldDefs = useMemo(() => {
     if (effectiveRole && PROFILE_FIELDS_BY_ROLE[effectiveRole]) {
@@ -106,9 +111,35 @@ export default function Profil() {
     toast.success("Profil enregistré");
   };
 
+  const native = isNativeApp();
+  const displayName = profile ? fullName(profile.first_name, profile.last_name) : "Utilisateur";
+  const initialsText =
+    `${profile?.first_name?.[0] ?? "?"}${profile?.last_name?.[0] ?? ""}`.toUpperCase();
+  const schoolName = (schools.find((x) => x.id === schoolId) ?? schools[0])?.name;
+
   return (
     <div>
-      <PageHeader title={t("profile")} subtitle="Informations personnelles" />
+      {native ? (
+        <div className="mb-4 flex items-center gap-[14px] py-2">
+          {profile?.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-white"
+              style={{ backgroundImage: "linear-gradient(135deg,#0f766e,#153064)" }}
+            >
+              {initialsText}
+            </span>
+          )}
+          <div className="min-w-0 space-y-1">
+            <p className={cn("text-[20px] font-bold leading-tight", INK)}>{displayName}</p>
+            {effectiveRole ? <p className={cn("text-[15px]", MUTED)}>{ROLE_LABELS[effectiveRole]}</p> : null}
+            {schoolName ? <p className={cn("text-[13px]", MUTED)}>{schoolName}</p> : null}
+          </div>
+        </div>
+      ) : (
+        <PageHeader title={t("profile")} subtitle="Informations personnelles" />
+      )}
 
       <Card className="mb-6 max-w-lg">
         {profile ? (
@@ -185,6 +216,17 @@ export default function Profil() {
           </div>
         </form>
       </Card>
+
+      {native ? (
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="ios-card mt-4 flex w-full max-w-lg items-center justify-center gap-2 py-[14px] text-[17px] font-semibold text-[#d4372e]"
+        >
+          <LogOut className="h-[18px] w-[18px]" />
+          Se déconnecter
+        </button>
+      ) : null}
     </div>
   );
 }

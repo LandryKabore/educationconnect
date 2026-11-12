@@ -34,6 +34,7 @@ export function NativeAppEffects() {
     if (!native) return;
     let cancelled = false;
     let remove: (() => void) | undefined;
+    let stopObserver: (() => void) | undefined;
 
     void (async () => {
       try {
@@ -43,10 +44,18 @@ export function NativeAppEffects() {
         ]);
         if (cancelled) return;
 
-        // Brand teal status bar with light icons (see capacitor.config.ts).
+        // Same as the iOS navigation bar: white bar with dark icons (dark theme: surface + light icons).
         if (Capacitor.getPlatform() === "android") {
-          await StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
           await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+          const media = window.matchMedia("(prefers-color-scheme: dark)");
+          const paint = () => {
+            const dark = media.matches;
+            void StatusBar.setBackgroundColor({ color: dark ? "#242b3d" : "#ffffff" }).catch(() => {});
+            void StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
+          };
+          paint();
+          media.addEventListener("change", paint);
+          stopObserver = () => media.removeEventListener("change", paint);
         }
 
         const handle = await App.addListener("backButton", () => {
@@ -85,6 +94,7 @@ export function NativeAppEffects() {
 
     return () => {
       cancelled = true;
+      stopObserver?.();
       remove?.();
     };
   }, [native, navigate]);

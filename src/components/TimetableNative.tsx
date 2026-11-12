@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, addWeeks, format, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import { CalendarClock, Clock, Coffee, MapPin, User } from "lucide-react";
+import { CalendarClock, Calendar, ChevronRight, Clock, CupSoda, MapPin, SunMedium, User } from "lucide-react";
 import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import { formatRoomLabel } from "@/lib/timetableLayout";
@@ -14,8 +14,12 @@ const PAUSE_GAP_MIN = 90;
 const WEEK_RANGE = [-2, -1, 0, 1, 2] as const;
 const SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] as const;
 
-const card =
-  "rounded-2xl border border-slate-200 bg-white dark:border-[var(--border)] dark:bg-[var(--surface)]";
+const card = "ios-card";
+const INK = "text-[#0f172a] dark:text-slate-100";
+const MUTED = "text-[#64748b] dark:text-slate-300";
+const GREEN = "#4b8f4a";
+const NAVY = "#153064";
+const TEAL = "#0f766e";
 
 const clock = (min: number) => {
   const h = Math.floor(min / 60);
@@ -129,72 +133,95 @@ export function TimetableNative({
   const weekTotal = sorted.filter((s) => s.day_of_week >= 1 && s.day_of_week <= 6).length;
   const selectedOption = options.find((o) => o.offset === weekOffset);
 
-  const tab = (active: boolean) =>
-    cn(
-      "min-h-11 flex-1 rounded-xl px-3 text-sm font-semibold transition-colors",
-      active
-        ? "bg-white text-brand-800 shadow-sm dark:bg-[var(--surface)] dark:text-brand-200"
-        : "text-slate-700 dark:text-slate-300",
-    );
+  const seg = (active: boolean) => ({ role: "tab" as const, "aria-selected": active });
+  const rgb = (c: readonly [number, number, number], a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  const Badge = ({ children, color, solid }: { children: string; color: string; solid?: boolean }) => (
+    <span
+      className="rounded-full px-[7px] py-[3px] text-[11px] font-bold uppercase leading-none"
+      style={solid ? { backgroundColor: color, color: "#fff" } : { backgroundColor: `${color}1a`, color }}
+    >
+      {children}
+    </span>
+  );
 
   const CourseCard = ({ slot, liveNow, next }: { slot: TimetableGridSlot; liveNow: boolean; next: boolean }) => {
     const sw = subjectSwatch(slot.subjectName);
     const room = formatRoomLabel(slot.room);
     const changed = changedIds.includes(slot.id);
     return (
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", liveNow ? "bg-emerald-600" : sw.dot)} aria-hidden />
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{slot.subjectName}</span>
-          {liveNow ? (
-            <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase text-white">En cours</span>
-          ) : next ? (
-            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-800 dark:bg-brand-900/40 dark:text-brand-200">
-              Prochain
-            </span>
-          ) : null}
-          {changed ? (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-              Modifié
-            </span>
+      <div className="flex min-w-0 items-stretch gap-[10px]">
+        <span className="w-1 shrink-0 rounded-sm" style={{ backgroundColor: liveNow ? GREEN : rgb(sw.border) }} aria-hidden />
+        <div className="min-w-0 space-y-[5px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn("text-[15px] font-semibold", INK)}>{slot.subjectName}</span>
+            {liveNow ? <Badge color={GREEN} solid>En cours</Badge> : next ? <Badge color={NAVY}>Prochain</Badge> : null}
+            {changed ? (
+              <span className="rounded-full bg-[#ff9500]/[0.14] px-[7px] py-[3px] text-[11px] font-bold uppercase leading-none text-[#ff9500]">
+                Modifié
+              </span>
+            ) : null}
+          </div>
+          {slot.teacherName || room ? (
+            <p className={cn("flex flex-wrap gap-x-2 gap-y-0.5 text-xs", MUTED)}>
+              {slot.teacherName ? (
+                <span className="inline-flex items-center gap-1">
+                  <User className="h-3 w-3" fill="currentColor" aria-hidden />
+                  {slot.teacherName}
+                </span>
+              ) : null}
+              {room ? (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3 w-3" aria-hidden />
+                  {room}
+                </span>
+              ) : null}
+            </p>
           ) : null}
         </div>
-        {slot.teacherName || room ? (
-          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-600 dark:text-slate-300">
-            {slot.teacherName ? (
-              <span className="inline-flex items-center gap-1">
-                <User className="h-3 w-3" aria-hidden />
-                {slot.teacherName}
-              </span>
-            ) : null}
-            {room ? (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3 w-3" aria-hidden />
-                {room}
-              </span>
-            ) : null}
-          </p>
-        ) : null}
       </div>
     );
   };
 
+  /** 52 pt circle + caption2 / headline / caption (day and week summary). */
+  const Summary = ({
+    color,
+    icon,
+    children,
+  }: {
+    color: string;
+    icon: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div className={cn(card, "flex items-center gap-[14px] p-4")}>
+      <span
+        className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${color}1f`, color }}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 space-y-1">{children}</div>
+    </div>
+  );
+  const cap = cn("text-[11px] font-bold uppercase tracking-[0.5px]", MUTED);
+  const head = cn("text-[17px] font-semibold leading-snug", INK);
+
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Affichage" className="flex gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
-        {(["day", "week"] as const).map((s) => (
-          <button key={s} type="button" role="tab" aria-selected={scope === s} onClick={() => setScope(s)} className={tab(scope === s)}>
-            {s === "day" ? "Jour" : "Semaine"}
+      <div role="tablist" aria-label="Affichage" className="ios-seg">
+        {(["day", "week"] as const).map((sc) => (
+          <button key={sc} type="button" {...seg(scope === sc)} onClick={() => setScope(sc)}>
+            {sc === "day" ? "Jour" : "Semaine"}
           </button>
         ))}
       </div>
 
       {scope === "day" ? (
         <>
-          <div className="grid grid-cols-6 gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
+          <div className="grid grid-cols-6 gap-1.5 rounded-2xl bg-[#f1f5f9] p-1 dark:bg-[var(--surface-2)]">
             {stripDays.map((d) => {
               const selected = d.day === selectedDay;
-              const has = slots.some((s) => s.day_of_week === d.day);
+              const has = slots.some((sl) => sl.day_of_week === d.day);
               return (
                 <button
                   key={d.day}
@@ -203,108 +230,113 @@ export function TimetableNative({
                   aria-pressed={selected}
                   aria-label={d.longLabel + (d.isToday ? " (aujourd’hui)" : "")}
                   className={cn(
-                    "flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 transition-colors",
-                    selected ? "bg-white shadow-sm dark:bg-[var(--surface)]" : "",
-                    d.isToday && "ring-1 ring-emerald-600",
+                    "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[14px] py-2 transition-colors",
+                    selected ? "bg-white dark:bg-[var(--surface)]" : "",
+                    d.isToday && "border-[1.5px] border-[#4b8f4a] bg-[#4b8f4a]/[0.12]",
+                    d.isToday && selected && "bg-white",
                   )}
                 >
-                  <span className={cn("text-[11px] font-bold", d.isToday ? "text-emerald-700 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300")}>
+                  <span
+                    className="text-[11px] font-bold"
+                    style={{ color: d.isToday ? GREEN : selected ? NAVY : "#64748b" }}
+                  >
                     {d.short}
                   </span>
-                  <span className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{d.number}</span>
+                  <span className={cn("text-[17px] font-bold tabular-nums", selected || d.isToday ? INK : MUTED)}>
+                    {d.number}
+                  </span>
                   {d.isToday ? (
-                    <span className="rounded-full bg-emerald-700 px-1.5 text-[9px] font-bold text-white">AUJ</span>
+                    <span className="rounded-full bg-[#4b8f4a] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">AUJ</span>
                   ) : (
-                    <span className={cn("h-1.5 w-1.5 rounded-full", has ? "bg-brand-600" : "bg-transparent")} aria-hidden />
+                    <span
+                      className="my-[3px] h-[5px] w-[5px] rounded-full"
+                      style={{ backgroundColor: has ? (selected ? NAVY : TEAL) : "transparent" }}
+                      aria-hidden
+                    />
                   )}
                 </button>
               );
             })}
           </div>
 
-          <div className={cn(card, "flex items-center gap-3.5 p-4")}>
-            <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full", live ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-[var(--surface-2)] dark:text-slate-200")}>
-              {live ? <Clock className="h-6 w-6" /> : <CalendarClock className="h-6 w-6" />}
-            </span>
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                <span>
-                  {selectedLabel ? `${selectedLabel.longLabel}${selectedLabel.isToday ? " · aujourd’hui" : ""}` : ""}
+          <Summary
+            color={live ? GREEN : NAVY}
+            icon={live ? <Clock className="h-[22px] w-[22px]" fill="currentColor" stroke="#fff" /> : <Calendar className="h-[22px] w-[22px]" strokeWidth={2.2} />}
+          >
+            <p className="flex items-center gap-2">
+              <span className={cn(cap, "truncate")}>
+                {selectedLabel ? `${selectedLabel.longLabel}${selectedLabel.isToday ? " · aujourd’hui" : ""}` : ""}
+              </span>
+              {viewingToday ? (
+                <span className="rounded-full bg-[#153064]/[0.08] px-2 py-[3px] text-[11px] font-bold tabular-nums text-[#153064] dark:text-slate-100">
+                  {clock(nowMin)}
                 </span>
-                {viewingToday ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 tabular-nums text-slate-800 dark:bg-[var(--surface-2)] dark:text-slate-100">
-                    {clock(nowMin)}
-                  </span>
-                ) : null}
-              </p>
-              {daySlots.length === 0 ? (
-                <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {viewingToday ? "Aucun cours aujourd’hui" : "Aucun cours"}
+              ) : null}
+            </p>
+            {daySlots.length === 0 ? (
+              <p className={head}>{viewingToday ? "Aucun cours aujourd’hui" : "Aucun cours"}</p>
+            ) : live ? (
+              <>
+                <p className={cn(head, "truncate")}>En cours · {live.subjectName}</p>
+                <p className="text-xs text-[#4b8f4a]">
+                  {clock(timeToMinutes(live.start_time))} – {clock(timeToMinutes(live.end_time))}
                 </p>
-              ) : live ? (
-                <>
-                  <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">En cours · {live.subjectName}</p>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                    {clock(timeToMinutes(live.start_time))} – {clock(timeToMinutes(live.end_time))}
-                  </p>
-                </>
-              ) : upcoming ? (
-                <>
-                  <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">Prochain · {upcoming.subjectName}</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">À {clock(timeToMinutes(upcoming.start_time))}</p>
-                </>
-              ) : viewingToday ? (
-                <>
-                  <p className="text-base font-semibold text-slate-900 dark:text-slate-100">Journée terminée</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {daySlots.length} cours · {dayWindow}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{daySlots.length} cours</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">{dayWindow}</p>
-                </>
-              )}
-            </div>
-          </div>
+              </>
+            ) : upcoming ? (
+              <>
+                <p className={cn(head, "truncate")}>Prochain · {upcoming.subjectName}</p>
+                <p className={cn("text-xs", MUTED)}>À {clock(timeToMinutes(upcoming.start_time))}</p>
+              </>
+            ) : viewingToday ? (
+              <>
+                <p className={head}>Journée terminée</p>
+                <p className={cn("text-xs", MUTED)}>
+                  {daySlots.length} cours · {dayWindow}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={head}>{daySlots.length} cours</p>
+                <p className={cn("text-xs", MUTED)}>{dayWindow}</p>
+              </>
+            )}
+          </Summary>
 
           {timeline.length === 0 ? (
-            <div className={cn(card, "px-4 py-8 text-center")}>
-              <p className="text-base font-semibold text-slate-900 dark:text-slate-100">Pas de cours ce jour</p>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Choisis un autre jour ou regarde la semaine.</p>
+            <div className={cn(card, "flex flex-col items-center gap-2 px-4 py-7 text-center")}>
+              <SunMedium className="h-[26px] w-[26px] text-[#0f766e]" />
+              <p className={head}>Pas de cours ce jour</p>
+              <p className={cn("text-xs", MUTED)}>Choisis un autre jour ou regarde la semaine.</p>
             </div>
           ) : (
-            <ol className={cn(card, "divide-y divide-slate-100 dark:divide-[var(--border)]")}>
-              {timeline.map((b) => {
+            <ol className={cn(card, "overflow-hidden")}>
+              {timeline.map((b, idx) => {
                 const liveCourse = b.kind === "course" && viewingToday && isLive(b.slot);
                 const livePause = b.kind === "pause" && viewingToday && b.start <= nowMin && nowMin < b.end;
                 return (
-                  <li
-                    key={b.id}
-                    className={cn("flex gap-3 px-3.5 py-3", (liveCourse || livePause) && "bg-emerald-50 dark:bg-emerald-900/20")}
-                  >
-                    <div className="w-11 shrink-0 pt-0.5 text-right tabular-nums">
-                      <p className={cn("text-xs font-bold", liveCourse || livePause ? "text-emerald-800 dark:text-emerald-300" : "text-slate-900 dark:text-slate-100")}>
-                        {clock(b.start)}
-                      </p>
-                      <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{clock(b.end)}</p>
+                  <li key={b.id} className="relative">
+                    {idx > 0 ? <span className="ios-hairline absolute left-[70px] right-0 top-0" /> : null}
+                    <div className={cn("flex items-start gap-3 rounded-xl px-[14px] py-3", (liveCourse || livePause) && "bg-[#4b8f4a]/[0.08]")}>
+                      <div className="w-11 shrink-0 space-y-0.5 pt-0.5 text-right tabular-nums">
+                        <p className={cn("text-xs font-bold", liveCourse || livePause ? "text-[#4b8f4a]" : INK)}>{clock(b.start)}</p>
+                        <p className={cn("text-[11px] font-semibold", MUTED)}>{clock(b.end)}</p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {b.kind === "course" ? (
+                          <CourseCard slot={b.slot} liveNow={liveCourse} next={viewingToday && !liveCourse && nextToday?.id === b.slot.id} />
+                        ) : (
+                          <p className="flex items-center gap-2 rounded-[10px] bg-[#f8fafc] px-2.5 py-1 dark:bg-[var(--surface-2)]">
+                            <CupSoda className="h-3 w-3" style={{ color: livePause ? GREEN : "#64748b" }} aria-hidden />
+                            <span className="text-[15px] font-semibold" style={{ color: livePause ? GREEN : "#64748b" }}>
+                              {livePause ? "Pause en cours" : "Pause"}
+                            </span>
+                            <span className={cn("text-xs font-semibold tabular-nums", MUTED)}>
+                              · {clock(b.start)} – {clock(b.end)}
+                            </span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {b.kind === "course" ? (
-                      <CourseCard
-                        slot={b.slot}
-                        liveNow={liveCourse}
-                        next={viewingToday && !liveCourse && nextToday?.id === b.slot.id}
-                      />
-                    ) : (
-                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                        <Coffee className="h-3.5 w-3.5" aria-hidden />
-                        {livePause ? "Pause en cours" : "Pause"}
-                        <span className="text-xs tabular-nums">
-                          · {clock(b.start)} – {clock(b.end)}
-                        </span>
-                      </p>
-                    )}
                   </li>
                 );
               })}
@@ -313,39 +345,29 @@ export function TimetableNative({
         </>
       ) : (
         <>
-          <div role="tablist" aria-label="Semaine" className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
+          <div role="tablist" aria-label="Semaine" className="flex gap-1.5 overflow-x-auto rounded-2xl bg-[#f1f5f9] p-1 dark:bg-[var(--surface-2)]">
             {options.map((o) => (
               <button
                 key={o.offset}
                 type="button"
-                role="tab"
-                aria-selected={weekOffset === o.offset}
+                {...seg(weekOffset === o.offset)}
                 onClick={() => setWeekOffset(o.offset)}
                 className={cn(
-                  "flex min-h-12 shrink-0 flex-col items-center justify-center rounded-xl px-3.5 text-xs font-semibold transition-colors",
-                  weekOffset === o.offset
-                    ? "bg-white text-brand-800 shadow-sm dark:bg-[var(--surface)] dark:text-brand-200"
-                    : "text-slate-700 dark:text-slate-300",
+                  "flex min-h-12 shrink-0 flex-col items-center justify-center gap-1 rounded-[14px] px-[14px] py-2.5 transition-colors",
+                  weekOffset === o.offset ? "bg-white text-[#153064] dark:bg-[var(--surface)] dark:text-slate-100" : "text-[#64748b] dark:text-slate-300",
                 )}
               >
-                <span className="text-[10px] font-bold">{o.badge}</span>
-                <span className="whitespace-nowrap">{o.range}</span>
+                <span className="text-[11px] font-bold">{o.badge}</span>
+                <span className="whitespace-nowrap text-xs font-semibold">{o.range}</span>
               </button>
             ))}
           </div>
 
-          <div className={cn(card, "flex items-center gap-3.5 p-4")}>
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
-              <CalendarClock className="h-6 w-6" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                {selectedOption?.badge ?? "Semaine"}
-              </p>
-              <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{selectedOption?.range}</p>
-              <p className="text-xs text-slate-600 dark:text-slate-300">{weekTotal} cours sur la semaine</p>
-            </div>
-          </div>
+          <Summary color={TEAL} icon={<CalendarClock className="h-[22px] w-[22px]" strokeWidth={2.2} />}>
+            <p className={cap}>{selectedOption?.badge ?? "Semaine"}</p>
+            <p className={head}>{selectedOption?.range}</p>
+            <p className={cn("text-xs", MUTED)}>{weekTotal} cours sur la semaine</p>
+          </Summary>
 
           <div className="space-y-3">
             {days.map((d) => {
@@ -360,43 +382,45 @@ export function TimetableNative({
                     if (d.isToday) setWeekOffset(0);
                     setScope("day");
                   }}
-                  className={cn(
-                    card,
-                    "block w-full p-3.5 text-left",
-                    highlight ? "border-emerald-600" : d.day === selectedDay && "border-slate-400",
-                  )}
+                  className={cn(card, "block w-full space-y-[10px] border-[1.5px] border-transparent p-[14px] text-left")}
+                  style={
+                    highlight
+                      ? { borderColor: "rgba(75,143,74,0.45)" }
+                      : d.day === selectedDay
+                        ? { borderColor: "rgba(21,48,100,0.28)" }
+                        : undefined
+                  }
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{d.longLabel}</span>
+                    <span className={cn("text-[15px] font-bold", INK)}>{d.longLabel}</span>
                     {highlight ? (
-                      <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white">AUJ.</span>
+                      <span className="rounded-full bg-[#4b8f4a] px-2 py-[3px] text-[11px] font-bold leading-none text-white">AUJ.</span>
                     ) : null}
-                    <span className="ml-auto text-xs font-semibold text-slate-600 dark:text-slate-300">
-                      {items.length === 0 ? "Libre" : `${items.length} cours`}
-                    </span>
+                    <span className={cn("ml-auto text-xs font-semibold", MUTED)}>{items.length === 0 ? "Libre" : `${items.length} cours`}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-[#64748b]" strokeWidth={2.6} aria-hidden />
                   </span>
                   {items.length === 0 ? (
-                    <span className="mt-2 block text-xs text-slate-600 dark:text-slate-300">Aucun cours</span>
+                    <span className={cn("block text-xs", MUTED)}>Aucun cours</span>
                   ) : (
-                    <span className="mt-2 block divide-y divide-slate-200 overflow-hidden rounded-xl bg-slate-50 dark:divide-[var(--border)] dark:bg-[var(--surface-2)]">
-                      {items.map((s) => {
-                        const liveNow = highlight && isLive(s);
-                        const next = highlight && !liveNow && nextToday?.id === s.id;
-                        const sw = subjectSwatch(s.subjectName);
+                    <span className="block divide-y divide-[rgba(60,60,67,0.12)] overflow-hidden rounded-xl bg-[#f8fafc] dark:divide-[var(--border)] dark:bg-[var(--surface-2)]">
+                      {items.map((sl) => {
+                        const liveNow = highlight && isLive(sl);
+                        const next = highlight && !liveNow && nextToday?.id === sl.id;
+                        const sw = subjectSwatch(sl.subjectName);
                         return (
-                          <span key={s.id} className={cn("flex items-center gap-2.5 px-2.5 py-2", liveNow && "bg-emerald-50 dark:bg-emerald-900/20")}>
-                            <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", liveNow ? "bg-emerald-600" : sw.dot)} aria-hidden />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                {s.subjectName}
-                                {liveNow ? <span className="text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300">En cours</span> : null}
-                                {next ? <span className="text-[10px] font-bold uppercase text-brand-800 dark:text-brand-200">Prochain</span> : null}
+                          <span key={sl.id} className={cn("flex items-center gap-[10px] px-2.5 py-2", liveNow && "bg-[#4b8f4a]/[0.08]")}>
+                            <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: liveNow ? GREEN : rgb(sw.border) }} aria-hidden />
+                            <span className="min-w-0 flex-1 space-y-0.5">
+                              <span className={cn("flex items-center gap-1.5 text-[15px] font-semibold", INK)}>
+                                {sl.subjectName}
+                                {liveNow ? <span className="text-[11px] font-bold uppercase text-[#4b8f4a]">En cours</span> : null}
+                                {next ? <span className="text-[11px] font-bold uppercase text-[#153064] dark:text-brand-200">Prochain</span> : null}
                               </span>
-                              <span className="block truncate text-xs text-slate-600 dark:text-slate-300">
+                              <span className={cn("block truncate text-xs", MUTED)}>
                                 {[
-                                  `${clock(timeToMinutes(s.start_time))}–${clock(timeToMinutes(s.end_time))}`,
-                                  s.teacherName,
-                                  formatRoomLabel(s.room),
+                                  `${clock(timeToMinutes(sl.start_time))}–${clock(timeToMinutes(sl.end_time))}`,
+                                  sl.teacherName,
+                                  formatRoomLabel(sl.room),
                                 ]
                                   .filter(Boolean)
                                   .join(" · ")}

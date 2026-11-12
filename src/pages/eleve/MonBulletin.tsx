@@ -10,6 +10,7 @@ import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
 import { BulletinView } from "@/components/BulletinView";
+import { isNativeApp } from "@/lib/platform";
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
@@ -93,7 +94,8 @@ export default function MonBulletin() {
 
   return (
     <div>
-      <PageHeader
+      {isNativeApp() ? null : (
+        <PageHeader
         title="Mon bulletin"
         subtitle={
           enrollment?.classes?.name
@@ -101,6 +103,7 @@ export default function MonBulletin() {
             : "Vos moyennes, votre rang et le bulletin PDF"
         }
       />
+      )}
 
       {isLoading ? (
         <PageLoadingState message="Chargement du bulletin…" />

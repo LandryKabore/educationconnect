@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BookMarked,
@@ -8,16 +8,23 @@ import {
   CalendarDays,
   CalendarRange,
   CheckCircle2,
+  CircleUser,
   ClipboardList,
   Download,
   FileText,
+  Book,
+  BookText,
+  Calendar,
   GraduationCap,
+  LayoutGrid,
   Layers,
   LayoutDashboard,
   ListChecks,
+  FileBarChart,
   Lock,
   LogOut,
   Megaphone,
+  Mail,
   Menu,
   MessageSquare,
   PencilLine,
@@ -385,15 +392,36 @@ function buildParentGroups(): NavGroup[] {
   ];
 }
 
+const IOS_MENU_ICON = "h-[17px] w-[17px]";
+
 /**
  * Android app, student: same menu structure as the native iOS app
  * (Scolarité / Travaux & cahier / Communication / Compte).
  */
+const IOS_ICON: Record<string, ReactNode> = {
+  "/tableau-de-bord": <LayoutGrid className={IOS_MENU_ICON} />,
+  "/mes-notes": <Book className={IOS_MENU_ICON} />,
+  "/mon-bulletin": <FileBarChart className={IOS_MENU_ICON} />,
+  "/mes-presences": <ListChecks className={IOS_MENU_ICON} />,
+  "/mon-emploi-du-temps": <Calendar className={IOS_MENU_ICON} />,
+  "/mes-profs": <Users className={IOS_MENU_ICON} />,
+  "/mon-cahier": <Book className={IOS_MENU_ICON} />,
+  "/mes-exercices": <FileText className={IOS_MENU_ICON} />,
+  "/mes-devoirs": <FileText className={IOS_MENU_ICON} />,
+  "/mes-compositions": <BookText className={IOS_MENU_ICON} />,
+  "/messages": <Mail className={IOS_MENU_ICON} />,
+  "/annonces": <Megaphone className={IOS_MENU_ICON} />,
+  "/profil": <CircleUser className={IOS_MENU_ICON} />,
+};
+
 function buildNativeStudentGroups(): NavGroup[] {
   const flat = NAV_GROUPS_BY_ROLE.student.flatMap((g) => g.items);
   const pick = (...paths: string[]) =>
     paths
-      .map((to) => flat.find((i) => i.to === to))
+      .map((to) => {
+        const item = flat.find((i) => i.to === to);
+        return item ? { ...item, icon: IOS_ICON[to] ?? item.icon } : undefined;
+      })
       .filter((i): i is NavItem => !!i);
   return [
     { items: pick("/tableau-de-bord") },
@@ -672,7 +700,7 @@ export function AppShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-[var(--bg)]">
+    <div className={cn("flex min-h-screen bg-slate-50 dark:bg-[var(--bg)]", native && "native-bg")}>
       {supportSchoolId ? (
         <div className="fixed inset-x-0 top-0 z-[60] flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
           <span>
@@ -696,7 +724,7 @@ export function AppShell() {
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className={cn("fixed inset-0 z-40 bg-black/40 lg:hidden", native && "native-scrim")}
           aria-label="Fermer le menu"
           onClick={() => setOpen(false)}
         />
@@ -705,35 +733,61 @@ export function AppShell() {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 dark:border-[var(--border)] dark:bg-[var(--surface)]",
+          native && "w-[300px] border-black/[0.06]",
+          native && open && "shadow-[8px_0_24px_rgba(0,0,0,0.18)]",
           supportSchoolId ? "top-12" : "",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-[var(--border)]">
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-[var(--border)]",
+            native && "items-start px-4 pb-[14px] pt-[18px]",
+          )}
+        >
           <div className="min-w-0 flex-1">
-            <BrandLogo
-              className="h-14 w-auto max-w-[11rem] rounded-lg"
-              imgClassName="h-14"
-            />
+            {native ? (
+              <BrandLogo
+                file="edufaso-logo-tight.png"
+                className="h-12 w-auto max-w-[160px]"
+                imgClassName="h-12"
+              />
+            ) : (
+              <BrandLogo
+                className="h-14 w-auto max-w-[11rem] rounded-lg"
+                imgClassName="h-14"
+              />
+            )}
             {schoolName ? (
-              <p className="mt-1 truncate text-xs text-slate-500">{schoolName}</p>
+              <p className={cn("mt-1 truncate text-xs text-slate-500", native && "mt-1 line-clamp-2 whitespace-normal text-[12px] text-[var(--ios-muted)]")}>{schoolName}</p>
             ) : null}
           </div>
           <button
             type="button"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden",
+              native && "h-11 w-11 hover:bg-transparent",
+            )}
             aria-label="Fermer le menu"
             onClick={() => setOpen(false)}
           >
-            <X className="h-5 w-5" />
+            {native ? (
+              <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#f8fafc] dark:bg-[var(--surface-2)]">
+                <X className="h-[17px] w-[17px] text-[var(--ios-ink)] dark:text-slate-100" strokeWidth={2.4} />
+              </span>
+            ) : (
+              <X className="h-5 w-5" />
+            )}
           </button>
         </div>
 
-        <div className="shrink-0 space-y-2 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
-          <LiveClockWeather />
-          <ThemeToggle className="w-full justify-center" />
-          <HelpLauncher />
-        </div>
+        {native ? null : (
+          <div className="shrink-0 space-y-2 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
+            <LiveClockWeather />
+            <ThemeToggle className="w-full justify-center" />
+            <HelpLauncher />
+          </div>
+        )}
 
         {canSearch ? (
           <div className="shrink-0 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
@@ -754,12 +808,12 @@ export function AppShell() {
           </div>
         ) : null}
 
-        <nav className="min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="space-y-4">
+        <nav className={cn("min-h-0 flex-1 overflow-y-auto p-3", native && "px-[10px] pb-4 pt-[14px]")}>
+          <div className={cn("space-y-4", native && "space-y-[18px]")}>
             {navGroups.map((group, groupIndex) => (
               <div key={group.label ?? `group-${groupIndex}`} className="space-y-0.5">
                 {group.label ? (
-                  <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500", native && "pb-0.5 text-[11px] tracking-[0.8px] text-[var(--ios-muted)]")}>
                     {group.label}
                   </p>
                 ) : null}
@@ -785,12 +839,14 @@ export function AppShell() {
                         active
                           ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
                           : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
+                        native && "gap-[10px] rounded-[14px] py-3 text-[15px] font-semibold hover:bg-transparent",
+                        native && (active ? "text-[var(--ios-teal-dark)]" : "text-[rgba(15,23,42,0.78)]"),
                       )}
                     >
                       <span
                         className={cn(
                           "shrink-0",
-                          active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
+                          native ? "text-current" : active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
                         )}
                       >
                         {item.icon}
@@ -803,6 +859,7 @@ export function AppShell() {
                             badge.tone === "rose" && "bg-rose-500",
                             badge.tone === "amber" && "bg-amber-500",
                             badge.tone === "brand" && "bg-brand-600",
+                            native && "bg-[var(--ios-red)] px-[7px] py-[3px] text-[11px]",
                           )}
                           title={badge.title}
                         >
@@ -820,12 +877,14 @@ export function AppShell() {
                         active
                           ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
                           : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
+                        native && "gap-[10px] rounded-[14px] py-3 text-[15px] font-semibold hover:bg-transparent",
+                        native && (active ? "text-[var(--ios-teal-dark)]" : "text-[rgba(15,23,42,0.78)]"),
                       )}
                     >
                       <span
                         className={cn(
                           "shrink-0",
-                          active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
+                          native ? "text-current" : active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
                         )}
                       >
                         {item.icon}
@@ -838,6 +897,7 @@ export function AppShell() {
                             badge.tone === "rose" && "bg-rose-500",
                             badge.tone === "amber" && "bg-amber-500",
                             badge.tone === "brand" && "bg-brand-600",
+                            native && "bg-[var(--ios-red)] px-[7px] py-[3px] text-[11px]",
                           )}
                           title={badge.title}
                         >
@@ -850,9 +910,30 @@ export function AppShell() {
                 })}
               </div>
             ))}
+            {native ? (
+              <div className="space-y-2 px-2 pt-1">
+                <LiveClockWeather className="!rounded-[14px] !border-0 !bg-[#f8fafc] dark:!bg-[var(--surface-2)]" />
+                <div className="flex items-center gap-2">
+                  <ThemeToggle compact className="h-11 w-11 justify-center !rounded-[10px] !border-0 !bg-[#f8fafc] !p-0 dark:!bg-[var(--surface-2)]" />
+                  <HelpLauncher compact className="h-11 w-11 justify-center !rounded-[10px] !border-0 !bg-[#f8fafc] !p-0 dark:!bg-[var(--surface-2)]" />
+                </div>
+              </div>
+            ) : null}
           </div>
         </nav>
 
+        {native ? (
+          <div className="shrink-0 border-t border-black/[0.08] bg-white pb-2 dark:border-[var(--border)] dark:bg-[var(--surface)]">
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              className="flex min-h-11 w-full items-center gap-2 px-[22px] py-[14px] text-left text-[15px] font-semibold text-[var(--ios-red)]"
+            >
+              <LogOut className="h-[17px] w-[17px]" />
+              Déconnexion
+            </button>
+          </div>
+        ) : (
         <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]">
           <div className="mb-3">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -874,6 +955,7 @@ export function AppShell() {
             Déconnexion
           </Button>
         </div>
+        )}
       </aside>
 
       <div
@@ -901,20 +983,20 @@ export function AppShell() {
           </>
         ) : null}
         {native ? (
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-1 border-b border-slate-200 bg-white px-2 dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
+          <header className="native-bar sticky top-0 z-30 flex h-[52px] items-center border-b border-black/[0.08] bg-white/85 px-2 backdrop-blur-xl dark:border-[var(--border)] dark:bg-[var(--surface)] lg:hidden">
             <button
               type="button"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
               aria-label="Ouvrir le menu"
               onClick={() => setOpen(true)}
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-[19px] w-[19px] text-[var(--ios-ink)] dark:text-slate-100" strokeWidth={2.4} />
             </button>
             <div className="flex min-w-0 flex-1 items-center justify-center">
               {onDashboard ? (
-                <BrandLogo className="h-9 w-auto max-w-[9rem]" imgClassName="h-9" />
+                <BrandLogo file="edufaso-logo-tight.png" className="h-7 w-auto max-w-[9rem]" imgClassName="h-7" />
               ) : (
-                <h1 className="truncate px-1 text-base font-semibold text-slate-900 dark:text-slate-100">
+                <h1 className="truncate px-1 text-[17px] font-semibold text-[var(--ios-ink)] dark:text-slate-100">
                   {pageTitle}
                 </h1>
               )}
@@ -922,7 +1004,7 @@ export function AppShell() {
             {canSearch ? (
               <button
                 type="button"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                 aria-label="Rechercher"
                 onClick={() => setSearchOpen(true)}
               >
@@ -931,10 +1013,10 @@ export function AppShell() {
             ) : null}
             <Link
               to="/profil"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-brand-700 hover:bg-slate-100 dark:text-brand-300 dark:hover:bg-slate-800"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--ios-navy)] dark:text-brand-300"
               aria-label="Profil"
             >
-              <User className="h-5 w-5" />
+              <CircleUser className="h-[25px] w-[25px]" strokeWidth={1.7} />
             </Link>
           </header>
         ) : (
@@ -967,7 +1049,7 @@ export function AppShell() {
         <main
           className={cn(
             "flex-1 p-4 sm:p-6 lg:p-8",
-            native && "pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+            native && "px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3",
           )}
         >
           <ErrorBoundary

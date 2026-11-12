@@ -10,6 +10,8 @@ import {
   type DevoirListItem,
 } from "@/components/DevoirsClearList";
 import { QueryError } from "@/components/QueryError";
+import { isNativeApp } from "@/lib/platform";
+import { EvaluationsNative } from "@/components/native/EvaluationsNative";
 
 type Props = {
   isExam: boolean;
@@ -86,6 +88,18 @@ export default function MesDevoirs({ isExam }: Props) {
   const items = data?.items ?? [];
   const className = data?.className ?? "";
   const gradedIds = new Set(data?.gradedIds ?? []);
+
+  if (isNativeApp() && !isError) {
+    return (
+      <EvaluationsNative
+        items={items}
+        gradedIds={gradedIds}
+        isExam={isExam}
+        className={className}
+        isLoading={isLoading}
+      />
+    );
+  }
 
   return (
     <div>

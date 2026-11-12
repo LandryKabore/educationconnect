@@ -19,6 +19,7 @@
     "dist:mac": "npm run build:electron && electron-builder --mac dmg",
     "dist:desktop": "npm run build:electron && electron-builder --win nsis --mac dmg",
     "cap:sync": "npx cap sync",
+    "build:android": "vite build --mode android && npx cap sync android",
     "cap:android": "npx cap open android",
     "cap:add:android": "npx cap add android"
   },

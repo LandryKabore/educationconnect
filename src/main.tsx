@@ -36,6 +36,19 @@ function installGlobalErrorHooks() {
 
 installGlobalErrorHooks();
 
+/**
+ * Android app: the web build registers a service worker that keeps serving an old bundle
+ * from its cache, so an updated app would still show the previous screens. Drop it.
+ */
+if (isNativeApp() && "serviceWorker" in navigator) {
+  void navigator.serviceWorker
+    .getRegistrations()
+    .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+    .then(() => ("caches" in window ? caches.keys() : []))
+    .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    .catch(() => undefined);
+}
+
 const rootEl = document.getElementById("root");
 if (!rootEl) {
   document.body.innerHTML =

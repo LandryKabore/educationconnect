@@ -16,24 +16,22 @@ import type { NotesPeriodGrade } from "@/components/NotesPeriodTables";
 const ALL = "Tous";
 
 const tone = (v: number | null) =>
-  v == null
-    ? "text-slate-500 dark:text-slate-300"
-    : v >= 10
-      ? "text-brand-700 dark:text-brand-300"
-      : "text-amber-600 dark:text-amber-400";
+  v == null ? "text-[#64748b] dark:text-slate-300" : v >= 10 ? "text-[#0f766e] dark:text-brand-300" : "text-[#ff9500]";
 
-const card =
-  "rounded-2xl border border-slate-200 bg-white dark:border-[var(--border)] dark:bg-[var(--surface)]";
+const card = "ios-card";
+const INK = "text-[#0f172a] dark:text-slate-100";
+const MUTED = "text-[#64748b] dark:text-slate-300";
 
 function Ring({ value }: { value: number }) {
   const r = 30;
   const c = 2 * Math.PI * r;
   const pct = Math.min(Math.max(value / 20, 0), 1);
-  const color = value >= 10 ? "stroke-brand-700 dark:stroke-brand-300" : "stroke-amber-500";
+  const color = value >= 10 ? "stroke-[#0f766e] dark:stroke-brand-300" : "stroke-[#ff9500]";
+  const track = value >= 10 ? "stroke-[#0f766e]/15" : "stroke-[#ff9500]/15";
   return (
     <div className="relative h-[72px] w-[72px] shrink-0">
       <svg viewBox="0 0 72 72" className="h-[72px] w-[72px] -rotate-90" aria-hidden="true">
-        <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className="stroke-slate-200 dark:stroke-slate-600" />
+        <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className={track} />
         <circle
           cx="36"
           cy="36"
@@ -46,8 +44,8 @@ function Ring({ value }: { value: number }) {
         />
       </svg>
       <span className="absolute inset-0 flex flex-col items-center justify-center leading-tight">
-        <span className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{value.toFixed(1)}</span>
-        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">/20</span>
+        <span className={cn("text-[17px] font-bold tabular-nums", INK)}>{value.toFixed(1)}</span>
+        <span className={cn("text-[11px] font-semibold", MUTED)}>/20</span>
       </span>
     </div>
   );
@@ -55,10 +53,10 @@ function Ring({ value }: { value: number }) {
 
 function Stat({ title, value, detail, valueClass }: { title: string; value: number; detail: string; valueClass: string }) {
   return (
-    <div className={cn(card, "min-w-0 p-3")}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">{title}</p>
-      <p className={cn("mt-0.5 text-2xl font-bold tabular-nums", valueClass)}>{value}</p>
-      <p className="truncate text-xs text-slate-600 dark:text-slate-300">{detail}</p>
+    <div className={cn(card, "min-w-0 space-y-1 p-[14px]")}>
+      <p className={cn("text-[11px] font-bold uppercase tracking-[0.6px]", MUTED)}>{title}</p>
+      <p className={cn("text-[22px] font-bold leading-tight tabular-nums", valueClass)}>{value}</p>
+      <p className={cn("truncate text-xs", MUTED)}>{detail}</p>
     </div>
   );
 }
@@ -135,12 +133,8 @@ export function NotesNative({
   return (
     <div>
       {/* Sticky: trimestre + moyenne only */}
-      <div className="sticky top-14 z-20 -mx-4 space-y-3 bg-[var(--bg)] px-4 pb-3 pt-3 lg:top-0">
-        <div
-          role="tablist"
-          aria-label="Période"
-          className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-[var(--border)] dark:bg-[var(--surface-2)]"
-        >
+      <div className="native-sticky sticky top-[52px] z-20 -mx-4 -mt-3 space-y-3 px-4 pb-[10px] pt-3 lg:top-0">
+        <div role="tablist" aria-label="Période" className="ios-seg">
           {periods.map((p) => {
             const active = p === period;
             return (
@@ -150,14 +144,8 @@ export function NotesNative({
                 role="tab"
                 aria-selected={active}
                 onClick={() => choose(p)}
-                className={cn(
-                  "min-h-11 min-w-16 flex-1 whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition-colors",
-                  active
-                    ? "bg-white text-brand-800 shadow-sm dark:bg-[var(--surface)] dark:text-brand-200"
-                    : "text-slate-700 dark:text-slate-300",
-                )}
               >
-                {p === ALL ? "Tout" : p.replace("Trimestre ", "T")}
+                {p === ALL ? "Tout" : p}
               </button>
             );
           })}
@@ -166,49 +154,49 @@ export function NotesNative({
         {average != null ? (
           <div className={cn(card, "flex items-center gap-4 p-4")}>
             <Ring value={average} />
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Moyenne</p>
-              <p className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            <div className="min-w-0 space-y-1">
+              <p className={cn("text-[11px] font-bold uppercase tracking-[0.6px]", MUTED)}>Moyenne</p>
+              <p className={cn("text-[22px] font-bold leading-tight tabular-nums", INK)}>
                 {average.toFixed(1)} / 20
               </p>
-              <p className="text-xs text-slate-600 dark:text-slate-300">
+              <p className={cn("text-xs", MUTED)}>
                 {period === ALL ? "Sur toutes les notes publiées" : `Sur ${period.toLowerCase()}`}
               </p>
             </div>
           </div>
         ) : (
-          <p className={cn(card, "p-4 text-sm text-slate-600 dark:text-slate-300")}>
+          <p className={cn(card, "p-4 text-[15px]", MUTED)}>
             Aucune note sur cette période.
           </p>
         )}
       </div>
 
-      <div className="space-y-2.5 pb-6">
+      <div className="space-y-2.5 pb-6 pt-1">
         {filtered.length > 0 ? (
           <div className="grid grid-cols-3 gap-2">
             <Stat
               title="Notes"
               value={filtered.length}
               detail={`publiée${filtered.length === 1 ? "" : "s"}`}
-              valueClass="text-slate-900 dark:text-slate-100"
+              valueClass="text-[#153064] dark:text-slate-100"
             />
             <Stat
               title="Matières"
               value={subjects.length}
               detail={`évaluée${subjects.length === 1 ? "" : "s"}`}
-              valueClass="text-brand-700 dark:text-brand-300"
+              valueClass="text-[#0f766e] dark:text-brand-300"
             />
             <Stat
               title="Absents"
               value={absentCount}
               detail={absentCount === 0 ? "aucune" : `non noté${absentCount === 1 ? "" : "s"}`}
-              valueClass={absentCount === 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}
+              valueClass={absentCount === 0 ? "text-[#4b8f4a]" : "text-[#ff9500]"}
             />
           </div>
         ) : null}
 
         {subjects.length > 0 ? (
-          <div className="flex items-center justify-between px-1 pt-1 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+          <div className={cn("flex items-center justify-between px-0 pt-1 text-xs font-bold uppercase tracking-[0.6px]", MUTED)}>
             <span>Matières</span>
             <span>{subjects.length}</span>
           </div>
@@ -224,20 +212,21 @@ export function NotesNative({
                 aria-expanded={expanded}
                 aria-controls={panelId}
                 onClick={() => toggle(s.id)}
-                className="flex min-h-14 w-full items-start gap-3 p-3.5 text-left"
+                className="flex min-h-14 w-full items-start gap-[10px] p-[14px] text-left"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{s.name}</span>
-                  <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-300">
+                  <span className={cn("block text-[15px] font-semibold", INK)}>{s.name}</span>
+                  <span className={cn("mt-1 block text-xs", MUTED)}>
                     {s.grades.length} note{s.grades.length === 1 ? "" : "s"} · Coef. {s.coefficient}
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  <span className={cn("text-base font-bold tabular-nums", tone(s.average))}>
+                  <span className={cn("text-[17px] font-semibold tabular-nums", tone(s.average))}>
                     {s.average != null ? formatAverage(s.average) : "—"}
                   </span>
                   <ChevronDown
-                    className={cn("h-4 w-4 text-slate-500 transition-transform duration-200", expanded && "rotate-180")}
+                    className={cn("h-3.5 w-3.5 text-[#64748b] transition-transform duration-200", expanded && "rotate-180")}
+                    strokeWidth={3}
                     aria-hidden
                   />
                 </span>
@@ -251,8 +240,8 @@ export function NotesNative({
               >
                 <ul
                   className={cn(
-                    "min-h-0 divide-y divide-slate-100 overflow-hidden dark:divide-[var(--border)]",
-                    expanded && "border-t border-slate-100 dark:border-[var(--border)]",
+                    "mx-0 min-h-0 divide-y divide-[rgba(60,60,67,0.12)] overflow-hidden dark:divide-[var(--border)]",
+                    expanded && "border-t border-[rgba(60,60,67,0.12)] dark:border-[var(--border)]",
                   )}
                 >
                   {s.grades.map((g) => {
@@ -262,14 +251,14 @@ export function NotesNative({
                       : null;
                     const comment = g.comment?.trim();
                     return (
-                      <li key={g.id} className="flex items-start gap-3 px-3.5 py-3">
+                      <li key={g.id} className="flex items-start gap-3 px-[14px] py-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          <p className={cn("text-[15px] font-medium", INK)}>
                             {g.evaluations?.title?.trim() || s.name}
                           </p>
-                          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                          <p className={cn("mt-[5px] flex flex-wrap items-center gap-1.5 text-xs", MUTED)}>
                             {g.evaluations?.type ? (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold dark:bg-[var(--surface-2)]">
+                              <span className="rounded-full bg-[#153064]/[0.08] px-2 py-[3px] text-[11px] font-bold text-[#153064] dark:bg-[var(--surface-2)] dark:text-slate-100">
                                 {evaluationTypeShort(g.evaluations.type)}
                               </span>
                             ) : null}
@@ -281,14 +270,14 @@ export function NotesNative({
                         </div>
                         <div className="shrink-0 text-right">
                           {g.is_absent ? (
-                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                            <span className="rounded-full bg-[#ff9500]/[0.12] px-2.5 py-[5px] text-xs font-bold text-[#ff9500]">
                               Absent
                             </span>
                           ) : on20 != null ? (
                             <>
-                              <p className={cn("text-base font-bold tabular-nums", tone(on20))}>
+                              <p className={cn("text-[17px] font-bold tabular-nums", tone(on20))}>
                                 {on20.toFixed(1)}
-                                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300"> / 20</span>
+                                <span className={cn("text-xs font-semibold", MUTED)}> / 20</span>
                               </p>
                               {g.max_score !== 20 ? (
                                 <p className="text-[11px] tabular-nums text-slate-600 dark:text-slate-300">
@@ -297,7 +286,7 @@ export function NotesNative({
                               ) : null}
                             </>
                           ) : (
-                            <span className="text-base font-bold text-slate-500">—</span>
+                            <span className={cn("text-[17px] font-semibold", MUTED)}>—</span>
                           )}
                         </div>
                       </li>

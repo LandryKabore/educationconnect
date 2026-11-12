@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, UserX, Users } from "lucide-react";
+import { isNativeApp } from "@/lib/platform";
+import { IOS, INK, MUTED, IosEmpty, SectionCaption, SummaryCard } from "@/components/native/ios";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { fullName, joinProfile } from "@/lib/utils";
@@ -99,6 +102,86 @@ export default function MesProfs() {
     if (className) return `Enseignants de ${className}`;
     return "Enseignants de votre classe";
   }, [className]);
+
+  if (isNativeApp() && !isLoading && !isError && className && teachers.length > 0) {
+    const subjectCount = new Set(teachers.flatMap((t) => t.subjects)).size;
+    const palette = [IOS.navy, IOS.teal, IOS.green, IOS.orange, "#7c3aed", IOS.sky];
+    const tintFor = (name: string) => {
+      let h = 0;
+      [...new TextEncoder().encode(name)].forEach((b, i) => {
+        h = (h + b * (i + 1)) % 997;
+      });
+      return palette[h % palette.length];
+    };
+    return (
+      <div className="space-y-4">
+        <SummaryCard
+          color={IOS.teal}
+          icon={<Users className="h-[22px] w-[22px]" fill="currentColor" />}
+          caption={className}
+          title={`${teachers.length} enseignant${teachers.length === 1 ? "" : "s"}`}
+          detail={`${subjectCount} matière${subjectCount === 1 ? "" : "s"}`}
+        />
+        <SectionCaption>Enseignants</SectionCaption>
+        <div className="space-y-[10px]">
+          {teachers.map((t) => {
+            const name = fullName(t.firstName, t.lastName) || "Enseignant";
+            const initials =
+              name
+                .split(" ")
+                .slice(0, 2)
+                .map((w) => w[0] ?? "")
+                .join("")
+                .toUpperCase() || "?";
+            return (
+              <div key={t.teacherId} className="ios-card flex items-start gap-3 p-[14px]">
+                <span
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
+                  style={{ backgroundColor: tintFor(name) }}
+                >
+                  {initials}
+                </span>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className={cn("text-[15px] font-semibold", INK)}>{name}</p>
+                  {t.subjects.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.subjects.map((sub) => (
+                        <span
+                          key={sub}
+                          className="max-w-full truncate rounded-full bg-[#153064]/[0.08] px-2.5 py-[5px] text-[11px] font-bold text-[#153064] dark:bg-[var(--surface-2)] dark:text-slate-100"
+                        >
+                          {sub}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={cn("text-xs", MUTED)}>Matière non précisée</p>
+                  )}
+                </div>
+                <Link
+                  to={`/messages?avec=${encodeURIComponent(t.teacherId)}&retour=${encodeURIComponent("/mes-profs")}`}
+                  aria-label={`Écrire à ${name}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f8fafc] text-[#153064] dark:bg-[var(--surface-2)] dark:text-slate-100"
+                >
+                  <MessageSquare className="h-[18px] w-[18px]" />
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (isNativeApp() && !isLoading && !isError) {
+    return (
+      <IosEmpty
+        icon={<UserX strokeWidth={1.4} />}
+        title="Aucun enseignant"
+        message={className ? "Aucun enseignant affecté à ta classe." : "Aucune classe active trouvée pour ce compte."}
+      />
+    );
+  }
 
   return (
     <div>

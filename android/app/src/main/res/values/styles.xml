@@ -13,11 +13,12 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <!-- Visible behind the WebView margins (status / navigation bars): brand teal -->
-        <item name="android:windowBackground">@color/colorPrimary</item>
-        <item name="android:statusBarColor">@color/colorPrimary</item>
-        <item name="android:navigationBarColor">@color/colorPrimary</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <!-- Visible behind the WebView margins (status / navigation bars): same white bar as the iOS app -->
+        <item name="android:windowBackground">@color/ios_bar</item>
+        <item name="android:statusBarColor">@color/ios_bar</item>
+        <item name="android:navigationBarColor">@color/ios_bar</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
 

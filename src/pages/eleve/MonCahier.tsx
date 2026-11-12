@@ -5,6 +5,7 @@ import { CahierFeedView } from "@/components/CahierFeedView";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { ScreenSkeleton } from "@/components/Skeleton";
 import { QueryError } from "@/components/QueryError";
+import { isNativeApp } from "@/lib/platform";
 
 /** Student: the lesson log of his/her class. */
 export default function MonCahier() {
@@ -25,10 +26,12 @@ export default function MonCahier() {
   });
   return (
     <div>
-      <PageHeader
-        title="Cahier de textes"
-        subtitle={data?.classes?.name ? `Classe ${data.classes.name} · cours et travail à faire` : "Cours et travail à faire"}
-      />
+      {isNativeApp() ? null : (
+        <PageHeader
+          title="Cahier de textes"
+          subtitle={data?.classes?.name ? `Classe ${data.classes.name} · cours et travail à faire` : "Cours et travail à faire"}
+        />
+      )}
       {isLoading ? (
         <ScreenSkeleton />
       ) : isError ? (
