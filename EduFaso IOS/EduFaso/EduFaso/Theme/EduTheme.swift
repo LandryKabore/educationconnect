@@ -23,3 +23,61 @@ enum EduTheme {
         )
     }
 }
+
+/// Stable subject colors shared by EDT, notes, exercices, etc.
+enum SubjectPalette {
+    struct Swatch {
+        let fill: Color
+        let border: Color
+    }
+
+    private static let palette: [Swatch] = [
+        Swatch(fill: rgb(186, 230, 253), border: rgb(2, 132, 199)),
+        Swatch(fill: rgb(167, 243, 208), border: rgb(5, 150, 105)),
+        Swatch(fill: rgb(253, 230, 138), border: rgb(217, 119, 6)),
+        Swatch(fill: rgb(221, 214, 254), border: rgb(124, 58, 237)),
+        Swatch(fill: rgb(165, 243, 252), border: rgb(8, 145, 178)),
+        Swatch(fill: rgb(153, 246, 228), border: rgb(13, 148, 136)),
+        Swatch(fill: rgb(190, 242, 100), border: rgb(101, 163, 13)),
+        Swatch(fill: rgb(254, 205, 211), border: rgb(225, 29, 72)),
+        Swatch(fill: rgb(254, 215, 170), border: rgb(234, 88, 12)),
+        Swatch(fill: rgb(233, 213, 255), border: rgb(147, 51, 234)),
+        Swatch(fill: rgb(251, 207, 232), border: rgb(219, 39, 119)),
+        Swatch(fill: rgb(254, 240, 138), border: rgb(202, 138, 4)),
+    ]
+
+    private static let aliases: [String: Int] = [
+        "mathematiques": 0, "maths": 0, "math": 0, "calcul": 0,
+        "francais": 1,
+        "anglais": 2, "education civique et morale": 2, "education civique": 2,
+        "histoire geographie": 3, "histoire geo": 3, "hist geo": 3, "histoire": 3, "geographie": 3,
+        "physique chimie": 4, "pc": 4, "sciences physiques": 4,
+        "sciences de la vie et de la terre": 5, "svt": 5,
+        "education physique et sportive": 6, "eps": 6,
+        "philosophie": 7, "philo": 7,
+        "informatique": 8, "technologie": 8,
+        "economie": 9, "sciences economiques et sociales": 9, "ses": 9,
+        "arts plastiques": 10, "musique": 10, "dessin": 10,
+        "allemand": 11, "espagnol": 11,
+    ]
+
+    static func swatch(for name: String?) -> Swatch {
+        let key = normalize(name ?? "Cours")
+        if let pinned = aliases[key] { return palette[pinned] }
+        var h = 0
+        for (i, ch) in key.utf8.enumerated() { h = (h + Int(ch) * (i + 1)) % 997 }
+        return palette[h % palette.count]
+    }
+
+    private static func normalize(_ name: String) -> String {
+        name
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color {
+        Color(red: r / 255, green: g / 255, blue: b / 255)
+    }
+}

@@ -164,12 +164,20 @@ struct EvaluationsBrowser: View {
                 } else if rows.isEmpty {
                     PremiumEmpty(title: emptyTitle, systemImage: "doc.text", message: emptyMessage)
                 } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 12) {
                             summaryCard
                             if isStudentAudience {
                                 statusChips
                             }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(EduTheme.loginBackground)
+
+                        ScrollView {
                             LazyVStack(spacing: 10) {
                                 if filteredRows.isEmpty {
                                     Text("Rien à afficher avec ce filtre.")
@@ -184,11 +192,11 @@ struct EvaluationsBrowser: View {
                                     }
                                 }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .refreshable { await load(isRefresh: true) }
                     }
-                    .refreshable { await load(isRefresh: true) }
                 }
             }
         }
@@ -267,12 +275,14 @@ struct EvaluationsBrowser: View {
         let canEnter = allowEntry && row.classSectionId != nil && row.subjectId != nil
         let hasDetails = !(row.details ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
+        let swatch = SubjectPalette.swatch(for: row.matieres?.name)
+
         VStack(alignment: .leading, spacing: 0) {
             if canEnter {
                 NavigationLink {
                     GradeEntryView(evaluation: row, recordedBy: recordedBy)
                 } label: {
-                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true)
+                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true, swatch: swatch)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -286,7 +296,7 @@ struct EvaluationsBrowser: View {
                         }
                     }
                 } label: {
-                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails)
+                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails, swatch: swatch)
                 }
                 .buttonStyle(.plain)
 
@@ -301,7 +311,18 @@ struct EvaluationsBrowser: View {
                 }
             }
         }
-        .background(cardBackground)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(swatch.fill.opacity(0.35))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.white.opacity(0.72))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(swatch.border.opacity(0.35), lineWidth: 1)
+        )
     }
 
     private func cardHeader(
@@ -309,11 +330,12 @@ struct EvaluationsBrowser: View {
         graded: Bool,
         expanded: Bool,
         expandable: Bool,
-        showsChevron: Bool = false
+        showsChevron: Bool = false,
+        swatch: SubjectPalette.Swatch
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(accent)
+                .fill(swatch.border)
                 .frame(width: 4)
                 .padding(.vertical, 2)
 
@@ -325,16 +347,16 @@ struct EvaluationsBrowser: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    statusBadge(row, graded: graded)
+                    statusBadge(row, graded: graded, swatch: swatch)
                 }
 
                 if let subject = row.matieres?.name, !subject.isEmpty {
                     Text(subject)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(EduTheme.navy)
+                        .foregroundStyle(swatch.border)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(EduTheme.navy.opacity(0.08), in: Capsule())
+                        .background(swatch.border.opacity(0.12), in: Capsule())
                 }
 
                 if !row.whenLabel.isEmpty {
@@ -363,7 +385,7 @@ struct EvaluationsBrowser: View {
     }
 
     @ViewBuilder
-    private func statusBadge(_ row: EvaluationRow, graded: Bool) -> some View {
+    private func statusBadge(_ row: EvaluationRow, graded: Bool, swatch: SubjectPalette.Swatch) -> some View {
         if graded {
             Text("Noté")
                 .font(.caption2.weight(.bold))
@@ -374,10 +396,10 @@ struct EvaluationsBrowser: View {
         } else if isStudentAudience {
             Text("À faire")
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(accent)
+                .foregroundStyle(swatch.border)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(accent.opacity(0.12), in: Capsule())
+                .background(swatch.border.opacity(0.12), in: Capsule())
         } else if row.adminConfirmed == false && (row.type == "examen" || row.type == "composition") {
             Text("À confirmer")
                 .font(.caption2.weight(.bold))
