@@ -63,9 +63,11 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 button,
@@ -637,3 +639,229 @@ textarea {
     transform: none;
   }
 }
+
+/* ---- Android app (Capacitor): fluid page change, no rubber-band, no tap flash ---- */
+@keyframes native-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.native-app .native-page-enter {
+  animation: native-page-in 0.18s ease-out both;
+}
+
+.native-app {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.native-app a,
+.native-app button {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-app .native-page-enter {
+    animation: none;
+  }
+}
+
+/* Android phone: the top bar already shows the page title, keep only the subtitle */
+@media (max-width: 1023px) {
+  .native-app .native-hide-title {
+    display: none;
+  }
+}
+
+/* =====================================================================
+   Android app — iOS look (SwiftUI EduTheme / HomePanel / PremiumScreenChrome)
+   Kalam asked for the Android screens to match the iOS designs exactly.
+   Light = the iOS light-only look; dark mode keeps working (iOS has none).
+   ===================================================================== */
+.native-app {
+  --ios-teal: #0f766e;
+  --ios-teal-dark: #115e59;
+  --ios-brand50: #f0fdfa;
+  --ios-navy: #153064;
+  --ios-red: #d4372e;
+  --ios-yellow: #efac42;
+  --ios-green: #4b8f4a;
+  --ios-ink: #0f172a;
+  --ios-muted: #64748b;
+  --ios-row: #f8fafc;
+  --ios-line: #e2e8f0;
+  --ios-orange: #ff9500;
+  --ios-sky: #0284c7;
+}
+
+/* EduTheme.loginBackground: brand50 → sand → #f1f5f9, top-leading → bottom-trailing */
+.native-app:not(.dark) body {
+  background: linear-gradient(to bottom right, #f0fdfa 0%, #f5f7fa 50%, #f1f5f9 100%) fixed;
+  background-color: #f5f7fa;
+}
+.native-app:not(.dark) .native-bg {
+  background: transparent !important;
+}
+
+/* HomePanel / MetricCard : white, radius 20, soft shadow, hairline border */
+.native-app .ios-panel {
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+.native-app .ios-card18 {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+/* cardBackground of the list screens: white, radius 16, no border */
+.native-app .ios-card {
+  background: #fff;
+  border-radius: 16px;
+}
+.native-app .ios-tile {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+.native-app .ios-row {
+  background: var(--ios-row);
+  border-radius: 14px;
+  padding: 12px;
+}
+.native-app .ios-field {
+  background: #fff;
+  border-radius: 14px;
+}
+.dark.native-app .ios-panel,
+.dark .native-app .ios-panel,
+.dark .ios-panel,
+.dark .ios-card18,
+.dark .ios-card,
+.dark .ios-tile,
+.dark .ios-field {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.dark .ios-row {
+  background: var(--surface-2);
+}
+
+/* generic web cards (Card, EmptyState, tables) get the same skin on every screen */
+.native-app:not(.dark) main .rounded-2xl.border.bg-white,
+.native-app:not(.dark) main .rounded-2xl.border-slate-200.bg-white {
+  border-color: rgba(0, 0, 0, 0.04);
+  border-radius: 20px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Picker(.segmented) */
+.native-app .ios-seg {
+  display: flex;
+  gap: 0;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(118, 118, 128, 0.12);
+}
+.native-app .ios-seg > button {
+  flex: 1 1 0;
+  min-height: 36px;
+  min-width: 0;
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.native-app .ios-seg > button[aria-selected="true"],
+.native-app .ios-seg > button[aria-pressed="true"] {
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+}
+.dark .ios-seg {
+  background: var(--surface-2);
+}
+.dark .ios-seg > button {
+  color: #cbd5e1;
+}
+.dark .ios-seg > button[aria-selected="true"],
+.dark .ios-seg > button[aria-pressed="true"] {
+  background: var(--surface);
+  color: #e8edf5;
+}
+
+/* capsule filter chips (status chips) */
+.native-app .ios-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #fff;
+  color: var(--ios-muted);
+  border: 1px solid #e2e8f0;
+}
+.native-app .ios-chip[aria-pressed="true"] {
+  color: var(--ios-navy);
+  background: rgba(21, 48, 100, 0.1);
+  border-color: rgba(21, 48, 100, 0.35);
+}
+.dark .ios-chip {
+  background: var(--surface);
+  border-color: var(--border);
+  color: #cbd5e1;
+}
+.dark .ios-chip[aria-pressed="true"] {
+  color: #e8edf5;
+  background: rgba(45, 212, 191, 0.14);
+  border-color: rgba(45, 212, 191, 0.4);
+}
+
+/* HomePanelEmpty : dashed rounded box */
+.native-app .ios-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ios-muted);
+}
+.dark .ios-empty {
+  background: var(--surface-2);
+}
+
+/* the iOS screens are never wider than a phone: keep list screens full width */
+.native-app .ios-hairline {
+  border-top: 1px solid rgba(60, 60, 67, 0.12);
+}
+.dark .ios-hairline {
+  border-color: var(--border);
+}
+
+/* sticky headers of the list screens (iOS: EduTheme.loginBackground behind the pinned part) */
+.native-app:not(.dark) .native-sticky {
+  background: #f4f8f9;
+}
+.dark .native-sticky {
+  background: var(--bg);
+}
+
+.no-scrollbar{scrollbar-width:none}
+.no-scrollbar::-webkit-scrollbar{display:none}

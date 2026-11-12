@@ -4,7 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMessageContacts, fetchSentAnnouncements } from "@/lib/scaleApi";
 import { format, isToday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowLeft, Check, CheckCheck, Send } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Mail, MailOpen, Megaphone, Send } from "lucide-react";
+import { IosEmpty } from "@/components/native/ios";
+import { isNativeApp } from "@/lib/platform";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
@@ -1031,11 +1033,29 @@ export default function Messages({
       <PageHeader
         title={isAnnoncesView ? "Annonces" : "Messages"}
         subtitle={
-          isAnnoncesView
+          isAnnoncesView && !isNativeApp()
             ? "Informations officielles de l’établissement"
             : undefined
         }
         actions={
+          isNativeApp() ? (
+            <div role="tablist" aria-label="Messagerie" className="ios-seg w-full">
+              {(isAnnoncesView
+                ? ([
+                    { key: "announcements", label: "Liste", onClick: () => { setTab("announcements"); setListSearch(""); } },
+                    ...(canAnnounce ? [{ key: "announce", label: "Envoyer une annonce", onClick: () => setTab("announce") }] : []),
+                  ] as { key: MessageTab; label: string; onClick: () => void }[])
+                : ([
+                    { key: "discussions", label: "Discussions", onClick: () => { setTab("discussions"); setSelectedOtherId(null); setDiscussionsSearch(""); } },
+                    { key: "compose", label: "Nouveau message", onClick: () => { setTab("compose"); setContactSearch(""); } },
+                  ] as { key: MessageTab; label: string; onClick: () => void }[])
+              ).map((t) => (
+                <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={t.onClick}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          ) : (
           <div className="flex flex-wrap gap-2">
             {isAnnoncesView ? (
               <>
@@ -1085,6 +1105,7 @@ export default function Messages({
               </>
             )}
           </div>
+          )
         }
       />
 
@@ -1409,7 +1430,15 @@ export default function Messages({
         inboxLoading || sentLoading ? (
           <PageLoadingState message="Chargement des annonces…" />
         ) : announcementItems.length === 0 ? (
-          <EmptyState message="Aucune annonce pour le moment." />
+          isNativeApp() ? (
+            <IosEmpty
+              icon={<Megaphone strokeWidth={1.4} />}
+              title="Aucune annonce"
+              message="Les annonces de votre école apparaîtront ici."
+            />
+          ) : (
+            <EmptyState message="Aucune annonce pour le moment." />
+          )
         ) : (
           <div className="space-y-8">
             <div className="max-w-md">
@@ -1648,7 +1677,14 @@ export default function Messages({
                   <p className="p-6 text-center text-slate-500">Chargement…</p>
                 ) : conversations.length === 0 ? (
                   <div className="p-4">
-                    <EmptyState message="Aucune discussion pour le moment. Lancez une conversation depuis « Nouveau message »." />
+                    {isNativeApp() ? (
+                      <IosEmpty
+                        icon={<MailOpen strokeWidth={1.4} />}
+                        title="Boîte de réception vide"
+                        message="Vos messages reçus apparaîtront ici."
+                      />
+                    ) : null}
+                    {isNativeApp() ? null : <EmptyState message="Aucune discussion pour le moment. Lancez une conversation depuis « Nouveau message »." />}
                   </div>
                 ) : filteredConversations.length === 0 ? (
                   <div className="p-4">
@@ -1665,9 +1701,20 @@ export default function Messages({
                           onClick={() => setSelectedOtherId(c.otherId)}
                           className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 last:border-b-0"
                         >
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                            {initials(c.otherName)}
-                          </span>
+                          {isNativeApp() ? (
+                            <span
+                              className={cn(
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                                unread ? "bg-[#153064] text-white" : "bg-[#f0fdfa] text-[#153064] dark:bg-[var(--surface-2)] dark:text-slate-100",
+                              )}
+                            >
+                              <Mail className="h-[18px] w-[18px]" strokeWidth={2} />
+                            </span>
+                          ) : (
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+                              {initials(c.otherName)}
+                            </span>
+                          )}
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center justify-between gap-2">
                               <span

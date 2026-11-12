@@ -1,15 +1,15 @@
 import { Link, Navigate } from "react-router-dom";
 import { ArrowLeft, Download, Monitor } from "lucide-react";
 import { APK_DOWNLOAD_URL, WEBSITE_URL } from "@/lib/config";
-import { isDesktopApp } from "@/lib/platform";
+import { canShowInstallLinks } from "@/lib/platform";
 import { Card, PageHeader } from "@/components/ui";
 
 const SITE_URL = WEBSITE_URL || "https://edufaso.lovable.app";
 const DOWNLOAD_SECTION = `${SITE_URL.replace(/\/$/, "")}/#telecharger`;
 
 export default function Telecharger() {
-  // Already in the desktop app — download page is useless here
-  if (isDesktopApp()) {
+  // Already in the desktop or Android app — download page is useless here
+  if (!canShowInstallLinks()) {
     return <Navigate to="/connexion" replace />;
   }
 

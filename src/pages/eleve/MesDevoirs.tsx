@@ -9,6 +9,9 @@ import {
   DevoirsClearList,
   type DevoirListItem,
 } from "@/components/DevoirsClearList";
+import { QueryError } from "@/components/QueryError";
+import { isNativeApp } from "@/lib/platform";
+import { EvaluationsNative } from "@/components/native/EvaluationsNative";
 
 type Props = {
   isExam: boolean;
@@ -22,7 +25,7 @@ export default function MesDevoirs({ isExam }: Props) {
     if (!isExam) markExercicesSeen();
   }, [isExam, markExercicesSeen]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["mes-devoirs", user?.id, isExam],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -34,15 +37,18 @@ export default function MesDevoirs({ isExam }: Props) {
         .maybeSingle();
 
       if (!enrollment) {
-        return { className: "", items: [] as DevoirListItem[], gradedIds: [] as string[] };
+        return {
+          className: "",
+          items: [] as DevoirListItem[],
+          gradedIds: [] as string[],
+        };
       }
 
       const row = enrollment as {
         class_section_id: string;
         classes: unknown;
       };
-      const className =
-        joinProfile<{ name: string }>(row.classes)?.name ?? "";
+      const className = joinProfile<{ name: string }>(row.classes)?.name ?? "";
 
       let q = supabase
         .from("evaluations")
@@ -83,6 +89,18 @@ export default function MesDevoirs({ isExam }: Props) {
   const className = data?.className ?? "";
   const gradedIds = new Set(data?.gradedIds ?? []);
 
+  if (isNativeApp() && !isError) {
+    return (
+      <EvaluationsNative
+        items={items}
+        gradedIds={gradedIds}
+        isExam={isExam}
+        className={className}
+        isLoading={isLoading}
+      />
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -98,22 +116,29 @@ export default function MesDevoirs({ isExam }: Props) {
         }
       />
 
-      <DevoirsClearList
-        items={items}
-        gradedIds={gradedIds}
-        isExam={isExam}
-        isLoading={isLoading}
-        emptyMessage={
-          isExam
-            ? "Aucun devoir confirmé pour le moment."
-            : "Aucun exercice de maison pour le moment."
-        }
-        hint={
-          isExam
-            ? "Seuls les devoirs confirmés apparaissent ici, avec date et créneau. Les notes sont dans « Mes notes » — rien n’est à rendre en ligne."
-            : "Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
-        }
-      />
+      {isError ? (
+        <QueryError
+          message="Impossible de charger la liste."
+          onRetry={() => void refetch()}
+        />
+      ) : (
+        <DevoirsClearList
+          items={items}
+          gradedIds={gradedIds}
+          isExam={isExam}
+          isLoading={isLoading}
+          emptyMessage={
+            isExam
+              ? "Aucun devoir confirmé pour le moment."
+              : "Aucun exercice de maison pour le moment."
+          }
+          hint={
+            isExam
+              ? "Seuls les devoirs confirmés apparaissent ici, avec date et créneau. Les notes sont dans « Mes notes » — rien n’est à rendre en ligne."
+              : "Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
+          }
+        />
+      )}
     </div>
   );
 }

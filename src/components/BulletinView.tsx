@@ -21,6 +21,8 @@ import type { AnnualAverageResult } from "@/lib/averages";
 import { periodOptionLabel } from "@/lib/gradingPeriod";
 import { cn } from "@/lib/utils";
 import { Button, Card, EmptyState } from "@/components/ui";
+import { isNativeApp } from "@/lib/platform";
+import { INK, IOS, MUTED, SectionCaption } from "@/components/native/ios";
 
 type Annual = Pick<AnnualAverageResult, "annualAverage" | "passed" | "complete" | "trimesters">;
 
@@ -72,13 +74,19 @@ export function BulletinViewBody({
   const visible = showAll ? subjects : subjects.slice(0, 6);
   const nAbs = stats?.attendance.absences ?? 0;
   const nLate = stats?.attendance.lates ?? 0;
+  const native = isNativeApp();
+  const scoreColor = (v: number | null | undefined) => ((v ?? 0) >= 10 ? IOS.teal : IOS.orange);
 
   return (
     <div className="space-y-4">
       <div
         role="tablist"
         aria-label="Période"
-        className="flex gap-1 overflow-x-auto rounded-2xl border border-brand-200 bg-brand-50/60 p-1 dark:border-[var(--border)]"
+        className={
+          native
+            ? "ios-seg"
+            : "flex gap-1 overflow-x-auto rounded-2xl border border-brand-200 bg-brand-50/60 p-1 dark:border-[var(--border)]"
+        }
       >
         {periods.map((p) => {
           const active = p === period;
@@ -95,15 +103,21 @@ export function BulletinViewBody({
                 onPeriodChange(p);
               }}
               className={cn(
-                "min-w-16 flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition",
-                active
-                  ? "bg-brand-700 text-white shadow-sm"
-                  : "text-brand-900 hover:bg-white dark:text-slate-200 dark:hover:bg-[var(--surface-2)]",
+                !native && "min-w-16 flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition",
+                native && "flex flex-col items-center justify-center leading-tight",
+                !native &&
+                  (active
+                    ? "bg-brand-700 text-white shadow-sm"
+                    : "text-brand-900 hover:bg-white dark:text-slate-200 dark:hover:bg-[var(--surface-2)]"),
               )}
             >
-              {periodTabLabel(p)}
+              {native ? p : periodTabLabel(p)}
               {closed ? (
-                <span className="ml-1 text-xs font-medium opacity-75">(clôturé)</span>
+                native ? (
+                  <span className="text-[9px] font-medium opacity-60">clôturé</span>
+                ) : (
+                  <span className="ml-1 text-xs font-medium opacity-75">(clôturé)</span>
+                )
               ) : null}
             </button>
           );
@@ -134,9 +148,46 @@ export function BulletinViewBody({
         />
       ) : (
         <>
+          {native ? (
+            <section
+              aria-label={isAnnual ? "Moyenne annuelle" : "Moyenne générale"}
+              className="ios-card flex flex-col items-center gap-[10px] px-3 py-[14px]"
+            >
+              <p className={cn("text-xs font-semibold", MUTED)}>
+                {isAnnual ? "Moyenne annuelle" : "Moyenne générale"}
+              </p>
+              <p
+                className="text-[32px] font-bold leading-none tabular-nums"
+                style={{ color: scoreColor(avg) }}
+              >
+                {fmtFr(avg)} / 20
+              </p>
+              <p className={cn("text-xs font-semibold", INK)}>Mention : {bulletinMention(avg)}</p>
+              <div className="flex w-full justify-center gap-4">
+                {[
+                  ["Rang", general?.rank ? `${general.rank}/${general.ranked_count}` : "—"],
+                  ["Classe", fmtFr(general?.class_avg)],
+                  ["Absences", String(nAbs)],
+                  ["Retards", String(nLate)],
+                ].map(([k, v]) => (
+                  <div key={k} className="text-center">
+                    <p className={cn("text-xs font-bold tabular-nums", INK)}>{v}</p>
+                    <p className={cn("text-[11px]", MUTED)}>{k}</p>
+                  </div>
+                ))}
+              </div>
+              {isAnnual && annual && annual.trimesters.length > 0 ? (
+                <p className={cn("text-center text-xs", MUTED)}>
+                  {annual.trimesters
+                    .map((t) => `${periodTabLabel(t.periodLabel)} : ${fmtFr(t.generalAverage)}`)
+                    .join(" · ")}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           <section
             aria-label={isAnnual ? "Moyenne annuelle" : "Moyenne générale"}
-            className="rounded-2xl border-2 border-brand-700 bg-white p-4 dark:bg-[var(--surface)]"
+            className={cn("rounded-2xl border-2 border-brand-700 bg-white p-4 dark:bg-[var(--surface)]", native && "hidden")}
           >
             <div className="flex items-end justify-between gap-3">
               <div>
@@ -187,7 +238,53 @@ export function BulletinViewBody({
             ) : null}
           </section>
 
-          {subjects.length > 0 ? (
+          {native && subjects.length > 0 ? (
+            <section aria-labelledby="bulletin-matieres" className="space-y-2">
+              <div id="bulletin-matieres">
+                <SectionCaption right={subjects.length}>Matières</SectionCaption>
+              </div>
+              <div className="space-y-[10px]">
+                {visible.map((s) => (
+                  <div key={s.subject_id} className="ios-card flex items-start gap-[10px] p-[14px]">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className={cn("text-[15px] font-semibold", INK)}>{s.subject_name}</p>
+                      <p className={cn("text-xs", MUTED)}>
+                        {[
+                          `coef ${String(s.coefficient).replace(".", ",")}`,
+                          s.teacher_name,
+                          s.rank ? `rang ${s.rank}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <p className={cn("text-[11px]", MUTED)}>
+                        Moy. classe {fmtFr(s.class_avg)} · {subjectAppreciation(s.student_avg)}
+                      </p>
+                    </div>
+                    <p
+                      className="text-[17px] font-semibold tabular-nums"
+                      style={{ color: scoreColor(s.student_avg) }}
+                    >
+                      {fmtFr(s.student_avg)}
+                    </p>
+                  </div>
+                ))}
+                {subjects.length > 6 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((v) => !v)}
+                    className="ios-card w-full py-3 text-center text-[15px] font-semibold"
+                    style={{ color: IOS.teal }}
+                  >
+                    {showAll
+                      ? "Afficher moins"
+                      : `+ ${subjects.length - 6} autre${subjects.length - 6 > 1 ? "s" : ""} matière${subjects.length - 6 > 1 ? "s" : ""}`}
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+          {!native && subjects.length > 0 ? (
             <section aria-labelledby="bulletin-matieres">
               <h2
                 id="bulletin-matieres"
@@ -243,7 +340,7 @@ export function BulletinViewBody({
             </section>
           ) : null}
 
-          <Card className="p-4">
+          <Card className={cn("p-4", native && "ios-card !rounded-2xl !border-0")}>
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Conseil de classe
             </h2>
@@ -262,7 +359,7 @@ export function BulletinViewBody({
         )}
       >
         <Button
-          className="flex-1"
+          className={cn("flex-1", native && "!h-12 !rounded-[14px] !bg-[#0f766e] !text-[15px] !font-semibold !text-white")}
           onClick={onDownload}
           disabled={!!busy || loading || !hasData}
         >
@@ -276,7 +373,7 @@ export function BulletinViewBody({
         {onShare ? (
           <Button
             variant="outline"
-            className="flex-1"
+            className={cn("flex-1", native && "!h-12 !rounded-[14px] !text-[15px] !font-semibold")}
             onClick={onShare}
             disabled={!!busy || loading || !hasData}
           >

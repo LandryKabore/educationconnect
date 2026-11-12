@@ -19,12 +19,15 @@
     "dist:mac": "npm run build:electron && electron-builder --mac dmg",
     "dist:desktop": "npm run build:electron && electron-builder --win nsis --mac dmg",
     "cap:sync": "npx cap sync",
+    "build:android": "vite build --mode android && npx cap sync android",
     "cap:android": "npx cap open android",
     "cap:add:android": "npx cap add android"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.8",
+    "@capacitor/status-bar": "^7.0.6",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/supabase-js": "^2.110.6",
     "@tanstack/react-query": "^5.101.2",

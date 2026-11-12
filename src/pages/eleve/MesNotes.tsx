@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
+import { NotesNative } from "@/components/NotesNative";
+import { QueryError } from "@/components/QueryError";
+import { ScreenSkeleton } from "@/components/Skeleton";
 import { EmptyState, PageHeader } from "@/components/ui";
+import { isNativeApp } from "@/lib/platform";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
 import { programmeToCoefMap } from "@/lib/averages";
@@ -42,7 +46,12 @@ export default function MesNotes() {
     },
   });
 
-  const { data: grades = [], isLoading } = useQuery({
+  const {
+    data: grades = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["mes-notes", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -63,14 +72,25 @@ export default function MesNotes() {
     },
   });
 
+  const native = isNativeApp();
+
   return (
     <div>
-      <PageHeader title="Mes notes" subtitle="Résultats scolaires" />
+      {/* the Android top bar already shows the page title */}
+      {native ? null : <PageHeader title="Mes notes" subtitle="Résultats scolaires" />}
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        native ? (
+          <ScreenSkeleton variant="cards" label="Chargement des notes…" />
+        ) : (
+          <p className="text-slate-500">Chargement…</p>
+        )
+      ) : isError ? (
+        <QueryError message="Impossible de charger vos notes." onRetry={() => void refetch()} />
       ) : grades.length === 0 ? (
         <EmptyState message="Aucune note publiée pour le moment." />
+      ) : native ? (
+        <NotesNative grades={grades} coefficientBySubject={coefMap} />
       ) : (
         <NotesPeriodTables
           grades={grades}

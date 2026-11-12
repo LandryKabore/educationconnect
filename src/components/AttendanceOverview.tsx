@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MessageSquare } from "lucide-react";
+import { ChevronsUpDown, ListChecks, MessageSquare } from "lucide-react";
+import { isNativeApp } from "@/lib/platform";
+import { INK, IOS, MUTED, Capsule, IosEmpty } from "@/components/native/ios";
 import { useAttendancePeriods } from "@/hooks/useAttendancePeriods";
 import { useAttendanceOverview } from "@/hooks/useAttendanceOverview";
 import {
@@ -13,6 +15,7 @@ import {
 } from "@/lib/attendance";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, EmptyState, Select } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
 
 const STATUS_CHIPS = [
   { value: "", label: "Tout" },
@@ -25,18 +28,19 @@ function RateRing({ rate }: { rate: number | null }) {
   const r = 30;
   const c = 2 * Math.PI * r;
   const pct = rate ?? 0;
+  const native = isNativeApp();
   const tone =
     rate === null
       ? "text-slate-300"
       : rate >= 90
-        ? "text-emerald-600"
+        ? native ? "text-[#4b8f4a]" : "text-emerald-600"
         : rate >= 80
-          ? "text-amber-500"
-          : "text-rose-600";
+          ? native ? "text-[#ff9500]" : "text-amber-500"
+          : native ? "text-[#d4372e]" : "text-rose-600";
   return (
-    <div className="relative h-20 w-20 shrink-0">
-      <svg viewBox="0 0 72 72" className="h-20 w-20 -rotate-90" aria-hidden="true">
-        <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className="stroke-slate-200 dark:stroke-slate-600" />
+    <div className={cn("relative shrink-0", native ? "h-[72px] w-[72px]" : "h-20 w-20")}>
+      <svg viewBox="0 0 72 72" className={cn("-rotate-90", native ? "h-[72px] w-[72px]" : "h-20 w-20")} aria-hidden="true">
+        <circle cx="36" cy="36" r={r} fill="none" strokeWidth="8" className="stroke-[#e2e8f0] dark:stroke-slate-600" />
         <circle
           cx="36"
           cy="36"
@@ -48,7 +52,7 @@ function RateRing({ rate }: { rate: number | null }) {
           className={cn("stroke-current", tone)}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-slate-100">
+      <span className="absolute inset-0 flex items-center justify-center text-[15px] font-bold tabular-nums text-slate-900 dark:text-slate-100">
         {rate === null ? "—" : `${Math.round(rate)} %`}
       </span>
     </div>
@@ -90,6 +94,197 @@ export function AttendanceOverview({
   const rate = t ? attendanceRate(t) : null;
   const shownExceptions = ov.rows.length;
   const exceptionsTotal = t ? t.absent + t.late + t.excused : 0;
+
+  if (isNativeApp()) {
+    const STATUS_COLOR: Record<string, string> = {
+      present: IOS.green,
+      absent: IOS.red,
+      late: IOS.orange,
+      excused: IOS.teal,
+    };
+    return (
+      <div className="space-y-4">
+        <div role="tablist" aria-label="Période" className="ios-seg">
+          {periods.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              role="tab"
+              aria-selected={p.key === period.key}
+              onClick={() => setPeriodKey(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {ov.subjects.length > 1 ? (
+          <label className="ios-field relative flex items-center justify-between !rounded-[14px] px-[14px] py-3">
+            <span className={cn("text-[15px] font-medium", INK)}>
+              {ov.subjects.find((x) => x.id === subjectId)?.name ?? "Toutes les matières"}
+            </span>
+            <ChevronsUpDown className="h-3.5 w-3.5 text-[#64748b]" />
+            <select
+              aria-label="Matière"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="absolute inset-0 h-full w-full opacity-0"
+            >
+              <option value="">Toutes les matières</option>
+              {ov.subjects.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {ov.isLoading ? (
+          <div className="space-y-3" aria-busy>
+            <div className="ios-card h-[104px] animate-pulse" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="ios-card h-[88px] animate-pulse" />
+              <div className="ios-card h-[88px] animate-pulse" />
+            </div>
+          </div>
+        ) : ov.isError ? (
+          <IosEmpty icon={<ListChecks strokeWidth={1.4} />} title="Chargement impossible" message="Impossible de charger les présences. Réessayez plus tard." />
+        ) : !t || t.total === 0 ? (
+          <IosEmpty icon={<ListChecks strokeWidth={1.4} />} title="Aucune présence" message="Aucun cours enregistré sur cette période." />
+        ) : (
+          <>
+            <div className="ios-card flex items-center gap-4 p-4">
+              <RateRing rate={rate} />
+              <div className="min-w-0 space-y-1">
+                <p className={cn("text-[11px] font-bold uppercase tracking-[0.6px]", MUTED)}>Présence</p>
+                <p className={cn("text-[17px] font-semibold", INK)}>
+                  {t.total - t.absent} cours sur {t.total}
+                </p>
+                <p className={cn("text-xs", MUTED)}>
+                  Les absences justifiées ne comptent pas ; un retard compte comme présent.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="ios-card space-y-1 p-[14px]">
+                <p className={cn("text-[11px] font-bold uppercase tracking-[0.6px]", MUTED)}>Absences</p>
+                <p className="text-[22px] font-bold tabular-nums" style={{ color: IOS.red }}>
+                  {absencesTotal(t)}
+                </p>
+                <p className={cn("text-xs", MUTED)}>
+                  {t.excused} justifiée{t.excused !== 1 ? "s" : ""} · {t.absent} non justifiée
+                  {t.absent !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="ios-card space-y-1 p-[14px]">
+                <p className={cn("text-[11px] font-bold uppercase tracking-[0.6px]", MUTED)}>Retards</p>
+                <p className="text-[22px] font-bold tabular-nums" style={{ color: IOS.orange }}>
+                  {t.late}
+                </p>
+                <p className={cn("text-xs", MUTED)}>
+                  {t.present} cours présent{t.present !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+
+            <section aria-labelledby="exceptions-title" className="space-y-[10px]">
+              <div className={cn("flex items-center justify-between text-xs font-bold uppercase tracking-[0.6px]", MUTED)}>
+                <h2 id="exceptions-title">Absences et retards</h2>
+                <span className="text-[15px] font-semibold normal-case tracking-normal">{exceptionsTotal}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {STATUS_CHIPS.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setStatus(c.value)}
+                    aria-pressed={status === c.value}
+                    className="ios-chip"
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              {ov.isListLoading ? (
+                <p className={cn("py-5 text-center text-sm", MUTED)}>Chargement…</p>
+              ) : shownExceptions === 0 ? (
+                <div className={cn("ios-card p-4 text-[15px]", MUTED)}>
+                  {exceptionsTotal === 0
+                    ? "Aucune absence ni retard sur cette période. Bravo !"
+                    : "Rien à afficher avec ce filtre."}
+                </div>
+              ) : (
+                <div className="ios-card overflow-hidden">
+                  {ov.rows.map((a, i) => {
+                    const d = new Date(`${a.date}T00:00:00`);
+                    const color = STATUS_COLOR[a.status] ?? IOS.muted;
+                    return (
+                      <div key={a.id}>
+                        {i > 0 ? <div className="ios-hairline ml-[68px]" /> : null}
+                        <div className="flex items-center gap-3 px-[14px] py-3">
+                          <div className="w-11 shrink-0 text-center">
+                            <p className={cn("text-[20px] font-bold leading-tight tabular-nums", INK)}>{format(d, "d")}</p>
+                            <p className={cn("text-[11px] font-semibold uppercase", MUTED)}>
+                              {format(d, "MMM", { locale: fr })}
+                            </p>
+                          </div>
+                          <div className="min-w-0 flex-1 space-y-[3px]">
+                            <p className={cn("truncate text-[15px] font-semibold", INK)}>{a.matieres?.name ?? "Matière"}</p>
+                            <p className={cn("line-clamp-2 text-xs", MUTED)}>
+                              <span className="capitalize">{format(d, "EEEE", { locale: fr })}</span>
+                              {a.note ? ` · ${a.note}` : ""}
+                            </p>
+                          </div>
+                          <Capsule color={color} className="!px-[10px] !py-[5px] !text-xs">
+                            {ATTENDANCE_LABELS[a.status]}
+                          </Capsule>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {ov.hasNextPage ? (
+                <div className="flex justify-center pt-1">
+                  <button
+                    type="button"
+                    disabled={ov.isFetchingNextPage}
+                    onClick={ov.fetchNextPage}
+                    className="ios-chip"
+                  >
+                    {ov.isFetchingNextPage
+                      ? "Chargement…"
+                      : `Afficher plus (${Math.max(exceptionsTotal - shownExceptions, 0)} restantes)`}
+                  </button>
+                </div>
+              ) : null}
+            </section>
+
+            {t.absent > 0 ? (
+              <div
+                className="flex items-start gap-[10px] rounded-2xl p-[14px]"
+                style={{ backgroundColor: "rgba(15,118,110,0.08)", border: "1px solid rgba(15,118,110,0.25)" }}
+              >
+                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" style={{ color: IOS.teal }} fill="currentColor" />
+                <div className="space-y-1">
+                  <p className={cn("text-[15px] font-semibold", INK)}>
+                    {audience === "parent" ? "Une absence à justifier ?" : "Une absence à expliquer ?"}
+                  </p>
+                  <Link to="/messages" className="text-[15px] font-semibold underline" style={{ color: IOS.teal }}>
+                    Écrivez à l’école depuis la messagerie
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -134,7 +329,7 @@ export function AttendanceOverview({
       ) : null}
 
       {ov.isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton variant="cards" label="Chargement des présences…" />
       ) : ov.isError ? (
         <EmptyState message="Impossible de charger les présences. Réessayez plus tard." />
       ) : !t || t.total === 0 ? (

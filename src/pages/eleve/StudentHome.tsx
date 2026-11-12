@@ -46,7 +46,11 @@ import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { fetchAttendanceCounts } from "@/lib/scaleApi";
-import { cn, fullName, personName } from "@/lib/utils";
+import { cn, fullName, joinProfile, personName } from "@/lib/utils";
+import { isNativeApp } from "@/lib/platform";
+import { QueryError } from "@/components/QueryError";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { StudentHomeNative, type HomeSlot } from "@/pages/eleve/StudentHomeNative";
 import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
 
 const WEEKDAY_LABELS: Record<number, string> = {
@@ -76,18 +80,20 @@ export default function StudentHome() {
     useEdtPendingChanges();
   const name = personName(profile?.first_name, profile?.last_name);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["student-home", "v5", user?.id],
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["student-home", "v6", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
       const uid = user!.id;
 
-      const { data: enrollment } = await supabase
+      const { data: enrollment, error: enrollmentError } = await supabase
         .from("inscriptions")
         .select("class_section_id, classes(name, grade_level)")
         .eq("student_id", uid)
         .eq("status", "active")
         .maybeSingle();
+      // a network/server failure must show the error state, not an empty "no class" home
+      if (enrollmentError) throw enrollmentError;
 
       const row = enrollment as {
         class_section_id?: string;
@@ -95,13 +101,15 @@ export default function StudentHome() {
       } | null;
       const classId = row?.class_section_id;
 
-      const { data: notesData } = await supabase
+      const { data: notesData, error: notesError } = await supabase
         .from("notes")
         .select(
-          "id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, matieres(id, name, coefficient)",
+          "id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, matieres(id, name, coefficient), evaluations(title)",
         )
         .eq("student_id", uid)
         .order("created_at", { ascending: false });
+
+      if (notesError) throw notesError;
 
       const { count: notesCountExact } = await supabase
         .from("notes")
@@ -110,6 +118,7 @@ export default function StudentHome() {
 
       const notes = (notesData ?? []) as (GradeRow & {
         matieres: Subject | null;
+        evaluations?: { title: string | null } | null;
       })[];
       const gradedEvalIds = new Set(
         notes
@@ -131,6 +140,7 @@ export default function StudentHome() {
       const attendanceRate =
         att.total > 0 ? Math.round((presentish / att.total) * 100) : null;
       const absencesCount = att.absent;
+      const lateCount = att.late;
 
       let pendingExercices: {
         id: string;
@@ -162,6 +172,7 @@ export default function StudentHome() {
         end_time: string;
         room: string | null;
         matieres: { name: string } | null;
+        profils?: unknown;
       }[] = [];
       let weekSlots: typeof todaySlots = [];
 
@@ -257,7 +268,9 @@ export default function StudentHome() {
         const todayDow = dbDayOfWeek();
         const { data: slots } = await supabase
           .from("creneaux_edt")
-          .select("id, day_of_week, start_time, end_time, room, matieres(name)")
+          .select(
+            "id, day_of_week, start_time, end_time, room, matieres(name), profils(first_name, last_name)",
+          )
           .eq("class_section_id", classId)
           .order("day_of_week")
           .order("start_time");
@@ -298,11 +311,14 @@ export default function StudentHome() {
         annual,
         attendanceRate,
         absencesCount,
+        lateCount,
         notesCount: notesCountExact ?? notes.length,
-        recentNotes: notes.slice(0, 4).map((n) => ({
+        recentNotes: notes.slice(0, 5).map((n) => ({
           id: n.id,
           score: n.score,
           max_score: n.max_score,
+          is_absent: n.is_absent === true,
+          evalTitle: n.evaluations?.title ?? null,
           period_label: n.period_label,
           matieres: n.matieres
             ? { name: n.matieres.name }
@@ -383,12 +399,23 @@ export default function StudentHome() {
     return null;
   }, [data?.weekSlots, todayDow, nowMinutes]);
 
+  const native = isNativeApp();
+
   if (isLoading) {
-    return <p className="text-slate-500">Chargement…</p>;
+    return native ? (
+      <ScreenSkeleton variant="home" label="Chargement de l’accueil…" />
+    ) : (
+      <p className="text-slate-500">Chargement…</p>
+    );
   }
 
   if (!data) {
-    return (
+    return native || isError ? (
+      <QueryError
+        message="Impossible de charger votre aperçu."
+        onRetry={() => void refetch()}
+      />
+    ) : (
       <p className="text-slate-500">Impossible de charger votre aperçu.</p>
     );
   }
@@ -409,6 +436,54 @@ export default function StudentHome() {
   const recentMessages = data.recentMessages ?? [];
   const annual = data.annual;
   const trimesterShort = ["T1", "T2", "T3"] as const;
+
+  if (native) {
+    const toHomeSlot = (s: (typeof todaySlots)[number]): HomeSlot => {
+      const t = joinProfile<{ first_name: string; last_name: string }>(s.profils);
+      return {
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        room: s.room,
+        matieres: s.matieres,
+        teacherName: t ? fullName(t.first_name, t.last_name) : null,
+      };
+    };
+    const firstName =
+      profile?.first_name?.trim() || name.split(" ")[0] || "";
+    return (
+      <StudentHomeNative
+        userId={user?.id}
+        firstName={firstName}
+        classLabel={classLabel ? `Classe · ${classLabel}` : "Espace élève"}
+        todayCaption={formatDateSafe(new Date().toISOString(), "EEEE d MMMM", { locale: fr })}
+        unread={unreadInbox}
+        edtPendingCount={edtPendingCount}
+        edtPendingLabel={edtPending[0]?.label ?? null}
+        onEdtSeen={() => markSeen()}
+        todaySlots={[...todaySlots]
+          .sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time))
+          .map(toHomeSlot)}
+        focus={
+          scheduleFocus
+            ? { ...scheduleFocus, slot: toHomeSlot(scheduleFocus.slot as (typeof todaySlots)[number]) }
+            : null
+        }
+        nowMinutes={nowMinutes}
+        annual={annual}
+        attendanceRate={data.attendanceRate}
+        absencesCount={data.absencesCount}
+        lateCount={data.lateCount ?? 0}
+        notesCount={data.notesCount}
+        pendingExercices={pendingExercices}
+        upcomingExamens={upcomingExamens}
+        upcomingCompositions={upcomingCompositions}
+        recentNotes={recentNotes.slice(0, 5)}
+        timeToMinutes={timeToMinutes}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -603,8 +678,8 @@ export default function StudentHome() {
             <PanelEmpty message="Aucune note disponible pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {recentNotes.map((n) => {
-                const v = on20(n.score, n.max_score);
+              {recentNotes.slice(0, 4).map((n) => {
+                const v = n.is_absent ? null : on20(n.score, n.max_score);
                 return (
                   <li
                     key={n.id}

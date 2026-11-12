@@ -7,7 +7,7 @@ import { readFileSync } from "fs";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8")) as { version: string };
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   // Electron needs relative assets; GitHub Pages needs the repo base path
   base:
@@ -20,6 +20,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // Android app (vite build --mode android): the WebView must never serve a cached old bundle
+      disable: mode === "android",
       registerType: "autoUpdate",
       includeAssets: [
         "favicon.png",
@@ -76,4 +78,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+}));

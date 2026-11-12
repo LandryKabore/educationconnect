@@ -2,13 +2,18 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isPast, isWithinInterval, parseISO, startOfDay } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Files } from "lucide-react";
+import { isNativeApp } from "@/lib/platform";
+import { Capsule, INK, IOS, IosEmpty, MUTED } from "@/components/native/ios";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompositionsPendingChanges } from "@/hooks/useCompositionRealtime";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { QueryError } from "@/components/QueryError";
 
 type Paper = {
   id: string;
@@ -49,7 +54,7 @@ export default function MesCompositions() {
     markSeen();
   }, [markSeen]);
 
-  const { data: sessions = [], isLoading } = useQuery({
+  const { data: sessions = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["mes-compositions", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -110,6 +115,71 @@ export default function MesCompositions() {
     },
   });
 
+  if (isNativeApp() && !isLoading && !isError) {
+    if (sessions.length === 0) {
+      return (
+        <IosEmpty
+          icon={<Files strokeWidth={1.4} />}
+          title="Aucune composition"
+          message="Aucune composition programmée pour le moment."
+        />
+      );
+    }
+    const statusColor = (label: string) =>
+      label === "En cours" ? IOS.orange : label === "Terminée" ? IOS.muted : IOS.teal;
+    return (
+      <div className="space-y-3">
+        <p className={cn("rounded-2xl bg-[#f0fdfa] px-4 py-3 text-[13px] dark:bg-[var(--surface-2)]", MUTED)}>
+          Chaque composition regroupe les épreuves de ta classe. Les notes apparaissent dans « Mes notes » une fois
+          saisies.
+        </p>
+        {sessions.map((session) => {
+          const status = sessionStatus(session.starts_on, session.ends_on);
+          const color = statusColor(status.label);
+          const range = `${formatDateSafe(session.starts_on, "d MMM", { locale: fr })} → ${formatDateSafe(session.ends_on, "d MMM yyyy", { locale: fr })}`;
+          return (
+            <div key={session.id} className="ios-card space-y-2 p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className={cn("text-[17px] font-semibold", INK)}>{session.title || "Composition"}</p>
+                <Capsule color={color} className="shrink-0 !px-2 !py-1 !text-xs">
+                  {status.label}
+                </Capsule>
+              </div>
+              <p className={cn("text-xs", MUTED)}>
+                {[session.period_label, range].filter(Boolean).join(" · ")}
+              </p>
+              {session.papers.length === 0 ? (
+                <p className={cn("text-xs", MUTED)}>Épreuves non encore publiées.</p>
+              ) : (
+                <div className="space-y-2">
+                  {session.papers.map((paper) => (
+                    <div key={paper.id} className="ios-row flex items-center justify-between gap-2 !rounded-xl p-[10px]">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className={cn("truncate text-[15px] font-semibold", INK)}>
+                          {paper.matieres?.name ?? "Matière"}
+                        </p>
+                        {paper.eval_date ? (
+                          <p className={cn("text-xs capitalize", MUTED)}>
+                            {formatDateSafe(paper.eval_date, "EEEE d MMM", { locale: fr })}
+                          </p>
+                        ) : null}
+                      </div>
+                      {paper.start_time && paper.end_time ? (
+                        <span className="shrink-0 text-xs font-semibold tabular-nums text-[#153064] dark:text-slate-100">
+                          {paper.start_time.slice(0, 5)}–{paper.end_time.slice(0, 5)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -124,7 +194,9 @@ export default function MesCompositions() {
       </p>
 
       {isLoading ? (
-        <p className="text-slate-500">Chargement…</p>
+        <ScreenSkeleton />
+      ) : isError ? (
+        <QueryError message="Impossible de charger les compositions." onRetry={() => void refetch()} />
       ) : sessions.length === 0 ? (
         <EmptyState message="Aucune composition programmée pour le moment." />
       ) : (

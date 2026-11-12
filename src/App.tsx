@@ -9,6 +9,10 @@ import {
 } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { NativeAppEffects } from "@/components/NativeAppEffects";
+import { OpeningScreen } from "@/components/OpeningScreen";
+import { ScreenSkeleton } from "@/components/Skeleton";
+import { isNativeApp } from "@/lib/platform";
 import Connexion from "@/pages/Connexion";
 import PremiereConnexion from "@/pages/PremiereConnexion";
 import CompleterProfil from "@/pages/CompleterProfil";
@@ -88,6 +92,7 @@ import { useAuth } from "@/contexts/AuthContext";
 function HomeRedirect() {
   const { homePath, loading } = useAuth();
   if (loading) {
+    if (isNativeApp()) return <OpeningScreen />;
     return (
       <div className="flex min-h-screen items-center justify-center text-slate-500">
         Chargement…
@@ -99,6 +104,8 @@ function HomeRedirect() {
 
 function AppRoutes() {
   return (
+    <>
+    <NativeAppEffects />
     <Routes>
       <Route path="/connexion" element={<Connexion />} />
       <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
@@ -340,7 +347,7 @@ function AppRoutes() {
           path="/bulletins"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <Bulletins />
               </Suspense>
             </RequireAuth>
@@ -350,7 +357,7 @@ function AppRoutes() {
           path="/cahier-ecole"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <CahierEcole />
               </Suspense>
             </RequireAuth>
@@ -360,7 +367,7 @@ function AppRoutes() {
           path="/statistiques"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <Statistiques />
               </Suspense>
             </RequireAuth>
@@ -370,7 +377,7 @@ function AppRoutes() {
           path="/cahier-de-textes"
           element={
             <RequireAuth roles={["teacher"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <CahierTextes />
               </Suspense>
             </RequireAuth>
@@ -380,7 +387,7 @@ function AppRoutes() {
           path="/mon-cahier"
           element={
             <RequireAuth roles={["student"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <MonCahier />
               </Suspense>
             </RequireAuth>
@@ -390,7 +397,7 @@ function AppRoutes() {
           path="/enfants/:id/cahier"
           element={
             <RequireAuth roles={["parent"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <EnfantCahier />
               </Suspense>
             </RequireAuth>
@@ -400,7 +407,7 @@ function AppRoutes() {
           path="/presences-ecole"
           element={
             <RequireAuth roles={["school_admin"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <PresencesEcole />
               </Suspense>
             </RequireAuth>
@@ -449,7 +456,7 @@ function AppRoutes() {
           path="/classes/:id/presences"
           element={
             <RequireAuth roles={["teacher", "school_admin"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <Presences />
               </Suspense>
             </RequireAuth>
@@ -571,7 +578,7 @@ function AppRoutes() {
           path="/mes-presences"
           element={
             <RequireAuth roles={["student"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <MesPresences />
               </Suspense>
             </RequireAuth>
@@ -606,7 +613,7 @@ function AppRoutes() {
           path="/enfants/:id/presences"
           element={
             <RequireAuth roles={["parent"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+              <Suspense fallback={<ScreenSkeleton />}>
                 <EnfantPresences />
               </Suspense>
             </RequireAuth>
@@ -656,6 +663,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

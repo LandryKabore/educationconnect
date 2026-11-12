@@ -1,6 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { needsProfileCompletion } from "@/lib/profileCompletion";
+import { OpeningScreen } from "@/components/OpeningScreen";
+import { isNativeApp } from "@/lib/platform";
 import type { AppRole } from "@/lib/types";
 
 const PROFILE_GATE_PATHS = new Set([
@@ -20,6 +22,7 @@ export function RequireAuth({
   const effectiveRole = role ?? realRole;
 
   if (loading) {
+    if (isNativeApp()) return <OpeningScreen />;
     return (
       <div className="flex min-h-screen items-center justify-center text-slate-500">
         Chargement…
