@@ -71,6 +71,18 @@ struct ChildGate<Content: View>: View {
 }
 
 struct EvaluationsBrowser: View {
+    private enum StatusFilter: String, CaseIterable, Identifiable {
+        case all, todo, graded
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: return "Tout"
+            case .todo: return "À faire"
+            case .graded: return "Notés"
+            }
+        }
+    }
+
     var classId: String? = nil
     var classIds: [String]? = nil
     var studentId: String? = nil
@@ -84,12 +96,15 @@ struct EvaluationsBrowser: View {
     @EnvironmentObject private var auth: AuthViewModel
     @State private var rows: [EvaluationRow] = []
     @State private var gradedIds: Set<String> = []
+    @State private var expandedIds: Set<String> = []
+    @State private var statusFilter: StatusFilter = .all
     @State private var className: String?
     @State private var loading = true
     @State private var ready = false
     @State private var error: String?
 
-    private var resolvedStudentId: String? { studentId ?? auth.userId }
+    private var resolvedStudentId: String? { studentId ?? (teacherId == nil && !allowEntry ? auth.userId : nil) }
+    private var isStudentAudience: Bool { resolvedStudentId != nil && !allowEntry }
 
     private var emptyTitle: String {
         switch type {
@@ -114,6 +129,31 @@ struct EvaluationsBrowser: View {
         }
     }
 
+    private var accent: Color {
+        switch type {
+        case "devoir": return EduTheme.fasoRed
+        case "examen": return EduTheme.navy
+        case "composition": return EduTheme.teal
+        default: return EduTheme.navy
+        }
+    }
+
+    private var pendingCount: Int {
+        rows.filter { !gradedIds.contains($0.id) }.count
+    }
+
+    private var gradedCount: Int {
+        rows.filter { gradedIds.contains($0.id) }.count
+    }
+
+    private var filteredRows: [EvaluationRow] {
+        switch statusFilter {
+        case .all: return rows
+        case .todo: return rows.filter { !gradedIds.contains($0.id) }
+        case .graded: return rows.filter { gradedIds.contains($0.id) }
+        }
+    }
+
     var body: some View {
         PremiumScreenChrome {
             Group {
@@ -124,83 +164,262 @@ struct EvaluationsBrowser: View {
                 } else if rows.isEmpty {
                     PremiumEmpty(title: emptyTitle, systemImage: "doc.text", message: emptyMessage)
                 } else {
-                    List {
-                        if let className, !className.isEmpty {
-                            Section {
-                                Text(className)
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(EduTheme.muted)
-                                    .listRowBackground(Color.clear)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            summaryCard
+                            if isStudentAudience {
+                                statusChips
                             }
-                        }
-                        ForEach(rows) { row in
-                            Group {
-                                if allowEntry, row.classSectionId != nil, row.subjectId != nil {
-                                    NavigationLink {
-                                        GradeEntryView(evaluation: row, recordedBy: recordedBy)
-                                    } label: {
-                                        evaluationRow(row)
-                                    }
+                            LazyVStack(spacing: 10) {
+                                if filteredRows.isEmpty {
+                                    Text("Rien à afficher avec ce filtre.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(EduTheme.muted)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(16)
+                                        .background(cardBackground)
                                 } else {
-                                    evaluationRow(row)
+                                    ForEach(filteredRows) { row in
+                                        evaluationCard(row)
+                                    }
                                 }
                             }
-                            .listRowBackground(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(.white)
-                                    .padding(.vertical, 3)
-                            )
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .premiumListStyle()
+                    .refreshable { await load(isRefresh: true) }
                 }
             }
         }
         .premiumTitle(title)
         .task { await load(isRefresh: false) }
-        .refreshable { await load(isRefresh: true) }
     }
 
-    private func evaluationRow(_ row: EvaluationRow) -> some View {
-        let graded = gradedIds.contains(row.id)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(row.title?.isEmpty == false ? row.title! : row.typeLabel)
-                    .font(.subheadline.weight(.semibold))
+    private var summaryCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(accent.opacity(0.12))
+                Image(systemName: type == "devoir" ? "list.clipboard.fill" : "doc.text.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(accent)
+            }
+            .frame(width: 52, height: 52)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text((className ?? "Ma classe").uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(EduTheme.muted)
+                    .tracking(0.5)
+                Text("\(rows.count) \(itemNoun(rows.count))")
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(EduTheme.ink)
-                Spacer(minLength: 8)
-                if graded {
-                    Text("Noté")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(EduTheme.teal.opacity(0.12), in: Capsule())
-                } else if row.adminConfirmed == false && (row.type == "examen" || row.type == "composition") {
-                    Text("À confirmer")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.orange.opacity(0.12), in: Capsule())
+                if isStudentAudience {
+                    Text("\(pendingCount) à faire · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                } else if let className, !className.isEmpty {
+                    Text(className)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
                 }
             }
-            Text([row.matieres?.name, row.typeLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(EduTheme.muted)
-            if !row.whenLabel.isEmpty {
-                Text(row.whenLabel)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(EduTheme.navy)
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background(cardBackground)
+    }
+
+    private var statusChips: some View {
+        HStack(spacing: 8) {
+            ForEach(StatusFilter.allCases) { chip in
+                Button {
+                    statusFilter = chip
+                } label: {
+                    Text(chip.label)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
+                        .background(
+                            Capsule()
+                                .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
+                                    lineWidth: 1
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
             }
-            if let details = row.details, !details.isEmpty {
-                Text(details)
-                    .font(.caption)
-                    .foregroundStyle(EduTheme.muted)
-                    .lineLimit(3)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private func evaluationCard(_ row: EvaluationRow) -> some View {
+        let graded = gradedIds.contains(row.id)
+        let expanded = expandedIds.contains(row.id)
+        let canEnter = allowEntry && row.classSectionId != nil && row.subjectId != nil
+        let hasDetails = !(row.details ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        VStack(alignment: .leading, spacing: 0) {
+            if canEnter {
+                NavigationLink {
+                    GradeEntryView(evaluation: row, recordedBy: recordedBy)
+                } label: {
+                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    guard hasDetails else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if expanded {
+                            expandedIds.remove(row.id)
+                        } else {
+                            expandedIds.insert(row.id)
+                        }
+                    }
+                } label: {
+                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails)
+                }
+                .buttonStyle(.plain)
+
+                if expanded, let details = row.details, !details.isEmpty {
+                    Divider().padding(.horizontal, 14)
+                    Text(details)
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.ink.opacity(0.85))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .background(cardBackground)
+    }
+
+    private func cardHeader(
+        _ row: EvaluationRow,
+        graded: Bool,
+        expanded: Bool,
+        expandable: Bool,
+        showsChevron: Bool = false
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(accent)
+                .frame(width: 4)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(row.title?.isEmpty == false ? row.title! : row.typeLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    statusBadge(row, graded: graded)
+                }
+
+                if let subject = row.matieres?.name, !subject.isEmpty {
+                    Text(subject)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(EduTheme.navy)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(EduTheme.navy.opacity(0.08), in: Capsule())
+                }
+
+                if !row.whenLabel.isEmpty {
+                    Label(prettyWhen(row), systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
+
+                if let period = row.periodLabel, !period.isEmpty {
+                    Text(period)
+                        .font(.caption2)
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+
+            if expandable || showsChevron {
+                Image(systemName: showsChevron ? "chevron.right" : "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(EduTheme.muted)
+                    .rotationEffect(.degrees(!showsChevron && expanded ? 180 : 0))
+                    .padding(.top, 4)
+            }
+        }
+        .padding(14)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func statusBadge(_ row: EvaluationRow, graded: Bool) -> some View {
+        if graded {
+            Text("Noté")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(EduTheme.teal)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(EduTheme.teal.opacity(0.12), in: Capsule())
+        } else if isStudentAudience {
+            Text("À faire")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(accent.opacity(0.12), in: Capsule())
+        } else if row.adminConfirmed == false && (row.type == "examen" || row.type == "composition") {
+            Text("À confirmer")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.orange.opacity(0.12), in: Capsule())
+        }
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.white)
+    }
+
+    private func itemNoun(_ count: Int) -> String {
+        switch type {
+        case "devoir": return count == 1 ? "exercice" : "exercices"
+        case "examen": return count == 1 ? "devoir" : "devoirs"
+        case "composition": return count == 1 ? "composition" : "compositions"
+        default: return count == 1 ? "évaluation" : "évaluations"
+        }
+    }
+
+    private func prettyWhen(_ row: EvaluationRow) -> String {
+        let raw = row.evalDate ?? row.dueDate ?? ""
+        let parts = raw.split(separator: "-").compactMap { Int($0) }
+        var label = raw
+        if parts.count >= 3 {
+            let comps = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+            if let date = Calendar.current.date(from: comps) {
+                let f = DateFormatter()
+                f.locale = Locale(identifier: "fr_FR")
+                f.dateFormat = "EEEE d MMM"
+                label = f.string(from: date).capitalized
+            }
+        }
+        let start = row.startTime.map { String($0.prefix(5)) } ?? ""
+        let end = row.endTime.map { String($0.prefix(5)) } ?? ""
+        if start.isEmpty { return label }
+        if end.isEmpty { return "\(label) · \(start)" }
+        return "\(label) · \(start)–\(end)"
     }
 
     private func load(isRefresh: Bool) async {
