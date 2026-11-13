@@ -8,13 +8,15 @@ import {
   type DevoirListItem,
 } from "@/components/DevoirsClearList";
 import {
-  ParentChildBackLink,
-  ParentChildGate,
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
+import {
+  ParentChildBackLink,
+  ParentChildGate,
+} from "@/pages/parent/ParentChildGate";
 
 type Props = {
   isExam: boolean;

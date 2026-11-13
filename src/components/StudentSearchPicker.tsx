@@ -43,13 +43,16 @@ export function StudentSearchPicker({
 
   const serverMode = !!schoolId;
   const debouncedQuery = useDebouncedValue(query, 250);
-  const { data: remote = [], isFetching } = useQuery({
+  const { data: remote, isFetching } = useQuery({
     queryKey: ["student-picker", schoolId, debouncedQuery],
     enabled: serverMode && open,
     queryFn: () => searchStudentsForPicker(schoolId!, debouncedQuery, 40),
     staleTime: 15_000,
   });
-  const students: StudentOption[] = serverMode ? remote : (studentsProp ?? []);
+  const students = useMemo<StudentOption[]>(
+    () => (serverMode ? (remote ?? []) : (studentsProp ?? [])),
+    [serverMode, remote, studentsProp],
+  );
   const [picked, setPicked] = useState<StudentOption | null>(null);
 
   const selected = useMemo(

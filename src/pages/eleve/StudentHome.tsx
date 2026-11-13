@@ -22,14 +22,9 @@ import {
   PanelEmpty,
   PortalHomeHeader,
   QuickLink,
-  relativeFr,
-  snippet,
 } from "@/components/PortalHomeKit";
+import { relativeFr, snippet } from "@/lib/portalHomeFormat";
 import { formatDateSafe } from "@/lib/dateFr";
-import {
-  isAttendancePositive,
-  isUnjustifiedAbsence,
-} from "@/lib/attendance";
 import {
   computeAnnualAverage,
   formatAverage,
@@ -47,7 +42,7 @@ import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMes
 import { supabase } from "@/lib/supabase";
 import { fetchAttendanceCounts } from "@/lib/scaleApi";
 import { cn, fullName, personName } from "@/lib/utils";
-import type { AttendanceStatus, GradeRow, Subject } from "@/lib/types";
+import type { GradeRow, Subject } from "@/lib/types";
 
 const WEEKDAY_LABELS: Record<number, string> = {
   1: "Lundi",

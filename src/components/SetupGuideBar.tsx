@@ -7,8 +7,11 @@ import {
   type SetupStepId,
 } from "@/lib/schoolSetup";
 import { Button } from "@/components/ui";
-
-const SETUP_FLAG = "ef_setup_guide";
+import {
+  enterSetupGuide,
+  exitSetupGuide,
+  isSetupGuideActive,
+} from "@/lib/setupGuide";
 
 const PATH_TO_STEP: { prefix: string; stepId: SetupStepId }[] = [
   { prefix: "/ecole/parametres", stepId: "profil" },
@@ -34,22 +37,12 @@ function withSetupQuery(to: string) {
   return `${to}${sep}setup=1`;
 }
 
-export function enterSetupGuide() {
-  sessionStorage.setItem(SETUP_FLAG, "1");
-}
-
-export function exitSetupGuide() {
-  sessionStorage.removeItem(SETUP_FLAG);
-}
-
 /** Sticky bar: next step when navigating from the configuration guide. */
 export function SetupGuideBar() {
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const { steps, progress } = useSchoolSetupProgress();
-  const [guideOn, setGuideOn] = useState(
-    () => sessionStorage.getItem(SETUP_FLAG) === "1",
-  );
+  const [guideOn, setGuideOn] = useState(isSetupGuideActive);
 
   const setupFlag = params.get("setup");
 

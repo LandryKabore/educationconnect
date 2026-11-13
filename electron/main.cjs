@@ -13,7 +13,7 @@ if (instance) {
   app.setPath("userData", dir);
 }
 
-function appEntryUrl(win) {
+function appEntryUrl() {
   if (isDev) {
     return process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   }
@@ -22,9 +22,9 @@ function appEntryUrl(win) {
 
 function loadApp(win) {
   if (isDev) {
-    void win.loadURL(appEntryUrl(win));
+    void win.loadURL(appEntryUrl());
   } else {
-    void win.loadFile(appEntryUrl(win));
+    void win.loadFile(appEntryUrl());
   }
 }
 

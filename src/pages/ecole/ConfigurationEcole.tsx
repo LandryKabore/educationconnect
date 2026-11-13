@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Check, ChevronRight, Circle, Sparkles } from "lucide-react";
 import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
-import { enterSetupGuide } from "@/components/SetupGuideBar";
+import { enterSetupGuide } from "@/lib/setupGuide";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { cn } from "@/lib/utils";
 

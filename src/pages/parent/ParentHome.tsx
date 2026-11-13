@@ -13,12 +13,8 @@ import {
   NotebookPen,
   Users,
 } from "lucide-react";
-import {
-  Panel,
-  PanelEmpty,
-  relativeFr,
-  snippet,
-} from "@/components/PortalHomeKit";
+import { Panel, PanelEmpty } from "@/components/PortalHomeKit";
+import { relativeFr, snippet } from "@/lib/portalHomeFormat";
 import { HomeworkTomorrowCard } from "@/components/HomeworkTomorrowCard";
 import { ProgressRing } from "@/components/ProgressRing";
 import { Button, Card } from "@/components/ui";

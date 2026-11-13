@@ -11,13 +11,15 @@ import { supabase } from "@/lib/supabase";
 import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
 import { BulletinView } from "@/components/BulletinView";
 import {
-  ParentChildBackLink,
-  ParentChildGate,
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
+import {
+  ParentChildBackLink,
+  ParentChildGate,
+} from "@/pages/parent/ParentChildGate";
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 

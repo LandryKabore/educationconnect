@@ -27,6 +27,20 @@ function formatDate(iso: string) {
   });
 }
 
+function filterInvites(list: InviteWithSchool[], search: string) {
+  const q = search.trim().toLowerCase();
+  if (!q) return list;
+  return list.filter((inv) => {
+    const name = fullName(inv.first_name, inv.last_name).toLowerCase();
+    const school = inv.ecoles?.name?.toLowerCase() ?? "";
+    return (
+      name.includes(q) ||
+      inv.email.toLowerCase().includes(q) ||
+      school.includes(q)
+    );
+  });
+}
+
 export default function AdminInvites() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -63,22 +77,8 @@ export default function AdminInvites() {
     },
   });
 
-  const filterInvites = (list: InviteWithSchool[]) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((inv) => {
-      const name = fullName(inv.first_name, inv.last_name).toLowerCase();
-      const school = inv.ecoles?.name?.toLowerCase() ?? "";
-      return (
-        name.includes(q) ||
-        inv.email.toLowerCase().includes(q) ||
-        school.includes(q)
-      );
-    });
-  };
-
-  const pendingFiltered = useMemo(() => filterInvites(pending), [pending, search]);
-  const acceptedFiltered = useMemo(() => filterInvites(accepted), [accepted, search]);
+  const pendingFiltered = useMemo(() => filterInvites(pending, search), [pending, search]);
+  const acceptedFiltered = useMemo(() => filterInvites(accepted, search), [accepted, search]);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["admin-invites-pending"] });

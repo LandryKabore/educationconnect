@@ -2,11 +2,6 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-/** Stable JSON compare for form dirty-checking. */
-export function isFormDirty(current: unknown, baseline: unknown) {
-  return JSON.stringify(current) !== JSON.stringify(baseline);
-}
-
 type SaveButtonProps = {
   saving?: boolean;
   /** True when the form has unsaved changes. */

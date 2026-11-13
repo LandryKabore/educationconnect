@@ -17,7 +17,7 @@ export function frToIso(fr: string): string | null {
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
 
-  const match = cleaned.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+  const match = cleaned.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
   if (!match) return null;
 
   const day = Number(match[1]);

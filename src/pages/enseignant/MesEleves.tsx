@@ -141,7 +141,7 @@ export default function MesEleves() {
   });
 
   const classes = data?.classes ?? [];
-  const students = data?.students ?? [];
+  const students = useMemo(() => data?.students ?? [], [data]);
 
   const filtered = useMemo(() => {
     let list = students;
