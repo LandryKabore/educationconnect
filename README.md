@@ -8,6 +8,7 @@ Système de gestion scolaire installable (français), multi-écoles, multi-rôle
 - Supabase (Auth, Postgres, RLS, Edge Functions)
 - PWA (`vite-plugin-pwa`)
 - Capacitor (APK Android)
+- SwiftUI natif iOS (`edufaso iOS/`)
 
 ## Démarrage
 
@@ -50,6 +51,18 @@ npx cap open android
 ```
 
 Dans Android Studio : Build → Build APK(s). Déposez l'APK sur une page de téléchargement plus tard.
+
+## App iOS native (SwiftUI)
+
+Projet Xcode dans [`edufaso iOS/`](edufaso%20iOS/) — **pas de Capacitor**, client Supabase natif.
+
+Voir le guide : [edufaso iOS/README.md](edufaso%20iOS/README.md).
+
+```bash
+open "edufaso iOS/EduFaso.xcodeproj"
+```
+
+Renseignez `edufaso iOS/EduFaso/Config/Secrets.xcconfig`, puis Run dans Xcode (Team Apple + simulateur / appareil).
 
 ## Variables d'environnement
 
