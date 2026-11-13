@@ -18,7 +18,8 @@
   --color-faso-red: #d4372e;
   --color-faso-yellow: #efac42;
   --color-faso-green: #4b8f4a;
-  --font-sans: "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  /* Lato (loaded in index.html); system fonts while it loads or offline before first cache */
+  --font-sans: "Lato", "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
