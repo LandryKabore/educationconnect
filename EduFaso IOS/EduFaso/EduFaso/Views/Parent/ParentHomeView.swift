@@ -194,6 +194,57 @@ struct ParentHomeView: View {
     @State private var listFailed = false
     @State private var detailChild: ChildSummary?
 
+    // guided tour
+    @AppStorage("edufaso.tour.parentHome.v1") private var tourDone = false
+    @State private var coach = CoachMarkRegistry()
+    @State private var tourSteps: [CoachMarkStep] = []
+    @State private var tourIndex = 0
+    @State private var showTour = false
+    @State private var tourScheduled = false
+
+    private static let tour: [CoachMarkStep] = [
+        CoachMarkStep(
+            id: "parent.switcher", icon: "hand.tap.fill",
+            title: "Choisissez un enfant",
+            message: "Touchez le prénom d’un enfant : toute la page affiche alors son suivi. Le ✓ montre l’enfant affiché."
+        ),
+        CoachMarkStep(
+            id: "parent.stats", icon: "chart.bar.fill",
+            title: "L’essentiel en un coup d’œil",
+            message: "Moyenne de l’année, présence du trimestre et épreuves de la semaine. Touchez la moyenne pour ouvrir le bulletin, la présence pour le détail."
+        ),
+        CoachMarkStep(
+            id: "parent.watch", icon: "exclamationmark.triangle.fill",
+            title: "À surveiller",
+            message: "Les absences à justifier et les notes faibles récentes s’affichent ici. Touchez « Voir » pour en savoir plus."
+        ),
+        CoachMarkStep(
+            id: "parent.week", icon: "calendar",
+            title: "Cette semaine",
+            message: "Interrogations, devoirs et compositions des 7 prochains jours, avec le jour exact. Touchez une ligne pour le détail."
+        ),
+        CoachMarkStep(
+            id: "parent.results", icon: "chart.line.uptrend.xyaxis",
+            title: "Résultats",
+            message: "Les moyennes de chaque trimestre et les dernières notes. « Bulletin » ouvre le bulletin officiel."
+        ),
+        CoachMarkStep(
+            id: "parent.attendance", icon: "checkmark.seal.fill",
+            title: "Assiduité",
+            message: "La présence du trimestre, et un carré de couleur par jour de classe sur les 4 dernières semaines."
+        ),
+        CoachMarkStep(
+            id: "parent.quick", icon: "square.grid.3x3.fill",
+            title: "Accès rapide",
+            message: "Tous les espaces de votre enfant : notes, présences, emploi du temps, cahier de textes, messages…"
+        ),
+        CoachMarkStep(
+            id: "parent.help", icon: "questionmark.circle.fill",
+            title: "Revoir ce guide",
+            message: "Touchez ce bouton à tout moment pour relancer la visite."
+        ),
+    ]
+
     private static let sky = Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
     private static let softFill = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
     private static let childColors: [Color] = [
@@ -234,36 +285,55 @@ struct ParentHomeView: View {
     // MARK: Body
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if !ready {
-                    loadingSkeleton
-                } else if children.isEmpty {
-                    hero
-                    if listFailed { errorBanner }
-                    noChildrenCard
-                } else {
-                    hero
-                    if unreadMessages > 0 || unreadAnnouncements > 0 { inboxPills }
-                    if listFailed || home?.failed == true { errorBanner }
-                    if let child = selected {
-                        Group {
-                            watchCard(child)
-                            weekCard(child)
-                            resultsCard(child)
-                            attendanceCard(child)
+        ScrollViewReader { scroller in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    if !ready {
+                        loadingSkeleton
+                    } else if children.isEmpty {
+                        hero
+                        if listFailed { errorBanner }
+                        noChildrenCard
+                    } else {
+                        hero
+                        if unreadMessages > 0 || unreadAnnouncements > 0 { inboxPills }
+                        if listFailed || home?.failed == true { errorBanner }
+                        if let child = selected {
+                            watchCard(child).coachMarkTarget("parent.watch")
+                            weekCard(child).coachMarkTarget("parent.week")
+                            resultsCard(child).coachMarkTarget("parent.results")
+                            attendanceCard(child).coachMarkTarget("parent.attendance")
+                            if children.count > 1 { childrenOverview }
+                            quickActions(child).coachMarkTarget("parent.quick")
                         }
-                        .id(child.id)
-                        .transition(.opacity)
-                        if children.count > 1 { childrenOverview }
-                        quickActions(child)
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
+                .animation(.easeInOut(duration: 0.2), value: selected?.id)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
-            .animation(.easeInOut(duration: 0.2), value: selected?.id)
+            .scrollDisabled(showTour)
+            .onChange(of: tourIndex) { _, index in
+                guard showTour, tourSteps.indices.contains(index) else { return }
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    scroller.scrollTo(tourSteps[index].id, anchor: .center)
+                }
+            }
+            .onChange(of: showTour) { _, isOn in
+                guard isOn, let first = tourSteps.first else { return }
+                withAnimation(.easeInOut(duration: 0.4)) { scroller.scrollTo(first.id, anchor: .center) }
+            }
+        }
+        .environment(coach)
+        .fullScreenCover(isPresented: $showTour) {
+            CoachMarkOverlay(steps: tourSteps, index: $tourIndex, registry: coach) {
+                endTour()
+            }
+            .presentationBackground(.clear)
+        }
+        .onChange(of: home != nil) { _, loaded in
+            if loaded { scheduleFirstTour() }
         }
         .refreshable { await load() }
         .background(EduTheme.loginBackground.ignoresSafeArea())
@@ -300,16 +370,25 @@ struct ParentHomeView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "house.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .accessibilityHidden(true)
+                Button {
+                    startTour()
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .stroke(.white.opacity(0.25), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Revoir le guide de cette page")
+                .coachMarkTarget("parent.help")
             }
-            .accessibilityElement(children: .combine)
 
-            if children.count > 1 { childSwitcher }
+            if children.count > 1 { childSwitcher.coachMarkTarget("parent.switcher") }
 
             if let child = selected {
                 HStack(spacing: 10) {
@@ -342,6 +421,7 @@ struct ParentHomeView: View {
                     )
                 }
                 .redacted(reason: home == nil ? .placeholder : [])
+                .coachMarkTarget("parent.stats")
             }
         }
         .padding(20)
@@ -1358,6 +1438,38 @@ struct ParentHomeView: View {
         case 1: return ("Demain", true)
         default: return ("Dans \(days) j", days <= 3)
         }
+    }
+
+    // MARK: Guided tour
+
+    /// First visit: once the selected child's cards are on screen, run the tour by itself.
+    private func scheduleFirstTour() {
+        guard !tourDone, !tourScheduled, !showTour else { return }
+        tourScheduled = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(900))
+            startTour()
+        }
+    }
+
+    private func startTour() {
+        let steps = coach.steps(Self.tour)
+        guard !steps.isEmpty else { return }
+        tourSteps = steps
+        tourIndex = 0
+        // the overlay fades itself in; no slide-up sheet animation
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { showTour = true }
+    }
+
+    private func endTour() {
+        tourDone = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        // tourIndex is left as is: resetting it here briefly showed step 1 again
+        // while the overlay was closing (startTour resets it for the next run)
+        withTransaction(transaction) { showTour = false }
     }
 
     // MARK: Loading
