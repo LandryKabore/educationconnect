@@ -304,7 +304,7 @@ export default function ExamensEcole() {
       return;
     }
     const conflict = conflicts?.[0] as
-      | {
+      unknown as | {
           title: string;
           matieres: { name: string } | null;
           start_time: string | null;

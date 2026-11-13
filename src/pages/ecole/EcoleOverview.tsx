@@ -255,7 +255,7 @@ export default function EcoleOverview() {
       classesWithoutEdt = stats.classesWithoutEdt;
       studentsWithoutClass = stats.studentsWithoutClass.sample;
 
-      const allMsgs = (msgRes.data ?? []) as InboxPreview[];
+      const allMsgs = (msgRes.data ?? []) as unknown as InboxPreview[];
 
       return {
         classes: classesRes.count ?? 0,

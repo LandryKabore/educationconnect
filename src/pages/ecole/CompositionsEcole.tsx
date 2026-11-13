@@ -161,7 +161,7 @@ export default function CompositionsEcole() {
         .order("starts_on", { ascending: false });
       const { data, error } = await q;
       if (error) throw error;
-      const list = (data ?? []) as {
+      const list = (data ?? []) as unknown as {
         id: string;
         title: string;
         period_label: string;
@@ -186,7 +186,7 @@ export default function CompositionsEcole() {
 
       type Paper = SessionRow["papers"][number] & { session_id: string };
       const bySession = new Map<string, SessionRow["papers"]>();
-      for (const p of (papers ?? []) as Paper[]) {
+      for (const p of (papers ?? []) as unknown as Paper[]) {
         const listP = bySession.get(p.session_id) ?? [];
         listP.push(p);
         bySession.set(p.session_id, listP);

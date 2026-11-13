@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
 import { supabase } from "@/lib/supabase";
-import { joinProfile } from "@/lib/utils";
+import { joinOne } from "@/lib/utils";
 import { PageHeader } from "@/components/ui";
 import {
   DevoirsClearList,
@@ -42,7 +42,7 @@ export default function MesDevoirs({ isExam }: Props) {
         classes: unknown;
       };
       const className =
-        joinProfile<{ name: string }>(row.classes)?.name ?? "";
+        joinOne<{ name: string }>(row.classes)?.name ?? "";
 
       let q = supabase
         .from("evaluations")

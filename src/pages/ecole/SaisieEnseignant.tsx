@@ -71,7 +71,7 @@ export default function SaisieEnseignant() {
 
       const byClass = new Map<string, TeacherAssignment>();
       for (const row of data ?? []) {
-        const r = row as {
+        const r = row as unknown as {
           class_section_id: string;
           classes: ClassSection | null;
           matieres: { name: string } | null;
