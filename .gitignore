@@ -61,3 +61,5 @@ EduFaso IOS/**/DerivedData/
 **/xcuserdata/
 **/*.xcuserstate
 
+# Capacitor iOS webview wrapper removed — native app lives in EduFaso IOS/
+ios/
