@@ -26,6 +26,13 @@ function slugify(value: string) {
     .slice(0, 20);
 }
 
+/** "prenom.nom" login base; `fallback` only when neither name has a usable character. */
+function usernameBase(firstName: string, lastName: string, fallback: string) {
+  const first = slugify(firstName);
+  const last = slugify(lastName);
+  return first || last ? `${first}.${last}` : fallback;
+}
+
 function randomPassword(length = 12) {
   // F-22: always 12+ chars with upper, lower, digit and symbol, so temporary
   // passwords also satisfy a stricter Auth password policy.
@@ -117,7 +124,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: isSuper } = await admin.rpc("ef_is_super_admin");
     // Check caller permissions via service using caller's id
     const { data: callerRoles } = await admin
       .from("roles_utilisateurs")
@@ -247,7 +253,7 @@ Deno.serve(async (req) => {
       familyManaged = isFam === true;
     }
 
-    const base = `${slugify(firstName)}.${slugify(lastName)}` || "utilisateur";
+    const base = usernameBase(firstName, lastName, "utilisateur");
     const suffix = Math.floor(Math.random() * 900 + 100);
     const username = `${base}${suffix}`;
     const email = `${username}@edufaso.local`;

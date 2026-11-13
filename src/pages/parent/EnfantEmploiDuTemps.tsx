@@ -15,13 +15,15 @@ import {
 } from "@/components/TimetableGrid";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import {
-  ParentChildBackLink,
-  ParentChildGate,
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
+import {
+  ParentChildBackLink,
+  ParentChildGate,
+} from "@/pages/parent/ParentChildGate";
 
 export default function EnfantEmploiDuTemps() {
   const id = useParentChildParams();

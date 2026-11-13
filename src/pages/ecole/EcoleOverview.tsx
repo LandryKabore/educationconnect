@@ -18,10 +18,9 @@ import {
   Panel,
   PanelEmpty,
   PortalHomeHeader,
-  relativeFr,
-  snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import { relativeFr, snippet } from "@/lib/portalHomeFormat";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";

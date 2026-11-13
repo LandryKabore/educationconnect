@@ -28,7 +28,7 @@ export function normalizeDob(value: unknown): string | null {
     m = Number(match[2]);
     d = Number(match[3]);
   } else {
-    match = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(v);
+    match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(v);
     if (!match) return null;
     d = Number(match[1]);
     m = Number(match[2]);

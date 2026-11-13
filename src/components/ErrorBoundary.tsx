@@ -14,6 +14,8 @@ type Props = {
 
 type State = {
   error: Error | null;
+  /** resetKeys seen on the last render, to detect changes. */
+  resetKeys?: unknown[];
 };
 
 function keysChanged(prev: unknown[] | undefined, next: unknown[] | undefined) {
@@ -30,7 +32,16 @@ function keysChanged(prev: unknown[] | undefined, next: unknown[] | undefined) {
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromProps(
+    props: Props,
+    state: State,
+  ): Partial<State> | null {
+    if (!keysChanged(state.resetKeys, props.resetKeys)) return null;
+    // Keys changed (e.g. navigation): clear any crash before rendering.
+    return { resetKeys: props.resetKeys, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
   }
 
@@ -38,15 +49,6 @@ export class ErrorBoundary extends Component<Props, State> {
     const scope = this.props.scope ?? "app";
     console.error(`[EduFaso:${scope}] render crash`, error, info.componentStack);
     recordClientError(error);
-  }
-
-  componentDidUpdate(prevProps: Props) {
-    if (
-      this.state.error &&
-      keysChanged(prevProps.resetKeys, this.props.resetKeys)
-    ) {
-      this.setState({ error: null });
-    }
   }
 
   private recover = () => {

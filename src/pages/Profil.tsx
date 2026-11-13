@@ -10,7 +10,8 @@ import {
   type ProfileFieldKey,
 } from "@/lib/profileCompletion";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { SaveButton } from "@/components/SaveButton";
+import { isFormDirty } from "@/lib/formDirty";
 import {
   Card,
   DateInputFr,

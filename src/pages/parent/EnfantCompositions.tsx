@@ -9,13 +9,15 @@ import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import {
-  ParentChildBackLink,
-  ParentChildGate,
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
+import {
+  ParentChildBackLink,
+  ParentChildGate,
+} from "@/pages/parent/ParentChildGate";
 
 type Paper = {
   id: string;

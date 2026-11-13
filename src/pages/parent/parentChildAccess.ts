@@ -1,9 +1,7 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { fullName } from "@/lib/utils";
-import { EmptyState } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 
 /** Shared parent→child access gate used by all enfant-* pages. */
@@ -53,39 +51,6 @@ export function useChildEnrollment(studentId: string | undefined, enabled: boole
       } | null;
     },
   });
-}
-
-export function ParentChildBackLink({
-  childName,
-}: {
-  childName?: string | null;
-}) {
-  return (
-    <Link
-      to="/enfants"
-      className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-    >
-      <ArrowLeft className="h-4 w-4" />
-      {childName
-        ? `Retour — ${childName}`
-        : "Retour aux enfants"}
-    </Link>
-  );
-}
-
-export function ParentChildGate({
-  link,
-  isLoading,
-  children,
-}: {
-  link: unknown;
-  isLoading: boolean;
-  children: React.ReactNode;
-}) {
-  if (!link && !isLoading) {
-    return <EmptyState message="Accès non autorisé à cet élève." />;
-  }
-  return <>{children}</>;
 }
 
 export function childDisplayName(

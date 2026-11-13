@@ -27,6 +27,13 @@ function slugify(value: string) {
     .slice(0, 20);
 }
 
+/** "prenom.nom" login base; `fallback` only when neither name has a usable character. */
+function usernameBase(firstName: string, lastName: string, fallback: string) {
+  const first = slugify(firstName);
+  const last = slugify(lastName);
+  return first || last ? `${first}.${last}` : fallback;
+}
+
 function randomPassword(length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   let out = "";
@@ -251,7 +258,7 @@ Deno.serve(async (req) => {
       }
       const familyManaged = familyCache.get(classKey) === true;
 
-      const base = `${slugify(firstName)}.${slugify(lastName)}` || "eleve";
+      const base = usernameBase(firstName, lastName, "eleve");
       const suffix = Math.floor(Math.random() * 900 + 100);
       const username = `${base}${suffix}`;
       const email = `${username}@edufaso.local`;
@@ -361,7 +368,7 @@ Deno.serve(async (req) => {
               message: "Parent non créé : prénom et nom du parent requis (aucun parent n'a ce téléphone)",
             });
           } else {
-            const pBase = `${slugify(parentFirst)}.${slugify(parentLast)}` || "parent";
+            const pBase = usernameBase(parentFirst, parentLast, "parent");
             parentUsername = `${pBase}${Math.floor(Math.random() * 900 + 100)}`;
             const pEmail = `${parentUsername}@edufaso.local`;
             parentTemp = randomPassword(10);

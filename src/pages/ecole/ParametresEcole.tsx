@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
-import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { SaveButton } from "@/components/SaveButton";
+import { isFormDirty } from "@/lib/formDirty";
 import {
   emptySchoolForm,
   formToSchoolPayload,

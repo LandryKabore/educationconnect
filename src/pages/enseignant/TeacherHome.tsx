@@ -17,10 +17,9 @@ import {
   Panel,
   PanelEmpty,
   PortalHomeHeader,
-  relativeFr,
-  snippet,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
+import { relativeFr, snippet } from "@/lib/portalHomeFormat";
 import {
   TeacherMobileHome,
   type MetricChipModel,

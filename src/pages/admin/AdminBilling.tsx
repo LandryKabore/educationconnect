@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { logAudit } from "@/lib/audit";
 import type { School } from "@/lib/types";
-import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { SaveButton } from "@/components/SaveButton";
+import { isFormDirty } from "@/lib/formDirty";
 import { Badge, Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 
 const PLANS = [

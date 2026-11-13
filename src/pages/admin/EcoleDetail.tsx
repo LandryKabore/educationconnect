@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,7 +15,8 @@ import {
   type SchoolFormFields,
 } from "@/lib/schoolForm";
 import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
-import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { SaveButton } from "@/components/SaveButton";
+import { isFormDirty } from "@/lib/formDirty";
 import {
   Badge,
   Button,

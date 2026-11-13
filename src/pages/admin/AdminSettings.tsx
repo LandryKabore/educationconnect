@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { logAudit } from "@/lib/audit";
 import type { PlatformSettings } from "@/lib/types";
-import { SaveButton, isFormDirty } from "@/components/SaveButton";
+import { SaveButton } from "@/components/SaveButton";
+import { isFormDirty } from "@/lib/formDirty";
 import { Card, Input, Label, PageHeader } from "@/components/ui";
 
 type SettingsForm = {

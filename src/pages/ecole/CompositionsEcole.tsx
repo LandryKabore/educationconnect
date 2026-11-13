@@ -15,7 +15,7 @@ import {
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
-import { fullName, joinProfile } from "@/lib/utils";
+import { joinProfile } from "@/lib/utils";
 import {
   Badge,
   Button,

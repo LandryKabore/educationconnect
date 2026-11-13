@@ -1,13 +1,15 @@
 import { CahierFeedView } from "@/components/CahierFeedView";
 import { EmptyState, PageHeader } from "@/components/ui";
 import {
-  ParentChildBackLink,
-  ParentChildGate,
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
+import {
+  ParentChildBackLink,
+  ParentChildGate,
+} from "@/pages/parent/ParentChildGate";
 
 /** Parent: the lesson log of the child's class. */
 export default function EnfantCahier() {

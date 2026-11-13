@@ -1,14 +1,11 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
-  type Context,
   type ReactNode,
 } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
   ROLE_HOME,
@@ -19,39 +16,9 @@ import {
 } from "@/lib/types";
 import { toAuthEmail } from "@/lib/utils";
 import { isPasswordStrong } from "@/lib/passwordRules";
+import { AuthContext, type AuthState } from "@/contexts/AuthContext";
 
 const SUPPORT_KEY = "ef_support_school";
-
-interface AuthState {
-  session: Session | null;
-  user: User | null;
-  profile: Profile | null;
-  role: AppRole | null;
-  /** Real role ignoring support mode */
-  realRole: AppRole | null;
-  roles: UserRoleRow[];
-  schoolId: string | null;
-  schools: School[];
-  loading: boolean;
-  supportSchoolId: string | null;
-  enterSupportMode: (schoolId: string) => void;
-  exitSupportMode: () => void;
-  signIn: (identifiant: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
-  completePasswordChange: (newPassword: string) => Promise<void>;
-  homePath: string;
-}
-
-const authContextGlobal = globalThis as typeof globalThis & {
-  __edufasoAuthContext?: Context<AuthState | null>;
-};
-
-// Reuse the same Context across Vite HMR so useAuth doesn't go blank mid-session.
-const AuthContext =
-  authContextGlobal.__edufasoAuthContext ??
-  createContext<AuthState | null>(null);
-authContextGlobal.__edufasoAuthContext = AuthContext;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -305,10 +272,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth doit être utilisé dans AuthProvider");
-  return ctx;
 }

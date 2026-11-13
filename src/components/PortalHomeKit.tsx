@@ -1,31 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
-import { fr } from "date-fns/locale";
 import type { LucideIcon } from "lucide-react";
 import { Megaphone, MessageSquare } from "lucide-react";
-import { parseValidDate } from "@/lib/dateFr";
 import { getTimeGreeting } from "@/lib/greeting";
 import { cn } from "@/lib/utils";
 import { Button, Card } from "@/components/ui";
 import type { UnreadInboxCounts } from "@/hooks/useUnreadMessagesCount";
 import { EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
-
-export function relativeFr(iso: string | null | undefined) {
-  const d = parseValidDate(iso);
-  if (!d) return "—";
-  try {
-    return formatDistanceToNow(d, { addSuffix: true, locale: fr });
-  } catch {
-    return "—";
-  }
-}
-
-export function snippet(text: string, max = 72) {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1)}…`;
-}
 
 export function MetricCard({
   label,

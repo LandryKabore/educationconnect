@@ -10,7 +10,6 @@ import { fullName } from "@/lib/utils";
 import {
   fetchAdminUsersFacets,
   fetchAdminUsersPage,
-  type AdminUserRow,
 } from "@/lib/scaleApi";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -22,8 +21,6 @@ import {
   PageHeader,
   Select,
 } from "@/components/ui";
-
-type UserWithRoles = AdminUserRow;
 
 const PAGE = 50;
 
