@@ -527,8 +527,6 @@ struct ScreenHost: View {
             MyTeachersView()
         case .bulletin:
             BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin")
-        case .children:
-            ParentHomeView(title: "Tous mes enfants")
         case .childNotes:
             ChildGate(title: "Notes") { StudentGradesView(studentIdOverride: $0.id) }
         case .childAttendance:

@@ -52,7 +52,6 @@ enum AppScreen: String, Identifiable, Hashable {
     case myTeachers
     case bulletin
 
-    case children
     case childNotes
     case childAttendance
     case childExams
@@ -111,7 +110,6 @@ enum AppScreen: String, Identifiable, Hashable {
         case .attendance: return "Mes présences"
         case .myTeachers: return "Mes profs"
         case .bulletin: return "Mon bulletin"
-        case .children: return "Tous mes enfants"
         case .childNotes: return "Notes"
         case .childAttendance: return "Présences"
         case .childExams: return "Devoirs"
@@ -138,7 +136,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .adminAudit: return "list.clipboard"
         case .years, .periods, .timetable, .schoolTimetable, .childTimetable: return "calendar"
         case .subjects, .cahier, .schoolCahier, .teacherCahier, .childCahier, .grades, .childNotes: return "book"
-        case .classes, .teacherClasses, .children: return "rectangle.3.group"
+        case .classes, .teacherClasses: return "rectangle.3.group"
         case .programmes: return "square.stack.3d.up"
         case .schoolAttendance, .teacherAttendance, .attendance, .childAttendance: return "checklist"
         case .schoolHomework, .teacherEvaluations, .exams, .exercises, .childExams, .childExercises: return "doc.text"
@@ -218,7 +216,7 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
         return [
             AppNavSection(id: "main", title: nil, screens: [.dashboard]),
             AppNavSection(id: "enfants", title: "Mes enfants", screens: [
-                .children, .childNotes, .childAttendance, .childExams, .childExercises,
+                .childNotes, .childAttendance, .childExams, .childExercises,
                 .childCompositions, .childBulletin, .childTimetable, .childCahier,
             ]),
             AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
