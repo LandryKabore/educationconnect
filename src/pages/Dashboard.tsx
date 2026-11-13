@@ -6,6 +6,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { PortalGreeting } from "@/components/PortalGreeting";
 import StudentHome from "@/pages/eleve/StudentHome";
 import TeacherHome from "@/pages/enseignant/TeacherHome";
+import { ParentHomeSkeleton } from "@/pages/parent/ParentHomeSkeleton";
 
 const ParentHome = lazy(() => import("@/pages/parent/ParentHome"));
 
@@ -16,7 +17,7 @@ export default function Dashboard() {
   if (role === "teacher") return <TeacherHome />;
   if (role === "parent") {
     return (
-      <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+      <Suspense fallback={<ParentHomeSkeleton />}>
         <ParentHome />
       </Suspense>
     );

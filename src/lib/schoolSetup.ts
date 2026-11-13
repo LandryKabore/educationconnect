@@ -146,6 +146,12 @@ export function evaluateSetupStep(
   }
 }
 
+/** Step URL that turns the sticky setup guide on (`?setup=1`). */
+export function setupGuideHref(to: string) {
+  const sep = to.includes("?") ? "&" : "?";
+  return `${to}${sep}setup=1`;
+}
+
 export function setupProgress(counts: SetupCounts) {
   const required = SCHOOL_SETUP_STEPS.filter((s) => !s.optional);
   const doneRequired = required.filter(

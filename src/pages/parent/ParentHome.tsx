@@ -4,13 +4,8 @@ import {
   AlertTriangle,
   Bell,
   BookOpen,
-  CalendarCheck,
-  CalendarDays,
   ClipboardList,
-  FileText,
-  GraduationCap,
   MessageSquare,
-  NotebookPen,
   Users,
 } from "lucide-react";
 import { Panel, PanelEmpty } from "@/components/PortalHomeKit";
@@ -33,7 +28,6 @@ import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMes
 import type { ChildSummary } from "@/lib/scaleApi";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { formatDateSafe } from "@/lib/dateFr";
-import { getTimeGreeting } from "@/lib/greeting";
 import {
   CHILD_COLORS,
   ageLabel,
@@ -52,6 +46,17 @@ import {
 } from "@/lib/parentHome";
 import type { AttendanceStatus } from "@/lib/types";
 import { cn, fullName, personName } from "@/lib/utils";
+import {
+  AnnouncementRowsSkeleton,
+  AverageCardBodySkeleton,
+  DetailRowsSkeleton,
+  MessageRowsSkeleton,
+  ParentHomeHeader,
+  ParentHomeSkeleton,
+  PresenceCardBodySkeleton,
+  StripBodySkeleton,
+} from "@/pages/parent/ParentHomeSkeleton";
+import { PARENT_QUICK_LINKS } from "@/pages/parent/parentQuickLinks";
 
 const CARD_LABEL =
   "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300";
@@ -76,15 +81,6 @@ function averageTone(v: number | null) {
   if (v >= 10) return "text-brand-600";
   if (v >= 8) return "text-amber-500";
   return "text-rose-600";
-}
-
-function CardSkeleton() {
-  return (
-    <div className="space-y-2" aria-hidden="true">
-      <div className="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-      <div className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
-    </div>
-  );
 }
 
 /* ------------------------------------------------------------------ switcher */
@@ -257,7 +253,7 @@ function AverageCard({
     <Link to={`/enfants/${childId}/notes`} className="block h-full">
       <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
         {loading ? (
-          <CardSkeleton />
+          <AverageCardBodySkeleton />
         ) : (
           <>
             <p className={CARD_LABEL}>Moyennes · année</p>
@@ -316,7 +312,7 @@ function PresenceCard({
     <Link to={`/enfants/${childId}/presences`} className="block h-full">
       <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
         {loading ? (
-          <CardSkeleton />
+          <PresenceCardBodySkeleton />
         ) : (
           <>
             <p className={CARD_LABEL}>Présence{att ? ` · ${att.periodLabel}` : ""}</p>
@@ -358,7 +354,7 @@ function StripCard({ childId }: { childId: string }) {
         </Link>
       </div>
       {isLoading ? (
-        <div className="mt-3 h-6 animate-pulse rounded bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
+        <StripBodySkeleton />
       ) : isError ? (
         <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Indisponible pour le moment.</p>
       ) : !strip || strip.length === 0 ? (
@@ -410,7 +406,7 @@ function HomeworkPanel({
       }
     >
       {isLoading ? (
-        <CardSkeleton />
+        <DetailRowsSkeleton />
       ) : isError ? (
         <PanelEmpty message="Devoirs indisponibles pour le moment." />
       ) : !classSectionId ? (
@@ -519,7 +515,7 @@ function MessagesPanel({ userId }: { userId: string | undefined }) {
       }
     >
       {isLoading ? (
-        <CardSkeleton />
+        <MessageRowsSkeleton />
       ) : isError ? (
         <PanelEmpty message="Messages indisponibles pour le moment." />
       ) : !data || data.messages.length === 0 ? (
@@ -560,7 +556,7 @@ function MessagesPanel({ userId }: { userId: string | undefined }) {
 }
 
 function AnnouncementsPanel({ userId }: { userId: string | undefined }) {
-  const { data } = useParentInbox(userId);
+  const { data, isLoading } = useParentInbox(userId);
   const items = data?.announcements ?? [];
   return (
     <Panel
@@ -576,7 +572,9 @@ function AnnouncementsPanel({ userId }: { userId: string | undefined }) {
         </Link>
       }
     >
-      {items.length === 0 ? (
+      {isLoading ? (
+        <AnnouncementRowsSkeleton />
+      ) : items.length === 0 ? (
         <PanelEmpty message="Aucune annonce pour le moment." />
       ) : (
         <ul className="space-y-2">
@@ -598,20 +596,11 @@ function AnnouncementsPanel({ userId }: { userId: string | undefined }) {
 }
 
 function ChildQuickLinks({ childId }: { childId: string }) {
-  const links = [
-    { to: "notes", label: "Notes", icon: BookOpen },
-    { to: "bulletin", label: "Bulletin", icon: FileText },
-    { to: "presences", label: "Présences", icon: CalendarCheck },
-    { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
-    { to: "devoirs", label: "Devoirs", icon: ClipboardList },
-    { to: "exercices", label: "Exercices", icon: NotebookPen },
-    { to: "compositions", label: "Compositions", icon: GraduationCap },
-  ];
   return (
     <Card className="p-4">
       <p className={CARD_LABEL}>Accès rapide</p>
       <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
-        {links.map(({ to, label, icon: Icon }) => (
+        {PARENT_QUICK_LINKS.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={`/enfants/${childId}/${to}`}
@@ -695,7 +684,7 @@ export default function ParentHome() {
   }, []);
 
   if (isLoading) {
-    return <p className="text-slate-500">Chargement…</p>;
+    return <ParentHomeSkeleton />;
   }
 
   if (isError || !children) {
@@ -704,22 +693,7 @@ export default function ParentHome() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <p className="text-sm font-medium text-brand-700">
-          {getTimeGreeting()}{" "}
-          <span className="animate-greeting-wave inline-block" aria-hidden>
-            👋
-          </span>
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-          {name || (
-            <span className="inline-block h-8 w-40 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
-          )}
-        </h1>
-        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-          {[schoolName, "Parent"].filter(Boolean).join(" · ")}
-        </p>
-      </header>
+      <ParentHomeHeader name={name} schoolName={schoolName} />
 
       {children.length === 0 || !selected ? (
         <Card className="p-5">
