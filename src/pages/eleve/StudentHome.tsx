@@ -166,13 +166,18 @@ export default function StudentHome() {
       let weekSlots: typeof todaySlots = [];
 
       if (classId) {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        // only what is still to come (or undated): ordering the whole history
+        // oldest-first with a small limit returned old, already graded work,
+        // so new homework never reached this card
         const { data: exercicesData } = await supabase
           .from("evaluations")
           .select("id, title, due_date:eval_date, matieres(name)")
           .eq("class_section_id", classId)
           .eq("type", "devoir")
+          .or(`eval_date.gte.${todayIso},eval_date.is.null`)
           .order("eval_date", { ascending: true })
-          .limit(4);
+          .limit(50);
 
         pendingExercices = (
           (exercicesData ?? []) as {
@@ -191,10 +196,10 @@ export default function StudentHome() {
           .eq("class_section_id", classId)
           .eq("type", "examen")
           .eq("admin_confirmed", true)
+          .or(`eval_date.gte.${todayIso},eval_date.is.null`)
           .order("eval_date", { ascending: true })
-          .limit(6);
+          .limit(12);
 
-        const todayIso = new Date().toISOString().slice(0, 10);
         upcomingExamens = (
           (examensData ?? []) as {
             id: string;
@@ -770,7 +775,7 @@ export default function StudentHome() {
             <PanelEmpty message="Aucun exercice à rendre pour le moment." />
           ) : (
             <ul className="space-y-2">
-              {pendingExercices.map((d) => (
+              {pendingExercices.slice(0, 4).map((d) => (
                 <li
                   key={d.id}
                   className="flex items-start justify-between gap-2 rounded-xl bg-amber-50/80 px-3 py-2.5"

@@ -28,7 +28,7 @@ import {
 } from "@/lib/averages";
 import { attendanceRate, type AttendanceTotals } from "@/lib/attendance";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import { initialGradingPeriod } from "@/lib/gradingPeriod";
+import { useResolvedGradingPeriod } from "@/hooks/useGradingPeriodState";
 import type {
   AcademicYear,
   AttendanceRow,
@@ -270,7 +270,6 @@ export default function EleveDetail() {
       : "/eleves";
 
   const since = useMemo(() => format(subDays(new Date(), 29), "yyyy-MM-dd"), []);
-  const termLabel = useMemo(() => initialGradingPeriod(TRIMESTER_PERIODS), []);
 
   const { data: student, isLoading } = useQuery({
     queryKey: ["eleve-detail", id, schoolId],
@@ -391,6 +390,12 @@ export default function EleveDetail() {
   });
 
   const classId = enrollment?.class_section_id;
+  // same term as the bulletins and grade pages: the school's open trimester
+  // (its real dates and closures), not a guess from the calendar month
+  const { suggested: termLabel } = useResolvedGradingPeriod(TRIMESTER_PERIODS, {
+    classSectionId: classId,
+    schoolId,
+  });
 
   const { data: coefMap = {} } = useQuery({
     queryKey: ["programme-coefs", classId],
