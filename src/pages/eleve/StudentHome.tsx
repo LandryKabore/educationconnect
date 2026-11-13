@@ -108,7 +108,7 @@ export default function StudentHome() {
         .select("id", { count: "exact", head: true })
         .eq("student_id", uid);
 
-      const notes = (notesData ?? []) as (GradeRow & {
+      const notes = (notesData ?? []) as unknown as (GradeRow & {
         matieres: Subject | null;
       })[];
       const gradedEvalIds = new Set(
@@ -175,7 +175,7 @@ export default function StudentHome() {
           .limit(4);
 
         pendingExercices = (
-          (exercicesData ?? []) as {
+          (exercicesData ?? []) as unknown as {
             id: string;
             title: string;
             due_date: string | null;
@@ -196,7 +196,7 @@ export default function StudentHome() {
 
         const todayIso = new Date().toISOString().slice(0, 10);
         upcomingExamens = (
-          (examensData ?? []) as {
+          (examensData ?? []) as unknown as {
             id: string;
             title: string;
             due_date: string | null;
@@ -261,7 +261,7 @@ export default function StudentHome() {
           .eq("class_section_id", classId)
           .order("day_of_week")
           .order("start_time");
-        weekSlots = (slots ?? []) as typeof weekSlots;
+        weekSlots = (slots ?? []) as unknown as typeof weekSlots;
         todaySlots = weekSlots.filter((s) => s.day_of_week === todayDow);
       }
 
@@ -284,7 +284,7 @@ export default function StudentHome() {
         sender: { first_name: string; last_name: string } | null;
       };
 
-      const allMsgs = (msgData ?? []) as Msg[];
+      const allMsgs = (msgData ?? []) as unknown as Msg[];
       const announcements = allMsgs
         .filter((m) => m.is_announcement)
         .slice(0, 3);

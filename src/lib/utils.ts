@@ -16,6 +16,21 @@ export function personName(first?: string | null, last?: string | null) {
 
 /**
  * Normalize a PostgREST embed: object, single-element array, or null.
+ * supabase-js (without generated DB types) types every embed as an array,
+ * while many-to-one embeds arrive as a single object at runtime.
+ */
+export function joinOne<T extends object>(raw: unknown): T | null {
+  if (raw == null) return null;
+  if (Array.isArray(raw)) {
+    const first: unknown = raw[0];
+    return first && typeof first === "object" ? (first as T) : null;
+  }
+  if (typeof raw === "object") return raw as T;
+  return null;
+}
+
+/**
+ * Profile flavour of {@link joinOne}.
  * Bare `profils(*)` joins sometimes arrive as arrays — reading `.first_name`
  * on those yields undefined and causes name flashes ("Élève" / "Utilisateur").
  */
@@ -25,13 +40,7 @@ export function joinProfile<
     last_name: string | null;
   },
 >(raw: unknown): T | null {
-  if (raw == null) return null;
-  if (Array.isArray(raw)) {
-    const first = raw[0];
-    return first && typeof first === "object" ? (first as T) : null;
-  }
-  if (typeof raw === "object") return raw as T;
-  return null;
+  return joinOne<T>(raw);
 }
 
 /** Identifiant local → email technique Auth */
