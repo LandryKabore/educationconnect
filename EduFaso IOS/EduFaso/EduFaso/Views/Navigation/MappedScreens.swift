@@ -72,16 +72,19 @@ struct ChildGate<Content: View>: View {
 
 struct EvaluationsBrowser: View {
     private enum StatusFilter: String, CaseIterable, Identifiable {
-        case all, todo, upcoming, past, graded
+        case all, todo, late, upcoming, past, graded, toGrade, confirm
         var id: String { rawValue }
 
         func label(for type: String?) -> String {
             switch self {
             case .all: return "Tout"
             case .todo: return "À faire"
+            case .late: return "En retard"
             case .upcoming: return "À venir"
             case .past: return "Passés"
             case .graded: return "Notés"
+            case .toGrade: return "À noter"
+            case .confirm: return "À confirmer"
             }
         }
     }
@@ -97,6 +100,7 @@ struct EvaluationsBrowser: View {
     let title: String
 
     @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rows: [EvaluationRow] = []
     @State private var gradedIds: Set<String> = []
     @State private var expandedIds: Set<String> = []
@@ -105,21 +109,56 @@ struct EvaluationsBrowser: View {
     @State private var loading = true
     @State private var ready = false
     @State private var error: String?
+    @State private var showCreate = false
 
     private var resolvedStudentId: String? { studentId ?? (teacherId == nil && !allowEntry ? auth.userId : nil) }
     private var isStudentAudience: Bool { resolvedStudentId != nil && !allowEntry }
+    private var isTeacherAudience: Bool { allowEntry && !isStudentAudience }
     private var isExamMode: Bool { type == "examen" }
+    private var isQuizMode: Bool { type == "interrogation" }
+    /// Exercices de maison are not graded here — just to read, like the cahier.
+    private var isHomeworkInfoMode: Bool { type == "devoir" && isStudentAudience }
+    private var canCreateEvaluation: Bool {
+        allowEntry && (auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin)
+            && (type == nil || type == "interrogation")
+    }
 
     private var availableFilters: [StatusFilter] {
-        if isExamMode {
+        if isTeacherAudience {
+            var chips: [StatusFilter] = [.all, .toGrade, .upcoming, .graded]
+            if confirmCount > 0 { chips.append(.confirm) }
+            return chips
+        }
+        if isHomeworkInfoMode {
+            return []
+        }
+        if isExamMode || isQuizMode {
             return [.all, .upcoming, .past, .graded]
         }
         return [.all, .todo, .graded]
     }
 
+    private func isLate(_ row: EvaluationRow) -> Bool {
+        !gradedIds.contains(row.id) && eventDay(row) != nil && !isUpcoming(row)
+    }
+
+    private var lateCount: Int {
+        rows.filter { isLate($0) }.count
+    }
+
+    private var confirmCount: Int {
+        rows.filter { $0.adminConfirmed == false && ($0.type == "examen" || $0.type == "composition") }.count
+    }
+
+    /// Past date + not graded — what teachers actually need to act on.
+    private var needsGradingCount: Int {
+        rows.filter { !gradedIds.contains($0.id) && !isUpcoming($0) }.count
+    }
+
     private var emptyTitle: String {
         switch type {
         case "devoir": return "Aucun exercice"
+        case "interrogation": return "Aucune interrogation"
         case "examen": return "Aucun devoir"
         case "composition": return "Aucune composition"
         default: return "Aucune évaluation"
@@ -132,7 +171,9 @@ struct EvaluationsBrowser: View {
         }
         switch type {
         case "devoir":
-            return "Aucun exercice de maison publié pour ta classe."
+            return "Les exercices de maison se trouvent dans le cahier de textes."
+        case "interrogation":
+            return "Aucune interrogation publiée pour ta classe pour le moment."
         case "examen":
             return "Aucun devoir confirmé par l’établissement pour le moment."
         default:
@@ -143,6 +184,7 @@ struct EvaluationsBrowser: View {
     private var accent: Color {
         switch type {
         case "devoir": return EduTheme.fasoRed
+        case "interrogation": return Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
         case "examen": return EduTheme.navy
         case "composition": return EduTheme.teal
         default: return EduTheme.navy
@@ -166,21 +208,57 @@ struct EvaluationsBrowser: View {
         switch statusFilter {
         case .all: base = rows
         case .todo: base = rows.filter { !gradedIds.contains($0.id) }
+        case .late: base = rows.filter { isLate($0) }
         case .upcoming: base = rows.filter { isUpcoming($0) }
         case .past: base = rows.filter { !isUpcoming($0) }
         case .graded: base = rows.filter { gradedIds.contains($0.id) }
+        case .toGrade:
+            base = rows.filter { !gradedIds.contains($0.id) && !isUpcoming($0) }
+        case .confirm:
+            base = rows.filter {
+                $0.adminConfirmed == false && ($0.type == "examen" || $0.type == "composition")
+            }
         }
         return base.sorted { lhs, rhs in
             let l = eventDay(lhs) ?? "9999"
             let r = eventDay(rhs) ?? "9999"
-            if isExamMode {
-                // Upcoming first (soonest), then past (most recent)
+            if isTeacherAudience {
+                // À noter first, then upcoming soonest, then graded/past.
+                let lNeed = !gradedIds.contains(lhs.id) && !isUpcoming(lhs)
+                let rNeed = !gradedIds.contains(rhs.id) && !isUpcoming(rhs)
+                if lNeed != rNeed { return lNeed && !rNeed }
                 let lUp = isUpcoming(lhs)
                 let rUp = isUpcoming(rhs)
                 if lUp != rUp { return lUp && !rUp }
                 return lUp ? l < r : l > r
             }
+            if isExamMode || isQuizMode {
+                let lUp = isUpcoming(lhs)
+                let rUp = isUpcoming(rhs)
+                if lUp != rUp { return lUp && !rUp }
+                return lUp ? l < r : l > r
+            }
+            if isHomeworkInfoMode {
+                return l > r
+            }
+            if isStudentAudience {
+                let lDone = gradedIds.contains(lhs.id)
+                let rDone = gradedIds.contains(rhs.id)
+                if lDone != rDone { return !lDone && rDone }
+                return l < r
+            }
             return l > r
+        }
+    }
+
+    private var filterEmptyMessage: String {
+        switch statusFilter {
+        case .todo: return "Rien à faire pour le moment."
+        case .late: return "Rien en retard."
+        case .graded: return "Rien n’a encore été noté."
+        case .upcoming: return "Rien à venir pour le moment."
+        case .past: return "Rien de passé à afficher."
+        default: return "Rien à afficher avec ce filtre."
         }
     }
 
@@ -190,14 +268,38 @@ struct EvaluationsBrowser: View {
                 if !ready || loading {
                     LoadingBlock()
                 } else if let error {
-                    Text(error).foregroundStyle(EduTheme.fasoRed).padding()
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.largeTitle)
+                            .foregroundStyle(Color.orange)
+                            .accessibilityHidden(true)
+                        Text("Chargement impossible")
+                            .font(.headline)
+                            .foregroundStyle(EduTheme.ink)
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(EduTheme.muted)
+                            .multilineTextAlignment(.center)
+                        Button {
+                            Task { await load(isRefresh: false) }
+                        } label: {
+                            Text("Réessayer")
+                                .font(.subheadline.weight(.bold))
+                                .padding(.horizontal, 18)
+                                .frame(minHeight: 44)
+                                .foregroundStyle(.white)
+                                .background(EduTheme.teal, in: Capsule())
+                        }
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if rows.isEmpty {
                     PremiumEmpty(title: emptyTitle, systemImage: "doc.text", message: emptyMessage)
                 } else {
                     VStack(spacing: 0) {
                         VStack(alignment: .leading, spacing: 12) {
                             summaryCard
-                            if isStudentAudience {
+                            if (isStudentAudience || isTeacherAudience), !availableFilters.isEmpty {
                                 statusChips
                             }
                         }
@@ -211,7 +313,7 @@ struct EvaluationsBrowser: View {
                             ScrollView {
                                 LazyVStack(spacing: 10) {
                                     if filteredRows.isEmpty {
-                                        Text("Rien à afficher avec ce filtre.")
+                                        Text(filterEmptyMessage)
                                             .font(.subheadline)
                                             .foregroundStyle(EduTheme.muted)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,53 +335,131 @@ struct EvaluationsBrowser: View {
             }
         }
         .premiumTitle(title)
+        .toolbar {
+            if canCreateEvaluation {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCreate = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .accessibilityLabel("Nouvelle évaluation")
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if canCreateEvaluation, ready, !loading {
+                Button {
+                    showCreate = true
+                } label: {
+                    Label("Nouvelle évaluation", systemImage: "plus")
+                        .font(.body.weight(.bold))
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .foregroundStyle(.white)
+                        .background(EduTheme.navy, in: Capsule())
+                        .shadow(color: EduTheme.navy.opacity(0.3), radius: 10, y: 4)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            CreateEvaluationSheet(
+                preselectedClassId: classId,
+                lockedType: type == "interrogation" ? type : nil
+            ) {
+                showCreate = false
+                Task { await load(isRefresh: true) }
+            }
+            .environmentObject(auth)
+        }
         .task { await load(isRefresh: false) }
     }
 
     private var summaryCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.12))
-                Image(systemName: summaryIcon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(accent)
-            }
-            .frame(width: 52, height: 52)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(0.12))
+                    Image(systemName: summaryIcon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(accent)
+                }
+                .frame(width: 48, height: 48)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text((className ?? "Ma classe").uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(EduTheme.muted)
-                    .tracking(0.5)
-                Text("\(rows.count) \(itemNoun(rows.count))")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink)
-                if isStudentAudience {
-                    if isExamMode {
-                        Text("\(upcomingCount) à venir · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-                    } else {
-                        Text("\(pendingCount) à faire · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-                    }
-                } else if let className, !className.isEmpty {
-                    Text(className)
-                        .font(.caption)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text((className ?? (isTeacherAudience ? "Mes évaluations" : "Ma classe")).uppercased())
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(EduTheme.muted)
+                        .tracking(0.5)
+                    Text("\(rows.count) \(itemNoun(rows.count))")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                    if !isTeacherAudience {
+                        if isStudentAudience {
+                            if isHomeworkInfoMode {
+                                Text("À lire · comme le cahier de textes")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            } else if isExamMode || isQuizMode {
+                                Text("\(upcomingCount) à venir · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            } else {
+                                Text("\(pendingCount) à faire · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                        } else if let className, !className.isEmpty {
+                            Text(className)
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            if isTeacherAudience {
+                HStack(spacing: 8) {
+                    summaryStat("\(needsGradingCount)", "À noter", needsGradingCount > 0 ? EduTheme.fasoRed : EduTheme.muted) {
+                        statusFilter = .toGrade
+                    }
+                    summaryStat("\(upcomingCount)", "À venir", EduTheme.navy) {
+                        statusFilter = .upcoming
+                    }
+                    summaryStat("\(gradedCount)", "Notés", EduTheme.teal) {
+                        statusFilter = .graded
+                    }
                 }
             }
-            Spacer(minLength: 0)
         }
         .padding(16)
         .background(cardBackground)
     }
 
+    private func summaryStat(_ value: String, _ label: String, _ tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(value)
+                    .font(.title3.weight(.bold).monospacedDigit())
+                    .foregroundStyle(tint)
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(EduTheme.muted)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var summaryIcon: String {
         switch type {
         case "devoir": return "list.clipboard.fill"
+        case "interrogation": return "questionmark.circle.fill"
         case "examen": return "pencil.and.list.clipboard"
         case "composition": return "graduationcap.fill"
         default: return "doc.text.fill"
@@ -290,29 +470,65 @@ struct EvaluationsBrowser: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(availableFilters) { chip in
+                    let count = filterCount(chip)
+                    let selected = statusFilter == chip
                     Button {
                         statusFilter = chip
                     } label: {
-                        Text(chip.label(for: type))
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
-                            .background(
-                                Capsule()
-                                    .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(
-                                        statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
-                                        lineWidth: 1
+                        HStack(spacing: 5) {
+                            Text(chip.label(for: type))
+                                .font(.caption.weight(.semibold))
+                            if let count, chip != .all {
+                                Text("\(count)")
+                                    .font(.caption2.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(statusFilter == chip ? .white : EduTheme.muted)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(
+                                            statusFilter == chip
+                                                ? EduTheme.navy.opacity(0.85)
+                                                : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255)
+                                        )
                                     )
-                            )
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
+                        .background(
+                            Capsule()
+                                .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
+                                    lineWidth: 1
+                                )
+                        )
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(count.map { "\(chip.label(for: type)), \($0)" } ?? chip.label(for: type))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityHint("Filtre la liste")
                 }
             }
+        }
+    }
+
+    private func filterCount(_ chip: StatusFilter) -> Int? {
+        switch chip {
+        case .all: return rows.count
+        case .todo: return pendingCount
+        case .late: return lateCount
+        case .upcoming: return upcomingCount
+        case .past: return rows.filter { !isUpcoming($0) }.count
+        case .graded: return gradedCount
+        case .toGrade: return needsGradingCount
+        case .confirm: return confirmCount
         }
     }
 
@@ -322,55 +538,194 @@ struct EvaluationsBrowser: View {
         let expanded = expandedIds.contains(row.id)
         let canEnter = allowEntry && row.classSectionId != nil && row.subjectId != nil
         let hasDetails = !(row.details ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
         let swatch = SubjectPalette.swatch(for: row.matieres?.name)
 
-        VStack(alignment: .leading, spacing: 0) {
-            if canEnter {
-                NavigationLink {
-                    GradeEntryView(evaluation: row, recordedBy: recordedBy)
-                } label: {
-                    cardHeader(row, graded: graded, expanded: false, expandable: false, showsChevron: true, swatch: swatch, now: now)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button {
-                    guard hasDetails else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if expanded {
-                            expandedIds.remove(row.id)
-                        } else {
-                            expandedIds.insert(row.id)
-                        }
+        if isTeacherAudience, canEnter {
+            NavigationLink {
+                GradeEntryView(evaluation: row, recordedBy: recordedBy)
+            } label: {
+                teacherEvalCard(row, graded: graded, swatch: swatch, now: now)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(graded ? "Ouvre la modification des notes" : "Ouvre la saisie des notes")
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                if canEnter {
+                    NavigationLink {
+                        GradeEntryView(evaluation: row, recordedBy: recordedBy)
+                    } label: {
+                        cardHeader(
+                            row,
+                            graded: graded,
+                            expanded: false,
+                            expandable: false,
+                            showsChevron: true,
+                            gradeAction: graded ? "Modifier" : "Noter",
+                            swatch: swatch,
+                            now: now
+                        )
                     }
-                } label: {
-                    cardHeader(row, graded: graded, expanded: expanded, expandable: hasDetails, swatch: swatch, now: now)
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
+                } else if hasDetails {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                            if expanded {
+                                expandedIds.remove(row.id)
+                            } else {
+                                expandedIds.insert(row.id)
+                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 0) {
+                            cardHeader(row, graded: graded, expanded: expanded, expandable: true, swatch: swatch, now: now)
+                            if !expanded, let details = row.details {
+                                Text(details.trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.footnote)
+                                    .foregroundStyle(EduTheme.ink.opacity(0.7))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 14)
+                                    .padding(.leading, 16)
+                                    .padding(.bottom, 12)
+                                    .padding(.top, -4)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spokenLabel(row, graded: graded, now: now))
+                    .accessibilityValue(expanded ? "Consignes affichées" : "")
+                    .accessibilityHint(expanded ? "Masque les consignes" : "Affiche les consignes")
+                    .accessibilityAddTraits(.isButton)
 
-                if expanded, let details = row.details, !details.isEmpty {
-                    Divider().padding(.horizontal, 14)
-                    Text(details)
-                        .font(.subheadline)
-                        .foregroundStyle(EduTheme.ink.opacity(0.85))
+                    if expanded, let details = row.details, !details.isEmpty {
+                        Divider().padding(.horizontal, 14)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Consignes")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(EduTheme.muted)
+                                .textCase(.uppercase)
+                                .accessibilityAddTraits(.isHeader)
+                            Text(details)
+                                .font(.subheadline)
+                                .foregroundStyle(EduTheme.ink.opacity(0.85))
+                                .textSelection(.enabled)
+                        }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
+                    }
+                } else {
+                    cardHeader(row, graded: graded, expanded: false, expandable: false, swatch: swatch, now: now)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(spokenLabel(row, graded: graded, now: now))
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(swatch.fill.opacity(0.35))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.white.opacity(0.72))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(swatch.border.opacity(0.35), lineWidth: 1)
+            )
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(swatch.fill.opacity(0.35))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.white.opacity(0.72))
+    }
+
+    /// Cleaner teacher card: date · title · meta · clear status + Noter.
+    private func teacherEvalCard(
+        _ row: EvaluationRow,
+        graded: Bool,
+        swatch: SubjectPalette.Swatch,
+        now: Date
+    ) -> some View {
+        let status = teacherStatus(row, graded: graded, now: now)
+
+        return HStack(alignment: .center, spacing: 12) {
+            dateBadge(row, swatch: swatch)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(row.title?.isEmpty == false ? row.title! : row.typeLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Text(
+                    [shortTypeLabel(row), row.matieres?.name, row.classes?.name]
+                        .compactMap { $0?.isEmpty == false ? $0 : nil }
+                        .joined(separator: " · ")
                 )
-        )
+                .font(.caption)
+                .foregroundStyle(EduTheme.muted)
+                .lineLimit(1)
+
+                if let time = timeRange(row) {
+                    Text(time)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(EduTheme.navy)
+                } else if let period = row.periodLabel, !period.isEmpty {
+                    Text(period)
+                        .font(.caption2)
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(status.text)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(status.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(status.color.opacity(0.12), in: Capsule())
+
+                HStack(spacing: 4) {
+                    Image(systemName: "pencil.line")
+                        .font(.caption2.weight(.bold))
+                    Text(graded ? "Modifier" : "Noter")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(EduTheme.navy, in: Capsule())
+            }
+        }
+        .padding(14)
+        .background(.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(swatch.border.opacity(0.35), lineWidth: 1)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
+    }
+
+    private func teacherStatus(
+        _ row: EvaluationRow,
+        graded: Bool,
+        now: Date
+    ) -> (text: String, color: Color) {
+        if graded {
+            return ("Noté", EduTheme.teal)
+        }
+        if row.adminConfirmed == false && (row.type == "examen" || row.type == "composition") {
+            return ("À confirmer", Color.orange)
+        }
+        if !isUpcoming(row) {
+            // Date passed, still ungraded — not “late homework”, just needs grading.
+            return ("À noter", EduTheme.fasoRed)
+        }
+        if let chip = countdownChip(for: row, now: now, teacherMode: true) {
+            return chip
+        }
+        return ("À venir", EduTheme.navy)
     }
 
     private func cardHeader(
@@ -379,11 +734,12 @@ struct EvaluationsBrowser: View {
         expanded: Bool,
         expandable: Bool,
         showsChevron: Bool = false,
+        gradeAction: String? = nil,
         swatch: SubjectPalette.Swatch,
         now: Date
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            if isExamMode {
+            if isExamMode || isQuizMode || (isTeacherAudience && (row.type == "examen" || row.type == "interrogation")) {
                 dateBadge(row, swatch: swatch)
             } else {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -403,21 +759,40 @@ struct EvaluationsBrowser: View {
                     statusBadge(row, graded: graded, swatch: swatch)
                 }
 
-                if let subject = row.matieres?.name, !subject.isEmpty {
-                    Text(subject)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(swatch.border)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(swatch.border.opacity(0.12), in: Capsule())
+                HStack(spacing: 6) {
+                    if isTeacherAudience, type == nil {
+                        Text(shortTypeLabel(row))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(typeTint(row))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(typeTint(row).opacity(0.12), in: Capsule())
+                    }
+                    if let subject = row.matieres?.name, !subject.isEmpty {
+                        Text(subject)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(swatch.border)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(swatch.border.opacity(0.12), in: Capsule())
+                    }
+                    if isTeacherAudience, let className = row.classes?.name, !className.isEmpty {
+                        Text(className)
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
                 }
 
                 HStack(spacing: 8) {
-                    if isExamMode {
+                    if isExamMode || isQuizMode || (isTeacherAudience && (row.type == "examen" || row.type == "interrogation")) {
                         if let time = timeRange(row) {
                             Label(time, systemImage: "clock")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(EduTheme.navy)
+                        } else if !row.whenLabel.isEmpty {
+                            Label(prettyWhen(row), systemImage: "calendar")
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
                         }
                     } else if !row.whenLabel.isEmpty {
                         Label(prettyWhen(row), systemImage: "calendar")
@@ -435,14 +810,29 @@ struct EvaluationsBrowser: View {
                     }
                 }
 
-                if let period = row.periodLabel, !period.isEmpty {
-                    Text(period)
-                        .font(.caption2)
-                        .foregroundStyle(EduTheme.muted)
+                HStack(spacing: 8) {
+                    if let period = row.periodLabel, !period.isEmpty {
+                        Text(period)
+                            .font(.caption2)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                    Spacer(minLength: 0)
+                    if let gradeAction {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil.line")
+                                .font(.caption2.weight(.bold))
+                            Text(gradeAction)
+                                .font(.caption.weight(.bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(EduTheme.navy, in: Capsule())
+                    }
                 }
             }
 
-            if expandable || showsChevron {
+            if gradeAction == nil, expandable || showsChevron {
                 Image(systemName: showsChevron ? "chevron.right" : "chevron.down")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(EduTheme.muted)
@@ -482,7 +872,7 @@ struct EvaluationsBrowser: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(EduTheme.teal.opacity(0.12), in: Capsule())
-        } else if isExamMode {
+        } else if isExamMode || isQuizMode {
             let label = relativeDayLabel(row)
             Text(label)
                 .font(.caption2.weight(.bold))
@@ -493,13 +883,9 @@ struct EvaluationsBrowser: View {
                     (label == "Passé" ? EduTheme.muted : swatch.border).opacity(0.12),
                     in: Capsule()
                 )
-        } else if isStudentAudience {
-            Text("À faire")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(swatch.border)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(swatch.border.opacity(0.12), in: Capsule())
+        } else if isHomeworkInfoMode {
+            // Informative only — no “à faire / noté” status.
+            EmptyView()
         } else if row.adminConfirmed == false && (row.type == "examen" || row.type == "composition") {
             Text("À confirmer")
                 .font(.caption2.weight(.bold))
@@ -576,7 +962,11 @@ struct EvaluationsBrowser: View {
         return Calendar.current.date(from: comps)
     }
 
-    private func countdownChip(for row: EvaluationRow, now: Date) -> (text: String, color: Color)? {
+    private func countdownChip(
+        for row: EvaluationRow,
+        now: Date,
+        teacherMode: Bool = false
+    ) -> (text: String, color: Color)? {
         guard !gradedIds.contains(row.id), let target = dueMoment(for: row) else { return nil }
         let seconds = target.timeIntervalSince(now)
         if seconds >= 0 {
@@ -596,6 +986,14 @@ struct EvaluationsBrowser: View {
             }
             let color: Color = days == 0 ? Color.orange : EduTheme.navy
             return (text, color)
+        } else if teacherMode {
+            // Teachers: past date = “still to grade”, not student-style “en retard”.
+            return ("À noter", EduTheme.fasoRed)
+        } else if isExamMode || isQuizMode || isHomeworkInfoMode
+                    || row.type == "examen" || row.type == "composition" || row.type == "interrogation" || row.type == "devoir" {
+            // Past supervised work / interrogations show “Passé”.
+            // Exercices de maison aren’t graded here — no “en retard”.
+            return nil
         } else {
             let lateMin = Int((-seconds) / 60)
             let days = lateMin / (60 * 24)
@@ -619,11 +1017,79 @@ struct EvaluationsBrowser: View {
 
     private func itemNoun(_ count: Int) -> String {
         switch type {
+        case "interrogation": return count == 1 ? "interrogation" : "interrogations"
         case "devoir": return count == 1 ? "exercice" : "exercices"
         case "examen": return count == 1 ? "devoir" : "devoirs"
         case "composition": return count == 1 ? "composition" : "compositions"
         default: return count == 1 ? "évaluation" : "évaluations"
         }
+    }
+
+    private func shortTypeLabel(_ row: EvaluationRow) -> String {
+        switch row.type {
+        case "interrogation": return "Interro"
+        case "devoir": return "Exercice"
+        case "examen": return "Devoir"
+        case "composition": return "Compo"
+        default: return row.typeLabel
+        }
+    }
+
+    private func typeTint(_ row: EvaluationRow) -> Color {
+        switch row.type {
+        case "interrogation": return Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
+        case "devoir": return EduTheme.fasoRed
+        case "examen": return EduTheme.navy
+        case "composition": return EduTheme.teal
+        default: return EduTheme.muted
+        }
+    }
+
+    /// One sentence for VoiceOver: what, which subject, when, and where it stands.
+    private func spokenLabel(_ row: EvaluationRow, graded: Bool, now: Date) -> String {
+        var parts: [String] = [shortTypeLabel(row)]
+        parts.append(row.title?.isEmpty == false ? row.title! : row.typeLabel)
+        if let subject = row.matieres?.name, !subject.isEmpty { parts.append(subject) }
+        if let when = spokenWhen(row) {
+            parts.append(isHomeworkInfoMode ? "pour le \(when)" : when)
+        }
+        if isHomeworkInfoMode {
+            parts.append("à lire")
+        } else if graded {
+            parts.append("noté")
+        } else if let chip = countdownChip(for: row, now: now) {
+            parts.append(Self.spokenUnits(chip.text))
+        } else if isExamMode || isQuizMode {
+            parts.append(relativeDayLabel(row))
+        }
+        if let period = row.periodLabel, !period.isEmpty { parts.append(period) }
+        return parts.joined(separator: ", ")
+    }
+
+    private func spokenWhen(_ row: EvaluationRow) -> String? {
+        guard let day = eventDay(row) else { return nil }
+        let p = day.split(separator: "-").compactMap { Int($0) }
+        guard p.count >= 3,
+              let date = Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))
+        else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        var text = f.string(from: date)
+        if let start = row.startTime?.prefix(5), !start.isEmpty {
+            text += " à \(start.replacingOccurrences(of: ":", with: " h "))"
+        }
+        return text
+    }
+
+    private static func spokenUnits(_ text: String) -> String {
+        text.replacingOccurrences(of: " · ", with: ", ")
+            .replacingOccurrences(of: #"\b1 j\b"#, with: "1 jour", options: .regularExpression)
+            .replacingOccurrences(of: #"(\d+) j\b"#, with: "$1 jours", options: .regularExpression)
+            .replacingOccurrences(of: #"\b1 h\b"#, with: "1 heure", options: .regularExpression)
+            .replacingOccurrences(of: #"(\d+) h\b"#, with: "$1 heures", options: .regularExpression)
+            .replacingOccurrences(of: #"\b1 min\b"#, with: "1 minute", options: .regularExpression)
+            .replacingOccurrences(of: #"(\d+) min\b"#, with: "$1 minutes", options: .regularExpression)
     }
 
     private func prettyWhen(_ row: EvaluationRow) -> String {
@@ -687,7 +1153,8 @@ struct EvaluationsBrowser: View {
             rows = fetched
             className = resolvedName
 
-            if let sid, !fetched.isEmpty {
+            // Exercices de maison aren’t graded for students — skip the notes lookup.
+            if let sid, !fetched.isEmpty, type != "devoir" {
                 gradedIds = (try? await api.fetchGradedEvaluationIds(
                     studentId: sid,
                     evaluationIds: fetched.map(\.id)
@@ -704,14 +1171,238 @@ struct EvaluationsBrowser: View {
     }
 }
 
+/// Teachers create interrogations (graded). Exercices de maison go in the cahier, not here.
+struct CreateEvaluationSheet: View {
+    var preselectedClassId: String? = nil
+    var lockedType: String? = nil
+    var onCreated: () -> Void
+
+    @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var assignments: [TeachingAssignment] = []
+    @State private var selected: TeachingAssignment?
+    @State private var evalType = "interrogation"
+    @State private var title = ""
+    @State private var description = ""
+    @State private var period = "Trimestre 1"
+    @State private var maxScoreText = "20"
+    @State private var evalDate = Date()
+    @State private var includeTime = false
+    @State private var startTime = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var endTime = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var loading = true
+    @State private var saving = false
+    @State private var error: String?
+
+    private let periods = ["Trimestre 1", "Trimestre 2", "Trimestre 3"]
+    private let teacherTypes: [(id: String, label: String)] = [
+        ("interrogation", "Interrogation"),
+    ]
+
+    private var filteredAssignments: [TeachingAssignment] {
+        guard let preselectedClassId else { return assignments }
+        return assignments.filter { $0.classSectionId == preselectedClassId }
+    }
+
+    private var canSave: Bool {
+        selected != nil
+            && selected?.subjectId != nil
+            && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && Double(maxScoreText.replacingOccurrences(of: ",", with: ".")) != nil
+            && !saving
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if loading {
+                        ProgressView().tint(EduTheme.navy).frame(maxWidth: .infinity, minHeight: 120)
+                    } else if filteredAssignments.isEmpty {
+                        Text("Aucune classe assignée pour créer une évaluation.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 24)
+                    } else {
+                        fieldBlock("Classe et matière") {
+                            Picker("Classe et matière", selection: $selected) {
+                                Text("Choisir").tag(Optional<TeachingAssignment>.none)
+                                ForEach(filteredAssignments) { item in
+                                    Text("\(item.classes?.name ?? "Classe") — \(item.matieres?.name ?? "")")
+                                        .tag(Optional(item))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(EduTheme.navy)
+                        }
+
+                        Text("Interrogation")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(EduTheme.ink)
+                        Text("Les exercices de maison se mettent dans le cahier de textes.")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+
+                        fieldBlock("Titre") {
+                            TextField("Ex. Interro chap. 2", text: $title)
+                        }
+
+                        fieldBlock("Description (optionnel)") {
+                            TextField("Consignes, chapitre…", text: $description, axis: .vertical)
+                                .lineLimit(2...5)
+                        }
+
+                        fieldBlock("Période") {
+                            Picker("Période", selection: $period) {
+                                ForEach(periods, id: \.self) { Text($0).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+
+                        HStack(spacing: 12) {
+                            fieldBlock("Note max") {
+                                TextField("20", text: $maxScoreText)
+                                    .keyboardType(.decimalPad)
+                            }
+                            DatePicker("Date", selection: $evalDate, displayedComponents: .date)
+                                .tint(EduTheme.navy)
+                                .labelsHidden()
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                                .padding(.top, 22)
+                        }
+
+                        Toggle(isOn: $includeTime) {
+                            Text("Horaires")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EduTheme.ink)
+                        }
+                        .tint(EduTheme.navy)
+
+                        if includeTime {
+                            HStack(spacing: 12) {
+                                DatePicker("Début", selection: $startTime, displayedComponents: .hourAndMinute)
+                                    .tint(EduTheme.navy)
+                                DatePicker("Fin", selection: $endTime, displayedComponents: .hourAndMinute)
+                                    .tint(EduTheme.navy)
+                            }
+                        }
+
+                        if let error {
+                            Text(error)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(EduTheme.fasoRed)
+                        }
+
+                        Button {
+                            Task { await save() }
+                        } label: {
+                            HStack {
+                                if saving { ProgressView().tint(.white) }
+                                Text("Créer l'évaluation").fontWeight(.bold)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .foregroundStyle(.white)
+                            .background(canSave ? EduTheme.navy : EduTheme.muted.opacity(0.35), in: Capsule())
+                        }
+                        .disabled(!canSave)
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(20)
+            }
+            .background(EduTheme.loginBackground.ignoresSafeArea())
+            .navigationTitle("Nouvelle évaluation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fermer") { dismiss() }
+                }
+            }
+            .task { await load() }
+        }
+        .preferredColorScheme(.light)
+        .tint(EduTheme.navy)
+    }
+
+    private func fieldBlock<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EduTheme.muted)
+            content()
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(EduTheme.fieldBorder.opacity(0.7), lineWidth: 1)
+                )
+        }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        guard let tid = auth.userId else { return }
+        let rows = (try? await EduAPI().fetchTeachingAssignments(teacherId: tid)) ?? []
+        assignments = rows
+        let options = filteredAssignments
+        if let preselectedClassId,
+           let match = options.first(where: { $0.classSectionId == preselectedClassId }) {
+            selected = match
+        } else if options.count == 1 {
+            selected = options.first
+        }
+        evalType = lockedType ?? "interrogation"
+    }
+
+    private func save() async {
+        guard let selected, let subjectId = selected.subjectId, let tid = auth.userId else { return }
+        let maxScore = Double(maxScoreText.replacingOccurrences(of: ",", with: ".")) ?? 20
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        saving = true
+        defer { saving = false }
+        do {
+            let timeFmt = DateFormatter()
+            timeFmt.locale = Locale(identifier: "en_US_POSIX")
+            timeFmt.dateFormat = "HH:mm:ss"
+            _ = try await EduAPI().createEvaluation(EvaluationInsert(
+                class_section_id: selected.classSectionId,
+                subject_id: subjectId,
+                teacher_id: tid,
+                period_label: period,
+                type: lockedType ?? evalType,
+                title: trimmedTitle,
+                description: trimmedDesc.isEmpty ? nil : trimmedDesc,
+                max_score: maxScore,
+                eval_date: EduDates.day(evalDate),
+                start_time: includeTime ? timeFmt.string(from: startTime) : nil,
+                end_time: includeTime ? timeFmt.string(from: endTime) : nil,
+                admin_confirmed: true
+            ))
+            onCreated()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
 struct GradeEntryView: View {
     let evaluation: EvaluationRow
     var recordedBy: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
+    @FocusState private var focusedStudentId: String?
     @State private var drafts: [ScoreDraft] = []
     @State private var loading = true
     @State private var saving = false
     @State private var message: String?
+    @State private var error: String?
 
     struct ScoreDraft: Identifiable {
         let id: String
@@ -721,73 +1412,329 @@ struct GradeEntryView: View {
         var absent: Bool
     }
 
+    private var maxScore: Double { evaluation.maxScore ?? 20 }
+
+    private var filledCount: Int {
+        drafts.filter { $0.absent || !$0.score.trimmingCharacters(in: .whitespaces).isEmpty }.count
+    }
+
+    private var progress: Double {
+        guard !drafts.isEmpty else { return 0 }
+        return Double(filledCount) / Double(drafts.count)
+    }
+
+    private var provisionalAverage: Double? {
+        let scores = drafts.compactMap { draft -> Double? in
+            guard !draft.absent else { return nil }
+            let raw = draft.score.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+            guard !raw.isEmpty, let value = Double(raw) else { return nil }
+            return value
+        }
+        guard !scores.isEmpty else { return nil }
+        return scores.reduce(0, +) / Double(scores.count)
+    }
+
     var body: some View {
         PremiumScreenChrome {
-            Form {
-                Section {
-                    Text(evaluation.title ?? evaluation.typeLabel)
-                        .font(.headline)
-                        .foregroundStyle(EduTheme.ink)
-                    Text(evaluation.matieres?.name ?? evaluation.typeLabel)
-                        .foregroundStyle(EduTheme.muted)
-                    if !evaluation.whenLabel.isEmpty {
-                        Text(evaluation.whenLabel).font(.caption).foregroundStyle(EduTheme.navy)
-                    }
-                }
+            ZStack(alignment: .bottom) {
                 if loading {
-                    ProgressView().tint(EduTheme.navy)
+                    LoadingBlock()
                 } else {
-                    Section("Élèves") {
-                        ForEach($drafts) { $draft in
-                            HStack {
-                                Text(draft.name)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(EduTheme.ink)
-                                Spacer()
-                                if draft.absent {
-                                    Text("Absent").foregroundStyle(.orange)
-                                } else {
-                                    TextField("Note", text: $draft.score)
-                                        .keyboardType(.decimalPad)
-                                        .multilineTextAlignment(.trailing)
-                                        .foregroundStyle(EduTheme.ink)
-                                        .frame(width: 72)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            headerCard
+                            progressCard
+                            if drafts.isEmpty {
+                                PremiumEmpty(
+                                    title: "Aucun élève",
+                                    systemImage: "person.3",
+                                    message: "Cette classe n’a pas encore d’élèves inscrits."
+                                )
+                            } else {
+                                LazyVStack(spacing: 10) {
+                                    ForEach($drafts) { $draft in
+                                        studentCard($draft)
+                                    }
                                 }
-                                Toggle("Absent", isOn: $draft.absent)
-                                    .labelsHidden()
-                                    .tint(EduTheme.navy)
+                            }
+                            if let error {
+                                Text(error)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(EduTheme.fasoRed)
+                            }
+                            if let message {
+                                Text(message)
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(EduTheme.teal)
                             }
                         }
+                        .padding(16)
+                        .padding(.bottom, 100)
                     }
-                    Section {
-                        Button {
-                            Task { await save() }
-                        } label: {
-                            HStack {
-                                if saving { ProgressView().tint(.white) }
-                                Text("Enregistrer les notes").fontWeight(.bold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                        }
-                        .listRowBackground(EduTheme.navy)
-                        .foregroundStyle(.white)
-                        .disabled(saving || drafts.isEmpty)
-                    }
-                }
-                if let message {
-                    Text(message).foregroundStyle(EduTheme.teal)
+                    .scrollDismissesKeyboard(.interactively)
+
+                    saveBar
                 }
             }
         }
-        .premiumTitle("Saisie")
+        .premiumTitle("Saisie des notes")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("OK") { focusedStudentId = nil }
+                    .fontWeight(.semibold)
+            }
+        }
         .task { await load() }
+    }
+
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(evaluation.title?.isEmpty == false ? evaluation.title! : evaluation.typeLabel)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(EduTheme.ink)
+            HStack(spacing: 8) {
+                if let subject = evaluation.matieres?.name, !subject.isEmpty {
+                    Text(subject)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(EduTheme.navy)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(EduTheme.navy.opacity(0.1), in: Capsule())
+                }
+                Text(evaluation.typeLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EduTheme.muted)
+            }
+            if !evaluation.whenLabel.isEmpty {
+                Text(evaluation.whenLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            Text("Note sur \(formatScore(maxScore))")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(EduTheme.tealDark)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        )
+    }
+
+    private var progressCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Progression")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Spacer()
+                Text("\(filledCount)/\(drafts.count)")
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(EduTheme.navy)
+            }
+            ProgressView(value: progress)
+                .tint(EduTheme.teal)
+            if let avg = provisionalAverage {
+                Text("Moyenne provisoire : \(formatScore(avg)) / \(formatScore(maxScore))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EduTheme.muted)
+            } else {
+                Text("Saisissez une note, ou marquez l’élève absent.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        )
+    }
+
+    private func studentCard(_ draft: Binding<ScoreDraft>) -> some View {
+        let value = draft.wrappedValue
+        let invalid = isInvalid(value)
+        let status = rowStatus(value)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(value.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(status.label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(status.color)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 6) {
+                    TextField(
+                        "0",
+                        text: Binding(
+                            get: { draft.wrappedValue.score },
+                            set: { draft.wrappedValue.score = sanitizeScoreInput($0) }
+                        )
+                    )
+                    .keyboardType(.decimalPad)
+                    .focused($focusedStudentId, equals: value.id)
+                    .multilineTextAlignment(.center)
+                    .font(.title3.weight(.bold).monospacedDigit())
+                    .foregroundStyle(value.absent ? EduTheme.muted : EduTheme.ink)
+                    .disabled(value.absent)
+                    .frame(width: 72, height: 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(value.absent ? Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255) : .white)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                invalid ? EduTheme.fasoRed : (focusedStudentId == value.id ? EduTheme.teal : Color.black.opacity(0.1)),
+                                lineWidth: invalid || focusedStudentId == value.id ? 2 : 1
+                            )
+                    )
+
+                    Text("/ \(formatScore(maxScore))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(EduTheme.muted)
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        let next = !draft.wrappedValue.absent
+                        draft.wrappedValue.absent = next
+                        if next {
+                            draft.wrappedValue.score = ""
+                            if focusedStudentId == value.id { focusedStudentId = nil }
+                        }
+                    }
+                } label: {
+                    Text(draft.wrappedValue.absent ? "Absent ✓" : "Absent")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(draft.wrappedValue.absent ? Color(red: 146 / 255, green: 64 / 255, blue: 14 / 255) : EduTheme.ink)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(
+                            Capsule().fill(
+                                draft.wrappedValue.absent
+                                    ? Color(red: 254 / 255, green: 243 / 255, blue: 199 / 255)
+                                    : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
+                            )
+                        )
+                        .overlay(
+                            Capsule().stroke(
+                                draft.wrappedValue.absent
+                                    ? Color(red: 251 / 255, green: 191 / 255, blue: 36 / 255)
+                                    : Color.black.opacity(0.1),
+                                lineWidth: 1
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(draft.wrappedValue.absent ? "Retirer l’absence" : "Marquer absent")
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white)
+        )
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(status.color)
+                .frame(width: 4)
+                .padding(.vertical, 10)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private var saveBar: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Color.black.opacity(0.06)).frame(height: 1)
+            Button {
+                Task { await save() }
+            } label: {
+                HStack(spacing: 8) {
+                    if saving {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                    }
+                    Text(saving ? "Enregistrement…" : "Enregistrer les notes")
+                        .font(.body.weight(.bold))
+                }
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .foregroundStyle(.white)
+                .background(
+                    (canSave ? EduTheme.navy : EduTheme.muted.opacity(0.45)),
+                    in: Capsule()
+                )
+            }
+            .disabled(!canSave || saving)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+            .background(Color.white)
+        }
+    }
+
+    private var canSave: Bool {
+        !drafts.isEmpty && drafts.contains { draft in
+            if draft.absent { return true }
+            let raw = draft.score.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+            return !raw.isEmpty && Double(raw) != nil && !isInvalid(draft)
+        }
+    }
+
+    private struct RowStatus {
+        let label: String
+        let color: Color
+    }
+
+    private func rowStatus(_ draft: ScoreDraft) -> RowStatus {
+        if isInvalid(draft) {
+            return RowStatus(label: "Note invalide", color: EduTheme.fasoRed)
+        }
+        if draft.absent {
+            return RowStatus(label: "Absent", color: Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255))
+        }
+        if draft.score.trimmingCharacters(in: .whitespaces).isEmpty {
+            return RowStatus(label: "À saisir", color: EduTheme.muted)
+        }
+        if draft.noteId != nil {
+            return RowStatus(label: "Enregistrée", color: EduTheme.fasoGreen)
+        }
+        return RowStatus(label: "Prête", color: EduTheme.teal)
+    }
+
+    private func isInvalid(_ draft: ScoreDraft) -> Bool {
+        guard !draft.absent else { return false }
+        let raw = draft.score.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return false }
+        guard let value = Double(raw) else { return true }
+        return value < 0 || value > maxScore
+    }
+
+    private func sanitizeScoreInput(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: " ", with: "")
+            .filter { $0.isNumber || $0 == "," || $0 == "." }
     }
 
     private func load() async {
         guard let classId = evaluation.classSectionId else {
-            message = "Cette évaluation n’a pas de classe."
+            error = "Cette évaluation n’a pas de classe."
             loading = false
             return
         }
@@ -799,12 +1746,19 @@ struct GradeEntryView: View {
             let byStudent = Dictionary(notes.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
             drafts = students.map { student in
                 let note = byStudent[student.studentId]
-                let score = note?.score.map { formatScore($0) } ?? ""
-                return ScoreDraft(id: student.studentId, noteId: note?.id, name: student.fullName, score: score, absent: note?.isAbsent == true)
+                let score = note?.isAbsent == true ? "" : (note?.score.map { formatScore($0) } ?? "")
+                return ScoreDraft(
+                    id: student.studentId,
+                    noteId: note?.id,
+                    name: student.fullName,
+                    score: score,
+                    absent: note?.isAbsent == true
+                )
             }
+            error = nil
             message = nil
         } catch {
-            message = error.localizedDescription
+            self.error = error.localizedDescription
         }
         loading = false
     }
@@ -813,13 +1767,17 @@ struct GradeEntryView: View {
         guard let classId = evaluation.classSectionId, let subjectId = evaluation.subjectId else { return }
         let recorder = recordedBy ?? auth.userId
         guard let recorder else { return }
+        focusedStudentId = nil
         saving = true
         defer { saving = false }
-        let maxScore = evaluation.maxScore ?? 20
         let period = evaluation.periodLabel ?? "Trimestre 1"
         var inserts: [GradeInsert] = []
         var updates: [GradeUpdate] = []
         for draft in drafts {
+            if isInvalid(draft) {
+                error = "Corrigez les notes invalides avant d’enregistrer."
+                return
+            }
             let trimmed = draft.score.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)
             if !draft.absent && trimmed.isEmpty { continue }
             guard draft.absent || Double(trimmed) != nil else { continue }
@@ -841,9 +1799,11 @@ struct GradeEntryView: View {
         do {
             try await EduAPI().saveGrades(inserts: inserts, updates: updates)
             message = "Notes enregistrées."
+            error = nil
             await load()
         } catch {
-            message = error.localizedDescription
+            self.error = error.localizedDescription
+            message = nil
         }
     }
 
@@ -956,19 +1916,29 @@ struct CahierFeedView: View {
 struct BulletinBoard: View {
     let studentId: String
     var title: String = "Bulletin"
+    @EnvironmentObject private var auth: AuthViewModel
     @State private var period = "Trimestre 1"
     @State private var stats: BulletinClassStats?
     @State private var grades: [GradeRow] = []
     @State private var expandedIds: Set<String> = []
     @State private var classId: String?
     @State private var className: String?
+    @State private var studentName: String?
     @State private var loading = true
+    @State private var exporting = false
+    @State private var exportError: String?
     @State private var error: String?
 
     private let periods = ["Trimestre 1", "Trimestre 2", "Trimestre 3", "Année"]
 
     private var subjects: [BulletinSubjectStat] {
         stats?.subjects ?? []
+    }
+
+    private var canExport: Bool {
+        guard let stats else { return false }
+        let hasSubjects = !(stats.subjects?.isEmpty ?? true)
+        return hasSubjects || stats.general != nil
     }
 
     var body: some View {
@@ -1027,11 +1997,120 @@ struct BulletinBoard: View {
             }
         }
         .premiumTitle(title)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await exportPdf() }
+                } label: {
+                    if exporting {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+                .disabled(exporting || !canExport)
+                .accessibilityLabel("Télécharger le bulletin PDF")
+            }
+        }
+        .alert("Export impossible", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
         .task { await load(reset: true) }
         .onChange(of: period) { _, _ in
             expandedIds.removeAll()
             Task { await load(reset: false) }
         }
+    }
+
+    private func exportPdf() async {
+        guard let stats, let classId else {
+            exportError = "Bulletin incomplet."
+            return
+        }
+        if (stats.subjects ?? []).isEmpty, stats.general == nil, period != "Année" {
+            exportError = "Aucune note pour cette période."
+            return
+        }
+        exporting = true
+        defer { exporting = false }
+
+        let api = EduAPI()
+        async let codeTask = api.issueBulletinCode(
+            studentId: studentId,
+            classSectionId: classId,
+            periodLabel: period
+        )
+        async let annualTask: AnnualAverageResult? = period == "Année"
+            ? await api.fetchAnnualAverage(studentId: studentId, classSectionId: classId)
+            : nil
+        async let schoolTask: School? = {
+            if let id = auth.schoolId {
+                return try? await api.fetchSchool(id: id)
+            }
+            return auth.schools.first
+        }()
+        async let profileTask: Profile? = {
+            if studentId == auth.userId { return auth.profile }
+            let rows: [Profile] = (try? await SupabaseManager.client
+                .from("profils")
+                .select("id, first_name, last_name, email, phone, avatar_url, date_of_birth, gender, address, matricule, must_change_password, family_managed, last_login_at, active")
+                .eq("id", value: studentId)
+                .limit(1)
+                .execute()
+                .value) ?? []
+            return rows.first
+        }()
+
+        let code = await codeTask
+        let annual = await annualTask
+        let school = await schoolTask
+        let profile = await profileTask
+        // HTTPS handoff (Camera only opens http(s)) → tries edufaso:// then web verify.
+        let verifyURL = code.map {
+            let enc = $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0
+            return "https://hbfjtsxzueftoiryzhxh.supabase.co/functions/v1/ouvrir-verifier?c=\(enc)"
+        }
+
+        if period == "Année",
+           (annual?.trimesters ?? []).allSatisfy({ $0.generalAverage == nil }),
+           stats.general == nil {
+            exportError = "Aucune note sur l’année."
+            return
+        }
+
+        let lastName = profile?.lastName ?? studentName?.split(separator: " ").last.map(String.init)
+        let data = BulletinPdf.make(
+            .init(
+                school: .init(
+                    name: school?.name ?? auth.schools.first?.name ?? "École",
+                    city: school?.city ?? auth.schools.first?.city,
+                    address: school?.address,
+                    phone: school?.phone,
+                    email: school?.email
+                ),
+                student: .init(
+                    firstName: profile?.firstName,
+                    lastName: profile?.lastName,
+                    dateOfBirth: profile?.dateOfBirth,
+                    gender: profile?.gender,
+                    matricule: profile?.matricule
+                ),
+                className: stats.className ?? className ?? "—",
+                periodLabel: period,
+                stats: stats,
+                annual: annual,
+                verificationCode: code,
+                verificationURL: verifyURL,
+                logo: UIImage(named: "EduFasoLogo")
+            )
+        )
+        let filePeriod = period == "Année" ? "annee" : period.replacingOccurrences(of: " ", with: "-")
+        PdfShare.present(data: data, fileName: "bulletin-\(lastName ?? "eleve")-\(filePeriod).pdf")
     }
 
     private var stickyHeader: some View {
@@ -1276,6 +2355,27 @@ struct BulletinBoard: View {
                     className = enrollment.className
                 }
             }
+            if studentName == nil {
+                if studentId == auth.userId {
+                    studentName = auth.profile?.fullName
+                } else {
+                    struct Mini: Decodable {
+                        let first_name: String?
+                        let last_name: String?
+                    }
+                    let rows: [Mini] = (try? await SupabaseManager.client
+                        .from("profils")
+                        .select("first_name, last_name")
+                        .eq("id", value: studentId)
+                        .limit(1)
+                        .execute()
+                        .value) ?? []
+                    if let p = rows.first {
+                        studentName = "\(p.first_name ?? "") \(p.last_name ?? "")"
+                            .trimmingCharacters(in: .whitespaces)
+                    }
+                }
+            }
             guard let classId else {
                 error = "Aucune inscription active."
                 stats = nil
@@ -1299,82 +2399,529 @@ struct BulletinBoard: View {
 }
 
 struct ClassHubView: View {
+    private struct SubjectLine: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let averageOn20: Double?
+        let gradeCount: Int
+    }
+
     let classId: String
     let className: String
     @EnvironmentObject private var auth: AuthViewModel
+
     @State private var students: [PresenceDraft] = []
-    @State private var subjects: [String] = []
+    @State private var gradeLevel: String?
+    @State private var mySubjects: [SubjectLine] = []
+    @State private var upcoming: [EvaluationRow] = []
+    @State private var studentSearch = ""
     @State private var loading = true
     @State private var error: String?
+
+    private var isTeacher: Bool { auth.primaryRole == .teacher }
+
+    private var filteredStudents: [PresenceDraft] {
+        let q = studentSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return students }
+        return students.filter { $0.fullName.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         PremiumScreenChrome {
             Group {
-                if loading { LoadingBlock() }
-                else if let error { Text(error).foregroundStyle(EduTheme.fasoRed).padding() }
-                else {
-                    List {
-                        if !subjects.isEmpty {
-                            Section("Matières") {
-                                Text(subjects.joined(separator: ", "))
-                                    .font(.subheadline)
-                                    .foregroundStyle(EduTheme.muted)
+                if loading {
+                    LoadingBlock()
+                } else if let error {
+                    Text(error).foregroundStyle(EduTheme.fasoRed).padding()
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            heroHeader
+                            actionsGrid
+                            if !mySubjects.isEmpty {
+                                subjectsSection
                             }
+                            if !upcoming.isEmpty {
+                                upcomingSection
+                            }
+                            rosterSection
                         }
-                        Section("Ouvrir") {
-                            NavigationLink("Emploi du temps") { TimetableView(mode: .classSection(classId)) }
-                            NavigationLink("Cahier de textes") { CahierFeedView(classId: classId, title: "Cahier") }
-                            NavigationLink("Notes et évaluations") {
-                                EvaluationsBrowser(classId: classId, allowEntry: true, title: "Notes")
-                            }
-                            if auth.primaryRole == .teacher {
-                                NavigationLink("Faire l’appel") { TeacherAttendanceView(initialClassId: classId) }
-                            }
-                        }
-                        Section("Élèves (\(students.count))") {
-                            ForEach(students) { student in
-                                NavigationLink {
-                                    StudentFileView(
-                                        studentId: student.studentId,
-                                        name: student.fullName,
-                                        className: className
-                                    )
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Text(String(student.fullName.prefix(1)).uppercased())
-                                            .font(.caption.weight(.bold))
-                                            .foregroundStyle(.white)
-                                            .frame(width: 32, height: 32)
-                                            .background(EduTheme.navy, in: Circle())
-                                        Text(student.fullName)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(EduTheme.ink)
-                                    }
-                                }
-                            }
-                        }
+                        .padding(16)
+                        .padding(.bottom, 28)
                     }
-                    .scrollContentBackground(.hidden)
+                    .refreshable { await load() }
                 }
             }
         }
         .premiumTitle(className)
         .task { await load() }
-        .refreshable { await load() }
     }
+
+    // MARK: Hero
+
+    private var heroHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(className)
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(EduTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                metaChip(systemImage: "person.2.fill", text: "\(students.count) élève\(students.count == 1 ? "" : "s")")
+                if let gradeLevel, !gradeLevel.isEmpty {
+                    metaChip(systemImage: "graduationcap.fill", text: gradeLevel)
+                }
+                if isTeacher, !mySubjects.isEmpty {
+                    metaChip(
+                        systemImage: "book.fill",
+                        text: mySubjects.count == 1
+                            ? (mySubjects.first?.name ?? "Matière")
+                            : "\(mySubjects.count) matières"
+                    )
+                }
+            }
+
+            Text(isTeacher
+                 ? "Ta classe — notes, présences et suivi des élèves."
+                 : "Fiche classe — effectif, notes et outils du quotidien.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [EduTheme.brand50, .white],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(EduTheme.teal.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func metaChip(systemImage: String, text: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(EduTheme.navy)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(.white.opacity(0.9)))
+            .overlay(Capsule().stroke(Color.black.opacity(0.06), lineWidth: 1))
+    }
+
+    // MARK: Actions
+
+    private var actionsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            if isTeacher {
+                actionTile(
+                    title: "Faire l’appel",
+                    subtitle: "Présences du jour",
+                    systemImage: "checklist",
+                    tint: EduTheme.teal
+                ) {
+                    TeacherAttendanceView(initialClassId: classId)
+                }
+            } else {
+                actionTile(
+                    title: "Présences",
+                    subtitle: "Suivi de classe",
+                    systemImage: "checklist",
+                    tint: EduTheme.teal
+                ) {
+                    TeacherAttendanceView(initialClassId: classId)
+                }
+            }
+
+            actionTile(
+                title: "Notes",
+                subtitle: isTeacher ? "Tes évaluations" : "Devoirs & notes",
+                systemImage: "pencil.and.list.clipboard",
+                tint: EduTheme.navy
+            ) {
+                if isTeacher {
+                    EvaluationsBrowser(
+                        classId: classId,
+                        teacherId: auth.userId,
+                        allowEntry: true,
+                        recordedBy: auth.userId,
+                        title: "Notes"
+                    )
+                } else {
+                    EvaluationsBrowser(classId: classId, allowEntry: true, title: "Notes")
+                }
+            }
+
+            actionTile(
+                title: "Emploi du temps",
+                subtitle: "Semaine de la classe",
+                systemImage: "calendar",
+                tint: Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
+            ) {
+                TimetableView(mode: .classSection(classId))
+            }
+
+            actionTile(
+                title: "Cahier",
+                subtitle: "Textes & devoirs",
+                systemImage: "book",
+                tint: EduTheme.fasoYellow
+            ) {
+                CahierFeedView(classId: classId, title: "Cahier")
+            }
+        }
+    }
+
+    private func actionTile<Dest: View>(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        @ViewBuilder destination: @escaping () -> Dest
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(tint.opacity(0.12)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(EduTheme.ink)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 118, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Subjects
+
+    private var subjectsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Mes matières", subtitle: "Moyenne de classe sur tes enseignements")
+            VStack(spacing: 8) {
+                ForEach(mySubjects) { subject in
+                    subjectRow(subject)
+                }
+            }
+        }
+    }
+
+    private func subjectRow(_ subject: SubjectLine) -> some View {
+        let avg = subject.averageOn20
+        let tint: Color = {
+            guard let avg else { return EduTheme.muted }
+            if avg >= 12 { return EduTheme.fasoGreen }
+            if avg >= 10 { return Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255) }
+            return EduTheme.fasoRed
+        }()
+        let progress = avg.map { min(1, max(0, $0 / 20)) } ?? 0
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(subject.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Spacer()
+                if let avg {
+                    Text("\(Self.formatAvg(avg)) / 20")
+                        .font(.headline.weight(.bold).monospacedDigit())
+                        .foregroundStyle(tint)
+                } else {
+                    Text("— / 20")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
+                    Capsule().fill(tint).frame(width: geo.size.width * progress)
+                }
+            }
+            .frame(height: 7)
+            Text(subject.gradeCount > 0
+                 ? "\(subject.gradeCount) note\(subject.gradeCount == 1 ? "" : "s")"
+                 : "Aucune note encore")
+                .font(.caption)
+                .foregroundStyle(EduTheme.muted)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    // MARK: Upcoming
+
+    private var upcomingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("À venir", subtitle: "Tes prochaines évaluations dans cette classe")
+            VStack(spacing: 8) {
+                ForEach(upcoming.prefix(4)) { row in
+                    NavigationLink {
+                        if row.classSectionId != nil, row.subjectId != nil {
+                            GradeEntryView(evaluation: row, recordedBy: auth.userId)
+                        } else {
+                            EvaluationsBrowser(
+                                classId: classId,
+                                teacherId: auth.userId,
+                                allowEntry: true,
+                                recordedBy: auth.userId,
+                                title: "Notes"
+                            )
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(row.title?.isEmpty == false ? row.title! : row.typeLabel)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .lineLimit(2)
+                                Text([row.matieres?.name, row.whenLabel].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "))
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "pencil.line")
+                                    .font(.caption2.weight(.bold))
+                                Text("Noter")
+                                    .font(.caption.weight(.bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(EduTheme.navy, in: Capsule())
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(.white)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Ouvre la saisie des notes")
+                }
+            }
+        }
+    }
+
+    // MARK: Roster
+
+    private var rosterSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Effectif", subtitle: "\(students.count) élève\(students.count == 1 ? "" : "s") inscrit\(students.count == 1 ? "" : "s")")
+
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(EduTheme.muted)
+                TextField("Rechercher un élève…", text: $studentSearch)
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
+
+            if students.isEmpty {
+                PremiumEmpty(
+                    title: "Aucun élève",
+                    systemImage: "person.3",
+                    message: "Cette classe n’a pas encore d’effectif."
+                )
+            } else if filteredStudents.isEmpty {
+                Text("Aucun élève ne correspond à la recherche.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+                    .padding(.vertical, 8)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(filteredStudents) { student in
+                        NavigationLink {
+                            StudentFileView(
+                                studentId: student.studentId,
+                                name: student.fullName,
+                                className: className,
+                                classId: classId,
+                                subjectIds: isTeacher ? mySubjects.map(\.id) : nil,
+                                subjectLabels: isTeacher ? mySubjects.map(\.name) : nil
+                            )
+                        } label: {
+                            HStack(spacing: 12) {
+                                UserAvatarView(
+                                    url: student.avatarUrl,
+                                    firstName: student.firstName,
+                                    lastName: student.lastName,
+                                    size: 40
+                                )
+                                Text(student.fullName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .lineLimit(1)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(.white)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionTitle(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(EduTheme.muted)
+        }
+    }
+
+    // MARK: Load
 
     private func load() async {
         loading = students.isEmpty
         do {
             let api = EduAPI()
-            students = try await api.fetchStudentsInClass(classSectionId: classId)
-            let assignments = try await api.fetchClassAssignments(classId: classId)
-            subjects = Array(Set(assignments.compactMap { $0.matieres?.name })).sorted()
+            async let studentsTask = api.fetchStudentsInClass(classSectionId: classId)
+            async let assignmentsTask = api.fetchClassAssignments(classId: classId)
+
+            let loadedStudents = try await studentsTask
+            let assignments = try await assignmentsTask
+            students = loadedStudents.sorted {
+                $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending
+            }
+            gradeLevel = assignments.compactMap(\.classes?.gradeLevel).first
+
+            if isTeacher, let tid = auth.userId {
+                let mine = try await api.fetchTeachingAssignments(teacherId: tid)
+                    .filter { $0.classSectionId == classId }
+                let stats = try await api.fetchTeacherClassStats(classIds: [classId])
+                let avgMap = Dictionary(
+                    uniqueKeysWithValues: stats.averages.map { ("\($0.classId)|\($0.subjectId)", $0) }
+                )
+                mySubjects = mine.compactMap { row -> SubjectLine? in
+                    let subjectId = row.subjectId ?? row.matieres?.id
+                    let name = row.matieres?.name
+                    guard let subjectId, let name, !name.isEmpty else { return nil }
+                    let avg = avgMap["\(classId)|\(subjectId)"]
+                    return SubjectLine(
+                        id: subjectId,
+                        name: name,
+                        averageOn20: avg?.avg,
+                        gradeCount: avg?.n ?? 0
+                    )
+                }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+                let today = EduDates.day()
+                let evals = try await api.fetchEvaluations(
+                    classId: classId,
+                    teacherId: tid,
+                    confirmedOnly: false
+                )
+                upcoming = evals
+                    .filter { row in
+                        let day = String((row.evalDate ?? row.dueDate ?? "").prefix(10))
+                        return day.isEmpty || day >= today
+                    }
+                    .sorted {
+                        (String(($0.evalDate ?? $0.dueDate ?? "9999").prefix(10)))
+                            < (String(($1.evalDate ?? $1.dueDate ?? "9999").prefix(10)))
+                    }
+            } else {
+                mySubjects = Array(
+                    Set(assignments.compactMap { row -> SubjectLine? in
+                        guard let name = row.matieres?.name, !name.isEmpty else { return nil }
+                        return SubjectLine(
+                            id: row.subjectId ?? row.matieres?.id ?? name,
+                            name: name,
+                            averageOn20: nil,
+                            gradeCount: 0
+                        )
+                    })
+                )
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                upcoming = []
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
         loading = false
+    }
+
+    private static func formatAvg(_ value: Double) -> String {
+        let nf = NumberFormatter()
+        nf.locale = Locale(identifier: "fr_FR")
+        nf.minimumFractionDigits = 2
+        nf.maximumFractionDigits = 2
+        return nf.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+    }
+
+    private static func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ").prefix(2)
+        let chars = parts.compactMap { $0.first.map(String.init) }
+        let value = chars.joined().uppercased()
+        return value.isEmpty ? "?" : value
     }
 }
 
@@ -1382,8 +2929,31 @@ struct StudentFileView: View {
     let studentId: String
     let name: String
     var className: String?
+    var classId: String? = nil
+    /// Teacher-only: restrict notes / présences to these subjects.
+    var subjectIds: [String]? = nil
+    var subjectLabels: [String]? = nil
     var phone: String?
     var matricule: String?
+
+    @EnvironmentObject private var auth: AuthViewModel
+    @State private var resolvedClassId: String?
+    @State private var resolvedSubjectIds: [String] = []
+    @State private var resolvedSubjectLabels: [String] = []
+
+    private var isTeacherScoped: Bool {
+        auth.primaryRole == .teacher
+    }
+
+    private var effectiveClassId: String? { classId ?? resolvedClassId }
+    private var effectiveSubjectIds: [String] {
+        if let subjectIds, !subjectIds.isEmpty { return subjectIds }
+        return resolvedSubjectIds
+    }
+    private var effectiveSubjectLabels: [String] {
+        if let subjectLabels, !subjectLabels.isEmpty { return subjectLabels }
+        return resolvedSubjectLabels
+    }
 
     var body: some View {
         PremiumScreenChrome {
@@ -1400,27 +2970,91 @@ struct StudentFileView: View {
                             if let className, !className.isEmpty {
                                 Text(className).font(.caption).foregroundStyle(EduTheme.muted)
                             }
+                            if isTeacherScoped, !effectiveSubjectLabels.isEmpty {
+                                Text(effectiveSubjectLabels.joined(separator: " · "))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(EduTheme.teal)
+                            }
                         }
                     }
                     .padding(.vertical, 4)
                     if let matricule, !matricule.isEmpty { LabeledContent("Matricule", value: matricule) }
                     if let phone, !phone.isEmpty { LabeledContent("Téléphone", value: phone) }
                 }
-                Section("Dossier") {
-                    NavigationLink("Notes") { StudentGradesView(studentIdOverride: studentId) }
-                    NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: studentId) }
-                    NavigationLink("Bulletin") { BulletinBoard(studentId: studentId) }
-                    NavigationLink("Emploi du temps") { TimetableView(mode: .student, studentIdOverride: studentId) }
-                    NavigationLink("Cahier de textes") { CahierFeedView(studentId: studentId) }
-                    NavigationLink("Devoirs") { EvaluationsBrowser(studentId: studentId, type: "examen", confirmedOnly: true, title: "Devoirs") }
-                    NavigationLink("Exercices") { EvaluationsBrowser(studentId: studentId, type: "devoir", title: "Exercices") }
-                    NavigationLink("Compositions") { EvaluationsBrowser(studentId: studentId, type: "composition", title: "Compositions") }
+
+                if isTeacherScoped {
+                    Section {
+                        Text("Tu vois uniquement tes matières pour cet élève — pas le dossier complet.")
+                            .font(.footnote)
+                            .foregroundStyle(EduTheme.muted)
+                            .listRowBackground(Color.clear)
+                    }
+                    Section("Suivi (tes matières)") {
+                        NavigationLink("Notes") {
+                            StudentGradesView(
+                                studentIdOverride: studentId,
+                                subjectIds: effectiveSubjectIds
+                            )
+                        }
+                        NavigationLink("Présences") {
+                            StudentAttendanceView(
+                                studentIdOverride: studentId,
+                                allowedSubjectIds: effectiveSubjectIds
+                            )
+                        }
+                        if let effectiveClassId {
+                            NavigationLink("Mes évaluations") {
+                                EvaluationsBrowser(
+                                    classId: effectiveClassId,
+                                    teacherId: auth.userId,
+                                    allowEntry: true,
+                                    title: "Évaluations"
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Section("Dossier") {
+                        NavigationLink("Notes") { StudentGradesView(studentIdOverride: studentId) }
+                        NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: studentId) }
+                        NavigationLink("Bulletin") { BulletinBoard(studentId: studentId) }
+                        NavigationLink("Emploi du temps") { TimetableView(mode: .student, studentIdOverride: studentId) }
+                        NavigationLink("Cahier de textes") { CahierFeedView(studentId: studentId) }
+                        NavigationLink("Devoirs") { EvaluationsBrowser(studentId: studentId, type: "examen", confirmedOnly: true, title: "Devoirs") }
+                        NavigationLink("Interrogations") { EvaluationsBrowser(studentId: studentId, type: "interrogation", title: "Interrogations") }
+                        NavigationLink("Compositions") { EvaluationsBrowser(studentId: studentId, type: "composition", title: "Compositions") }
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
         }
         .premiumTitle("Élève")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard isTeacherScoped else { return }
+            await resolveTeacherScope()
+        }
+    }
+
+    private func resolveTeacherScope() async {
+        guard let tid = auth.userId else { return }
+        let api = EduAPI()
+        let resolvedClass: String?
+        if let classId {
+            resolvedClass = classId
+        } else if let enrollment = try? await api.activeEnrollment(studentId: studentId) {
+            resolvedClass = enrollment.classId
+        } else {
+            resolvedClass = nil
+        }
+        resolvedClassId = resolvedClass
+        guard let resolvedClass else { return }
+        let assignments = (try? await api.fetchTeachingAssignments(teacherId: tid)) ?? []
+        let mine = assignments.filter { $0.classSectionId == resolvedClass }
+        if subjectIds == nil || subjectIds?.isEmpty == true {
+            resolvedSubjectIds = mine.compactMap { $0.subjectId ?? $0.matieres?.id }
+            resolvedSubjectLabels = mine.compactMap(\.matieres?.name).filter { !$0.isEmpty }
+        }
     }
 }
 
@@ -1730,64 +3364,237 @@ struct MyTeachersView: View {
 // MARK: - Teacher
 
 struct TeacherClassesView: View {
+    private enum Filter: String, CaseIterable, Identifiable {
+        case all, watch
+        var id: String { rawValue }
+    }
+
+    private enum SortMode: String {
+        case name, average
+    }
+
     @EnvironmentObject private var auth: AuthViewModel
-    @State private var classes: [(id: String, name: String, subjects: [String])] = []
+    @State private var classes: [TeacherClassCardModel] = []
+    @State private var filter: Filter = .all
+    @State private var sortMode: SortMode = .name
     @State private var loading = true
     @State private var error: String?
+
+    private var totalStudents: Int { classes.reduce(0) { $0 + $1.studentCount } }
+    private var totalSubjects: Int {
+        Set(classes.flatMap { $0.subjects.map(\.subjectId) }).count
+    }
+
+    private var watchCount: Int {
+        classes.filter(\.needsWatch).count
+    }
+
+    private var visibleClasses: [TeacherClassCardModel] {
+        let base: [TeacherClassCardModel]
+        switch filter {
+        case .all: base = classes
+        case .watch: base = classes.filter(\.needsWatch)
+        }
+        switch sortMode {
+        case .name:
+            return base.sorted {
+                $0.className.localizedCaseInsensitiveCompare($1.className) == .orderedAscending
+            }
+        case .average:
+            return base.sorted {
+                ($0.primaryAverage ?? -1) > ($1.primaryAverage ?? -1)
+            }
+        }
+    }
 
     var body: some View {
         PremiumScreenChrome {
             Group {
-                if loading { LoadingBlock() }
-                else if let error { Text(error).foregroundStyle(EduTheme.fasoRed).padding() }
-                else if classes.isEmpty {
-                    PremiumEmpty(title: "Aucune classe", systemImage: "rectangle.3.group", message: "Aucune classe ne t’est affectée.")
+                if loading {
+                    LoadingBlock()
+                } else if let error {
+                    Text(error).foregroundStyle(EduTheme.fasoRed).padding()
+                } else if classes.isEmpty {
+                    PremiumEmpty(
+                        title: "Aucune classe",
+                        systemImage: "rectangle.3.group",
+                        message: "Aucune classe ne t’est affectée."
+                    )
                 } else {
-                    List(classes, id: \.id) { item in
-                        NavigationLink {
-                            ClassHubView(classId: item.id, className: item.name)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.name)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(EduTheme.ink)
-                                Text(item.subjects.joined(separator: ", "))
-                                    .font(.caption)
-                                    .foregroundStyle(EduTheme.muted)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            headerBlock
+                            statsStrip
+                            filterRow
+                            LazyVStack(spacing: 12) {
+                                ForEach(visibleClasses) { item in
+                                    TeacherClassCard(model: item)
+                                }
                             }
-                            .padding(.vertical, 4)
                         }
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.white)
-                                .padding(.vertical, 3)
-                        )
+                        .padding(16)
+                        .padding(.bottom, 24)
                     }
-                    .premiumListStyle()
+                    .refreshable { await load() }
                 }
             }
         }
-        .premiumTitle("Classes")
+        .premiumTitle("Mes classes")
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private var headerBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Mes classes")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(EduTheme.ink)
+            Text("Classes où tu enseignes — moyenne de classe par matière")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+        }
+    }
+
+    private var statsStrip: some View {
+        HStack(spacing: 0) {
+            statCell("\(classes.count)", "Classes")
+            Rectangle().fill(Color.black.opacity(0.08)).frame(width: 1, height: 36)
+            statCell("\(totalStudents)", "Élèves")
+            Rectangle().fill(Color.black.opacity(0.08)).frame(width: 1, height: 36)
+            statCell("\(totalSubjects)", totalSubjects == 1 ? "Matière" : "Matières")
+        }
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func statCell(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(EduTheme.ink)
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EduTheme.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var filterRow: some View {
+        HStack(spacing: 8) {
+            filterPill("Toutes (\(classes.count))", selected: filter == .all) {
+                filter = .all
+            }
+            filterPill("À surveiller (\(watchCount))", selected: filter == .watch, systemImage: "exclamationmark.circle") {
+                filter = .watch
+            }
+            Spacer(minLength: 0)
+            Button {
+                sortMode = sortMode == .name ? .average : .name
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(EduTheme.ink)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(.white))
+                    .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1))
+            }
+            .accessibilityLabel(sortMode == .name ? "Trier par moyenne" : "Trier par nom")
+        }
+    }
+
+    private func filterPill(_ title: String, selected: Bool, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.caption2.weight(.bold))
+                }
+                Text(title)
+                    .font(.caption.weight(.bold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .foregroundStyle(selected ? .white : EduTheme.ink)
+            .background(
+                Capsule().fill(selected ? EduTheme.navy : Color.white)
+            )
+            .overlay(
+                Capsule().stroke(selected ? Color.clear : Color.black.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func load() async {
         guard let tid = auth.userId else { return }
         loading = classes.isEmpty
         do {
-            let rows = try await EduAPI().fetchTeachingAssignments(teacherId: tid)
-            var grouped: [String: (name: String, subjects: [String])] = [:]
+            let api = EduAPI()
+            let rows = try await api.fetchTeachingAssignments(teacherId: tid)
+
+            var grouped: [String: TeacherClassCardModel] = [:]
             for row in rows {
-                let id = row.classSectionId
-                var entry = grouped[id] ?? (row.classes?.name ?? "Classe", [])
-                if let subject = row.matieres?.name, !entry.subjects.contains(subject) {
-                    entry.subjects.append(subject)
+                let classId = row.classSectionId
+                let subjectId = row.subjectId ?? row.matieres?.id ?? row.id
+                let subjectName = row.matieres?.name ?? "Matière"
+                var entry = grouped[classId] ?? TeacherClassCardModel(
+                    classId: classId,
+                    className: row.classes?.name ?? "Classe",
+                    gradeLevel: row.classes?.gradeLevel,
+                    studentCount: 0,
+                    subjects: []
+                )
+                if !entry.subjects.contains(where: { $0.subjectId == subjectId }) {
+                    entry.subjects.append(
+                        TeacherClassSubjectAvg(
+                            subjectId: subjectId,
+                            subjectName: subjectName,
+                            averageOn20: nil,
+                            gradeCount: 0
+                        )
+                    )
                 }
-                grouped[id] = entry
+                grouped[classId] = entry
             }
-            classes = grouped.map { ($0.key, $0.value.name, $0.value.subjects.sorted()) }
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+            let classIds = Array(grouped.keys)
+            let stats = try await api.fetchTeacherClassStats(classIds: classIds)
+            let avgMap = Dictionary(
+                uniqueKeysWithValues: stats.averages.map { ("\($0.classId)|\($0.subjectId)", $0) }
+            )
+
+            classes = grouped.values.map { model in
+                var next = model
+                next.studentCount = stats.counts[model.classId] ?? 0
+                next.subjects = model.subjects
+                    .map { subject in
+                        let key = "\(model.classId)|\(subject.subjectId)"
+                        if let a = avgMap[key] {
+                            return TeacherClassSubjectAvg(
+                                subjectId: subject.subjectId,
+                                subjectName: subject.subjectName,
+                                averageOn20: a.avg,
+                                gradeCount: a.n
+                            )
+                        }
+                        return subject
+                    }
+                    .sorted {
+                        $0.subjectName.localizedCaseInsensitiveCompare($1.subjectName) == .orderedAscending
+                    }
+                return next
+            }
+            .sorted {
+                $0.className.localizedCaseInsensitiveCompare($1.className) == .orderedAscending
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -1796,11 +3603,269 @@ struct TeacherClassesView: View {
     }
 }
 
-struct TeacherStudentsView: View {
+// MARK: - Teacher class cards
+
+private struct TeacherClassSubjectAvg: Identifiable, Hashable {
+    var id: String { subjectId }
+    let subjectId: String
+    let subjectName: String
+    let averageOn20: Double?
+    let gradeCount: Int
+}
+
+private struct TeacherClassCardModel: Identifiable, Hashable {
+    var id: String { classId }
+    let classId: String
+    let className: String
+    let gradeLevel: String?
+    var studentCount: Int
+    var subjects: [TeacherClassSubjectAvg]
+
+    var primaryAverage: Double? {
+        let values = subjects.compactMap(\.averageOn20)
+        guard !values.isEmpty else { return nil }
+        return values.min()
+    }
+
+    var needsWatch: Bool {
+        subjects.contains { subject in
+            guard let avg = subject.averageOn20, subject.gradeCount > 0 else { return false }
+            return avg < 10
+        }
+    }
+
+    var status: TeacherClassLevelStatus {
+        guard let avg = primaryAverage else { return .none }
+        if avg >= 12 { return .good }
+        if avg >= 10 { return .ok }
+        return .watch
+    }
+}
+
+private enum TeacherClassLevelStatus {
+    case good, ok, watch, none
+
+    var label: String {
+        switch self {
+        case .good: return "Bon niveau"
+        case .ok: return "Moyen"
+        case .watch: return "À surveiller"
+        case .none: return "Pas encore de notes"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .good: return EduTheme.fasoGreen
+        case .ok: return Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
+        case .watch: return EduTheme.fasoRed
+        case .none: return EduTheme.muted
+        }
+    }
+}
+
+private struct TeacherClassCard: View {
+    let model: TeacherClassCardModel
     @EnvironmentObject private var auth: AuthViewModel
-    @State private var sections: [(id: String, name: String, students: [PresenceDraft])] = []
+    private var status: TeacherClassLevelStatus { model.status }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                ClassHubView(classId: model.classId, className: model.className)
+            } label: {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(model.className)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(EduTheme.ink)
+                            Text(metaLine)
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(EduTheme.muted)
+                            .padding(.top, 6)
+                    }
+
+                    ForEach(model.subjects) { subject in
+                        subjectBlock(subject)
+                    }
+                }
+                .padding(16)
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                NavigationLink {
+                    TeacherAttendanceView(initialClassId: model.classId)
+                } label: {
+                    Label("Faire l’appel", systemImage: "checklist")
+                        .font(.subheadline.weight(.bold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(.white)
+                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    EvaluationsBrowser(
+                        classId: model.classId,
+                        teacherId: auth.userId,
+                        allowEntry: true,
+                        recordedBy: auth.userId,
+                        title: "Notes"
+                    )
+                } label: {
+                    Label("Notes", systemImage: "pencil.and.list.clipboard")
+                        .font(.subheadline.weight(.bold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(EduTheme.navy)
+                        .background(EduTheme.navy.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(status.color.opacity(status == .none ? 0.15 : 0.55), lineWidth: 1.5)
+        )
+    }
+
+    private var metaLine: String {
+        var parts = ["\(model.studentCount) élève\(model.studentCount == 1 ? "" : "s")"]
+        if let grade = model.gradeLevel, !grade.isEmpty {
+            parts.append(grade)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func subjectBlock(_ subject: TeacherClassSubjectAvg) -> some View {
+        let avg = subject.averageOn20
+        let subjectStatus = TeacherClassCardModel(
+            classId: model.classId,
+            className: model.className,
+            gradeLevel: model.gradeLevel,
+            studentCount: model.studentCount,
+            subjects: [subject]
+        ).status
+        let progress = avg.map { min(1, max(0, $0 / 20)) } ?? 0
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(subject.subjectName)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(EduTheme.navy)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule().fill(EduTheme.navy.opacity(0.08))
+                    )
+                Spacer(minLength: 8)
+                if let avg {
+                    Text("\(Self.formatAvg(avg)) / 20")
+                        .font(.title3.weight(.bold).monospacedDigit())
+                        .foregroundStyle(subjectStatus.color)
+                } else {
+                    Text("— / 20")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
+                    Capsule()
+                        .fill(subjectStatus.color)
+                        .frame(width: geo.size.width * progress)
+                }
+            }
+            .frame(height: 7)
+
+            HStack {
+                Text(subjectStatus.label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(subjectStatus.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(subjectStatus.color.opacity(0.12), in: Capsule())
+                Spacer()
+                Text(subject.gradeCount > 0
+                     ? "\(subject.gradeCount) note\(subject.gradeCount == 1 ? "" : "s")"
+                     : "Aucune note")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(EduTheme.muted)
+            }
+        }
+    }
+
+    private static func formatAvg(_ value: Double) -> String {
+        let nf = NumberFormatter()
+        nf.locale = Locale(identifier: "fr_FR")
+        nf.minimumFractionDigits = 2
+        nf.maximumFractionDigits = 2
+        return nf.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+    }
+}
+
+struct TeacherStudentsView: View {
+    private struct ClassSection: Identifiable {
+        let id: String
+        let name: String
+        let students: [PresenceDraft]
+        let subjectIds: [String]
+        let subjectLabels: [String]
+    }
+
+    @EnvironmentObject private var auth: AuthViewModel
+    @State private var sections: [ClassSection] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var search = ""
+    @State private var selectedClassId: String? = nil
+
+    private var filteredSections: [ClassSection] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sections.compactMap { section in
+            if let selectedClassId, section.id != selectedClassId { return nil }
+            let students: [PresenceDraft]
+            if q.isEmpty {
+                students = section.students
+            } else {
+                students = section.students.filter {
+                    $0.fullName.localizedCaseInsensitiveContains(q)
+                }
+            }
+            guard !students.isEmpty || q.isEmpty else { return nil }
+            if q.isEmpty { return section }
+            return ClassSection(
+                id: section.id,
+                name: section.name,
+                students: students,
+                subjectIds: section.subjectIds,
+                subjectLabels: section.subjectLabels
+            )
+        }
+    }
+
+    private var totalStudents: Int {
+        sections.reduce(0) { $0 + $1.students.count }
+    }
+
+    private var visibleCount: Int {
+        filteredSections.reduce(0) { $0 + $1.students.count }
+    }
 
     var body: some View {
         PremiumScreenChrome {
@@ -1810,40 +3875,76 @@ struct TeacherStudentsView: View {
                 else if sections.isEmpty {
                     PremiumEmpty(title: "Aucun élève", systemImage: "graduationcap", message: "Aucun élève dans tes classes.")
                 } else {
-                    List {
-                        ForEach(sections, id: \.id) { section in
-                            Section {
-                                ForEach(section.students) { student in
-                                    NavigationLink {
-                                        StudentFileView(studentId: student.studentId, name: student.fullName, className: section.name)
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Text(String(student.fullName.prefix(1)).uppercased())
-                                                .font(.subheadline.weight(.bold))
-                                                .foregroundStyle(.white)
-                                                .frame(width: 36, height: 36)
-                                                .background(EduTheme.teal, in: Circle())
-                                            Text(student.fullName)
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(EduTheme.ink)
+                    VStack(spacing: 0) {
+                        filtersHeader
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 10)
+                            .background(EduTheme.loginBackground)
+
+                        if filteredSections.isEmpty || visibleCount == 0 {
+                            PremiumEmpty(
+                                title: "Aucun résultat",
+                                systemImage: "magnifyingglass",
+                                message: "Aucun élève ne correspond à ces filtres."
+                            )
+                        } else {
+                            List {
+                                ForEach(filteredSections) { section in
+                                    Section {
+                                        ForEach(section.students) { student in
+                                            NavigationLink {
+                                                StudentFileView(
+                                                    studentId: student.studentId,
+                                                    name: student.fullName,
+                                                    className: section.name,
+                                                    classId: section.id,
+                                                    subjectIds: section.subjectIds,
+                                                    subjectLabels: section.subjectLabels
+                                                )
+                                            } label: {
+                                                HStack(spacing: 12) {
+                                                    UserAvatarView(
+                                                        url: student.avatarUrl,
+                                                        firstName: student.firstName,
+                                                        lastName: student.lastName,
+                                                        size: 40
+                                                    )
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(student.fullName)
+                                                            .font(.subheadline.weight(.semibold))
+                                                            .foregroundStyle(EduTheme.ink)
+                                                        Text(section.name)
+                                                            .font(.caption)
+                                                            .foregroundStyle(EduTheme.muted)
+                                                    }
+                                                    Spacer(minLength: 0)
+                                                }
+                                                .padding(.vertical, 2)
+                                            }
+                                            .listRowBackground(
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .fill(.white)
+                                                    .padding(.vertical, 3)
+                                            )
                                         }
-                                        .padding(.vertical, 2)
+                                    } header: {
+                                        HStack {
+                                            Text(section.name.uppercased())
+                                                .font(.caption2.weight(.semibold))
+                                                .tracking(0.7)
+                                                .foregroundStyle(EduTheme.muted)
+                                            Spacer()
+                                            Text("\(section.students.count)")
+                                                .font(.caption2.weight(.bold).monospacedDigit())
+                                                .foregroundStyle(EduTheme.muted)
+                                        }
                                     }
-                                    .listRowBackground(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(.white)
-                                            .padding(.vertical, 3)
-                                    )
                                 }
-                            } header: {
-                                Text(section.name.uppercased())
-                                    .font(.caption2.weight(.semibold))
-                                    .tracking(0.7)
-                                    .foregroundStyle(EduTheme.muted)
                             }
+                            .premiumListStyle()
                         }
                     }
-                    .premiumListStyle()
                 }
             }
         }
@@ -1852,19 +3953,108 @@ struct TeacherStudentsView: View {
         .refreshable { await load() }
     }
 
+    private var filtersHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(EduTheme.muted)
+                TextField("Rechercher un élève…", text: $search)
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    classChip(id: nil, label: "Toutes", count: totalStudents)
+                    ForEach(sections) { section in
+                        classChip(id: section.id, label: section.name, count: section.students.count)
+                    }
+                }
+            }
+
+            Text("\(visibleCount) élève\(visibleCount == 1 ? "" : "s")")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EduTheme.muted)
+        }
+    }
+
+    private func classChip(id: String?, label: String, count: Int) -> some View {
+        let on = selectedClassId == id
+        return Button {
+            selectedClassId = id
+        } label: {
+            HStack(spacing: 5) {
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                Text("\(count)")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule().fill(on ? Color.white.opacity(0.25) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255))
+                    )
+            }
+            .foregroundStyle(on ? .white : EduTheme.ink)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(on ? EduTheme.navy : .white))
+            .overlay(
+                Capsule().stroke(on ? EduTheme.navy : Color.black.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func load() async {
         guard let tid = auth.userId else { return }
         loading = sections.isEmpty
         do {
             let api = EduAPI()
             let assignments = try await api.fetchTeachingAssignments(teacherId: tid)
-            var seen = Set<String>()
-            var built: [(id: String, name: String, students: [PresenceDraft])] = []
-            for assignment in assignments where seen.insert(assignment.classSectionId).inserted {
-                let students = try await api.fetchStudentsInClass(classSectionId: assignment.classSectionId)
-                built.append((assignment.classSectionId, assignment.classes?.name ?? "Classe", students))
+            var byClass: [String: ClassSection] = [:]
+            var order: [String] = []
+            for assignment in assignments {
+                let classId = assignment.classSectionId
+                let subjectId = assignment.subjectId ?? assignment.matieres?.id
+                let subjectName = assignment.matieres?.name
+                if byClass[classId] == nil {
+                    order.append(classId)
+                    let students = try await api.fetchStudentsInClass(classSectionId: classId)
+                    byClass[classId] = ClassSection(
+                        id: classId,
+                        name: assignment.classes?.name ?? "Classe",
+                        students: students,
+                        subjectIds: subjectId.map { [$0] } ?? [],
+                        subjectLabels: (subjectName?.isEmpty == false) ? [subjectName!] : []
+                    )
+                } else if let subjectId, let existing = byClass[classId] {
+                    var ids = existing.subjectIds
+                    var labels = existing.subjectLabels
+                    if !ids.contains(subjectId) {
+                        ids.append(subjectId)
+                        if let subjectName, !subjectName.isEmpty { labels.append(subjectName) }
+                    }
+                    byClass[classId] = ClassSection(
+                        id: existing.id,
+                        name: existing.name,
+                        students: existing.students,
+                        subjectIds: ids,
+                        subjectLabels: labels
+                    )
+                }
             }
-            sections = built.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            sections = order.compactMap { byClass[$0] }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            if let selectedClassId, !sections.contains(where: { $0.id == selectedClassId }) {
+                self.selectedClassId = nil
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -1935,25 +4125,149 @@ struct PresenceLogView: View {
     }
 }
 
+/// Teacher présence hub — take roll first; history is secondary (not a raw dump).
 struct TeacherAttendanceOverview: View {
     @EnvironmentObject private var auth: AuthViewModel
-    @State private var classIds: [String] = []
+    @State private var assignments: [TeachingAssignment] = []
     @State private var ready = false
 
+    private var classIds: [String] {
+        Array(Set(assignments.map(\.classSectionId)))
+    }
+
     var body: some View {
-        Group {
-            if !ready { LoadingBlock() }
-            else {
-                PresenceLogView(classIds: classIds, title: "Présences")
+        PremiumScreenChrome {
+            Group {
+                if !ready {
+                    LoadingBlock()
+                } else if assignments.isEmpty {
+                    PremiumEmpty(
+                        title: "Aucune classe",
+                        systemImage: "checklist",
+                        message: "Aucune affectation pour faire l’appel."
+                    )
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            NavigationLink {
+                                TeacherAttendanceView()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "checklist")
+                                        .font(.title3.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 44, height: 44)
+                                        .background(Circle().fill(.white.opacity(0.2)))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Faire l’appel")
+                                            .font(.headline.weight(.bold))
+                                            .foregroundStyle(.white)
+                                        Text("Marquer présents, absents, retards")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.85))
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                                .padding(16)
+                                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Ouvre la saisie d’appel")
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Tes classes")
+                                    .font(.headline)
+                                    .foregroundStyle(EduTheme.ink)
+
+                                ForEach(assignments) { assignment in
+                                    NavigationLink {
+                                        TeacherAttendanceView(
+                                            initialClassId: assignment.classSectionId,
+                                            initialSubjectId: assignment.subjectId
+                                        )
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(assignment.classes?.name ?? "Classe")
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundStyle(EduTheme.ink)
+                                                Text(assignment.matieres?.name ?? "Matière")
+                                                    .font(.caption)
+                                                    .foregroundStyle(EduTheme.muted)
+                                            }
+                                            Spacer()
+                                            Text("Appel")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(EduTheme.navy, in: Capsule())
+                                        }
+                                        .padding(14)
+                                        .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+
+                            if !classIds.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Historique")
+                                        .font(.headline)
+                                        .foregroundStyle(EduTheme.ink)
+                                    NavigationLink {
+                                        PresenceLogView(classIds: classIds, title: "Historique des présences")
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "clock.arrow.circlepath")
+                                                .foregroundStyle(EduTheme.teal)
+                                            Text("Voir les pointages enregistrés")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(EduTheme.ink)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundStyle(EduTheme.muted)
+                                        }
+                                        .padding(14)
+                                        .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .padding(20)
+                    }
+                }
             }
         }
+        .premiumTitle("Présences")
         .task { await load() }
     }
 
     private func load() async {
-        guard let tid = auth.userId else { return }
-        let rows = (try? await EduAPI().fetchTeachingAssignments(teacherId: tid)) ?? []
-        classIds = Array(Set(rows.map(\.classSectionId)))
+        guard let tid = auth.userId else {
+            ready = true
+            return
+        }
+        assignments = ((try? await EduAPI().fetchTeachingAssignments(teacherId: tid)) ?? [])
+            .sorted {
+                let ln = $0.classes?.name ?? ""
+                let rn = $1.classes?.name ?? ""
+                if ln != rn { return ln.localizedCaseInsensitiveCompare(rn) == .orderedAscending }
+                return ($0.matieres?.name ?? "").localizedCaseInsensitiveCompare($1.matieres?.name ?? "") == .orderedAscending
+            }
         ready = true
     }
 }

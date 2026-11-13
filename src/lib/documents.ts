@@ -1,8 +1,13 @@
 import { APP_PUBLIC_URL, WEBSITE_URL } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
 
-/** Used when nothing else is known (same default as the invitation links). */
-const FALLBACK_SITE = "https://edufaso.lovable.app";
+/**
+ * Public HTTPS landing for bulletin QR codes (Camera only opens http(s)).
+ * Tries the native app via `edufaso://`, then offers verification on the page.
+ * Prefer a stable custom domain later; do not point paper QRs at the marketing site.
+ */
+const VERIFY_HANDOFF_URL =
+  `${(import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "") || "https://hbfjtsxzueftoiryzhxh.supabase.co"}/functions/v1/ouvrir-verifier`;
 
 function isLocalHost(host: string) {
   return host === "localhost" || host.startsWith("127.") || host === "[::1]";
@@ -22,11 +27,12 @@ export function verifyBaseUrl(): string {
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     return `${window.location.origin}${base}`;
   }
-  return (WEBSITE_URL || FALLBACK_SITE).replace(/\/$/, "");
+  return VERIFY_HANDOFF_URL;
 }
 
 export function documentVerifyUrl(code: string): string {
-  return `${verifyBaseUrl()}/verifier?c=${encodeURIComponent(code)}`;
+  // Always use the public handoff so Camera → app works even if the SPA host is wrong.
+  return `${VERIFY_HANDOFF_URL}?c=${encodeURIComponent(code)}`;
 }
 
 /**

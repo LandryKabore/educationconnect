@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ForgotPasswordView: View {
     @EnvironmentObject private var auth: AuthViewModel
@@ -55,11 +56,18 @@ struct ForgotPasswordView: View {
 }
 
 struct VerifyDocumentView: View {
+    var initialCode: String? = nil
+
     @State private var code = ""
     @State private var average = ""
     @State private var result: VerifyPayload?
     @State private var error: String?
     @State private var loading = false
+
+    private var canVerify: Bool {
+        !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && parseAverage(average) != nil
+    }
 
     var body: some View {
         AuthChrome {
@@ -68,7 +76,7 @@ struct VerifyDocumentView: View {
                     Text("Vérifier un bulletin")
                         .font(.title2.weight(.bold))
                         .foregroundStyle(EduTheme.ink)
-                    Text("Saisissez le code imprimé sur le document. La moyenne sert à confirmer qu’il s’agit bien de cette édition.")
+                    Text("Saisissez le code et la moyenne générale exactement comme imprimés sur le bulletin (2 décimales).")
                         .font(.subheadline)
                         .foregroundStyle(EduTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -80,18 +88,30 @@ struct VerifyDocumentView: View {
                     contentType: .oneTimeCode,
                     submitLabel: .next
                 )
-                AuthTextField(
-                    title: "Moyenne (facultatif)",
-                    text: $average,
-                    keyboard: .decimalPad,
-                    submitLabel: .go,
-                    onSubmit: { Task { await verify() } }
-                )
+                .onAppear {
+                    if code.isEmpty, let initialCode, !initialCode.isEmpty {
+                        code = initialCode.uppercased()
+                    }
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    AuthTextField(
+                        title: "Moyenne générale",
+                        placeholder: "ex. 11,01",
+                        text: $average,
+                        keyboard: .decimalPad,
+                        submitLabel: .go,
+                        onSubmit: { Task { await verify() } }
+                    )
+                    Text("Obligatoire · même valeur que sur le papier (11,01 ≠ 11,1).")
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
 
                 AuthPrimaryButton(
                     title: "Vérifier",
+                    busyTitle: "Vérification…",
                     busy: loading,
-                    enabled: !code.trimmingCharacters(in: .whitespaces).isEmpty
+                    enabled: canVerify
                 ) {
                     Task { await verify() }
                 }
@@ -125,7 +145,8 @@ struct VerifyDocumentView: View {
                 Text("Une version plus récente a été émise.").foregroundStyle(.orange)
             }
             if result.gradeCheck == "mismatch" {
-                Text("La moyenne saisie ne correspond pas.").foregroundStyle(.orange)
+                Text("La moyenne saisie ne correspond pas. Reprenez les 2 décimales du bulletin.")
+                    .foregroundStyle(.orange)
             } else if result.gradeCheck == "match" {
                 Text("La moyenne correspond.").foregroundStyle(EduTheme.teal)
             }
@@ -149,16 +170,42 @@ struct VerifyDocumentView: View {
         }
     }
 
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
+    /// Accepts `11,01` / `11.01` and rounds to 2 decimals like the server hash.
+    private func parseAverage(_ raw: String) -> Double? {
+        let cleaned = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        guard let n = Double(cleaned), n >= 0, n <= 20 else { return nil }
+        return (n * 100).rounded() / 100
+    }
+
     private func verify() async {
+        dismissKeyboard()
+        guard let avg = parseAverage(average) else {
+            error = "Indiquez la moyenne générale imprimée (ex. 11,01)."
+            return
+        }
+        let cleanCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanCode.isEmpty else { return }
+
         loading = true
         defer { loading = false }
         error = nil
         result = nil
-        let trimmedAverage = average.trimmingCharacters(in: .whitespaces)
         do {
             result = try await EduAPI().verifyDocument(
-                code: code.trimmingCharacters(in: .whitespaces),
-                average: trimmedAverage.isEmpty ? nil : trimmedAverage
+                code: cleanCode,
+                average: String(format: "%.2f", avg)
             )
         } catch {
             self.error = error.localizedDescription

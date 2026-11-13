@@ -1,11 +1,17 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
+// iOS shipping path is the native SwiftUI app in `EduFaso IOS/`.
+// Keep Capacitor for Android (and optional webview experiments); prefer native on iPhone.
 const config: CapacitorConfig = {
   appId: "bf.edufaso.app",
   appName: "EduFaso",
   webDir: "dist",
   server: {
     androidScheme: "https",
+  },
+  ios: {
+    contentInset: "automatic",
+    backgroundColor: "#0f172a",
   },
   plugins: {
     SplashScreen: {

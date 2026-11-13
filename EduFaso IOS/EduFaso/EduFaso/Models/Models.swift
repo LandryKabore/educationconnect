@@ -268,14 +268,19 @@ struct TimetableSlot: Codable, Identifiable, Hashable {
     let startTime: String
     let endTime: String
     let room: String?
+    let classSectionId: String?
+    let subjectId: String?
     let matieres: NamedEntity?
+    let classes: ClassLite?
     let profils: PersonName?
 
     enum CodingKeys: String, CodingKey {
-        case id, room, matieres, profils
+        case id, room, matieres, classes, profils
         case dayOfWeek = "day_of_week"
         case startTime = "start_time"
         case endTime = "end_time"
+        case classSectionId = "class_section_id"
+        case subjectId = "subject_id"
     }
 
     var dayLabel: String {
@@ -296,13 +301,72 @@ struct MessageRow: Codable, Identifiable, Hashable {
     let createdAt: String?
     let readAt: String?
     let isAnnouncement: Bool?
+    let allowReplies: Bool?
+    let senderId: String?
+    let recipientId: String?
+    let schoolId: String?
+    let threadId: String?
     let sender: PersonName?
+    let recipient: PersonName?
 
     enum CodingKeys: String, CodingKey {
-        case id, subject, body, sender
+        case id, subject, body, sender, recipient
         case createdAt = "created_at"
         case readAt = "read_at"
         case isAnnouncement = "is_announcement"
+        case allowReplies = "allow_replies"
+        case senderId = "sender_id"
+        case recipientId = "recipient_id"
+        case schoolId = "school_id"
+        case threadId = "thread_id"
+    }
+}
+
+struct MessageContact: Codable, Identifiable, Hashable {
+    let id: String
+    let firstName: String?
+    let lastName: String?
+    let role: String?
+    let className: String?
+    let dateOfBirth: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, role
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case className = "class_name"
+        case dateOfBirth = "date_of_birth"
+    }
+
+    var fullName: String {
+        "\(firstName ?? "") \(lastName ?? "")".trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Canonical role used for filters / sorting (RPC may use FR aliases).
+    var normalizedRole: String {
+        switch (role ?? "").lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current) {
+        case "student", "eleve": return "student"
+        case "parent": return "parent"
+        case "teacher", "enseignant", "professeur", "prof": return "teacher"
+        case "school_admin", "admin", "administrateur": return "school_admin"
+        default: return role ?? ""
+        }
+    }
+
+    var roleLabel: String {
+        switch normalizedRole {
+        case "student": return "Élève"
+        case "parent": return "Parent"
+        case "teacher": return "Professeur"
+        case "school_admin": return "Administrateur"
+        default: return role ?? ""
+        }
+    }
+
+    var subtitle: String {
+        let bits = [className, roleLabel].compactMap { $0?.isEmpty == false ? $0 : nil }
+        return bits.joined(separator: " · ")
     }
 }
 
@@ -1020,7 +1084,42 @@ struct PresenceDraft: Identifiable, Hashable {
     let studentId: String
     let firstName: String
     let lastName: String
+    var avatarUrl: String? = nil
     var status: String
 
     var fullName: String { "\(firstName) \(lastName)" }
+}
+
+struct TeacherClassStatsPayload: Decodable, Hashable {
+    struct Average: Decodable, Hashable {
+        let classId: String
+        let subjectId: String
+        let avg: Double
+        let n: Int
+    }
+
+    let counts: [String: Int]
+    let averages: [Average]
+
+    enum CodingKeys: String, CodingKey {
+        case counts, averages
+    }
+
+    init(counts: [String: Int], averages: [Average]) {
+        self.counts = counts
+        self.averages = averages
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        averages = try c.decodeIfPresent([Average].self, forKey: .averages) ?? []
+        // JSON object values may arrive as Int or Double depending on jsonb.
+        if let raw = try? c.decode([String: Int].self, forKey: .counts) {
+            counts = raw
+        } else if let raw = try? c.decode([String: Double].self, forKey: .counts) {
+            counts = raw.mapValues { Int($0) }
+        } else {
+            counts = [:]
+        }
+    }
 }

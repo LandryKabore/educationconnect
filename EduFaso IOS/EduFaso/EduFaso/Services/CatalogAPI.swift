@@ -208,6 +208,20 @@ extension EduAPI {
         return rows.first
     }
 
+    /// Teachers create interrogations (graded). Exercices de maison go in the cahier.
+    @discardableResult
+    func createEvaluation(_ row: EvaluationInsert) async throws -> String {
+        struct Created: Decodable { let id: String }
+        let created: Created = try await client
+            .from("evaluations")
+            .insert(row)
+            .select("id")
+            .single()
+            .execute()
+            .value
+        return created.id
+    }
+
     func fetchEvaluations(
         classId: String? = nil,
         classIds: [String]? = nil,
@@ -218,7 +232,7 @@ extension EduAPI {
         if let classIds, classIds.isEmpty { return [] }
         // Keep select close to web (`*, matieres(name)`): avoid fragile FK embeds that
         // can 400 / fail decode for students.
-        let columns = "id, title, eval_date, start_time, end_time, type, period_label, max_score, admin_confirmed, subject_id, class_section_id, teacher_id, description, matieres(name)"
+        let columns = "id, title, eval_date, start_time, end_time, type, period_label, max_score, admin_confirmed, subject_id, class_section_id, teacher_id, description, matieres(name), classes(name)"
         var query = client.from("evaluations").select(columns)
         if let classId { query = query.eq("class_section_id", value: classId) }
         if let classIds { query = query.in("class_section_id", values: classIds) }
@@ -473,6 +487,21 @@ nonisolated struct CahierInsert: Encodable {
     let content: String
     let homework: String?
     let homework_due: String?
+}
+
+nonisolated struct EvaluationInsert: Encodable {
+    let class_section_id: String
+    let subject_id: String
+    let teacher_id: String
+    let period_label: String
+    let type: String
+    let title: String
+    let description: String?
+    let max_score: Double
+    let eval_date: String?
+    let start_time: String?
+    let end_time: String?
+    let admin_confirmed: Bool
 }
 
 nonisolated struct GradeInsert: Encodable {

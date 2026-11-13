@@ -115,6 +115,7 @@ struct AuthTextField: View {
 
 struct AuthPrimaryButton: View {
     let title: String
+    var busyTitle: String = "Enregistrement…"
     var busy: Bool = false
     var enabled: Bool = true
     let action: () -> Void
@@ -123,7 +124,7 @@ struct AuthPrimaryButton: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 if busy { ProgressView().tint(.white) }
-                Text(busy ? "Enregistrement…" : title)
+                Text(busy ? busyTitle : title)
                     .font(.body.weight(.bold))
             }
             .frame(maxWidth: .infinity)

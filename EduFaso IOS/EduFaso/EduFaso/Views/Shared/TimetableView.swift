@@ -9,9 +9,12 @@ struct TimetableView: View {
 
     @EnvironmentObject private var auth: AuthViewModel
     @State private var slots: [TimetableSlot] = []
+    @State private var className: String?
     @State private var loading = true
     @State private var ready = false
     @State private var error: String?
+    @State private var exporting = false
+    @State private var exportError: String?
     @State private var scope: Scope = .day
     @State private var selectedDay: Int = Self.defaultSelectedDay()
     /// 0 = current calendar week; ±1 previous/next, etc.
@@ -126,8 +129,74 @@ struct TimetableView: View {
             }
         }
         .premiumTitle(titleText)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await exportPdf() }
+                } label: {
+                    if exporting {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+                .disabled(exporting || slots.isEmpty || !ready)
+                .accessibilityLabel("Télécharger PDF")
+            }
+        }
+        .alert("Export impossible", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
         .task { await load(isRefresh: false) }
         .onAppear { snapToNow() }
+    }
+
+    private func exportPdf() async {
+        guard !slots.isEmpty else {
+            exportError = "Aucun créneau à exporter."
+            return
+        }
+        exporting = true
+        defer { exporting = false }
+
+        let schoolName = auth.schools.first?.name ?? "École"
+        let resolvedClass = className ?? "Classe"
+        let studentName: String? = {
+            switch mode {
+            case .student:
+                return auth.profile?.fullName
+            case .teacher:
+                return nil
+            case .classSection:
+                return nil
+            }
+        }()
+        let extra: String? = {
+            if case .teacher = mode {
+                return auth.profile.map { "Enseignant : \($0.fullName)" }
+            }
+            return nil
+        }()
+
+        let data = EmploiDuTempsPdf.make(
+            .init(
+                schoolName: schoolName,
+                className: resolvedClass,
+                studentName: studentName,
+                extraLine: extra,
+                slots: slots
+            )
+        )
+        let safe = resolvedClass
+            .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+            .replacingOccurrences(of: "[^A-Za-z0-9\\-_àâäéèêëïîôùûüç]", with: "", options: .regularExpression)
+        let fileName = "emploi-du-temps-\(safe.isEmpty ? "classe" : safe).pdf"
+        PdfShare.present(data: data, fileName: fileName)
     }
 
     private func snapToNow() {
@@ -654,15 +723,18 @@ struct TimetableView: View {
                 guard let tid = auth.userId else {
                     slots = []; loading = false; ready = true; return
                 }
+                className = "Mes classes"
                 slots = try await api.fetchTeacherTimetable(teacherId: tid)
             case .classSection(let classId):
+                className = nil
                 slots = try await api.fetchTimetable(classSectionId: classId)
             case .student:
                 let sid = studentIdOverride ?? auth.userId
-                guard let sid, let classId = try await api.activeEnrollment(studentId: sid)?.classId else {
+                guard let sid, let enrollment = try await api.activeEnrollment(studentId: sid) else {
                     slots = []; loading = false; ready = true; return
                 }
-                slots = try await api.fetchTimetable(classSectionId: classId)
+                className = enrollment.className
+                slots = try await api.fetchTimetable(classSectionId: enrollment.classId)
             }
             if !isRefresh {
                 weekOffset = 0

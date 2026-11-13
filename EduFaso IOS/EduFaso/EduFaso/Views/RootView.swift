@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    @EnvironmentObject private var deepLinks: DeepLinkCenter
 
     /// One continuous opening screen through auth + first portal load.
     private var showOpening: Bool {
@@ -42,5 +43,16 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: routeKey)
+        .sheet(item: $deepLinks.verifyRequest) { request in
+            NavigationStack {
+                VerifyDocumentView(initialCode: request.code)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Fermer") { deepLinks.verifyRequest = nil }
+                        }
+                    }
+            }
+            .preferredColorScheme(.light)
+        }
     }
 }

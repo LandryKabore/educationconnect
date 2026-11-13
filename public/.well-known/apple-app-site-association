@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["JUZV5J6AY8.bf.edufaso.app"],
+        "components": [
+          {
+            "/": "/verifier",
+            "comment": "Bulletin authenticity check"
+          },
+          {
+            "/": "/verifier/*"
+          }
+        ],
+        "paths": ["/verifier", "/verifier/*"]
+      }
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Supabase
 import Combine
 
@@ -208,6 +209,54 @@ final class AuthViewModel: ObservableObject {
             try await client
                 .from("profils")
                 .update(updates)
+                .eq("id", value: uid)
+                .execute()
+            await loadUserData(userId: uid)
+            return true
+        } catch {
+            authError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Upload a compressed avatar (512px JPEG) then store the public URL on `profils`.
+    func uploadAvatar(_ image: UIImage) async -> Bool {
+        authError = nil
+        guard let uid = userId else {
+            authError = AvatarError.notSignedIn.localizedDescription
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            let url = try await AvatarService.upload(userId: uid, image: image)
+            try await client
+                .from("profils")
+                .update(["avatar_url": url])
+                .eq("id", value: uid)
+                .execute()
+            await loadUserData(userId: uid)
+            return true
+        } catch {
+            authError = error.localizedDescription
+            return false
+        }
+    }
+
+    func removeAvatar() async -> Bool {
+        authError = nil
+        guard let uid = userId else {
+            authError = AvatarError.notSignedIn.localizedDescription
+            return false
+        }
+        busy = true
+        defer { busy = false }
+        do {
+            try await AvatarService.remove(userId: uid)
+            struct ClearAvatar: Encodable { let avatar_url: String? }
+            try await client
+                .from("profils")
+                .update(ClearAvatar(avatar_url: nil))
                 .eq("id", value: uid)
                 .execute()
             await loadUserData(userId: uid)

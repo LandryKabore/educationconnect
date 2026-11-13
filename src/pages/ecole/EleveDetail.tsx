@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
+import { frenchDate } from "@/lib/bulletinFormat";
 import {
   ArrowLeftRight,
   ChevronDown,
@@ -1016,7 +1017,8 @@ function EleveFiche({
 
   const summaryBits: string[] = [];
   if (student.date_of_birth) {
-    const born = format(new Date(student.date_of_birth), "d MMMM yyyy", { locale: fr });
+    // Calendar date only — never `new Date("YYYY-MM-DD")` (UTC midnight shifts the day in US timezones).
+    const born = frenchDate(student.date_of_birth) ?? student.date_of_birth;
     summaryBits.push(`${bornWord(student.gender)} ${born}${age != null ? ` (${age} ans)` : ""}`);
   }
   if (student.gender && GENDER_LABEL[student.gender]) summaryBits.push(GENDER_LABEL[student.gender]);
@@ -1298,11 +1300,7 @@ function EleveFiche({
                 <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                   <IdentityValue
                     label="Date de naissance"
-                    value={
-                      student.date_of_birth
-                        ? format(new Date(student.date_of_birth), "d MMMM yyyy", { locale: fr })
-                        : null
-                    }
+                    value={student.date_of_birth ? frenchDate(student.date_of_birth) : null}
                     onAdd={canEditIdentity && !student.date_of_birth ? () => setEditIdentity(true) : undefined}
                   />
                   <IdentityValue

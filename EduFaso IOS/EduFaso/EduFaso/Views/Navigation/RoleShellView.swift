@@ -7,13 +7,20 @@ struct RoleShellView: View {
     @State private var menuOpen = false
     @State private var showProfile = false
     @State private var contentID = UUID()
-    /// Blocks card taps once a horizontal portal swipe is clearly underway.
-    @State private var suppressContentClicks = false
     /// NavigationLink pushes (Présences, etc.) keep selection on dashboard — track real stack depth.
     @State private var navigationDepth = 1
 
+    /// Root of the stack (Accueil / a menu screen) — not a pushed detail.
+    private var isAtRoot: Bool {
+        navigationDepth <= 1 && !showProfile
+    }
+
     private var canSwipeToProfile: Bool {
-        selection == .dashboard && navigationDepth <= 1 && !showProfile
+        selection == .dashboard && isAtRoot
+    }
+
+    private var canSwipeToMenu: Bool {
+        isAtRoot && !menuOpen
     }
 
     var body: some View {
@@ -32,7 +39,6 @@ struct RoleShellView: View {
                 ScreenHost(screen: selection, open: openScreen)
                     .id(contentID)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(!suppressContentClicks)
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button {
@@ -57,9 +63,12 @@ struct RoleShellView: View {
                             Button {
                                 showProfile = true
                             } label: {
-                                Image(systemName: "person.crop.circle")
-                                    .font(.title3)
-                                    .foregroundStyle(EduTheme.navy)
+                                UserAvatarView(
+                                    url: auth.profile?.avatarUrl,
+                                    firstName: auth.profile?.firstName,
+                                    lastName: auth.profile?.lastName,
+                                    size: 28
+                                )
                             }
                             .accessibilityLabel("Profil")
                         }
@@ -75,6 +84,9 @@ struct RoleShellView: View {
                     }
             }
             .disabled(menuOpen)
+            // Only at root: swipe right → menu, swipe left → profile.
+            // On pushed pages we leave the left edge alone so interactive pop works.
+            // Never disable hit-testing mid-drag — that froze ScrollView with a white gap.
             .simultaneousGesture(portalSwipeGesture)
 
             if menuOpen {
@@ -108,29 +120,19 @@ struct RoleShellView: View {
         .preferredColorScheme(.light)
     }
 
-    /// Anywhere: swipe right → menu · swipe left → profile.
-    /// Mid-swipe we disable content hits so cards don't open at the same time.
     private var portalSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-            .onChanged { value in
-                guard !menuOpen, !showProfile else { return }
-                let dx = value.translation.width
-                let dy = value.translation.height
-                guard abs(dx) > 28, abs(dx) > abs(dy) * 1.5 else { return }
-                // Only claim the gesture when it can open menu (anywhere) or profile (root dashboard)
-                if dx > 0 || canSwipeToProfile {
-                    suppressContentClicks = true
-                }
-            }
+        DragGesture(minimumDistance: 28, coordinateSpace: .global)
             .onEnded { value in
-                defer { suppressContentClicks = false }
                 guard !menuOpen, !showProfile else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard abs(dx) > abs(dy) * 1.5, abs(dx) > 64 else { return }
-                if dx > 0 {
+                // Strictly horizontal — ignore scroll / pull-to-refresh.
+                guard abs(dx) > abs(dy) * 2, abs(dx) > 72 else { return }
+                // Carousels and chip rows own their horizontal swipes.
+                guard !HorizontalScrollProbe.startsOnHorizontalScroller(value.startLocation) else { return }
+                if dx > 0, canSwipeToMenu {
                     menuOpen = true
-                } else if canSwipeToProfile {
+                } else if dx < 0, canSwipeToProfile {
                     showProfile = true
                 }
             }
@@ -186,6 +188,27 @@ struct RoleShellView: View {
 
     private func closeMenu() {
         menuOpen = false
+    }
+}
+
+private enum HorizontalScrollProbe {
+    /// `point` is in window coordinates (SwiftUI `.global`).
+    @MainActor
+    static func startsOnHorizontalScroller(_ point: CGPoint) -> Bool {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+        var current = window?.hitTest(point, with: nil)
+        while let view = current {
+            if let scroll = view as? UIScrollView,
+               scroll.isScrollEnabled,
+               scroll.contentSize.width > scroll.bounds.width + 1 {
+                return true
+            }
+            current = view.superview
+        }
+        return false
     }
 }
 
@@ -516,7 +539,7 @@ struct ScreenHost: View {
         case .grades:
             StudentGradesView()
         case .exercises:
-            EvaluationsBrowser(studentId: auth.userId, type: "devoir", title: "Exercices de maison")
+            EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
         case .exams:
             EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Devoirs")
         case .compositions:
@@ -534,7 +557,7 @@ struct ScreenHost: View {
         case .childExams:
             ChildGate(title: "Devoirs") { EvaluationsBrowser(studentId: $0.id, type: "examen", confirmedOnly: true, title: "Devoirs") }
         case .childExercises:
-            ChildGate(title: "Exercices de maison") { EvaluationsBrowser(studentId: $0.id, type: "devoir", title: "Exercices") }
+            ChildGate(title: "Interrogations") { EvaluationsBrowser(studentId: $0.id, type: "interrogation", title: "Interrogations") }
         case .childCompositions:
             ChildGate(title: "Compositions") { StudentCompositionsView(studentIdOverride: $0.id) }
         case .childBulletin:

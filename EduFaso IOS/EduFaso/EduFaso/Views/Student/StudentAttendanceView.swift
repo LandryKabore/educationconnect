@@ -3,6 +3,8 @@ import SwiftUI
 struct StudentAttendanceView: View {
     @EnvironmentObject private var auth: AuthViewModel
     var studentIdOverride: String? = nil
+    /// When set (teacher viewing a student), only these subjects are available.
+    var allowedSubjectIds: [String]? = nil
 
     @State private var periods: [AttendancePeriod] = AttendancePeriodBuilder.build()
     @State private var periodKey: AttendancePeriodKey = .t1
@@ -22,8 +24,11 @@ struct StudentAttendanceView: View {
     private var studentId: String? { studentIdOverride ?? auth.userId }
 
     private var isParentAudience: Bool {
-        guard let override = studentIdOverride, let uid = auth.userId else { return false }
-        return override != uid
+        auth.primaryRole == .parent
+    }
+
+    private var showJustifyHint: Bool {
+        auth.primaryRole == .parent || auth.primaryRole == .student
     }
 
     private var selectedPeriod: AttendancePeriod {
@@ -50,7 +55,7 @@ struct StudentAttendanceView: View {
                                 rateCard(totals)
                                 breakdownCards(totals)
                                 exceptionsSection(totals)
-                                if totals.absent > 0 {
+                                if totals.absent > 0, showJustifyHint {
                                     messageHint
                                 }
                             } else {
@@ -90,13 +95,18 @@ struct StudentAttendanceView: View {
 
     private var subjectPicker: some View {
         Menu {
-            Button("Toutes les matières") { subjectId = "" }
+            if allowedSubjectIds == nil {
+                Button("Toutes les matières") { subjectId = "" }
+            }
             ForEach(subjects, id: \.id) { subject in
                 Button(subject.name) { subjectId = subject.id }
             }
         } label: {
             HStack {
-                Text(subjects.first(where: { $0.id == subjectId })?.name ?? "Toutes les matières")
+                Text(
+                    subjects.first(where: { $0.id == subjectId })?.name
+                        ?? (allowedSubjectIds == nil ? "Toutes les matières" : "Choisir une matière")
+                )
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(EduTheme.ink)
                 Spacer()
@@ -402,12 +412,23 @@ struct StudentAttendanceView: View {
         periodKey = AttendancePeriodBuilder.currentKey(periods: periods)
         if let sid = studentId,
            let counts = try? await api.fetchAttendanceCounts(studentId: sid) {
-            subjects = (counts.bySubject ?? [])
-                .compactMap { row in
+            var loaded = (counts.bySubject ?? [])
+                .compactMap { row -> (id: String, name: String)? in
                     guard let id = row.subjectId, !id.isEmpty else { return nil }
                     return (id, row.name)
                 }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            if let allowed = allowedSubjectIds, !allowed.isEmpty {
+                let allowedSet = Set(allowed)
+                loaded = loaded.filter { allowedSet.contains($0.id) }
+                // Teachers only see their subjects — lock or default to the first one.
+                if loaded.count == 1 {
+                    subjectId = loaded[0].id
+                } else if subjectId.isEmpty || !allowedSet.contains(subjectId) {
+                    subjectId = loaded.first?.id ?? ""
+                }
+            }
+            subjects = loaded
         }
         await reloadScoped(resetList: true)
         ready = true

@@ -3,6 +3,8 @@ import SwiftUI
 struct StudentGradesView: View {
     @EnvironmentObject private var auth: AuthViewModel
     var studentIdOverride: String? = nil
+    /// When set (teacher viewing a student), only these subjects are shown.
+    var subjectIds: [String]? = nil
     @State private var rows: [GradeRow] = []
     @State private var loading = true
     @State private var error: String?
@@ -363,7 +365,7 @@ struct StudentGradesView: View {
         }
         loading = rows.isEmpty
         do {
-            rows = try await EduAPI().fetchGrades(studentId: sid)
+            rows = try await EduAPI().fetchGrades(studentId: sid, subjectIds: subjectIds)
             if selectedPeriod != "Tous", !periods.contains(selectedPeriod) {
                 selectedPeriod = "Tous"
             }
