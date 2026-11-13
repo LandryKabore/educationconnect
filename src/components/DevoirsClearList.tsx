@@ -114,7 +114,7 @@ export function DevoirsClearList({
     return (
       <PageLoadingState
         message={
-          isExam ? "Chargement des devoirs…" : "Chargement des exercices…"
+          isExam ? "Chargement des examens…" : "Chargement des exercices…"
         }
       />
     );
@@ -167,7 +167,7 @@ export function DevoirsClearList({
         <EmptyState
           message={
             isExam
-              ? "Aucun devoir dans cet onglet."
+              ? "Aucun examen dans cet onglet."
               : "Aucun exercice dans cet onglet."
           }
         />

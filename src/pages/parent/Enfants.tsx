@@ -29,7 +29,7 @@ const CHILD_LINKS = [
   { to: "bulletin", label: "Bulletin", icon: FileText },
   { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
   { to: "cahier", label: "Cahier de textes", icon: BookOpenCheck },
-  { to: "devoirs", label: "Devoirs", icon: GraduationCap },
+  { to: "devoirs", label: "Examens", icon: GraduationCap },
   { to: "exercices", label: "Exercices", icon: NotebookPen },
   { to: "compositions", label: "Compositions", icon: ClipboardList },
 ] as const;

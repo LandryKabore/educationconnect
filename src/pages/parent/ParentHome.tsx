@@ -603,7 +603,7 @@ function ChildQuickLinks({ childId }: { childId: string }) {
     { to: "bulletin", label: "Bulletin", icon: FileText },
     { to: "presences", label: "Présences", icon: CalendarCheck },
     { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
-    { to: "devoirs", label: "Devoirs", icon: ClipboardList },
+    { to: "devoirs", label: "Examens", icon: ClipboardList },
     { to: "exercices", label: "Exercices", icon: NotebookPen },
     { to: "compositions", label: "Compositions", icon: GraduationCap },
   ];

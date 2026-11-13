@@ -7,6 +7,7 @@ import { useCompositionsPendingChanges } from "@/hooks/useCompositionRealtime";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
+import { CompositionMiniTimetable } from "@/components/CompositionMiniTimetable";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import {
   childDisplayName,
@@ -112,6 +113,13 @@ export default function EnfantCompositions() {
     },
   });
 
+  const featured =
+    sessions.find((s) => sessionStatus(s.starts_on, s.ends_on).label === "En cours") ??
+    [...sessions]
+      .filter((s) => sessionStatus(s.starts_on, s.ends_on).label === "À venir")
+      .sort((a, b) => a.starts_on.localeCompare(b.starts_on))[0] ??
+    null;
+
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
       <div>
@@ -137,73 +145,101 @@ export default function EnfantCompositions() {
         ) : sessions.length === 0 ? (
           <EmptyState message="Aucune composition programmée pour le moment." />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {sessions.map((session) => {
-              const status = sessionStatus(session.starts_on, session.ends_on);
-              return (
-                <Card key={session.id} className="h-full">
-                  <div className="flex h-full flex-col">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                            {session.title}
-                          </h3>
-                          <Badge tone={status.tone}>{status.label}</Badge>
-                        </div>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {session.period_label}
-                          <span> · </span>
-                          {formatDateSafe(session.starts_on, "d MMM", {
-                            locale: fr,
-                          })}
-                          {" – "}
-                          {formatDateSafe(session.ends_on, "d MMM yyyy", {
-                            locale: fr,
-                          })}
-                          <span> · </span>
-                          {session.papers.length} épreuve
-                          {session.papers.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
+          <div className="space-y-6">
+            {featured && featured.papers.length > 0 ? (
+              <section className="space-y-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Emploi du temps de la composition
+                  </p>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {featured.title}
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {featured.period_label} ·{" "}
+                    {formatDateSafe(featured.starts_on, "d MMM", { locale: fr })}
+                    {" – "}
+                    {formatDateSafe(featured.ends_on, "d MMM yyyy", { locale: fr })}
+                  </p>
+                </div>
+                <CompositionMiniTimetable papers={featured.papers} />
+              </section>
+            ) : null}
 
-                    {session.papers.length > 0 ? (
-                      <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-700">
-                        {session.papers.map((paper) => {
-                          const slot = formatExamSchedule({
-                            due_date: paper.eval_date,
-                            start_time: paper.start_time,
-                            end_time: paper.end_time,
-                          });
-                          return (
-                            <li
-                              key={paper.id}
-                              className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"
-                            >
-                              <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60" />
-                              <span>
-                                <span className="font-medium text-slate-800 dark:text-slate-100">
-                                  {paper.matieres?.name ?? "Matière"}
-                                </span>
-                                {paper.eval_date
-                                  ? ` · ${formatDateSafe(paper.eval_date, "EEE d MMM", { locale: fr })}`
-                                  : ""}
-                                {slot ? ` · ${slot}` : ""}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="mt-3 text-sm text-slate-500">
-                        Programme des épreuves à venir.
-                      </p>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {sessions.map((session) => {
+                const status = sessionStatus(session.starts_on, session.ends_on);
+                const isFeatured = featured?.id === session.id;
+                return (
+                  <Card key={session.id} className="h-full">
+                    <div className="flex h-full flex-col">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+                              {session.title}
+                            </h3>
+                            <Badge tone={status.tone}>{status.label}</Badge>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {session.period_label}
+                            <span> · </span>
+                            {formatDateSafe(session.starts_on, "d MMM", {
+                              locale: fr,
+                            })}
+                            {" – "}
+                            {formatDateSafe(session.ends_on, "d MMM yyyy", {
+                              locale: fr,
+                            })}
+                            <span> · </span>
+                            {session.papers.length} épreuve
+                            {session.papers.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                      </div>
+
+                      {session.papers.length > 0 ? (
+                        <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-700">
+                          {!isFeatured ? (
+                            <CompositionMiniTimetable papers={session.papers} compact />
+                          ) : null}
+                          <ul className="space-y-1.5">
+                            {session.papers.map((paper) => {
+                              const slot = formatExamSchedule({
+                                due_date: paper.eval_date,
+                                start_time: paper.start_time,
+                                end_time: paper.end_time,
+                              });
+                              return (
+                                <li
+                                  key={paper.id}
+                                  className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"
+                                >
+                                  <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60" />
+                                  <span>
+                                    <span className="font-medium text-slate-800 dark:text-slate-100">
+                                      {paper.matieres?.name ?? "Matière"}
+                                    </span>
+                                    {paper.eval_date
+                                      ? ` · ${formatDateSafe(paper.eval_date, "EEE d MMM", { locale: fr })}`
+                                      : ""}
+                                    {slot ? ` · ${slot}` : ""}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-500">
+                          Programme des épreuves à venir.
+                        </p>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

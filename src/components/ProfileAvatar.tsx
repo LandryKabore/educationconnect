@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { compressImage } from "@/lib/compressImage";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
+import { AvatarCropDialog } from "@/components/AvatarCropDialog";
 
 type Props = {
   userId: string;
@@ -66,6 +67,8 @@ export const ProfileAvatar = forwardRef<ProfileAvatarHandle, Props>(
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  /** Picked photo waiting in the crop dialog. */
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   const displayUrl = preview || avatarUrl || null;
   const label = initials(name);
@@ -195,15 +198,40 @@ export const ProfileAvatar = forwardRef<ProfileAvatarHandle, Props>(
     </span>
   );
 
+  // validate, then crop before uploading
+  const onChoose = (file: File | null) => {
+    if (inputRef.current) inputRef.current.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choisissez une image (JPG, PNG, etc.)");
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error("Image trop lourde (max 12 Mo avant compression)");
+      return;
+    }
+    setCropFile(file);
+  };
+
   const fileInput = editable ? (
+    <>
+    <AvatarCropDialog
+      file={cropFile}
+      onCancel={() => setCropFile(null)}
+      onConfirm={(cropped) => {
+        setCropFile(null);
+        void onPick(cropped);
+      }}
+    />
     <input
       ref={inputRef}
       type="file"
       accept="image/jpeg,image/png,image/webp,image/heic,image/*"
       className="hidden"
       tabIndex={-1}
-      onChange={(e) => void onPick(e.target.files?.[0] ?? null)}
+      onChange={(e) => onChoose(e.target.files?.[0] ?? null)}
     />
+    </>
   ) : null;
 
   if (layout === "badge") {

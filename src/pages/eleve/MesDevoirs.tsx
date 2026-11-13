@@ -9,6 +9,7 @@ import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { cn, joinOne } from "@/lib/utils";
 import { DevoirsClearList, type DevoirListItem } from "@/components/DevoirsClearList";
+import { ExamensSubjectBoards } from "@/components/ExamensSubjectBoards";
 
 type Props = {
   isExam: boolean;
@@ -103,7 +104,7 @@ export default function MesDevoirs({ isExam }: Props) {
       .filter((it) => !gradedIds.has(it.id) && (daysUntil(it.eval_date) ?? -1) >= 0)
       .sort((a, b) => (a.eval_date ?? "").localeCompare(b.eval_date ?? ""))[0] ?? null;
 
-  const word = isExam ? "devoir" : "exercice";
+  const word = isExam ? "examen" : "exercice";
 
   return (
     // squarer corners on this page only: the shared list keeps its radius on the parent screen
@@ -116,15 +117,15 @@ export default function MesDevoirs({ isExam }: Props) {
           <div className="space-y-5 lg:col-span-7">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-                {isExam ? "Devoirs surveillés" : "Travail à la maison"}
+                {isExam ? "Contrôles surveillés" : "Travail à la maison"}
                 {className ? ` · Classe ${className}` : ""}
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">
-                {isExam ? "Mes devoirs" : "Mes exercices de maison"}
+                {isExam ? "Mes examens" : "Mes exercices de maison"}
               </h1>
               <p className="mt-2 text-sm font-medium text-white/85">
                 {isExam
-                  ? "Seuls les devoirs confirmés par l’établissement, avec la date et l’horaire."
+                  ? "3 examens par matière et par trimestre — confirmés par l’établissement."
                   : "À préparer et présenter en classe — rien n’est à rendre en ligne."}
               </p>
             </div>
@@ -153,18 +154,23 @@ export default function MesDevoirs({ isExam }: Props) {
         </div>
       </section>
 
-      <DevoirsClearList
-        items={items}
-        gradedIds={gradedIds}
-        isExam={isExam}
-        isLoading={isLoading}
-        emptyMessage={isExam ? "Aucun devoir confirmé pour le moment." : "Aucun exercice de maison pour le moment."}
-        hint={
-          isExam
-            ? "Seuls les devoirs confirmés apparaissent ici, avec date et créneau. Les notes sont dans « Mes notes » — rien n’est à rendre en ligne."
-            : "Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
-        }
-      />
+      {isExam ? (
+        <ExamensSubjectBoards
+          items={items}
+          gradedIds={gradedIds}
+          isLoading={isLoading}
+          emptyMessage="Aucun examen confirmé pour le moment."
+        />
+      ) : (
+        <DevoirsClearList
+          items={items}
+          gradedIds={gradedIds}
+          isExam={false}
+          isLoading={isLoading}
+          emptyMessage="Aucun exercice de maison pour le moment."
+          hint="Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
+        />
+      )}
     </div>
   );
 }
@@ -185,7 +191,7 @@ function NextCard({ item, isExam }: { item: DevoirListItem | null; isExam: boole
     return (
       <div className="rounded-md bg-white/10 p-5 ring-1 ring-white/15">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
-          {isExam ? "Prochain devoir" : "Prochain exercice"}
+          {isExam ? "Prochain examen" : "Prochain exercice"}
         </p>
         <p className="mt-2 text-lg font-semibold">Rien de prévu pour le moment</p>
       </div>
@@ -201,7 +207,7 @@ function NextCard({ item, isExam }: { item: DevoirListItem | null; isExam: boole
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-sky-800">
           <CalendarClock className="h-3 w-3" />
-          {isExam ? "Prochain devoir" : "Prochain exercice"}
+          {isExam ? "Prochain examen" : "Prochain exercice"}
         </span>
         <span
           className={cn(

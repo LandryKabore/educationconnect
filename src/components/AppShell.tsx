@@ -146,7 +146,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
         },
         {
           to: "/devoirs-ecole",
-          label: "Devoirs",
+          label: "Examens",
           icon: <FileText className="h-4 w-4" />,
           badgeKey: "examens-en-attente",
         },
@@ -240,7 +240,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
         },
         {
           to: "/devoirs",
-          label: "Devoirs & évaluations",
+          label: "Examens & évaluations",
           icon: <ClipboardList className="h-4 w-4" />,
         },
       ],
@@ -289,7 +289,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
         },
         {
           to: "/mes-devoirs",
-          label: "Devoirs",
+          label: "Examens",
           icon: <FileText className="h-4 w-4" />,
         },
         {
@@ -375,7 +375,7 @@ function buildParentGroups(): NavGroup[] {
         all,
         { to: `/enfants/:child/notes`, childPage: "notes", label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
         { to: `/enfants/:child/presences`, childPage: "presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
-        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Devoirs", icon: <FileText className="h-4 w-4" /> },
+        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Examens", icon: <FileText className="h-4 w-4" /> },
         { to: `/enfants/:child/bulletin`, childPage: "bulletin", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
         { to: `/enfants/:child/emploi-du-temps`, childPage: "emploi-du-temps", label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" />, badgeKey: "edt-updates" },
       ],
