@@ -60,7 +60,8 @@ import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
 import MesClasses from "@/pages/enseignant/MesClasses";
 import MesEleves from "@/pages/enseignant/MesEleves";
 import MesPresencesProf from "@/pages/enseignant/MesPresencesProf";
-import Messages from "@/pages/Messages";
+import { MessagesRoute } from "@/pages/eleve/MesMessages";
+import { AnnoncesRoute } from "@/pages/eleve/MesAnnonces";
 import MesNotes from "@/pages/eleve/MesNotes";
 import {
   MesExamensPage,
@@ -520,8 +521,8 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
-        <Route path="/messages" element={<Messages view="messages" />} />
-        <Route path="/annonces" element={<Messages view="annonces" />} />
+        <Route path="/messages" element={<MessagesRoute />} />
+        <Route path="/annonces" element={<AnnoncesRoute />} />
 
         <Route
           path="/mes-notes"

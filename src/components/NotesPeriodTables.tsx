@@ -31,6 +31,12 @@ type Props = {
   coefficientBySubject?: Record<string, number>;
   /** Show évaluation type + title (student view). */
   showEvaluation?: boolean;
+  /**
+   * When set to a trimester label, only that period is shown (no annual strip).
+   * When `"Année"`, show the annual strip + every trimester.
+   * When omitted, keep the previous all-periods layout.
+   */
+  periodFilter?: string | null;
   className?: string;
 };
 
@@ -98,17 +104,23 @@ export function NotesPeriodTables({
   grades,
   coefficientBySubject = {},
   showEvaluation = false,
+  periodFilter = null,
   className,
 }: Props) {
   const byPeriod = useMemo(() => {
     const map = new Map<string, NotesPeriodGrade[]>();
     for (const g of grades) {
-      const list = map.get(g.period_label) ?? [];
+      const label = g.period_label?.trim() || "Sans période";
+      const list = map.get(label) ?? [];
       list.push(g);
-      map.set(g.period_label, list);
+      map.set(label, list);
     }
-    return [...map.entries()];
-  }, [grades]);
+    let entries = [...map.entries()];
+    if (periodFilter && periodFilter !== "Année") {
+      entries = entries.filter(([period]) => period === periodFilter);
+    }
+    return entries;
+  }, [grades, periodFilter]);
 
   const annual = useMemo(
     () =>
@@ -118,11 +130,23 @@ export function NotesPeriodTables({
     [grades, coefficientBySubject],
   );
 
+  const showAnnual =
+    periodFilter == null || periodFilter === "Année"
+      ? annual.annualAverage !== null
+      : false;
+
   if (grades.length === 0) return null;
+  if (periodFilter && periodFilter !== "Année" && byPeriod.length === 0) {
+    return (
+      <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600 dark:border-slate-600 dark:bg-[var(--surface-2)] dark:text-slate-300">
+        Aucune note pour {periodFilter} pour le moment.
+      </p>
+    );
+  }
 
   return (
     <div className={cn("space-y-6", className)}>
-      {annual.annualAverage !== null ? (
+      {showAnnual ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/60 px-5 py-4 dark:border-brand-800 dark:bg-brand-900/20">
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">

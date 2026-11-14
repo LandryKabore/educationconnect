@@ -8,6 +8,8 @@ import {
   BookOpen,
   Calendar,
   CalendarClock,
+  Check,
+  Clock,
   CheckCircle2,
   ClipboardList,
   FileText,
@@ -17,10 +19,8 @@ import {
   Users,
 } from "lucide-react";
 import {
-  MetricCard,
   Panel,
   PanelEmpty,
-  PortalHomeHeader,
   QuickLink,
 } from "@/components/PortalHomeKit";
 import { relativeFr, snippet } from "@/lib/portalHomeFormat";
@@ -408,16 +408,96 @@ export default function StudentHome() {
   const announcements = data.announcements ?? [];
   const recentMessages = data.recentMessages ?? [];
   const annual = data.annual;
-  const trimesterShort = ["T1", "T2", "T3"] as const;
+  const toPrepare =
+    (data.pendingExercices ?? []).length +
+    (data.upcomingExamens ?? []).length +
+    (data.upcomingCompositions ?? []).length;
+  const trimesterShort = ["Trimestre 1", "Trimestre 2", "Trimestre 3"] as const;
 
   return (
-    <div className="space-y-6">
-      <PortalHomeHeader
-        icon={GraduationCap}
-        name={name}
-        context={classLabel}
-        unreadInbox={unreadInbox}
-      />
+    // squarer corners on this page only: the shared home components keep their radius elsewhere
+    <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+      {/* Welcome banner: greeting, three key figures, and the next class */}
+      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
+          <div className="space-y-5 lg:col-span-7">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                {formatDateSafe(now.toISOString(), "EEEE d MMMM", { locale: fr })}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">
+                {now.getHours() < 12 ? "Bonjour" : now.getHours() < 18 ? "Bon après-midi" : "Bonsoir"}
+                {profile?.first_name?.trim() ? `, ${profile.first_name.trim()}` : name ? `, ${name}` : ""} 👋
+              </h1>
+              <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-white/85">
+                <GraduationCap className="h-4 w-4" />
+                {classLabel}
+              </p>
+              {unreadInbox.discussions + unreadInbox.announcements > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {unreadInbox.discussions > 0 ? (
+                    <Link
+                      to="/messages"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/20 transition hover:bg-white/25"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {unreadInbox.discussions} message{unreadInbox.discussions > 1 ? "s" : ""} non lu
+                      {unreadInbox.discussions > 1 ? "s" : ""}
+                    </Link>
+                  ) : null}
+                  {unreadInbox.announcements > 0 ? (
+                    <Link
+                      to="/annonces"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-faso-yellow/25 px-3 py-1.5 text-xs font-semibold ring-1 ring-faso-yellow/40 transition hover:bg-faso-yellow/35"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      {unreadInbox.announcements} annonce{unreadInbox.announcements > 1 ? "s" : ""}
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BannerStat
+                to="/mon-bulletin"
+                label="Moyenne"
+                value={annual?.annualAverage != null ? formatAverage(annual.annualAverage, 1) : "—"}
+                hint={
+                  annual?.annualAverage != null
+                    ? `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
+                    : "Pas de notes"
+                }
+              />
+              <BannerStat
+                to="/mes-presences"
+                label="Présence"
+                value={data.attendanceRate != null ? `${data.attendanceRate}%` : "—"}
+                hint={
+                  data.attendanceRate != null
+                    ? `${data.absencesCount} absence${data.absencesCount > 1 ? "s" : ""}`
+                    : "Aucune saisie"
+                }
+              />
+              <BannerStat
+                to="/mes-exercices"
+                label="À préparer"
+                value={String(toPrepare)}
+                hint={toPrepare > 0 ? "à venir" : "Rien à rendre"}
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-5">
+            <NextClassCard focus={scheduleFocus} nowMinutes={nowMinutes} />
+          </div>
+        </div>
+        <div className="flex h-1" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
+        </div>
+      </section>
 
       <HomeworkTomorrowCard userId={user?.id} moreHref="/mon-cahier" showChildren={false} />
 
@@ -457,69 +537,6 @@ export default function StudentHome() {
         </div>
       ) : null}
 
-      {/* Key metrics */}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Moyenne annuelle"
-          value={
-            annual?.annualAverage != null
-              ? formatAverage(annual.annualAverage, 1)
-              : "—"
-          }
-          hint={
-            annual?.annualAverage != null
-              ? `${formatPassDecision(annual)}${
-                  !annual.complete ? " · provisoire" : ""
-                }`
-              : "Pas encore de notes"
-          }
-          valueClass={
-            annual?.annualAverage == null
-              ? "text-slate-500 dark:text-slate-300"
-              : annual.annualAverage >= 10
-                ? "text-brand-600"
-                : "text-amber-600"
-          }
-          to="/mon-bulletin"
-        />
-        <MetricCard
-          label="Présence"
-          value={
-            data.attendanceRate != null ? `${data.attendanceRate}%` : "—"
-          }
-          hint={
-            data.attendanceRate != null
-              ? `${data.absencesCount} absence${data.absencesCount > 1 ? "s" : ""}`
-              : "Aucune saisie encore"
-          }
-          valueClass={
-            data.attendanceRate == null
-              ? "text-slate-500 dark:text-slate-300"
-              : data.attendanceRate >= 85
-                ? "text-emerald-600"
-                : "text-amber-600"
-          }
-          to="/mes-presences"
-        />
-        <MetricCard
-          label="Notes"
-          value={String(data.notesCount)}
-          hint="Notes publiées"
-          valueClass="text-sky-600"
-          to="/mes-notes"
-        />
-        <MetricCard
-          label="Exercices"
-          value={String(pendingExercices.length)}
-          hint="À rendre en classe"
-          valueClass={
-            pendingExercices.length > 0
-              ? "text-rose-600"
-              : "text-slate-500 dark:text-slate-300"
-          }
-          to="/mes-exercices"
-        />
-      </section>
 
       {/* Bulletin snapshot */}
       <section>
@@ -659,57 +676,73 @@ export default function StudentHome() {
               ) : null}
 
               {todaySlots.length > 0 ? (
-                <ul className="space-y-2">
-                  {todaySlots.slice(0, 5).map((s) => {
-                    const isFocus =
-                      !scheduleFocus?.isLaterDay &&
-                      scheduleFocus?.slot.id === s.id;
-                    const badge =
-                      isFocus
-                        ? scheduleFocus.kind === "current"
-                          ? "En cours"
-                          : "Prochain"
-                        : null;
-                    return (
-                      <li
-                        key={s.id}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                          isFocus
-                            ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700"
-                            : "bg-slate-50",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "w-24 shrink-0 text-xs font-semibold tabular-nums",
-                            isFocus ? "text-brand-800" : "text-brand-700",
-                          )}
-                        >
-                          {s.start_time?.slice(0, 5)}
-                          {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-slate-900">
-                              {s.matieres?.name ?? "Cours"}
-                            </p>
-                            {badge ? (
-                              <span className="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                                {badge}
-                              </span>
-                            ) : null}
-                          </div>
-                          {s.room ? (
-                            <p className="text-xs text-slate-500">
-                              Salle {s.room}
-                            </p>
+                // timeline: ✓ on a mint circle for finished classes (mint line),
+                // filled green for the class in progress, hollow circle for upcoming ones
+                <ol className="relative">
+                  {[...todaySlots]
+                    .sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time))
+                    .map((s, i, list) => {
+                      const start = timeToMinutes(s.start_time);
+                      const end = timeToMinutes(s.end_time);
+                      const done = end <= nowMinutes;
+                      const current = start <= nowMinutes && nowMinutes < end;
+                      const last = i === list.length - 1;
+                      return (
+                        <li key={s.id} className="relative flex gap-4 pb-5 last:pb-0">
+                          {!last ? (
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "absolute left-[11px] top-7 bottom-0 w-0.5",
+                                done ? "bg-emerald-200 dark:bg-emerald-800" : "bg-slate-200 dark:bg-white/10",
+                              )}
+                            />
                           ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "relative z-10 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                              done
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                                : current
+                                  ? "bg-emerald-500 text-white ring-4 ring-emerald-100 dark:ring-emerald-500/20"
+                                  : "border-2 border-slate-300 bg-white dark:border-white/20",
+                            )}
+                          >
+                            {done ? (
+                              <Check className="h-3.5 w-3.5" />
+                            ) : current ? (
+                              <span className="h-2 w-2 rounded-full bg-white" />
+                            ) : null}
+                          </span>
+                          <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className={cn("truncate text-sm font-semibold", done ? "text-slate-400" : "text-slate-900")}>
+                                {s.matieres?.name ?? "Cours"}
+                                {current ? (
+                                  <span className="ml-2 rounded-md bg-emerald-600 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-white">
+                                    En cours
+                                  </span>
+                                ) : null}
+                              </p>
+                              {s.room ? (
+                                <p className={cn("text-xs", done ? "text-slate-400" : "text-slate-500")}>Salle {s.room}</p>
+                              ) : null}
+                            </div>
+                            <span
+                              className={cn(
+                                "shrink-0 text-xs font-semibold tabular-nums",
+                                done ? "text-slate-400" : "text-slate-600 dark:text-slate-300",
+                              )}
+                            >
+                              {s.start_time?.slice(0, 5)}
+                              {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
+                </ol>
               ) : null}
 
               {scheduleFocus?.isLaterDay ? (
@@ -796,16 +829,16 @@ export default function StudentHome() {
 
         <Panel
           icon={BookOpen}
-          title="Prochains devoirs"
+          title="Prochains examens"
           subtitle="Confirmés par l’administration"
           action={
             <Link to="/mes-devoirs" className="block">
-              <Button className="w-full">Voir les devoirs</Button>
+              <Button className="w-full">Voir les examens</Button>
             </Link>
           }
         >
           {upcomingExamens.length === 0 ? (
-            <PanelEmpty message="Aucun devoir confirmé pour le moment." />
+            <PanelEmpty message="Aucun examen confirmé pour le moment." />
           ) : (
             <ul className="space-y-2">
               {upcomingExamens.map((e) => {
@@ -985,7 +1018,7 @@ export default function StudentHome() {
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <QuickLink to="/mes-notes" label="Mes notes" icon={BookOpen} />
         <QuickLink to="/mes-exercices" label="Exercices" icon={ClipboardList} />
-        <QuickLink to="/mes-devoirs" label="Devoirs" icon={FileText} />
+        <QuickLink to="/mes-devoirs" label="Examens" icon={FileText} />
         <QuickLink
           to="/mes-compositions"
           label="Compositions"
@@ -996,5 +1029,87 @@ export default function StudentHome() {
         <QuickLink to="/mon-bulletin" label="Mon bulletin" icon={GraduationCap} />
       </section>
     </div>
+  );
+}
+
+function BannerStat({ to, label, value, hint }: { to: string; label: string; value: string; hint: string }) {
+  return (
+    <Link to={to} className="rounded-md bg-white/10 p-3.5 ring-1 ring-white/15 transition hover:bg-white/15">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-white/75">{hint}</p>
+    </Link>
+  );
+}
+
+type NextFocus = {
+  slot: { start_time: string; end_time: string; room: string | null; matieres: { name: string } | null };
+  kind: "current" | "next";
+  dayLabel: string;
+  isLaterDay: boolean;
+} | null;
+
+function waitLabel(minutes: number) {
+  const m = Math.max(1, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r === 0 ? `${h} h` : `${h} h ${String(r).padStart(2, "0")}`;
+}
+
+/** White card in the banner: the class in progress (with progress bar) or the next one. */
+function NextClassCard({ focus, nowMinutes }: { focus: NextFocus; nowMinutes: number }) {
+  if (!focus) {
+    return (
+      <div className="rounded-md bg-white/10 p-5 ring-1 ring-white/15">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Maintenant</p>
+        <p className="mt-2 text-lg font-semibold">Pas de cours prévu cette semaine</p>
+      </div>
+    );
+  }
+  const start = timeToMinutes(focus.slot.start_time);
+  const end = timeToMinutes(focus.slot.end_time);
+  const live = focus.kind === "current";
+  const progress = live ? Math.min(100, Math.max(0, ((nowMinutes - start) / (end - start)) * 100)) : 0;
+  const room = focus.slot.room?.trim() ? (/^salle/i.test(focus.slot.room.trim()) ? focus.slot.room.trim() : `Salle ${focus.slot.room.trim()}`) : null;
+  const status = live
+    ? `Se termine dans ${waitLabel(end - nowMinutes)}`
+    : focus.isLaterDay
+      ? `${focus.dayLabel} à ${focus.slot.start_time.slice(0, 5)}`
+      : `Commence dans ${waitLabel(start - nowMinutes)}`;
+  return (
+    <Link
+      to="/mon-emploi-du-temps"
+      className="block rounded-md bg-white p-5 text-slate-900 shadow-xl shadow-brand-900/25 transition hover:-translate-y-0.5 dark:bg-white dark:text-slate-900"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider",
+            live ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800",
+          )}
+        >
+          {live ? (
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+          ) : (
+            <Clock className="h-3 w-3" />
+          )}
+          {live ? "En cours" : "Prochain cours"}
+        </span>
+        <span className="text-xs font-semibold tabular-nums text-slate-500">
+          {focus.slot.start_time.slice(0, 5)}–{focus.slot.end_time.slice(0, 5)}
+        </span>
+      </div>
+      <p className="mt-3 truncate text-xl font-bold text-slate-900">{focus.slot.matieres?.name ?? "Cours"}</p>
+      <p className="mt-0.5 text-sm text-slate-500">{[room, status].filter(Boolean).join(" · ")}</p>
+      {live ? (
+        <div className="mt-4 h-1.5 overflow-hidden rounded-sm bg-slate-100">
+          <div className="h-full rounded-sm bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      ) : null}
+    </Link>
   );
 }

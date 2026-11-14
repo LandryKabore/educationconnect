@@ -1,13 +1,12 @@
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePresencePendingChanges } from "@/hooks/usePresenceRealtime";
 import { supabase } from "@/lib/supabase";
 import { fullName } from "@/lib/utils";
-import { AttendanceOverview } from "@/components/AttendanceOverview";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { AttendanceBoard } from "@/components/AttendanceBoard";
+import { EmptyState } from "@/components/ui";
 
 export default function EnfantPresences() {
   const { id } = useParams<{ id: string }>();
@@ -41,30 +40,13 @@ export default function EnfantPresences() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <Link
-        to="/enfants"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour aux enfants
-      </Link>
-
-      <PageHeader
-        title={
-          child
-            ? `Présences — ${fullName(child.first_name, child.last_name)}`
-            : "Présences"
-        }
-        subtitle="Taux de présence, absences et retards"
-      />
-
-      <AttendanceOverview
-        keyRoot="enfant-presences"
-        studentId={id}
-        enabled={!!link}
-        audience="parent"
-      />
-    </div>
+    <AttendanceBoard
+      studentId={id}
+      keyRoot="enfant-presences"
+      audience="parent"
+      enabled={!!link}
+      title={child ? `Présences de ${fullName(child.first_name, child.last_name)}` : "Présences"}
+      childFirstName={child?.first_name}
+    />
   );
 }
