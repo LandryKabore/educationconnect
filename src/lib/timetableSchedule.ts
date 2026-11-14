@@ -9,10 +9,56 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   6: "Samedi",
 };
 
+export const WEEKDAY_SHORT: Record<number, string> = {
+  1: "Lun",
+  2: "Mar",
+  3: "Mer",
+  4: "Jeu",
+  5: "Ven",
+  6: "Sam",
+};
+
 /** DB day_of_week: 1 = Monday … 6 = Saturday (JS Sunday = 7 → 6 for schools). */
 export function dbDayOfWeek(date = new Date()) {
   const js = date.getDay();
   return js === 0 ? 6 : js;
+}
+
+/** Day-chip default: today Mon–Sat, Monday when it's Sunday. */
+export function defaultVisibleDay(date = new Date()) {
+  const js = date.getDay();
+  return js === 0 ? 1 : js;
+}
+
+export type SchoolWeekDay = {
+  day: number;
+  label: string;
+  date: number;
+  isToday: boolean;
+  dateObj: Date;
+};
+
+/** Monday–Saturday of the current school week, with calendar dates. */
+export function schoolWeekDays(today = new Date()): SchoolWeekDay[] {
+  const monday = new Date(today);
+  monday.setHours(12, 0, 0, 0);
+  const js = monday.getDay();
+  monday.setDate(monday.getDate() + (js === 0 ? -6 : 1 - js));
+  return [1, 2, 3, 4, 5, 6].map((day) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + day - 1);
+    const isToday =
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate();
+    return {
+      day,
+      label: WEEKDAY_SHORT[day] ?? "",
+      date: date.getDate(),
+      isToday,
+      dateObj: date,
+    };
+  });
 }
 
 export type ScheduleSlotBase = {

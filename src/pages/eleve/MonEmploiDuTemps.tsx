@@ -5,14 +5,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
-import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { fullName, personName } from "@/lib/utils";
-import {
-  TimetableGrid,
-  type TimetableGridSlot,
-} from "@/components/TimetableGrid";
+import { ReadOnlyTimetable } from "@/components/ReadOnlyTimetable";
+import { type TimetableGridSlot } from "@/components/TimetableGrid";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 
 export default function MonEmploiDuTemps() {
@@ -207,10 +204,9 @@ export default function MonEmploiDuTemps() {
       ) : slots.length === 0 ? (
         <EmptyState message="Aucun créneau planifié." />
       ) : (
-        <TimetableGrid
+        <ReadOnlyTimetable
           slots={gridSlots}
           highlightIds={highlightIds}
-          highlightDay={dbDayOfWeek()}
         />
       )}
     </div>
