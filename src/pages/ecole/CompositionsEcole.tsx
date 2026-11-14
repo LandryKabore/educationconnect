@@ -16,15 +16,8 @@ import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
 import { joinProfile } from "@/lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const COMPOSITION_PERIODS = [
   "Trimestre 1",
@@ -290,7 +283,7 @@ export default function CompositionsEcole() {
           if (pendingDelete) await handleDelete(pendingDelete);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Compositions"
         subtitle="Sessions multi-matières sur 2–3 jours — planifiées par l’administration"
         actions={

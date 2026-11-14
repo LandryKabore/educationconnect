@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isToday, isYesterday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowLeft, Check, CheckCheck, MessagesSquare, PenSquare, Search, Send, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, MessagesSquare, PenSquare, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
@@ -745,7 +745,7 @@ function StudentMessages({ formal }: { formal: boolean }) {
                 aria-label="Envoyer"
                 className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md bg-brand-700 text-white transition hover:bg-brand-800 disabled:opacity-40"
               >
-                <Send className="h-4 w-4" />
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </form>
             <p className="hidden px-4 pb-2 text-[10px] text-slate-400 lg:block">

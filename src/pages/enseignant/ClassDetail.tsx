@@ -9,14 +9,8 @@ import type { ClassProgrammeRow, Subject } from "@/lib/types";
 import { cn, fullName, joinProfile } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
-import {
-  BackLink,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  PageHeader,
-} from "@/components/ui";
+import { BackLink, Button, Card, EmptyState, Input } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type Tab = "overview" | "programme";
 
@@ -270,7 +264,7 @@ export default function ClassDetail() {
         to={isAdmin ? "/classes" : "/mes-classes"}
         label={isAdmin ? "Retour aux classes" : "Retour aux classes"}
       />
-      <PageHeader
+      <PageBanner
         title={cls.name}
         subtitle={
           [cls.grade_level, cls.annees_scolaires?.label].filter(Boolean).join(" · ") ||

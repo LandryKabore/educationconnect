@@ -8,17 +8,15 @@ import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import { CompositionMiniTimetable } from "@/components/CompositionMiniTimetable";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import {
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
-import {
-  ParentChildBackLink,
-  ParentChildGate,
-} from "@/pages/parent/ParentChildGate";
+import { ParentChildGate } from "@/pages/parent/ParentChildGate";
 
 type Paper = {
   id: string;
@@ -123,8 +121,7 @@ export default function EnfantCompositions() {
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
       <div>
-        <ParentChildBackLink childName={childName} />
-        <PageHeader
+        <PageBanner
           title={
             childName
               ? `Compositions — ${childName}`

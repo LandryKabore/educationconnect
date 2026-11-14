@@ -24,16 +24,8 @@ import { Modal } from "@/components/Modal";
 import { Pagination } from "@/components/Pagination";
 import { PersonName } from "@/components/PersonName";
 import { StudentSearchPicker } from "@/components/StudentSearchPicker";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type PresenceRow = {
   id: string;
@@ -371,7 +363,7 @@ export default function PresencesEcole() {
 
   return (
     <div className={cn(selection.count > 0 && "pb-24")}>
-      <PageHeader
+      <PageBanner
         title="Présences"
         subtitle="Passez en revue les absences et justifiez-les en lot"
       />

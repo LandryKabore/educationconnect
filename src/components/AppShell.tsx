@@ -719,12 +719,17 @@ export function AppShell() {
           <nav className="min-h-0 flex-1 overflow-y-auto p-3">
             <div className="space-y-4">
               {navGroups.map((group, groupIndex) => (
-                <div key={group.label ?? `group-${groupIndex}`} className="space-y-0.5">
+                <div key={group.label ?? `group-${groupIndex}`}>
                   {group.label ? (
-                    <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                      {group.label}
-                    </p>
+                    // a section title, not a link: small teal caps and a rule
+                    <div className="mb-1.5 flex select-none items-center gap-2 px-1" role="presentation">
+                      <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-brand-700/80 dark:text-brand-300/80">
+                        {group.label}
+                      </span>
+                      <span className="h-px flex-1 bg-slate-200 dark:bg-[var(--border)]" />
+                    </div>
                   ) : null}
+                  <div className={cn("space-y-0.5", group.label && "ml-2 border-l border-slate-200 pl-1.5 dark:border-[var(--border)]")}>
                   {group.items.map((item) => {
                     const active = item.childPage
                       ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(location.pathname)
@@ -810,6 +815,7 @@ export function AppShell() {
                       )
                     );
                   })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -886,7 +892,7 @@ export function AppShell() {
           <ThemeToggle compact />
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
           <ErrorBoundary
             scope="page"
             compact
@@ -1047,14 +1053,20 @@ function StudentSidebar({
       ) : null}
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
-        <div className="space-y-2.5">
+        <div className="space-y-4">
           {groups.map((group, gi) => (
-            <div key={group.label ?? `g-${gi}`} className="space-y-0.5">
+            <div key={group.label ?? `g-${gi}`}>
               {group.label ? (
-                <p className="px-3 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
-                  {group.label}
-                </p>
+                // a section title, not a link: small teal caps, a rule, and no hover
+                <div className="mb-1.5 flex select-none items-center gap-2 px-1" role="presentation">
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-brand-700/80 dark:text-brand-300/80">
+                    {group.label}
+                  </span>
+                  <span className="h-px flex-1 bg-slate-200 dark:bg-[var(--border)]" />
+                </div>
               ) : null}
+              {/* the section's items hang off a thin line */}
+              <div className={cn("space-y-0.5", group.label && "ml-2 border-l border-slate-200 pl-1.5 dark:border-[var(--border)]")}>
               {group.items.map((item) => {
                 const active = item.childPage
                   ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(pathname)
@@ -1119,6 +1131,7 @@ function StudentSidebar({
                   </Link>
                 );
               })}
+              </div>
             </div>
           ))}
         </div>

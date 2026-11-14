@@ -6,7 +6,8 @@ import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatDateSafe } from "@/lib/dateFr";
 import { evaluationTypeLabel } from "@/lib/evaluationTypes";
 import type { EvaluationType } from "@/lib/types";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
@@ -174,7 +175,7 @@ export default function MesDevoirsProf() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Devoirs & évaluations"
         subtitle="Interrogations et devoirs à rendre — par classe"
       />

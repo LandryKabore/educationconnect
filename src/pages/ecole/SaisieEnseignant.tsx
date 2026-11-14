@@ -7,14 +7,8 @@ import { sortClassesByProgression } from "@/lib/classCatalog";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import {
-  Badge,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type TeacherAssignment = {
   classId: string;
@@ -138,7 +132,7 @@ export default function SaisieEnseignant() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageBanner
         title="Saisie pour un enseignant"
         subtitle="Quand un professeur n’a pas de connexion, l’administration peut saisir à sa place."
       />

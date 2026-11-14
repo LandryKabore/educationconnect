@@ -32,14 +32,8 @@ import { BulletinView } from "@/components/BulletinView";
 import { SearchField } from "@/components/SearchField";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type StudentRow = StudentPageRow;
 
@@ -378,7 +372,7 @@ export default function Bulletins() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Bulletins"
         subtitle="Recherchez un élève (toutes classes, ou filtrez par classe), puis téléchargez le PDF"
       />

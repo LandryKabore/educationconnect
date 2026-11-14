@@ -7,13 +7,8 @@ import {
   classColorVars,
 } from "@/lib/classColors";
 import { sortClassesByProgression } from "@/lib/classCatalog";
-import {
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-} from "@/components/ui";
+import { Card, EmptyState, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, joinProfile, matchesSearch } from "@/lib/utils";
@@ -160,7 +155,7 @@ export default function MesEleves() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Mes élèves"
         subtitle="Élèves des classes où vous enseignez"
       />

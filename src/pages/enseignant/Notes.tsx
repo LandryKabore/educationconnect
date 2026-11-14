@@ -22,18 +22,8 @@ import { periodOptionLabel } from "@/lib/gradingPeriod";
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import { fullName, joinProfile } from "@/lib/utils";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-  Textarea,
-  TimeInput24,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select, Textarea, TimeInput24 } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"] as const;
 
@@ -625,7 +615,7 @@ export default function Notes() {
             : "Retour à la classe"}
       </Link>
 
-      <PageHeader
+      <PageBanner
         title="Devoirs & évaluations"
         subtitle={
           isProxy && proxyName

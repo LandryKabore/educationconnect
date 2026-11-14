@@ -8,17 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { Modal } from "@/components/Modal";
-import {
-  Badge,
-  Button,
-  Card,
-  DateInputFr,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-  Textarea,
-} from "@/components/ui";
+import { Badge, Button, Card, DateInputFr, EmptyState, Label, Select, Textarea } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 const longDate = (s: string) => format(new Date(`${s}T12:00:00`), "EEEE d MMMM", { locale: fr });
@@ -260,7 +251,7 @@ export default function CahierTextes() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Cahier de textes"
         subtitle="Ce qui a été fait en cours et le travail à faire. Les élèves et les parents le voient."
         actions={

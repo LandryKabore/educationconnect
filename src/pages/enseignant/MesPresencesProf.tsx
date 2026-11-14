@@ -6,14 +6,8 @@ import { fr } from "date-fns/locale";
 import { CheckCircle2, ClipboardList, Users } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatDateSafe } from "@/lib/dateFr";
-import {
-  Badge,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-} from "@/components/ui";
+import { Badge, Card, EmptyState, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 
@@ -147,7 +141,7 @@ export default function MesPresencesProf() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Présences"
         subtitle={`Appel du ${formatDateSafe(date, "EEEE d MMMM yyyy", { locale: fr })}`}
       />

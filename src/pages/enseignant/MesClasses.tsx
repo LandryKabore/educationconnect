@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, ChevronRight, ClipboardCheck, Users } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatAverage } from "@/lib/averages";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { fetchTeacherClassStats } from "@/lib/scaleApi";
@@ -143,7 +144,7 @@ export default function MesClasses() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Mes classes"
         subtitle="Classes où vous enseignez — moyenne de classe par matière"
       />

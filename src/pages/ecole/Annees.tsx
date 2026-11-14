@@ -8,16 +8,8 @@ import type { AcademicYear } from "@/lib/types";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
-import {
-  Badge,
-  Button,
-  Card,
-  DateInputFr,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-} from "@/components/ui";
+import { Badge, Button, Card, DateInputFr, EmptyState, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { isoToFr } from "@/lib/dateFr";
 
 export default function Annees() {
@@ -197,7 +189,7 @@ export default function Annees() {
         }}
       />
       <SetupGuideBar />
-      <PageHeader
+      <PageBanner
         title="Années scolaires"
         subtitle="Créez, modifiez ou définissez l’année courante"
         actions={

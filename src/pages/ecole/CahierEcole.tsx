@@ -4,7 +4,8 @@ import { addDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchCahierCoverage } from "@/lib/scaleApi";
-import { Badge, Card, EmptyState, PageHeader, Select } from "@/components/ui";
+import { Badge, Card, EmptyState, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const PERIODS = [
   { value: "7", label: "7 derniers jours" },
@@ -36,7 +37,7 @@ export default function CahierEcole() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Cahier de textes — suivi"
         subtitle="Quels enseignants remplissent le cahier de textes de leur classe"
         actions={

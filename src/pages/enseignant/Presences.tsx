@@ -18,16 +18,8 @@ import {
   UNSAVED_ROLLCALL_MESSAGE,
   useUnsavedChangesGuard,
 } from "@/hooks/useUnsavedChangesGuard";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 /**
  * Roll call = « everyone present, tap only the exceptions ».
@@ -319,7 +311,7 @@ export default function Presences() {
             : "Retour aux présences"}
       </Link>
 
-      <PageHeader
+      <PageBanner
         title="Appel"
         subtitle="Tous présents par défaut — touchez seulement les absents et les retards"
       />

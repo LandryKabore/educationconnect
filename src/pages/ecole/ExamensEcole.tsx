@@ -17,18 +17,8 @@ import { supabase } from "@/lib/supabase";
 import type { ClassSection, Evaluation, Profile, Subject } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { fullName, joinProfile } from "@/lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-  Textarea,
-  TimeInput24,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select, Textarea, TimeInput24 } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type StatusFilter = "upcoming" | "past" | "pending" | "confirmed" | "all";
 
@@ -475,7 +465,7 @@ export default function ExamensEcole() {
           if (pendingDelete) await deleteExam(pendingDelete);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Devoirs"
         subtitle="Créez un devoir pour une classe, ou confirmez ceux proposés par les enseignants"
         actions={

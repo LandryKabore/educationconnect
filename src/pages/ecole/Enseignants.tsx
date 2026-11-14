@@ -26,15 +26,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
 import { RowMenu } from "@/components/RowMenu";
 import { BulkBar } from "@/components/BulkBar";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type TeacherCredential = {
   username: string;
@@ -844,7 +837,7 @@ export default function Enseignants() {
           if (pendingRemove) await removeAssignment(pendingRemove);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Enseignants"
         subtitle="Comptes, identifiants et affectations par enseignant"
         actions={

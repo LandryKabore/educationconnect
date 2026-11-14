@@ -34,12 +34,8 @@ import { TimetableDayAgenda } from "@/components/TimetableDayAgenda";
 import { TimetableEditorPanel } from "@/components/TimetableEditorPanel";
 import { TimetableHoursCard } from "@/components/TimetableHoursCard";
 import { useSchoolTimetableRealtime } from "@/hooks/useStudentTimetableUpdates";
-import {
-  Button,
-  EmptyState,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, EmptyState, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const EMPTY_CLASSES: ClassSection[] = [];
 
@@ -722,7 +718,7 @@ export default function EmploisDuTemps() {
           if (pendingRemoveId) await removeSlot(pendingRemoveId);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Emplois du temps"
         subtitle="Lundi à samedi · cliquez une case vide pour ajouter, un cours pour le modifier"
         actions={

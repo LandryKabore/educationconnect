@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
 import { programmeToCoefMap } from "@/lib/averages";
@@ -91,15 +91,7 @@ export default function EnfantNotes() {
 
   return (
     <div>
-      <Link
-        to="/enfants"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour aux enfants
-      </Link>
-
-      <PageHeader
+      <PageBanner
         title={
           child
             ? `Notes — ${fullName(child.first_name, child.last_name)}`

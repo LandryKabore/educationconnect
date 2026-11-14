@@ -21,7 +21,8 @@ import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 import { joinProfile } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const CHILD_LINKS = [
   { to: "notes", label: "Notes", icon: BookOpen },
@@ -73,7 +74,7 @@ export default function Enfants() {
 
   return (
     <div>
-      <PageHeader title="Mes enfants" subtitle="Suivi scolaire" />
+      <PageBanner title="Mes enfants" subtitle="Suivi scolaire" />
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>

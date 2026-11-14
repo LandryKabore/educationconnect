@@ -17,7 +17,8 @@ import {
   TimetableGrid,
   type TimetableGridSlot,
 } from "@/components/TimetableGrid";
-import { Button, EmptyState, PageHeader } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type SlotRow = TimetableSlot & {
   matieres: { name: string } | null;
@@ -137,7 +138,7 @@ export default function MonEmploiDuTempsProf() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Mon emploi du temps"
         subtitle="Vos cours de la semaine (lundi → samedi) · mise à jour en direct"
         actions={
