@@ -362,7 +362,6 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
 
 /** Parent sidebar (Designer layout): Accueil / Mes enfants / Communication. */
 function buildParentGroups(): NavGroup[] {
-  const all: NavItem = { to: "/enfants", label: "Tous mes enfants", icon: <Users className="h-4 w-4" />, badgeKey: "enfants-attention", exact: true };
   return [
     {
       items: [
@@ -372,7 +371,6 @@ function buildParentGroups(): NavGroup[] {
     {
       label: "Mes enfants",
       items: [
-        all,
         { to: `/enfants/:child/notes`, childPage: "notes", label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
         { to: `/enfants/:child/presences`, childPage: "presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
         { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Examens", icon: <FileText className="h-4 w-4" /> },
@@ -642,8 +640,18 @@ export function AppShell() {
         />
       ) : null}
 
-      {role === "student" ? (
+      {role === "student" || role === "parent" || role === "teacher" || role === "school_admin" ? (
         <StudentSidebar
+          onSearch={
+            canSearch
+              ? () => {
+                  setOpen(false);
+                  setSearchOpen(true);
+                }
+              : undefined
+          }
+          roleLabel={ROLE_LABELS[role]}
+          onChildPage={openChildPage}
           groups={[...roleGroups, ACCOUNT_GROUP]}
           showDownload={!isDesktopApp()}
           pathname={location.pathname}
@@ -933,8 +941,11 @@ export function AppShell() {
 
 type SidebarBadge = { count: number; title: string; tone: "amber" | "rose" | "brand" } | null;
 
-/** Student sidebar: identity card, grouped menu with filled active item, compact footer. */
+/** Student / parent / teacher sidebar: identity card, grouped menu, compact footer. */
 function StudentSidebar({
+  onSearch,
+  roleLabel,
+  onChildPage,
   groups,
   showDownload,
   pathname,
@@ -947,6 +958,11 @@ function StudentSidebar({
   schoolName,
   topOffset,
 }: {
+  /** admins: opens the school search (Ctrl K) */
+  onSearch?: () => void;
+  roleLabel: string;
+  /** parent items that first ask which child (see openChildPage) */
+  onChildPage: (item: NavItem) => void;
   groups: NavGroup[];
   showDownload: boolean;
   pathname: string;
@@ -1002,7 +1018,7 @@ function StudentSidebar({
             <span className="block truncate text-sm font-bold !text-white">
               {name || <span className="inline-block h-4 w-24 animate-pulse rounded bg-white/25" />}
             </span>
-            <span className="block truncate text-xs !text-white/85">{schoolName ? `Élève · ${schoolName}` : "Élève"}</span>
+            <span className="block truncate text-xs !text-white/85">{schoolName ? `${roleLabel} · ${schoolName}` : roleLabel}</span>
           </span>
         </span>
         <span className="flex h-1" aria-hidden>
@@ -1016,6 +1032,20 @@ function StudentSidebar({
         <LiveClockWeather />
       </div>
 
+      {onSearch ? (
+        <button
+          type="button"
+          onClick={onSearch}
+          className="mx-3 mt-2.5 flex shrink-0 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 transition hover:border-slate-300 dark:border-[var(--border)] dark:bg-[var(--surface-2)]"
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="flex-1 truncate">Rechercher…</span>
+          <kbd className="hidden rounded border border-slate-200 px-1.5 text-[10px] font-medium text-slate-400 lg:inline dark:border-[var(--border)]">
+            Ctrl K
+          </kbd>
+        </button>
+      ) : null}
+
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
         <div className="space-y-2.5">
           {groups.map((group, gi) => (
@@ -1026,23 +1056,22 @@ function StudentSidebar({
                 </p>
               ) : null}
               {group.items.map((item) => {
-                const active =
-                  pathname === item.to ||
-                  (!item.exact && item.to !== "/tableau-de-bord" && pathname.startsWith(item.to));
+                const active = item.childPage
+                  ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(pathname)
+                  : pathname === item.to ||
+                    (!item.exact &&
+                      item.to !== "/tableau-de-bord" &&
+                      item.to !== "/ecole" &&
+                      pathname.startsWith(item.to));
                 const badge = badgeFor(item);
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={onClose}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
+                const rowCls = cn("w-full text-left",
                       "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition",
                       active
                         ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
                         : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
-                    )}
-                  >
+                    );
+                const content = (
+                  <>
                     <span
                       className={cn(
                         "shrink-0 transition",
@@ -1066,6 +1095,27 @@ function StudentSidebar({
                         {badge.count > 99 ? "99+" : badge.count}
                       </span>
                     ) : null}
+                  </>
+                );
+                return item.childPage ? (
+                  <button
+                    key={item.to}
+                    type="button"
+                    onClick={() => onChildPage(item)}
+                    aria-current={active ? "page" : undefined}
+                    className={rowCls}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={onClose}
+                    aria-current={active ? "page" : undefined}
+                    className={rowCls}
+                  >
+                    {content}
                   </Link>
                 );
               })}

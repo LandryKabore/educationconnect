@@ -11,10 +11,14 @@ import type { MessageRow } from "@/lib/types";
 import { cn, fullName, matchesSearch } from "@/lib/utils";
 import Messages from "@/pages/Messages";
 
-/** /annonces: the student gets this reader, every other role keeps the shared page. */
+/** /annonces: students and parents get this reader, staff keep the shared page. */
 export function AnnoncesRoute() {
   const { role } = useAuth();
-  return role === "student" ? <StudentAnnonces /> : <Messages view="annonces" />;
+  return role === "student" || role === "parent" ? (
+    <StudentAnnonces formal={role === "parent"} />
+  ) : (
+    <Messages view="annonces" />
+  );
 }
 
 type Announcement = MessageRow & { sender: { first_name: string; last_name: string } | null };
@@ -34,7 +38,7 @@ function longDate(iso: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function StudentAnnonces() {
+function StudentAnnonces({ formal }: { formal: boolean }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -228,10 +232,10 @@ function StudentAnnonces() {
               <Megaphone className="h-7 w-7" />
             </span>
             <p className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">
-              {announcements.length ? "Choisis une annonce" : "Aucune annonce"}
+              {announcements.length ? (formal ? "Choisissez une annonce" : "Choisis une annonce") : "Aucune annonce"}
             </p>
             <p className="mt-1 max-w-sm text-sm text-slate-500">
-              Les informations de l’établissement et de tes professeurs arrivent ici.
+              Les informations de l’établissement et {formal ? "des professeurs" : "de tes professeurs"} arrivent ici.
             </p>
           </div>
         ) : (

@@ -12,10 +12,14 @@ import type { MessageRow } from "@/lib/types";
 import { cn, fullName, joinOne, matchesSearch } from "@/lib/utils";
 import Messages from "@/pages/Messages";
 
-/** /messages: the student gets this page, every other role keeps the shared one. */
+/** /messages: students and parents get this page, staff keep the shared one. */
 export function MessagesRoute() {
   const { role } = useAuth();
-  return role === "student" ? <StudentMessages /> : <Messages view="messages" />;
+  return role === "student" || role === "parent" ? (
+    <StudentMessages formal={role === "parent"} />
+  ) : (
+    <Messages view="messages" />
+  );
 }
 
 type Contact = {
@@ -87,7 +91,7 @@ function Avatar({ name, size = "md", tone = "brand" }: { name: string; size?: "s
   );
 }
 
-function StudentMessages() {
+function StudentMessages({ formal }: { formal: boolean }) {
   const { user, schoolId } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -155,24 +159,36 @@ function StudentMessages() {
 
   // the student can write to the teachers of their class and to the school administration
   const { data: contacts = [], isLoading: contactsLoading } = useQuery({
-    queryKey: ["message-contacts-eleve", schoolId, user?.id],
+    queryKey: ["message-contacts-eleve", schoolId, user?.id, formal],
     enabled: !!schoolId && !!user?.id,
     queryFn: async () => {
       const map = new Map<string, Contact>();
-      const { data: enrollment } = await supabase
-        .from("inscriptions")
-        .select("class_section_id")
-        .eq("student_id", user!.id)
-        .eq("status", "active")
-        .maybeSingle();
-      const classId = (enrollment as { class_section_id?: string } | null)?.class_section_id;
-      if (classId) {
+      // the student's own class, or the classes of the parent's children
+      let studentIds = [user!.id];
+      if (formal) {
+        const { data: links } = await supabase
+          .from("liens_parent_eleve")
+          .select("student_id")
+          .eq("parent_id", user!.id);
+        studentIds = (links ?? []).map((l) => l.student_id as string);
+      }
+      const { data: enrollments } = studentIds.length
+        ? await supabase
+            .from("inscriptions")
+            .select("class_section_id")
+            .in("student_id", studentIds)
+            .eq("status", "active")
+        : { data: [] };
+      const classIds = [
+        ...new Set(((enrollments ?? []) as { class_section_id: string }[]).map((e) => e.class_section_id).filter(Boolean)),
+      ];
+      if (classIds.length) {
         const { data: aff } = await supabase
           .from("affectations_enseignement")
           .select(
             "teacher_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
           )
-          .eq("class_section_id", classId);
+          .in("class_section_id", classIds);
         for (const row of aff ?? []) {
           const r = row as { teacher_id: string; matieres: unknown; profils: unknown };
           if (!r.teacher_id || r.teacher_id === user!.id) continue;
@@ -420,7 +436,7 @@ function StudentMessages() {
               </h1>
               <p className="text-xs text-slate-500">
                 {picking
-                  ? "À qui veux-tu écrire ?"
+                  ? formal ? "À qui voulez-vous écrire ?" : "À qui veux-tu écrire ?"
                   : totalUnread > 0
                     ? `${totalUnread} message${totalUnread > 1 ? "s" : ""} non lu${totalUnread > 1 ? "s" : ""}`
                     : "Tout est lu"}
@@ -467,7 +483,7 @@ function StudentMessages() {
                 return (
                   <div key={kind}>
                     <p className="sticky top-0 z-10 bg-white/95 px-4 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-500 backdrop-blur dark:bg-[var(--surface)]/95">
-                      {kind === "teacher" ? "Mes professeurs" : "Administration"}
+                      {kind === "teacher" ? (formal ? "Professeurs de mes enfants" : "Mes professeurs") : "Administration"}
                     </p>
                     {group.map((c) => (
                       <button
@@ -496,7 +512,7 @@ function StudentMessages() {
           ) : conversations.length === 0 ? (
             <div className="p-6 text-center">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Aucune discussion</p>
-              <p className="mt-1 text-xs text-slate-500">Appuie sur « Écrire » pour contacter un professeur.</p>
+              <p className="mt-1 text-xs text-slate-500">{formal ? "Cliquez" : "Appuie"} sur « Écrire » pour contacter un professeur.</p>
             </div>
           ) : shownConversations.length === 0 ? (
             <p className="p-6 text-center text-sm text-slate-500">Aucun résultat.</p>
@@ -547,7 +563,7 @@ function StudentMessages() {
                           unread ? "font-semibold text-slate-800 dark:text-slate-200" : "text-slate-500",
                         )}
                       >
-                        {c.lastMessage.direction === "out" ? "Toi : " : ""}
+                        {c.lastMessage.direction === "out" ? (formal ? "Vous : " : "Toi : ") : ""}
                         {c.lastMessage.body}
                       </span>
                       {unread ? (
@@ -571,9 +587,11 @@ function StudentMessages() {
             <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
               <MessagesSquare className="h-7 w-7" />
             </span>
-            <p className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">Tes discussions</p>
+            <p className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">{formal ? "Vos discussions" : "Tes discussions"}</p>
             <p className="mt-1 max-w-sm text-sm text-slate-500">
-              Choisis une discussion à gauche, ou écris directement à l’un de tes professeurs.
+              {formal
+                ? "Choisissez une discussion à gauche, ou écrivez directement à un professeur de vos enfants."
+                : "Choisis une discussion à gauche, ou écris directement à l’un de tes professeurs."}
             </p>
             {contacts.length > 0 ? (
               <div className="mt-5 flex max-w-lg flex-wrap justify-center gap-2">
@@ -621,7 +639,7 @@ function StudentMessages() {
               {days.length === 0 ? (
                 <div className="mt-16 text-center">
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nouvelle discussion</p>
-                  <p className="mt-1 text-xs text-slate-500">Écris ton premier message à {chatName}.</p>
+                  <p className="mt-1 text-xs text-slate-500">{formal ? "Écrivez votre" : "Écris ton"} premier message à {chatName}.</p>
                 </div>
               ) : (
                 days.map((day) => (

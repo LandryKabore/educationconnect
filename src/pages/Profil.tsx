@@ -111,6 +111,9 @@ export default function Profil() {
 
   // same key and shape as the bulletin page, so the class comes from cache
   const isStudent = effectiveRole === "student";
+  const isParent = effectiveRole === "parent";
+  const isTeacher = effectiveRole === "teacher";
+  const isAdmin = effectiveRole === "school_admin";
   const { data: enrollment } = useQuery({
     queryKey: ["mon-inscription-bulletin", user?.id],
     enabled: isStudent && !!user?.id,
@@ -166,7 +169,8 @@ export default function Profil() {
     </div>
   );
 
-  if (isStudent) {
+  if (isStudent || isParent || isTeacher || isAdmin) {
+    const formal = !isStudent;
     const name = profile ? fullName(profile.first_name, profile.last_name) : "";
     const schoolName = schools.find((sc) => sc.id === schoolId)?.name ?? schools[0]?.name;
     const className = enrollment?.classes?.name;
@@ -200,7 +204,7 @@ export default function Profil() {
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">Mon profil</p>
                 <h1 className="mt-1.5 truncate text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "—"}</h1>
                 <p className="mt-1.5 truncate text-sm font-medium text-white/85">
-                  {["Élève", className ? `Classe ${className}` : null, schoolName].filter(Boolean).join(" · ")}
+                  {[isParent ? "Parent" : isTeacher ? "Enseignant" : isAdmin ? "Administrateur" : "Élève", className ? `Classe ${className}` : null, schoolName].filter(Boolean).join(" · ")}
                 </p>
                 <span className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs font-semibold ring-1 ring-white/15">
                   <AtSign className="h-3 w-3" />
@@ -246,7 +250,9 @@ export default function Profil() {
           <Card className="lg:col-span-8">
             <form onSubmit={(e) => void handleSave(e)}>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-50">Informations personnelles</h2>
-              <p className="mt-0.5 text-sm text-slate-500">Elles apparaissent sur ton bulletin et pour l’école.</p>
+              <p className="mt-0.5 text-sm text-slate-500">
+                {formal ? "Elles permettent à l’école de vous joindre." : "Elles apparaissent sur ton bulletin et pour l’école."}
+              </p>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">{fieldDefs.map(renderField)}</div>
               <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-[var(--border)]">
                 <SaveButton saving={saving} dirty={dirty} />
@@ -262,7 +268,9 @@ export default function Profil() {
           <div className="space-y-6 lg:col-span-4">
             <Card>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-50">Photo de profil</h2>
-              <p className="mb-4 mt-0.5 text-sm text-slate-500">Visible par tes professeurs et l’école.</p>
+              <p className="mb-4 mt-0.5 text-sm text-slate-500">
+                {isParent || isAdmin ? "Visible par l’école et les professeurs." : isTeacher ? "Visible par vos élèves, leurs parents et l’école." : "Visible par tes professeurs et l’école."}
+              </p>
               {profile ? (
                 <ProfileAvatar
                   userId={profile.id}
@@ -280,7 +288,7 @@ export default function Profil() {
               <dl className="mt-3 divide-y divide-slate-100 text-sm dark:divide-[var(--border)]">
                 {[
                   { icon: AtSign, label: "Identifiant", value: fromAuthEmail(profile?.email) },
-                  { icon: GraduationCap, label: "Classe", value: className ?? "—" },
+                  ...(!isStudent ? [] : [{ icon: GraduationCap, label: "Classe", value: className ?? "—" }]),
                   { icon: School, label: "École", value: schoolName ?? "—" },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center gap-3 py-2.5">

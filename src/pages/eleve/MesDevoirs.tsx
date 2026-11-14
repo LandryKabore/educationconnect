@@ -90,6 +90,23 @@ export default function MesDevoirs({ isExam }: Props) {
   const className = data?.className ?? "";
   const gradedIds = new Set(data?.gradedIds ?? []);
 
+  return <DevoirsView items={items} gradedIds={gradedIds} isLoading={isLoading} isExam={isExam} className={className} />;
+}
+
+type ViewProps = {
+  items: DevoirListItem[];
+  gradedIds: Set<string>;
+  isLoading: boolean;
+  isExam: boolean;
+  className: string;
+  /** parent screens: the child's first name changes the wording */
+  childFirstName?: string | null;
+};
+
+/** Banner + list, shared by the student and the parent screens. */
+export function DevoirsView({ items, gradedIds, isLoading, isExam, className, childFirstName }: ViewProps) {
+  const forParent = childFirstName !== undefined;
+  const notesLabel = forParent ? "« Notes »" : "« Mes notes »";
   // same buckets as the list below: graded, past (deadline gone), still to do
   let upcomingCount = 0;
   let pastCount = 0;
@@ -121,7 +138,11 @@ export default function MesDevoirs({ isExam }: Props) {
                 {className ? ` · Classe ${className}` : ""}
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">
-                {isExam ? "Mes examens" : "Mes exercices de maison"}
+                {forParent
+                  ? `${isExam ? "Examens" : "Exercices de maison"}${childFirstName ? ` de ${childFirstName}` : ""}`
+                  : isExam
+                    ? "Mes examens"
+                    : "Mes exercices de maison"}
               </h1>
               <p className="mt-2 text-sm font-medium text-white/85">
                 {isExam
@@ -135,7 +156,7 @@ export default function MesDevoirs({ isExam }: Props) {
                 value={String(upcomingCount)}
                 hint={upcomingCount > 0 ? `${word}${upcomingCount > 1 ? "s" : ""} à venir` : "rien pour l’instant"}
               />
-              <BannerStat label="Notés" value={String(gradedIds.size)} hint="voir dans Mes notes" />
+              <BannerStat label="Notés" value={String(gradedIds.size)} hint={`voir dans ${forParent ? "Notes" : "Mes notes"}`} />
               <BannerStat
                 label={isExam ? "Passés" : "Échéance passée"}
                 value={String(pastCount)}
@@ -168,7 +189,7 @@ export default function MesDevoirs({ isExam }: Props) {
           isExam={false}
           isLoading={isLoading}
           emptyMessage="Aucun exercice de maison pour le moment."
-          hint="Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
+          hint={`Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans ${notesLabel}.`}
         />
       )}
     </div>

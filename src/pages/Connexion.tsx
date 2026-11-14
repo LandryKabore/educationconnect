@@ -120,9 +120,6 @@ export default function Connexion() {
         <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-white/[0.06]" />
         <div className="pointer-events-none absolute -bottom-40 left-1/4 h-96 w-96 rounded-full bg-white/[0.04]" />
         <div className="relative flex flex-1 flex-col px-12 py-10 xl:px-16">
-          <div className="inline-flex w-fit rounded-lg bg-white px-3 py-2 shadow-lg shadow-brand-900/30">
-            <BrandLogo file="edufaso-logo-tight.png" className="h-12 w-auto max-w-[9rem]" imgClassName="h-12" />
-          </div>
           <div className="my-auto max-w-xl py-12">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">{t("tagline")}</p>
             <h2 className="mt-3 text-4xl font-bold leading-tight tracking-tight xl:text-[2.75rem]">
@@ -160,10 +157,7 @@ export default function Connexion() {
         {/* small screens: compact teal header instead of the panel */}
         <div className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 pb-6 pt-8 text-white lg:hidden">
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/[0.06]" />
-          <div className="relative inline-flex rounded-lg bg-white px-2.5 py-1.5">
-            <BrandLogo file="edufaso-logo-tight.png" className="h-9 w-auto max-w-[7rem]" imgClassName="h-9" />
-          </div>
-          <p className="relative mt-4 text-lg font-bold leading-snug">{t("connexions.panelTitle")}</p>
+          <p className="relative text-lg font-bold leading-snug">{t("connexions.panelTitle")}</p>
         </div>
         <div className="absolute right-4 top-4 z-10 hidden lg:block">
           <ThemeToggle />
@@ -171,10 +165,11 @@ export default function Connexion() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">
           <div className="w-full max-w-sm">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            <BrandLogo file="edufaso-logo-tight.png" className="mx-auto mb-8 h-20 w-auto max-w-[10rem]" imgClassName="h-20" />
+            <h1 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
               {t("connexions.title")}
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500">Utilisez l’identifiant fourni par votre établissement.</p>
+            <p className="mt-1.5 text-center text-sm text-slate-500">Utilisez l’identifiant fourni par votre établissement.</p>
 
             {saved.length > 0 ? (
               <div className="mt-7">

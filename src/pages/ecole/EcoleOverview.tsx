@@ -9,15 +9,12 @@ import {
   FileText,
   GraduationCap,
   MessageSquare,
-  School,
   Settings,
   Users,
 } from "lucide-react";
 import {
-  MetricCard,
   Panel,
   PanelEmpty,
-  PortalHomeHeader,
   type InboxPreview,
 } from "@/components/PortalHomeKit";
 import { relativeFr, snippet } from "@/lib/portalHomeFormat";
@@ -32,6 +29,7 @@ import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCou
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, joinProfile, personName } from "@/lib/utils";
+import { getTimeGreeting } from "@/lib/greeting";
 import { PersonName } from "@/components/PersonName";
 import type { AttendanceStatus } from "@/lib/types";
 
@@ -301,102 +299,108 @@ export default function EcoleOverview() {
     );
   }
 
-  const context = [
-    school?.name,
-    data.yearLabel ? `Année ${data.yearLabel}` : null,
-    "Administrateur",
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   const presenceTotal =
     data.presenceAbsent + data.presenceLate + data.presenceExcused;
 
+  const activeStudents = Math.max(0, data.students - departed);
+  const todo = [
+    pendingExams > 0
+      ? { key: "exams", to: "/devoirs-ecole", text: `${pendingExams} examen${pendingExams > 1 ? "s" : ""} à confirmer` }
+      : null,
+    sansClasse > 0
+      ? { key: "sans-classe", to: "/eleves", text: `${sansClasse} élève${sansClasse > 1 ? "s" : ""} sans classe` }
+      : null,
+    data.classesWithoutEdt.length > 0
+      ? {
+          key: "edt",
+          to: "/emplois-du-temps",
+          text: `${data.classesWithoutEdt.length} classe${data.classesWithoutEdt.length > 1 ? "s" : ""} sans emploi du temps`,
+        }
+      : null,
+  ].filter((t): t is { key: string; to: string; text: string } => t !== null);
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <PortalHomeHeader
-          icon={School}
-          name={name}
-          context={context}
-          unreadInbox={unreadInbox}
-        />
-        <div className="flex flex-wrap gap-2 lg:pt-2">
-          <Link to="/ecole/parametres">
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-              Paramètres
-            </Button>
-          </Link>
-          {pendingExams > 0 ? (
-            <Link to="/devoirs-ecole">
-              <Button size="sm">
-                <FileText className="h-4 w-4" />
-                {pendingExams} devoir{pendingExams > 1 ? "s" : ""} à confirmer
-              </Button>
-            </Link>
-          ) : null}
-        </div>
-      </div>
-
-      {pendingExams > 0 ? (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/40">
-          <div>
-            <p className="font-semibold text-amber-950">
-              Devoirs en attente de confirmation
-            </p>
-            <p className="mt-1 text-sm text-amber-900">
-              {pendingExams} proposition{pendingExams > 1 ? "s" : ""} des
-              enseignants à valider
-            </p>
+    // squarer corners on this page only
+    <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+      {/* Banner: same teal gradient and effects as the other portals */}
+      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
+          <div className="space-y-5 lg:col-span-7">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                  {[getTimeGreeting(), data.yearLabel ? `Année ${data.yearLabel}` : null].filter(Boolean).join(" · ")}
+                </p>
+                <h1 className="mt-2 truncate text-3xl font-bold tracking-tight lg:text-[2rem]">{school?.name ?? "Mon école"}</h1>
+                <p className="mt-2 text-sm font-medium text-white/85">
+                  {[name, "Administrateur"].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <Link
+                to="/ecole/parametres"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-3 py-2 text-xs font-semibold !text-white ring-1 ring-white/20 transition hover:bg-white/20"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                Paramètres
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BannerStat to="/classes" label="Classes" value={String(data.classes)} hint="sections actives" />
+              <BannerStat
+                to="/eleves"
+                label="Élèves"
+                value={String(activeStudents)}
+                hint={departed > 0 ? `${departed} sorti${departed > 1 ? "s" : ""} cette année` : "inscrits"}
+              />
+              <BannerStat
+                to="/enseignants"
+                label="Enseignants"
+                value={String(data.teachers)}
+                hint={`${data.subjects} matière${data.subjects > 1 ? "s" : ""}`}
+              />
+            </div>
           </div>
-          <Link to="/devoirs-ecole">
-            <Button size="sm">Voir les devoirs</Button>
-          </Link>
-        </section>
-      ) : null}
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Classes"
-          value={String(data.classes)}
-          hint="Sections actives"
-          valueClass="text-brand-600"
-          to="/classes"
-        />
-        <MetricCard
-          label="Élèves"
-          value={String(Math.max(0, data.students - departed))}
-          hint={
-            sansClasse > 0
-              ? `${sansClasse} sans classe`
-              : departed > 0
-                ? `${departed} sorti(s) cette année`
-                : "Comptes élèves"
-          }
-          valueClass={sansClasse > 0 ? "text-amber-600" : "text-sky-600"}
-          to="/eleves"
-        />
-        <MetricCard
-          label="Devoirs"
-          value={String(pendingExams)}
-          hint={
-            pendingExams > 0
-              ? "À confirmer"
-              : "Aucune demande en attente"
-          }
-          valueClass={
-            pendingExams > 0 ? "text-amber-600" : "text-emerald-600"
-          }
-          to="/devoirs-ecole"
-        />
-        <MetricCard
-          label="Enseignants"
-          value={String(data.teachers)}
-          hint={`${data.subjects} matière(s)`}
-          valueClass="text-violet-600"
-          to="/enseignants"
-        />
+          <div className="lg:col-span-5">
+            <div className="rounded-md bg-white p-5 text-slate-900 shadow-xl shadow-brand-900/25">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-sky-800">
+                  <CheckCircle2 className="h-3 w-3" />
+                  À traiter
+                </span>
+                <span className={cn("text-xs font-bold", todo.length ? "text-rose-600" : "text-emerald-600")}>
+                  {todo.length ? `${todo.length} point${todo.length > 1 ? "s" : ""}` : "Tout est à jour"}
+                </span>
+              </div>
+              {todo.length === 0 ? (
+                <p className="mt-3 text-lg font-bold text-slate-900">Rien en attente aujourd’hui.</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-slate-100">
+                  {todo.map((t) => (
+                    <li key={t.key}>
+                      <Link
+                        to={t.to}
+                        className="flex items-center justify-between gap-3 py-2.5 text-sm font-semibold !text-slate-900 hover:!text-brand-800"
+                      >
+                        {t.text}
+                        <span className="shrink-0 rounded-md bg-brand-700 px-2.5 py-1 text-xs font-semibold !text-white">
+                          Voir
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex h-1" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -787,5 +791,15 @@ export default function EcoleOverview() {
         </Panel>
       </section>
     </div>
+  );
+}
+
+function BannerStat({ label, value, hint, to }: { label: string; value: string; hint: string; to: string }) {
+  return (
+    <Link to={to} className="block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15 transition hover:bg-white/15">
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider !text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums !text-white lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs !text-white/80">{hint}</p>
+    </Link>
   );
 }

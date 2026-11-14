@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   BookOpen,
+  Check,
   CalendarCheck,
   CalendarDays,
   ClipboardList,
@@ -56,6 +57,10 @@ import { cn, fullName, personName } from "@/lib/utils";
 const CARD_LABEL =
   "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300";
 
+/** Button at the bottom of the summary cards (same teal as the panel buttons). */
+const CARD_BTN =
+  "flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-700 px-4 text-sm font-medium !text-white transition hover:bg-brand-800 group-hover:bg-brand-800";
+
 const STRIP_CELL: Record<AttendanceStatus, string> = {
   present: "bg-emerald-200 dark:bg-emerald-700/70",
   absent: "bg-rose-500",
@@ -96,6 +101,7 @@ function ChildChip({
   classSectionId,
   selected,
   onSelect,
+  showAction,
 }: {
   child: ChildSummary;
   index: number;
@@ -103,6 +109,8 @@ function ChildChip({
   classSectionId: string | undefined;
   selected: boolean;
   onSelect: () => void;
+  /** switch button, only when there is a choice to make */
+  showAction: boolean;
 }) {
   const { data: snapshot } = useChildSnapshot(child.id, classSectionId);
   const todos = useChildTodos(child.id, child, snapshot);
@@ -111,57 +119,75 @@ function ChildChip({
   const rate = snapshot?.attendance?.rate ?? null;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
+    <div
       className={cn(
-        "relative flex min-h-[3.5rem] min-w-[13rem] shrink-0 items-center gap-3 rounded-2xl border bg-white p-3 text-left shadow-sm transition md:min-w-0 md:shrink",
+        "relative flex min-w-[15rem] shrink-0 flex-col gap-3 rounded-2xl border bg-white p-3 text-left shadow-sm transition md:min-w-0 md:shrink dark:bg-[var(--surface)]",
         selected
-          ? "border-navy-700 ring-2 ring-navy-700/20 dark:border-brand-400 dark:ring-brand-400/30"
-          : "border-slate-200 hover:border-brand-300 dark:border-slate-600",
+          ? "border-brand-600 ring-2 ring-brand-600/20 dark:border-brand-400 dark:ring-brand-400/30"
+          : "border-slate-200 dark:border-slate-600",
       )}
     >
-      <span
-        className={cn(
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-          CHILD_COLORS[index % CHILD_COLORS.length],
-        )}
-        aria-hidden="true"
-      >
-        {initials(child.first_name, child.last_name)}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-bold text-slate-900 dark:text-slate-100">
-          {child.first_name}
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+            CHILD_COLORS[index % CHILD_COLORS.length],
+          )}
+          aria-hidden="true"
+        >
+          {initials(child.first_name, child.last_name)}
         </span>
-        <span className="block truncate text-xs text-slate-600 dark:text-slate-300">
-          {[child.className ?? "Sans classe", age].filter(Boolean).join(" · ")}
-        </span>
-      </span>
-      <span className="hidden shrink-0 gap-3 text-center md:flex">
-        <span>
-          <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">{fmt1(avg)}</span>
-          <span className="block text-[10px] text-slate-500 dark:text-slate-300">moy.</span>
-        </span>
-        <span>
-          <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
-            {rate === null ? "—" : `${Math.round(rate)} %`}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-bold text-slate-900 dark:text-slate-100">
+            {child.first_name}
           </span>
-          <span className="block text-[10px] text-slate-500 dark:text-slate-300">prés.</span>
+          <span className="block truncate text-xs text-slate-600 dark:text-slate-300">
+            {[child.className ?? "Sans classe", age].filter(Boolean).join(" · ")}
+          </span>
         </span>
-        <span>
+        <span className="hidden shrink-0 gap-3 text-center md:flex">
+          <span>
+            <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">{fmt1(avg)}</span>
+            <span className="block text-[10px] text-slate-500 dark:text-slate-300">moy.</span>
+          </span>
+          <span>
+            <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
+              {rate === null ? "—" : `${Math.round(rate)} %`}
+            </span>
+            <span className="block text-[10px] text-slate-500 dark:text-slate-300">prés.</span>
+          </span>
+          <span>
+            <span
+              className={cn(
+                "block text-sm font-bold",
+                attention > 0 ? "text-rose-600" : "text-slate-900 dark:text-slate-100",
+              )}
+            >
+              {attention}
+            </span>
+            <span className="block text-[10px] text-slate-500 dark:text-slate-300">à faire</span>
+          </span>
+        </span>
+      </div>
+      {showAction ? (
+        selected ? (
           <span
-            className={cn(
-              "block text-sm font-bold",
-              attention > 0 ? "text-rose-600" : "text-slate-900 dark:text-slate-100",
-            )}
+            aria-current="true"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-brand-50 text-sm font-semibold text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
           >
-            {attention}
+            <Check className="h-4 w-4" aria-hidden="true" />
+            Suivi affiché
           </span>
-          <span className="block text-[10px] text-slate-500 dark:text-slate-300">à faire</span>
-        </span>
-      </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onSelect}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-brand-700 text-sm font-semibold text-white transition hover:bg-brand-800"
+          >
+            Voir le suivi de {child.first_name}
+          </button>
+        )
+      ) : null}
       {attention > 0 ? (
         <span
           className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-bold leading-none text-white md:hidden"
@@ -170,7 +196,7 @@ function ChildChip({
           {attention}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -254,8 +280,8 @@ function AverageCard({
   const avg = snapshot?.average;
   const value = avg?.annual ?? null;
   return (
-    <Link to={`/enfants/${childId}/notes`} className="block h-full">
-      <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
+    <Link to={`/enfants/${childId}/notes`} className="group block h-full">
+      <Card className="flex h-full flex-col p-4 transition hover:border-brand-300 hover:shadow-md">
         {loading ? (
           <CardSkeleton />
         ) : (
@@ -282,7 +308,7 @@ function AverageCard({
                     className="rounded-lg bg-slate-50 px-1 py-1.5 dark:bg-slate-800"
                   >
                     <dt className="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-300">
-                      {t.period.replace("Trimestre ", "T")}
+                      {t.period}
                     </dt>
                     <dd className={cn("text-sm font-bold tabular-nums", gradeTone(t.value))}>
                       {fmt2(t.value)}
@@ -293,6 +319,9 @@ function AverageCard({
             ) : (
               <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucune note publiée.</p>
             )}
+            <span className="mt-auto block pt-4">
+              <span className={CARD_BTN}>Voir les notes</span>
+            </span>
           </>
         )}
       </Card>
@@ -313,8 +342,8 @@ function PresenceCard({
   const rate = att?.rate ?? null;
   const absences = att ? att.totals.absent + att.totals.excused : 0;
   return (
-    <Link to={`/enfants/${childId}/presences`} className="block h-full">
-      <Card className="h-full p-4 transition hover:border-brand-300 hover:shadow-md">
+    <Link to={`/enfants/${childId}/presences`} className="group block h-full">
+      <Card className="flex h-full flex-col p-4 transition hover:border-brand-300 hover:shadow-md">
         {loading ? (
           <CardSkeleton />
         ) : (
@@ -340,6 +369,9 @@ function PresenceCard({
             {!att || att.totals.total === 0 ? (
               <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Aucun cours enregistré.</p>
             ) : null}
+            <span className="mt-auto block pt-4">
+              <span className={CARD_BTN}>Voir les présences</span>
+            </span>
           </>
         )}
       </Card>
@@ -350,13 +382,8 @@ function PresenceCard({
 function StripCard({ childId }: { childId: string }) {
   const { data: strip, isLoading, isError } = useAttendanceStrip(childId);
   return (
-    <Card className="col-span-2 p-4 lg:col-span-1">
-      <div className="flex items-start justify-between gap-2">
-        <p className={CARD_LABEL}>Assiduité · 4 dernières semaines</p>
-        <Link to={`/enfants/${childId}/presences`} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline">
-          Détails
-        </Link>
-      </div>
+    <Card className="col-span-2 flex flex-col p-4 lg:col-span-1">
+      <p className={CARD_LABEL}>Assiduité · 4 dernières semaines</p>
       {isLoading ? (
         <div className="mt-3 h-6 animate-pulse rounded bg-slate-100 dark:bg-slate-800" aria-hidden="true" />
       ) : isError ? (
@@ -383,6 +410,11 @@ function StripCard({ childId }: { childId: string }) {
           </p>
         </>
       )}
+      <div className="mt-auto pt-4">
+        <Link to={`/enfants/${childId}/presences`} className={CARD_BTN}>
+          Voir le détail
+        </Link>
+      </div>
     </Card>
   );
 }
@@ -670,6 +702,88 @@ function ChildDashboard({
   );
 }
 
+/* ------------------------------------------------------------------ banner parts */
+
+function BannerStat({ label, value, hint, to }: { label: string; value: string; hint: string; to?: string }) {
+  const body = (
+    <>
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-white/80">{hint}</p>
+    </>
+  );
+  const cls = "block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15";
+  return to ? (
+    <Link to={to} className={cn(cls, "transition hover:bg-white/15")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
+}
+
+/** White card in the banner: the selected child at a glance. */
+function SelectedChildCard({
+  child,
+  index,
+  classSectionId,
+}: {
+  child: ChildSummary;
+  index: number;
+  classSectionId: string | undefined;
+}) {
+  // same queries as the dashboard below (shared cache)
+  const { data: snapshot } = useChildSnapshot(child.id, classSectionId);
+  const todos = useChildTodos(child.id, child, snapshot);
+  const avg = snapshot?.average?.annual ?? null;
+  const rate = snapshot?.attendance?.rate ?? null;
+  return (
+    <div className="rounded-md bg-white p-5 text-slate-900 shadow-xl shadow-brand-900/25">
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-sm font-bold",
+            CHILD_COLORS[Math.max(0, index) % CHILD_COLORS.length],
+          )}
+          aria-hidden="true"
+        >
+          {initials(child.first_name, child.last_name)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-bold text-slate-900">{personName(child.first_name, child.last_name)}</p>
+          <p className="truncate text-sm text-slate-500">{child.className ?? "Sans classe"}</p>
+        </div>
+        <Link
+          to={`/enfants/${child.id}/bulletin`}
+          className="shrink-0 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider !text-sky-800 transition hover:bg-sky-200"
+        >
+          Bulletin
+        </Link>
+      </div>
+      <dl className="mt-4 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-3 text-center">
+        <div>
+          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Moyenne</dt>
+          <dd className={cn("mt-0.5 text-xl font-bold tabular-nums", avg != null && avg < 10 ? "text-rose-600" : "text-slate-900")}>
+            {fmt2(avg)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Présence</dt>
+          <dd className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">
+            {rate == null ? "—" : `${Math.round(rate)} %`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-500">À faire</dt>
+          <dd className={cn("mt-0.5 text-xl font-bold tabular-nums", todos.length ? "text-rose-600" : "text-emerald-600")}>
+            {todos.length}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ page */
 
 export default function ParentHome() {
@@ -703,23 +817,71 @@ export default function ParentHome() {
   }
 
   return (
-    <div className="space-y-4">
-      <header>
-        <p className="text-sm font-medium text-brand-700">
-          {getTimeGreeting()}{" "}
-          <span className="animate-greeting-wave inline-block" aria-hidden>
-            👋
-          </span>
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-          {name || (
-            <span className="inline-block h-8 w-40 animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
-          )}
-        </h1>
-        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-          {[schoolName, "Parent"].filter(Boolean).join(" · ")}
-        </p>
-      </header>
+    // squarer corners on this page only
+    <div className="space-y-4 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+      {/* Banner: same teal gradient and effects as the student portal */}
+      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
+          <div className="space-y-5 lg:col-span-7">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                {getTimeGreeting()}
+                {schoolName ? ` · ${schoolName}` : ""}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">
+                {name || <span className="inline-block h-8 w-40 animate-pulse rounded-md bg-white/20" />}
+              </h1>
+              <p className="mt-2 text-sm font-medium text-white/85">
+                Le suivi scolaire de vos enfants, au même endroit.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BannerStat
+                label={children.length > 1 ? "Enfants" : "Enfant"}
+                value={String(children.length)}
+                hint={children.length ? children.map((c) => c.first_name).join(", ") : "aucun lié"}
+              />
+              <BannerStat
+                to="/messages"
+                label="Messages"
+                value={String(unreadInbox.discussions)}
+                hint={unreadInbox.discussions ? plural(unreadInbox.discussions, "non lu", "non lus") : "tout est lu"}
+              />
+              <BannerStat
+                to="/annonces"
+                label="Annonces"
+                value={String(unreadInbox.announcements)}
+                hint={
+                  unreadInbox.announcements
+                    ? plural(unreadInbox.announcements, "nouvelle", "nouvelles")
+                    : "rien de nouveau"
+                }
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-5">
+            {selected ? (
+              <SelectedChildCard
+                child={selected}
+                index={children.findIndex((c) => c.id === selected.id)}
+                classSectionId={meta?.classId[selected.id]}
+              />
+            ) : (
+              <div className="rounded-md bg-white/10 p-5 ring-1 ring-white/15">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Mes enfants</p>
+                <p className="mt-2 text-lg font-semibold">Aucun enfant lié pour le moment</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex h-1" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
+        </div>
+      </section>
 
       {children.length === 0 || !selected ? (
         <Card className="p-5">
@@ -737,6 +899,14 @@ export default function ParentHome() {
         </Card>
       ) : (
         <>
+          {children.length > 1 ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 pt-1">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Vos enfants</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-300">
+                Choisissez l’enfant dont vous voulez voir le suivi.
+              </p>
+            </div>
+          ) : null}
           <nav
             aria-label="Choisir un enfant"
             className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2 pt-2 md:mx-0 md:grid md:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] md:overflow-visible md:px-0"
@@ -749,6 +919,7 @@ export default function ParentHome() {
                 age={ageLabel(meta?.dob[c.id])}
                 classSectionId={meta?.classId[c.id]}
                 selected={c.id === selected.id}
+                showAction={children.length > 1}
                 onSelect={() => {
                   setPicked(c.id);
                   writeSelectedChild(c.id);

@@ -33,7 +33,7 @@ export const Button = React.forwardRef<
         size === "lg" && "h-12 px-5",
         variant === "primary" && "bg-brand-700 text-white hover:bg-brand-800",
         variant === "secondary" &&
-          "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
+          "bg-brand-700 text-white hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-500",
         variant === "outline" &&
           "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-100 dark:hover:bg-[#323a4f]",
         variant === "ghost" &&

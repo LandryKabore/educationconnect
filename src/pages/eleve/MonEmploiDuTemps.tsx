@@ -11,8 +11,9 @@ import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { cn, fullName, personName } from "@/lib/utils";
 import { EmptyState } from "@/components/ui";
+import { todayDow, useNow, useWeekLayout } from "@/lib/weekGrid";
 
-type Slot = TimetableSlot & {
+export type Slot = TimetableSlot & {
   matieres: { name: string };
   profils: { first_name: string; last_name: string } | null;
 };
@@ -27,9 +28,6 @@ const DAYS = [
 ];
 const HOUR_PX = 72;
 
-function todayDow(d = new Date()) {
-  return d.getDay() === 0 ? 7 : d.getDay();
-}
 
 function hhmm(t: string) {
   return t.slice(0, 5);
@@ -41,15 +39,6 @@ function roomLabel(room: string | null) {
   return /^salle/i.test(r) ? r : `Salle ${r}`;
 }
 
-/** Clock for the red "now" line; ticks every 30 s. */
-function useNow(intervalMs = 30_000) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 export default function MonEmploiDuTemps() {
   const { user, profile, schoolId, schools } = useAuth();
@@ -106,19 +95,7 @@ export default function MonEmploiDuTemps() {
     [pending],
   );
 
-  const byDay = useMemo(() => {
-    const m = new Map<number, Slot[]>();
-    for (const s of slots) m.set(s.day_of_week, [...(m.get(s.day_of_week) ?? []), s]);
-    return m;
-  }, [slots]);
-
-  const bounds = useMemo(() => {
-    if (slots.length === 0) return { start: 7 * 60, end: 18 * 60 };
-    return {
-      start: Math.floor(Math.min(...slots.map((s) => timeToMinutes(s.start_time))) / 60) * 60,
-      end: Math.ceil(Math.max(...slots.map((s) => timeToMinutes(s.end_time))) / 60) * 60,
-    };
-  }, [slots]);
+  const { byDay, bounds } = useWeekLayout(slots);
 
   const dismissChanges = () => {
     markSeen();
@@ -223,7 +200,8 @@ export default function MonEmploiDuTemps() {
 
 /* ---------------------------------------------------------------------- */
 
-function WeekGrid({
+
+export function WeekGrid({
   byDay,
   bounds,
   today,

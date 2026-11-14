@@ -286,7 +286,7 @@ function FilterChip({
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold ring-1 transition",
         on
-          ? "bg-navy-800 text-white ring-navy-800 dark:bg-brand-600 dark:ring-brand-600"
+          ? "bg-brand-700 text-white ring-brand-700 dark:bg-brand-600 dark:ring-brand-600"
           : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:ring-white/10 dark:text-slate-200",
       )}
     >
