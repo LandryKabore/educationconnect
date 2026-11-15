@@ -153,9 +153,8 @@ export function NotesPeriodTables({
               Moyenne annuelle
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
-              Moyenne générale des trimestres · (T1 + T2 + T3) /{" "}
-              {annual.trimesterCount || 3}
-              {!annual.complete ? " · provisoire" : ""} · seuil 10 / 20
+              Moyenne des trimestres notés ({annual.trimesterCount || 3} sur 3)
+              {!annual.complete ? " · provisoire" : ""} · admis à partir de 10 / 20
             </p>
           </div>
           <div className="text-right">

@@ -5,6 +5,7 @@ import { fetchLessonHomework, sortByDue } from "@/lib/homework";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
 import { type DevoirListItem } from "@/components/DevoirsClearList";
 import { DevoirsView } from "@/pages/eleve/MesDevoirs";
+import type { ExamScore } from "@/components/ExamensSubjectBoards";
 import {
   useChildEnrollment,
   useParentChildLink,
@@ -47,12 +48,16 @@ export default function EnfantDevoirs({ isExam }: Props) {
 
       const evalIds = (rows ?? []).map((r) => (r as { id: string }).id);
       let gradedIds = new Set<string>();
+      const scores: Record<string, ExamScore> = {};
       if (evalIds.length > 0) {
         const { data: graded } = await supabase
           .from("notes")
-          .select("evaluation_id")
+          .select("evaluation_id, score, max_score, is_absent")
           .eq("student_id", id!)
           .in("evaluation_id", evalIds);
+        for (const n of (graded ?? []) as { evaluation_id: string | null; score: number | null; max_score: number | null; is_absent: boolean | null }[]) {
+          if (n.evaluation_id) scores[n.evaluation_id] = { score: n.score, max: n.max_score, absent: !!n.is_absent };
+        }
         gradedIds = new Set(
           (graded ?? [])
             .map((n) => (n as { evaluation_id: string | null }).evaluation_id)
@@ -66,6 +71,7 @@ export default function EnfantDevoirs({ isExam }: Props) {
         className,
         items: isExam ? ((rows ?? []) as DevoirListItem[]) : sortByDue([...((rows ?? []) as DevoirListItem[]), ...lessonHomework]),
         gradedIds: [...gradedIds],
+        scores,
       };
     },
   });
@@ -82,6 +88,7 @@ export default function EnfantDevoirs({ isExam }: Props) {
         <DevoirsView
           items={items}
           gradedIds={gradedIds}
+          scores={data?.scores ?? {}}
           isLoading={linkLoading || isLoading}
           isExam={isExam}
           className={className}

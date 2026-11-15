@@ -529,7 +529,9 @@ export default function TeacherHome() {
                 {getTimeGreeting()}
                 {schoolName ? ` · ${schoolName}` : ""}
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "—"}</h1>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "—"}
+                <span className="animate-greeting-wave ml-2" aria-hidden>👋</span>
+              </h1>
               <p className="mt-2 text-sm font-medium text-white/85">
                 Enseignant · {data.uniqueClasses} classe{data.uniqueClasses > 1 ? "s" : ""} ·{" "}
                 {data.assignmentCount} affectation{data.assignmentCount > 1 ? "s" : ""}

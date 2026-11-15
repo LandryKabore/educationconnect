@@ -366,10 +366,18 @@ function buildParentGroups(): NavGroup[] {
       label: "Mes enfants",
       items: [
         { to: `/enfants/:child/notes`, childPage: "notes", label: "Notes", icon: <GraduationCap className="h-4 w-4" />, badgeKey: "notes-updates" },
+        { to: `/enfants/:child/bulletin`, childPage: "bulletin", label: "Bulletins", icon: <BookOpen className="h-4 w-4" /> },
         { to: `/enfants/:child/presences`, childPage: "presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" />, badgeKey: "presence-updates" },
-        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Examens", icon: <FileText className="h-4 w-4" /> },
-        { to: `/enfants/:child/bulletin`, childPage: "bulletin", label: "Bulletins", icon: <ClipboardList className="h-4 w-4" /> },
         { to: `/enfants/:child/emploi-du-temps`, childPage: "emploi-du-temps", label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" />, badgeKey: "edt-updates" },
+      ],
+    },
+    {
+      label: "Travail",
+      items: [
+        { to: `/enfants/:child/cahier`, childPage: "cahier", label: "Cahier de textes", icon: <BookOpenCheck className="h-4 w-4" /> },
+        { to: `/enfants/:child/exercices`, childPage: "exercices", label: "Exercices de maison", icon: <ClipboardList className="h-4 w-4" />, badgeKey: "exercices-updates" },
+        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Examens", icon: <FileText className="h-4 w-4" /> },
+        { to: `/enfants/:child/compositions`, childPage: "compositions", label: "Compositions", icon: <BookMarked className="h-4 w-4" />, badgeKey: "compositions-updates" },
       ],
     },
     {

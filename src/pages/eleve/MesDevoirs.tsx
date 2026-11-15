@@ -9,8 +9,9 @@ import { fetchLessonHomework, sortByDue } from "@/lib/homework";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { cn, joinOne } from "@/lib/utils";
-import { DevoirsClearList, type DevoirListItem } from "@/components/DevoirsClearList";
-import { ExamensSubjectBoards } from "@/components/ExamensSubjectBoards";
+import { type DevoirListItem } from "@/components/DevoirsClearList";
+import { ExercicesTimeline } from "@/components/ExercicesTimeline";
+import { ExamensSubjectBoards, type ExamScore } from "@/components/ExamensSubjectBoards";
 
 type Props = {
   isExam: boolean;
@@ -46,7 +47,7 @@ export default function MesDevoirs({ isExam }: Props) {
         .maybeSingle();
 
       if (!enrollment) {
-        return { className: "", items: [] as DevoirListItem[], gradedIds: [] as string[] };
+        return { className: "", items: [] as DevoirListItem[], gradedIds: [] as string[], scores: {} as Record<string, ExamScore> };
       }
 
       const row = enrollment as { class_section_id: string; classes: unknown };
@@ -66,12 +67,16 @@ export default function MesDevoirs({ isExam }: Props) {
 
       const evalIds = (rows ?? []).map((r) => (r as { id: string }).id);
       let gradedIds = new Set<string>();
+      const scores: Record<string, ExamScore> = {};
       if (evalIds.length > 0) {
         const { data: graded } = await supabase
           .from("notes")
-          .select("evaluation_id")
+          .select("evaluation_id, score, max_score, is_absent")
           .eq("student_id", user!.id)
           .in("evaluation_id", evalIds);
+        for (const n of (graded ?? []) as { evaluation_id: string | null; score: number | null; max_score: number | null; is_absent: boolean | null }[]) {
+          if (n.evaluation_id) scores[n.evaluation_id] = { score: n.score, max: n.max_score, absent: !!n.is_absent };
+        }
         gradedIds = new Set(
           (graded ?? [])
             .map((n) => (n as { evaluation_id: string | null }).evaluation_id)
@@ -85,6 +90,7 @@ export default function MesDevoirs({ isExam }: Props) {
         className,
         items: isExam ? ((rows ?? []) as DevoirListItem[]) : sortByDue([...((rows ?? []) as DevoirListItem[]), ...lessonHomework]),
         gradedIds: [...gradedIds],
+        scores,
       };
     },
   });
@@ -93,12 +99,23 @@ export default function MesDevoirs({ isExam }: Props) {
   const className = data?.className ?? "";
   const gradedIds = new Set(data?.gradedIds ?? []);
 
-  return <DevoirsView items={items} gradedIds={gradedIds} isLoading={isLoading} isExam={isExam} className={className} />;
+  return (
+    <DevoirsView
+      items={items}
+      gradedIds={gradedIds}
+      scores={data?.scores ?? {}}
+      isLoading={isLoading}
+      isExam={isExam}
+      className={className}
+    />
+  );
 }
 
 type ViewProps = {
   items: DevoirListItem[];
   gradedIds: Set<string>;
+  /** the child's grade per exam (exams page) */
+  scores?: Record<string, ExamScore>;
   isLoading: boolean;
   isExam: boolean;
   className: string;
@@ -107,9 +124,8 @@ type ViewProps = {
 };
 
 /** Banner + list, shared by the student and the parent screens. */
-export function DevoirsView({ items, gradedIds, isLoading, isExam, className, childFirstName }: ViewProps) {
+export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, className, childFirstName }: ViewProps) {
   const forParent = childFirstName !== undefined;
-  const notesLabel = forParent ? "« Notes »" : "« Mes notes »";
   // same buckets as the list below: graded, past (deadline gone), still to do
   let upcomingCount = 0;
   let pastCount = 0;
@@ -182,18 +198,12 @@ export function DevoirsView({ items, gradedIds, isLoading, isExam, className, ch
         <ExamensSubjectBoards
           items={items}
           gradedIds={gradedIds}
+          scores={scores}
           isLoading={isLoading}
           emptyMessage="Aucun examen confirmé pour le moment."
         />
       ) : (
-        <DevoirsClearList
-          items={items}
-          gradedIds={gradedIds}
-          isExam={false}
-          isLoading={isLoading}
-          emptyMessage="Aucun exercice de maison pour le moment."
-          hint={`Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans ${notesLabel}.`}
-        />
+        <ExercicesTimeline items={items} gradedIds={gradedIds} scores={scores} isLoading={isLoading} forParent={forParent} />
       )}
     </div>
   );

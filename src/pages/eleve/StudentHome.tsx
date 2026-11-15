@@ -439,7 +439,8 @@ export default function StudentHome() {
               </p>
               <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">
                 {now.getHours() < 12 ? "Bonjour" : now.getHours() < 18 ? "Bon après-midi" : "Bonsoir"}
-                {profile?.first_name?.trim() ? `, ${profile.first_name.trim()}` : name ? `, ${name}` : ""} 👋
+                {profile?.first_name?.trim() ? `, ${profile.first_name.trim()}` : name ? `, ${name}` : ""}
+                <span className="animate-greeting-wave ml-2" aria-hidden>👋</span>
               </h1>
               <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-white/85">
                 <GraduationCap className="h-4 w-4" />

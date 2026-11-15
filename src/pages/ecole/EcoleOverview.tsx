@@ -337,6 +337,7 @@ export default function EcoleOverview() {
                 <h1 className="mt-2 line-clamp-2 text-3xl font-bold leading-tight tracking-tight lg:text-[2rem]">{school?.name ?? "Mon école"}</h1>
                 <p className="mt-2 text-sm font-medium text-white/85">
                   {[name, "Administrateur"].filter(Boolean).join(" · ")}
+                  <span className="animate-greeting-wave ml-1.5" aria-hidden>👋</span>
                 </p>
               </div>
               <Link

@@ -75,7 +75,9 @@ export default function TeacherDay() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
                 {getTimeGreeting()} · {dayLong(format(now, "yyyy-MM-dd"))}
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "Ma journée"}</h1>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "Ma journée"}
+                <span className="animate-greeting-wave ml-2" aria-hidden>👋</span>
+              </h1>
               <p className="mt-2 text-sm font-medium text-white/85">
                 {todayLessons.length === 0
                   ? "Pas de cours aujourd’hui."
