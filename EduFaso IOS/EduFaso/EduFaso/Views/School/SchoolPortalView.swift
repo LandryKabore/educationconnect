@@ -105,7 +105,7 @@ struct SchoolPortalView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             Button { open(.schoolConfig) } label: { QuickLinkChip(title: "Configuration", systemImage: "checklist") }
-                            Button { open(.schoolHomework) } label: { QuickLinkChip(title: "Devoirs", systemImage: "doc.text") }
+                            Button { open(.schoolHomework) } label: { QuickLinkChip(title: "Examens", systemImage: "doc.text") }
                             Button { open(.bulletins) } label: { QuickLinkChip(title: "Bulletins", systemImage: "chart.bar.doc.horizontal") }
                             Button { open(.statistics) } label: { QuickLinkChip(title: "Statistiques", systemImage: "chart.bar") }
                             Button { open(.messages) } label: { QuickLinkChip(title: "Messages", systemImage: "envelope") }

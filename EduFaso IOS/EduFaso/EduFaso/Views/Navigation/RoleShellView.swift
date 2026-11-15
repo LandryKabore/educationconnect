@@ -503,7 +503,7 @@ struct ScreenHost: View {
         case .schoolAttendance:
             SchoolAttendanceView()
         case .schoolHomework:
-            SchoolEvalMenu(type: "examen", title: "Devoirs")
+            SchoolEvalMenu(type: "examen", title: "Examens")
         case .schoolCompositions:
             SessionsView()
         case .teacherEntry:
@@ -533,7 +533,7 @@ struct ScreenHost: View {
         case .teacherCahier:
             TeacherCahierView()
         case .teacherEvaluations:
-            EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Devoirs & évaluations")
+            EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
         case .cahier:
             CahierFeedView()
         case .grades:
@@ -541,7 +541,7 @@ struct ScreenHost: View {
         case .exercises:
             EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
         case .exams:
-            EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Devoirs")
+            EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
         case .compositions:
             StudentCompositionsView()
         case .attendance:
@@ -555,7 +555,7 @@ struct ScreenHost: View {
         case .childAttendance:
             ChildGate(title: "Présences") { StudentAttendanceView(studentIdOverride: $0.id) }
         case .childExams:
-            ChildGate(title: "Devoirs") { EvaluationsBrowser(studentId: $0.id, type: "examen", confirmedOnly: true, title: "Devoirs") }
+            ChildGate(title: "Examens") { EvaluationsBrowser(studentId: $0.id, type: "examen", confirmedOnly: true, title: "Examens") }
         case .childExercises:
             ChildGate(title: "Interrogations") { EvaluationsBrowser(studentId: $0.id, type: "interrogation", title: "Interrogations") }
         case .childCompositions:

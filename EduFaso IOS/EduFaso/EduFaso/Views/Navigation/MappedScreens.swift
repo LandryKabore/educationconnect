@@ -159,7 +159,7 @@ struct EvaluationsBrowser: View {
         switch type {
         case "devoir": return "Aucun exercice"
         case "interrogation": return "Aucune interrogation"
-        case "examen": return "Aucun devoir"
+        case "examen": return "Aucun examen"
         case "composition": return "Aucune composition"
         default: return "Aucune évaluation"
         }
@@ -175,7 +175,7 @@ struct EvaluationsBrowser: View {
         case "interrogation":
             return "Aucune interrogation publiée pour ta classe pour le moment."
         case "examen":
-            return "Aucun devoir confirmé par l’établissement pour le moment."
+            return "Aucun examen confirmé par l’établissement pour le moment."
         default:
             return "Rien à afficher pour le moment."
         }
@@ -262,6 +262,148 @@ struct EvaluationsBrowser: View {
         }
     }
 
+    @State private var examPeriodFilter: String = "Trimestre 1"
+
+    /// Burkina pattern: usually 3 examens per subject per trimester.
+    private static let examsPerTrimester = 3
+    private static let trimesterNames = ["Trimestre 1", "Trimestre 2", "Trimestre 3"]
+
+    private struct ExamSubjectBoard: Identifiable {
+        let id: String
+        let trimester: String
+        let subject: String
+        let rows: [EvaluationRow]
+        var planned: Int { EvaluationsBrowser.examsPerTrimester }
+        var remaining: Int { max(0, planned - rows.count) }
+        var title: String { subject }
+    }
+
+    private func normalizedTrimester(_ raw: String?) -> String {
+        let t = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty { return "Sans trimestre" }
+        let lower = t.lowercased()
+        for n in 1...3 {
+            if lower.contains("trimestre \(n)") || lower == "t\(n)" || lower.hasPrefix("t\(n) ") {
+                return "Trimestre \(n)"
+            }
+        }
+        if let m = t.range(of: #"[123]"#, options: .regularExpression) {
+            return "Trimestre \(t[m])"
+        }
+        return t
+    }
+
+    @ViewBuilder
+    private func examTrimesterSection(_ board: ExamSubjectBoard, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(board.title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(EduTheme.ink)
+                Text("\(board.rows.count)/\(board.planned)")
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(board.rows.count >= board.planned ? EduTheme.fasoGreen : EduTheme.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule().fill(
+                            board.rows.count >= board.planned
+                                ? EduTheme.fasoGreen.opacity(0.12)
+                                : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255)
+                        )
+                    )
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(board.title), \(board.rows.count) sur \(board.planned) examens")
+            .accessibilityAddTraits(.isHeader)
+
+            if board.rows.isEmpty && board.remaining == board.planned {
+                Text("Aucun examen publié pour ce trimestre pour l’instant.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+            }
+
+            ForEach(Array(board.rows.enumerated()), id: \.element.id) { index, row in
+                evaluationCard(row, now: now)
+                    .accessibilityHint("Examen \(index + 1) sur \(board.planned)")
+            }
+
+            if board.remaining > 0 {
+                ForEach(0..<board.remaining, id: \.self) { offset in
+                    let number = board.rows.count + offset + 1
+                    examPlaceholderCard(number: number, trimester: board.trimester)
+                }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func examPlaceholderCard(number: Int, trimester: String) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                .foregroundStyle(EduTheme.fieldBorder.opacity(0.8))
+                .frame(width: 48, height: 52)
+                .overlay {
+                    Text("\(number)")
+                        .font(.title3.weight(.bold).monospacedDigit())
+                        .foregroundStyle(EduTheme.muted)
+                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Examen \(number)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.muted)
+                Text("Prévu · \(trimester)")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted.opacity(0.9))
+            }
+            Spacer(minLength: 0)
+            Text("À venir")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(EduTheme.muted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(EduTheme.muted.opacity(0.1), in: Capsule())
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6]))
+                .foregroundStyle(EduTheme.fieldBorder.opacity(0.7))
+                .background(
+                    Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Examen \(number) prévu pour \(trimester), pas encore publié")
+    }
+
+    /// Student examens: subjects for the selected trimester, each with up to 3 slots.
+    private var examSubjectBoards: [ExamSubjectBoard] {
+        var buckets: [String: [EvaluationRow]] = [:]
+        for row in filteredRows {
+            let tri = normalizedTrimester(row.periodLabel)
+            guard tri == examPeriodFilter else { continue }
+            let subject = (row.matieres?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = subject.isEmpty ? "Matière" : subject
+            buckets[key, default: []].append(row)
+        }
+        return buckets.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }.map { subject in
+            let rows = (buckets[subject] ?? []).sorted {
+                ($0.evalDate ?? "") < ($1.evalDate ?? "")
+            }
+            return ExamSubjectBoard(
+                id: "\(examPeriodFilter)|\(subject)",
+                trimester: examPeriodFilter,
+                subject: subject,
+                rows: rows
+            )
+        }
+    }
+
     var body: some View {
         PremiumScreenChrome {
             Group {
@@ -312,7 +454,46 @@ struct EvaluationsBrowser: View {
                         TimelineView(.periodic(from: .now, by: 30)) { context in
                             ScrollView {
                                 LazyVStack(spacing: 10) {
-                                    if filteredRows.isEmpty {
+                                    if isExamMode, isStudentAudience {
+                                        Text("En général 3 examens par matière et par trimestre")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(EduTheme.muted)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .accessibilityAddTraits(.isHeader)
+
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 8) {
+                                                ForEach(Self.trimesterNames, id: \.self) { name in
+                                                    let active = examPeriodFilter == name
+                                                    Button {
+                                                        examPeriodFilter = name
+                                                    } label: {
+                                                        Text(name)
+                                                            .font(.caption.weight(.bold))
+                                                            .padding(.horizontal, 12)
+                                                            .padding(.vertical, 8)
+                                                            .foregroundStyle(active ? Color.white : EduTheme.ink)
+                                                            .background(active ? EduTheme.teal : Color.white, in: Capsule())
+                                                            .overlay(Capsule().strokeBorder(EduTheme.fieldBorder.opacity(active ? 0 : 0.5)))
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                            }
+                                        }
+
+                                        if examSubjectBoards.isEmpty {
+                                            Text("Aucun examen publié pour \(examPeriodFilter.lowercased()) pour l’instant.")
+                                                .font(.subheadline)
+                                                .foregroundStyle(EduTheme.muted)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(16)
+                                                .background(cardBackground)
+                                        } else {
+                                            ForEach(examSubjectBoards) { board in
+                                                examTrimesterSection(board, now: context.date)
+                                            }
+                                        }
+                                    } else if filteredRows.isEmpty {
                                         Text(filterEmptyMessage)
                                             .font(.subheadline)
                                             .foregroundStyle(EduTheme.muted)
@@ -402,7 +583,11 @@ struct EvaluationsBrowser: View {
                                 Text("À lire · comme le cahier de textes")
                                     .font(.caption)
                                     .foregroundStyle(EduTheme.muted)
-                            } else if isExamMode || isQuizMode {
+                            } else if isExamMode {
+                                Text("3 / trimestre · \(upcomingCount) à venir · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            } else if isQuizMode {
                                 Text("\(upcomingCount) à venir · \(gradedCount) noté\(gradedCount == 1 ? "" : "s")")
                                     .font(.caption)
                                     .foregroundStyle(EduTheme.muted)
@@ -1019,7 +1204,7 @@ struct EvaluationsBrowser: View {
         switch type {
         case "interrogation": return count == 1 ? "interrogation" : "interrogations"
         case "devoir": return count == 1 ? "exercice" : "exercices"
-        case "examen": return count == 1 ? "devoir" : "devoirs"
+        case "examen": return count == 1 ? "examen" : "examens"
         case "composition": return count == 1 ? "composition" : "compositions"
         default: return count == 1 ? "évaluation" : "évaluations"
         }
@@ -1029,7 +1214,7 @@ struct EvaluationsBrowser: View {
         switch row.type {
         case "interrogation": return "Interro"
         case "devoir": return "Exercice"
-        case "examen": return "Devoir"
+        case "examen": return "Examen"
         case "composition": return "Compo"
         default: return row.typeLabel
         }
@@ -2323,7 +2508,7 @@ struct BulletinBoard: View {
     private func typeLabel(_ type: String) -> String {
         switch type {
         case "devoir": return "Exercice"
-        case "examen": return "Devoir"
+        case "examen": return "Examen"
         case "composition": return "Composition"
         case "interrogation": return "Interro"
         default: return type.capitalized
@@ -2542,7 +2727,7 @@ struct ClassHubView: View {
 
             actionTile(
                 title: "Notes",
-                subtitle: isTeacher ? "Tes évaluations" : "Devoirs & notes",
+                subtitle: isTeacher ? "Tes évaluations" : "Examens & notes",
                 systemImage: "pencil.and.list.clipboard",
                 tint: EduTheme.navy
             ) {
@@ -2570,7 +2755,7 @@ struct ClassHubView: View {
 
             actionTile(
                 title: "Cahier",
-                subtitle: "Textes & devoirs",
+                subtitle: "Textes & travail à la maison",
                 systemImage: "book",
                 tint: EduTheme.fasoYellow
             ) {
@@ -3020,7 +3205,7 @@ struct StudentFileView: View {
                         NavigationLink("Bulletin") { BulletinBoard(studentId: studentId) }
                         NavigationLink("Emploi du temps") { TimetableView(mode: .student, studentIdOverride: studentId) }
                         NavigationLink("Cahier de textes") { CahierFeedView(studentId: studentId) }
-                        NavigationLink("Devoirs") { EvaluationsBrowser(studentId: studentId, type: "examen", confirmedOnly: true, title: "Devoirs") }
+                        NavigationLink("Examens") { EvaluationsBrowser(studentId: studentId, type: "examen", confirmedOnly: true, title: "Examens") }
                         NavigationLink("Interrogations") { EvaluationsBrowser(studentId: studentId, type: "interrogation", title: "Interrogations") }
                         NavigationLink("Compositions") { EvaluationsBrowser(studentId: studentId, type: "composition", title: "Compositions") }
                     }
@@ -5171,7 +5356,7 @@ struct TeacherEntryView: View {
             }
             if !teacherId.isEmpty {
                 Section("Saisie") {
-                    NavigationLink("Devoirs et évaluations") {
+                    NavigationLink("Examens et évaluations") {
                         EvaluationsBrowser(teacherId: teacherId, allowEntry: true, recordedBy: teacherId, title: "Évaluations")
                     }
                     NavigationLink("Cahier de textes") {

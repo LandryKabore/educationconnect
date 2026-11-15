@@ -796,11 +796,11 @@ export default function StudentHome() {
 
         <Panel
           icon={BookOpen}
-          title="Prochains devoirs"
+          title="Prochains examens"
           subtitle="Confirmés par l’administration"
           action={
             <Link to="/mes-devoirs" className="block">
-              <Button className="w-full">Voir les devoirs</Button>
+              <Button className="w-full">Voir les examens</Button>
             </Link>
           }
         >
@@ -985,7 +985,7 @@ export default function StudentHome() {
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <QuickLink to="/mes-notes" label="Mes notes" icon={BookOpen} />
         <QuickLink to="/mes-exercices" label="Exercices" icon={ClipboardList} />
-        <QuickLink to="/mes-devoirs" label="Devoirs" icon={FileText} />
+        <QuickLink to="/mes-devoirs" label="Examens" icon={FileText} />
         <QuickLink
           to="/mes-compositions"
           label="Compositions"

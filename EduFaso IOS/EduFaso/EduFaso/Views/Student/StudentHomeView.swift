@@ -47,7 +47,7 @@ struct StudentHomeView: View {
         let day: String?
     }
 
-    /// Interrogations, devoirs and compositions merged and sorted by date.
+    /// Interrogations, examens and compositions merged and sorted by date.
     private var workItems: [WorkItem] {
         let quizzes = pendingQuizzes.map {
             WorkItem(
@@ -62,7 +62,7 @@ struct StudentHomeView: View {
             WorkItem(
                 id: "dv-\($0.id)",
                 kind: .exam,
-                title: ($0.title?.isEmpty == false) ? $0.title! : ($0.matieres?.name ?? "Devoir"),
+                title: ($0.title?.isEmpty == false) ? $0.title! : ($0.matieres?.name ?? "Examen"),
                 subject: $0.matieres?.name,
                 day: eventDay($0)
             )
@@ -497,7 +497,7 @@ struct StudentHomeView: View {
         let message: String = {
             if weekday == 7 { return "Pas de cours le dimanche. Pense à préparer ta semaine." }
             if todaySlots.isEmpty { return "Aucun cours n’est planifié pour aujourd’hui." }
-            return "Plus de cours pour aujourd’hui. Pense à tes devoirs !"
+            return "Plus de cours pour aujourd’hui. Pense à tes examens !"
         }()
 
         return HStack(alignment: .top, spacing: 14) {
@@ -665,7 +665,7 @@ struct StudentHomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader(
                 title: "À préparer",
-                subtitle: workItems.isEmpty ? "Interrogations, devoirs et compositions" : "\(workItems.count) à venir"
+                subtitle: workItems.isEmpty ? "Interrogations, examens et compositions" : "\(workItems.count) à venir"
             ) {
                 NavigationLink {
                     EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
@@ -697,7 +697,7 @@ struct StudentHomeView: View {
                             case .quiz:
                                 EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
                             case .exam:
-                                EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Devoirs")
+                                EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
                             case .composition:
                                 StudentCompositionsView()
                             }
@@ -717,7 +717,7 @@ struct StudentHomeView: View {
         let badge: (title: String, color: Color) = {
             switch item.kind {
             case .quiz: return ("Interro", Self.sky)
-            case .exam: return ("Devoir", EduTheme.navy)
+            case .exam: return ("Examen", EduTheme.navy)
             case .composition: return ("Compo", EduTheme.teal)
             }
         }()
@@ -938,8 +938,8 @@ struct StudentHomeView: View {
                 actionLink("Interrogations", systemImage: "questionmark.circle.fill", color: Self.sky) {
                     EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
                 }
-                actionLink("Devoirs", systemImage: "doc.text.fill", color: Self.sky) {
-                    EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Devoirs")
+                actionLink("Examens", systemImage: "doc.text.fill", color: Self.sky) {
+                    EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
                 }
                 actionLink("Compositions", systemImage: "doc.on.doc.fill", color: EduTheme.teal) { StudentCompositionsView() }
                 actionLink("Présences", systemImage: "checkmark.circle.fill", color: EduTheme.fasoGreen) { StudentAttendanceView() }

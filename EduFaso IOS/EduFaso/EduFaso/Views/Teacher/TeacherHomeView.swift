@@ -685,7 +685,7 @@ struct TeacherHomeView: View {
                 .accessibilityHint("Crée une interrogation")
 
                 NavigationLink {
-                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Devoirs & évaluations")
+                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
                 } label: {
                     actionTile("Notes", systemImage: "pencil.and.list.clipboard", color: EduTheme.navy)
                 }
@@ -759,7 +759,7 @@ struct TeacherHomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader(title: "Priorités", subtitle: prioritySubtitle) {
                 NavigationLink {
-                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Devoirs & évaluations")
+                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
                 } label: {
                     Text("Tout voir")
                         .font(.subheadline.weight(.bold))
@@ -796,7 +796,7 @@ struct TeacherHomeView: View {
                             if row.classSectionId != nil, row.subjectId != nil {
                                 GradeEntryView(evaluation: row, recordedBy: auth.userId)
                             } else {
-                                EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Devoirs & évaluations")
+                                EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
                             }
                         } label: {
                             priorityRow(row)
@@ -813,7 +813,7 @@ struct TeacherHomeView: View {
     private var prioritySubtitle: String {
         let confirm = needsConfirm.count
         let soon = upcomingEvals.count
-        if confirm == 0 && soon == 0 { return "Notes et devoirs à suivre" }
+        if confirm == 0 && soon == 0 { return "Notes et examens à suivre" }
         if confirm > 0 { return "\(confirm) à confirmer · \(soon) à venir" }
         return "\(soon) à venir"
     }
@@ -906,7 +906,7 @@ struct TeacherHomeView: View {
         switch row.type {
         case "interrogation": return ("Interro", Self.sky)
         case "devoir": return ("Exercice", EduTheme.fasoRed)
-        case "examen": return ("Devoir", EduTheme.navy)
+        case "examen": return ("Examen", EduTheme.navy)
         case "composition": return ("Compo", EduTheme.teal)
         default: return (row.typeLabel, EduTheme.muted)
         }

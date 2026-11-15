@@ -17,7 +17,7 @@ struct ParentChildHome: Equatable {
     var recentAbsences: [AttendanceRow] = []
     /// Last 4 weeks, one cell per school day (worst status of the day).
     var strip: [ParentStripDay] = []
-    /// Interrogations, confirmed devoirs and compositions in the next 7 days.
+    /// Interrogations, confirmed examens and compositions in the next 7 days.
     var upcoming: [ParentUpcomingItem] = []
     var failed = false
 }
@@ -112,7 +112,7 @@ enum ParentHomeLoader {
                 guard let day = inWindow(row) else { return nil }
                 return ParentUpcomingItem(
                     id: "dv-\(row.id)", kind: .exam,
-                    title: nonEmpty(row.title) ?? row.matieres?.name ?? "Devoir",
+                    title: nonEmpty(row.title) ?? row.matieres?.name ?? "Examen",
                     subject: row.matieres?.name, day: day
                 )
             }
@@ -202,48 +202,77 @@ struct ParentHomeView: View {
     @State private var showTour = false
     @State private var tourScheduled = false
 
-    private static let tour: [CoachMarkStep] = [
-        CoachMarkStep(
-            id: "parent.switcher", icon: "hand.tap.fill",
-            title: "Choisissez un enfant",
-            message: "Touchez le prénom d’un enfant : toute la page affiche alors son suivi. Le ✓ montre l’enfant affiché."
-        ),
-        CoachMarkStep(
-            id: "parent.stats", icon: "chart.bar.fill",
-            title: "L’essentiel en un coup d’œil",
-            message: "Moyenne de l’année, présence du trimestre et épreuves de la semaine. Touchez la moyenne pour ouvrir le bulletin, la présence pour le détail."
-        ),
-        CoachMarkStep(
-            id: "parent.watch", icon: "exclamationmark.triangle.fill",
-            title: "À surveiller",
-            message: "Les absences à justifier et les notes faibles récentes s’affichent ici. Touchez « Voir » pour en savoir plus."
-        ),
-        CoachMarkStep(
-            id: "parent.week", icon: "calendar",
-            title: "Cette semaine",
-            message: "Interrogations, devoirs et compositions des 7 prochains jours, avec le jour exact. Touchez une ligne pour le détail."
-        ),
-        CoachMarkStep(
-            id: "parent.results", icon: "chart.line.uptrend.xyaxis",
-            title: "Résultats",
-            message: "Les moyennes de chaque trimestre et les dernières notes. « Bulletin » ouvre le bulletin officiel."
-        ),
-        CoachMarkStep(
-            id: "parent.attendance", icon: "checkmark.seal.fill",
-            title: "Assiduité",
-            message: "La présence du trimestre, et un carré de couleur par jour de classe sur les 4 dernières semaines."
-        ),
-        CoachMarkStep(
-            id: "parent.quick", icon: "square.grid.3x3.fill",
-            title: "Accès rapide",
-            message: "Tous les espaces de votre enfant : notes, présences, emploi du temps, cahier de textes, messages…"
-        ),
-        CoachMarkStep(
+    /// Tour steps adapted to how many children are linked to this parent.
+    private static func tour(forChildCount count: Int) -> [CoachMarkStep] {
+        let help = CoachMarkStep(
             id: "parent.help", icon: "questionmark.circle.fill",
             title: "Revoir ce guide",
             message: "Touchez ce bouton à tout moment pour relancer la visite."
-        ),
-    ]
+        )
+
+        if count == 0 {
+            return [
+                CoachMarkStep(
+                    id: "parent.empty", icon: "person.2.slash",
+                    title: "Pas encore d’enfant lié",
+                    message: "Quand l’école rattache votre enfant à ce compte, son suivi (notes, présences, emploi du temps…) apparaîtra ici."
+                ),
+                help,
+            ]
+        }
+
+        let childRef = count == 1 ? "votre enfant" : "l’enfant choisi"
+        var steps: [CoachMarkStep] = []
+
+        if count > 1 {
+            steps.append(
+                CoachMarkStep(
+                    id: "parent.switcher", icon: "hand.tap.fill",
+                    title: "Choisissez un enfant",
+                    message: "Vous avez plusieurs enfants liés. Touchez un prénom : toute la page affiche alors son suivi. Le ✓ montre l’enfant affiché."
+                )
+            )
+        }
+
+        steps.append(contentsOf: [
+            CoachMarkStep(
+                id: "parent.stats", icon: "chart.bar.fill",
+                title: "L’essentiel en un coup d’œil",
+                message: count == 1
+                    ? "Moyenne de l’année, présence du trimestre et épreuves de la semaine pour votre enfant. Touchez la moyenne pour le bulletin, la présence pour le détail."
+                    : "Moyenne, présence et épreuves de la semaine pour \(childRef). Changez d’enfant en haut pour comparer leur suivi."
+            ),
+            CoachMarkStep(
+                id: "parent.watch", icon: "exclamationmark.triangle.fill",
+                title: "À surveiller",
+                message: "Absences à justifier et notes faibles récentes de \(childRef). Touchez « Voir » pour en savoir plus."
+            ),
+            CoachMarkStep(
+                id: "parent.week", icon: "calendar",
+                title: "Cette semaine",
+                message: "Interrogations, examens et compositions des 7 prochains jours pour \(childRef). Touchez une ligne pour le détail."
+            ),
+            CoachMarkStep(
+                id: "parent.results", icon: "chart.line.uptrend.xyaxis",
+                title: "Résultats",
+                message: "Moyennes de chaque trimestre et dernières notes de \(childRef). « Bulletin » ouvre le bulletin officiel."
+            ),
+            CoachMarkStep(
+                id: "parent.attendance", icon: "checkmark.seal.fill",
+                title: "Assiduité",
+                message: "Présence du trimestre de \(childRef), et un carré de couleur par jour de classe sur les 4 dernières semaines."
+            ),
+            CoachMarkStep(
+                id: "parent.quick", icon: "square.grid.3x3.fill",
+                title: "Accès rapide",
+                message: count == 1
+                    ? "Tous les espaces de votre enfant : notes, présences, emploi du temps, cahier de textes, messages…"
+                    : "Tous les espaces de \(childRef) : notes, présences, emploi du temps, cahier de textes, messages…"
+            ),
+            help,
+        ])
+        return steps
+    }
 
     private static let sky = Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
     private static let softFill = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
@@ -293,7 +322,7 @@ struct ParentHomeView: View {
                     } else if children.isEmpty {
                         hero
                         if listFailed { errorBanner }
-                        noChildrenCard
+                        noChildrenCard.coachMarkTarget("parent.empty")
                     } else {
                         hero
                         if unreadMessages > 0 || unreadAnnouncements > 0 { inboxPills }
@@ -334,6 +363,10 @@ struct ParentHomeView: View {
         }
         .onChange(of: home != nil) { _, loaded in
             if loaded { scheduleFirstTour() }
+        }
+        .onChange(of: ready) { _, isReady in
+            // Empty account: no child home payload — still offer the short empty-state tour.
+            if isReady, children.isEmpty { scheduleFirstTour() }
         }
         .refreshable { await load() }
         .background(EduTheme.loginBackground.ignoresSafeArea())
@@ -760,7 +793,7 @@ struct ParentHomeView: View {
                             case .quiz:
                                 EvaluationsBrowser(studentId: child.id, type: "interrogation", title: "Interrogations")
                             case .exam:
-                                EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Devoirs")
+                                EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")
                             case .composition:
                                 StudentCompositionsView(studentIdOverride: child.id)
                             }
@@ -780,7 +813,7 @@ struct ParentHomeView: View {
         let badge: (title: String, color: Color) = {
             switch item.kind {
             case .quiz: return ("Interro", Self.sky)
-            case .exam: return ("Devoir", EduTheme.navy)
+            case .exam: return ("Examen", EduTheme.navy)
             case .composition: return ("Compo", EduTheme.teal)
             }
         }()
@@ -1199,8 +1232,8 @@ struct ParentHomeView: View {
                 actionLink("Interrogations", systemImage: "questionmark.circle.fill", color: Self.sky) {
                     EvaluationsBrowser(studentId: child.id, type: "interrogation", title: "Interrogations")
                 }
-                actionLink("Devoirs", systemImage: "doc.text.fill", color: Self.sky) {
-                    EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Devoirs")
+                actionLink("Examens", systemImage: "doc.text.fill", color: Self.sky) {
+                    EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")
                 }
                 actionLink("Compositions", systemImage: "doc.on.doc.fill", color: EduTheme.teal) {
                     StudentCompositionsView(studentIdOverride: child.id)
@@ -1442,7 +1475,7 @@ struct ParentHomeView: View {
 
     // MARK: Guided tour
 
-    /// First visit: once the selected child's cards are on screen, run the tour by itself.
+    /// First visit: once targets are on screen, run the tour adapted to child count.
     private func scheduleFirstTour() {
         guard !tourDone, !tourScheduled, !showTour else { return }
         tourScheduled = true
@@ -1453,7 +1486,8 @@ struct ParentHomeView: View {
     }
 
     private func startTour() {
-        let steps = coach.steps(Self.tour)
+        let catalog = Self.tour(forChildCount: children.count)
+        let steps = coach.steps(catalog)
         guard !steps.isEmpty else { return }
         tourSteps = steps
         tourIndex = 0
@@ -1542,8 +1576,8 @@ struct ChildDetailView: View {
                 Section("Vie scolaire") {
                     NavigationLink("Notes") { StudentGradesView(studentIdOverride: child.id) }
                     NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: child.id) }
-                    NavigationLink("Devoirs") {
-                        EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Devoirs")
+                    NavigationLink("Examens") {
+                        EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")
                     }
                     NavigationLink("Interrogations") {
                         EvaluationsBrowser(studentId: child.id, type: "interrogation", title: "Interrogations")

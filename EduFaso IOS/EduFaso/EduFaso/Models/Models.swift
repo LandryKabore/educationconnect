@@ -233,7 +233,7 @@ struct EvaluationRow: Codable, Identifiable, Hashable {
         case "interrogation": return "Interrogation"
         case "devoir": return "Exercice de maison"
         case "composition": return "Composition"
-        case "examen": return "Devoir"
+        case "examen": return "Examen"
         default: return type ?? "Évaluation"
         }
     }

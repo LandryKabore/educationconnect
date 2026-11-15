@@ -332,7 +332,7 @@ struct StudentGradesView: View {
     private func typeLabel(_ type: String) -> String {
         switch type {
         case "devoir": return "Exercice"
-        case "examen": return "Devoir"
+        case "examen": return "Examen"
         case "composition": return "Composition"
         case "interrogation": return "Interro"
         default: return type.capitalized

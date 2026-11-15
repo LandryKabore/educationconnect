@@ -84,16 +84,16 @@ export default function EnfantDevoirs({ isExam }: Props) {
         <PageHeader
           title={
             childName
-              ? `${isExam ? "Devoirs" : "Exercices"} — ${childName}`
+              ? `${isExam ? "Examens" : "Exercices"} — ${childName}`
               : isExam
-                ? "Devoirs"
+                ? "Examens"
                 : "Exercices de maison"
           }
           subtitle={
             className
               ? `Classe ${className}`
               : isExam
-                ? "Devoirs confirmés par l’établissement"
+                ? "Examens confirmés par l’établissement"
                 : "Travaux à faire à la maison"
           }
         />
@@ -115,7 +115,7 @@ export default function EnfantDevoirs({ isExam }: Props) {
             }
             hint={
               isExam
-                ? "Seuls les devoirs confirmés apparaissent ici. Les notes sont dans « Notes »."
+                ? "En général 3 examens par trimestre. Seuls les examens confirmés apparaissent ici. Les notes sont dans « Notes »."
                 : "Rappel des exercices à préparer. Les notes apparaissent dans « Notes »."
             }
           />

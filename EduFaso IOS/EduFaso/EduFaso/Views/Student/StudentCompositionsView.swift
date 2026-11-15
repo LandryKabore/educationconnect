@@ -49,6 +49,17 @@ struct StudentCompositionsView: View {
         sessions.filter { $0.statusLabel == "En cours" }.count
     }
 
+    /// Running composition, else the next upcoming one — used for the mini timetable.
+    private var featuredSession: StudentCompositionSession? {
+        if let running = sessions.first(where: { $0.statusLabel == "En cours" }) {
+            return running
+        }
+        return sessions
+            .filter { $0.statusLabel == "À venir" || $0.statusLabel == "Programmée" }
+            .sorted { ($0.startsOn ?? "9999") < ($1.startsOn ?? "9999") }
+            .first
+    }
+
     var body: some View {
         PremiumScreenChrome {
             Group {
@@ -78,6 +89,10 @@ struct StudentCompositionsView: View {
                             ScrollView {
                                 LazyVStack(spacing: 10) {
                                     hintCard
+
+                                    if let featured = featuredSession, !featured.papers.isEmpty {
+                                        featuredTimetableCard(featured)
+                                    }
 
                                     if filteredSessions.isEmpty {
                                         Text("Rien à afficher avec ce filtre.")
@@ -179,6 +194,31 @@ struct StudentCompositionsView: View {
             )
     }
 
+    private func featuredTimetableCard(_ session: StudentCompositionSession) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("EMPLOI DU TEMPS DE LA COMPOSITION")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(EduTheme.muted)
+                .tracking(0.4)
+            Text(session.title?.isEmpty == false ? session.title! : "Composition")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(EduTheme.ink)
+            if let period = session.periodLabel, !period.isEmpty {
+                Text(period)
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            CompositionMiniTimetableView(papers: session.papers, compact: false)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(EduTheme.teal.opacity(0.2), lineWidth: 1)
+        )
+    }
+
     private func sessionCard(_ session: StudentCompositionSession, now: Date) -> some View {
         let expanded = expandedIds.contains(session.id)
         let status = session.statusLabel
@@ -262,7 +302,10 @@ struct StudentCompositionsView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 10) {
+                        if featuredSession?.id != session.id {
+                            CompositionMiniTimetableView(papers: session.papers, compact: true)
+                        }
                         ForEach(session.papers) { paper in
                             paperRow(paper)
                         }
@@ -424,5 +467,181 @@ struct StudentCompositionsView: View {
             self.error = error.localizedDescription
         }
         loading = false
+    }
+}
+
+/// Compact day × start-time grid for composition papers (matches web CompositionMiniTimetable).
+private struct CompositionMiniTimetableView: View {
+    let papers: [CompositionPaper]
+    var compact: Bool = false
+
+    private struct SlotKey: Hashable {
+        let day: String
+        let start: String
+    }
+
+    private var datedPapers: [CompositionPaper] {
+        papers.filter { ($0.evalDate ?? "").isEmpty == false }
+    }
+
+    private var days: [String] {
+        Array(Set(datedPapers.compactMap(\.evalDate))).sorted()
+    }
+
+    private var starts: [String] {
+        Array(
+            Set(
+                datedPapers.compactMap { paper -> String? in
+                    guard let t = paper.startTime, !t.isEmpty else { return nil }
+                    return String(t.prefix(5))
+                }
+            )
+        )
+        .sorted { minutes($0) < minutes($1) }
+    }
+
+    private var cellMap: [SlotKey: CompositionPaper] {
+        var map: [SlotKey: CompositionPaper] = [:]
+        for paper in datedPapers {
+            guard let day = paper.evalDate, let startRaw = paper.startTime, !startRaw.isEmpty else { continue }
+            let key = SlotKey(day: day, start: String(startRaw.prefix(5)))
+            if map[key] == nil { map[key] = paper }
+        }
+        return map
+    }
+
+    var body: some View {
+        if days.isEmpty || starts.isEmpty {
+            EmptyView()
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 0) {
+                        Text("Horaire")
+                            .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+                            .foregroundStyle(EduTheme.muted)
+                            .frame(width: compact ? 48 : 56, alignment: .leading)
+                            .padding(.vertical, compact ? 6 : 8)
+                            .padding(.horizontal, 6)
+
+                        ForEach(days, id: \.self) { day in
+                            VStack(spacing: 1) {
+                                Text(weekdayShort(day))
+                                    .font(compact ? .caption2.weight(.bold) : .caption.weight(.bold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .textCase(.uppercase)
+                                Text(dayMonth(day))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            .frame(width: compact ? 84 : 96)
+                            .padding(.vertical, compact ? 6 : 8)
+                        }
+                    }
+                    .background(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+
+                    ForEach(starts, id: \.self) { start in
+                        HStack(alignment: .top, spacing: 0) {
+                            Text(start)
+                                .font(compact ? .caption2.weight(.semibold).monospacedDigit() : .caption.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(EduTheme.muted)
+                                .frame(width: compact ? 48 : 56, alignment: .leading)
+                                .padding(.vertical, compact ? 4 : 6)
+                                .padding(.horizontal, 6)
+
+                            ForEach(days, id: \.self) { day in
+                                cell(day: day, start: start)
+                                    .frame(width: compact ? 84 : 96)
+                                    .padding(.horizontal, 3)
+                                    .padding(.vertical, compact ? 3 : 4)
+                            }
+                        }
+                        .overlay(alignment: .bottom) {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cell(day: String, start: String) -> some View {
+        if let paper = cellMap[SlotKey(day: day, start: start)] {
+            let name = paper.matieres?.name ?? "Matière"
+            let swatch = SubjectPalette.swatch(for: name)
+            let end = paper.endTime.map { String($0.prefix(5)) } ?? ""
+            HStack(spacing: 0) {
+                Capsule()
+                    .fill(swatch.border)
+                    .frame(width: 3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(compact ? .caption2.weight(.bold) : .caption.weight(.bold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    if !end.isEmpty {
+                        Text("\(start)–\(end)")
+                            .font(.system(size: compact ? 9 : 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, compact ? 4 : 6)
+                Spacer(minLength: 0)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(swatch.fill.opacity(0.55))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(swatch.border.opacity(0.35), lineWidth: 1)
+            )
+        } else {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(
+                    Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255).opacity(0.6))
+                )
+                .frame(minHeight: compact ? 32 : 40)
+        }
+    }
+
+    private func minutes(_ hhmm: String) -> Int {
+        let parts = hhmm.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return 0 }
+        return parts[0] * 60 + parts[1]
+    }
+
+    private func weekdayShort(_ iso: String) -> String {
+        guard let date = parseDay(iso) else { return "—" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEE"
+        return f.string(from: date)
+    }
+
+    private func dayMonth(_ iso: String) -> String {
+        guard let date = parseDay(iso) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "d MMM"
+        return f.string(from: date)
+    }
+
+    private func parseDay(_ iso: String) -> Date? {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 }

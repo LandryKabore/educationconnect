@@ -86,14 +86,14 @@ export default function MesDevoirs({ isExam }: Props) {
   return (
     <div>
       <PageHeader
-        title={isExam ? "Mes devoirs" : "Mes exercices de maison"}
+        title={isExam ? "Mes examens" : "Mes exercices de maison"}
         subtitle={
           className
             ? isExam
               ? `Classe ${className} · confirmés par l’établissement`
               : `Classe ${className} · à faire à la maison`
             : isExam
-              ? "Devoirs confirmés par l’établissement"
+              ? "Examens confirmés par l’établissement"
               : "Travaux à faire à la maison"
         }
       />
@@ -110,7 +110,7 @@ export default function MesDevoirs({ isExam }: Props) {
         }
         hint={
           isExam
-            ? "Seuls les devoirs confirmés apparaissent ici, avec date et créneau. Les notes sont dans « Mes notes » — rien n’est à rendre en ligne."
+            ? "En général 3 examens par trimestre. Seuls les examens confirmés apparaissent ici, avec date et créneau. Les notes sont dans « Mes notes »."
             : "Rappel de ce qu’il faut préparer pour la classe. Rien n’est à rendre en ligne ; les notes apparaissent dans « Mes notes »."
         }
       />

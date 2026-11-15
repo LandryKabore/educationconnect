@@ -267,7 +267,7 @@ struct LoginView: View {
 
     private var marketingStrip: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Notes, présences et devoirs, au même endroit.")
+            Text("Notes, présences et examens, au même endroit.")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
