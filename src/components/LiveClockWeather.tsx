@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { WeatherScene, weatherKind, weatherTint } from "@/components/WeatherScene";
 
 type LocationSource = "gps" | "ip" | "school";
 
@@ -30,7 +31,7 @@ type Coords = { lat: number; lon: number; city?: string };
 
 function weatherFromCode(code: number): { label: string; Icon: typeof Sun } {
   if (code === 0) return { label: "Clair", Icon: Sun };
-  if (code <= 2) return { label: "Partiellement nuageux", Icon: CloudSun };
+  if (code <= 2) return { label: "Peu nuageux", Icon: CloudSun };
   if (code === 3) return { label: "Couvert", Icon: Cloud };
   if (code === 45 || code === 48) return { label: "Brouillard", Icon: CloudFog };
   if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
@@ -222,7 +223,6 @@ export function LiveClockWeather({ className }: { className?: string }) {
     retry: 1,
   });
 
-  const { Icon } = weatherFromCode(weather?.code ?? 0);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -236,15 +236,21 @@ export function LiveClockWeather({ className }: { className?: string }) {
   };
 
   const day = format(now, "EEEE d MMMM", { locale: fr });
+  const hour = now.getHours();
+  const night = hour < 6 || hour >= 19;
+  const kind = weather ? weatherKind(weather.code) : null;
 
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-md border border-slate-200 bg-white text-slate-700 dark:border-[var(--border)] dark:text-slate-300",
+        "relative overflow-hidden rounded-md border border-slate-200 bg-white text-slate-700 dark:border-[var(--border)] dark:text-slate-300",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+      {kind ? (
+        <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br transition-colors duration-700", weatherTint(kind, night))} />
+      ) : null}
+      <div className="relative flex items-center justify-between gap-2 px-3 pt-2.5">
         <p className="truncate text-[11px] font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
           {day}
         </p>
@@ -260,16 +266,14 @@ export function LiveClockWeather({ className }: { className?: string }) {
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-1">
+      <div className="relative flex items-center justify-between gap-1 px-3 pb-2 pt-0.5">
         <p className="font-bold tabular-nums leading-none text-slate-900 dark:text-slate-100">
           <span className="text-2xl">{format(now, "HH:mm")}</span>
           <span className="ml-0.5 text-sm text-slate-400">{format(now, "ss")}</span>
         </p>
         {weather ? (
-          <div className="flex items-center gap-1.5" title={weather.label}>
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
-              <Icon className="h-4 w-4" />
-            </span>
+          <div className="-my-1 flex items-center" title={weather.label}>
+            <WeatherScene kind={kind!} night={night} className="-mr-2 h-11 w-[4.5rem]" />
             <span className="leading-tight">
               <span className="block text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{weather.temp}°C</span>
               <span className="block max-w-[6.5rem] truncate text-[11px] text-slate-500">{weather.label}</span>
@@ -278,7 +282,7 @@ export function LiveClockWeather({ className }: { className?: string }) {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1.5 border-t border-slate-100 bg-slate-50/70 px-3 py-1.5 text-xs text-slate-500 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
+      <div className="relative flex items-center gap-1.5 border-t border-slate-100 bg-white/60 dark:bg-black/10 px-3 py-1.5 text-xs text-slate-500 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
         <MapPin className="h-3 w-3 shrink-0" />
         {weather ? (
           <span className="min-w-0 truncate" title={`Source : ${sourceHint(weather.source)}`}>
