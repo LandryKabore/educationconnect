@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Link,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -74,10 +75,11 @@ export default function NotesSaisie() {
   const { id, evalId } = useParams<{ id: string; evalId: string }>();
   const [searchParams] = useSearchParams();
   const fromDevoirs = searchParams.get("from") === "devoirs";
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [grades, setGrades] = useState<Record<string, GradeState>>({});
   const [savingGrades, setSavingGrades] = useState(false);
@@ -386,8 +388,10 @@ export default function NotesSaisie() {
         qc.invalidateQueries({ queryKey: ["mes-devoirs"] }),
         qc.invalidateQueries({ queryKey: ["student-home"] }),
         qc.invalidateQueries({ queryKey: ["teacher-mes-devoirs"] }),
+        qc.invalidateQueries({ queryKey: ["teacher-todo"] }),
+        qc.invalidateQueries({ queryKey: ["lesson-evaluations"] }),
       ]);
-      navigate(backTo);
+      // stay on the sheet: the teacher often saves part of the class and goes on
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Enregistrement impossible");
     } finally {
@@ -477,6 +481,12 @@ export default function NotesSaisie() {
       !window.confirm("Quitter sans enregistrer ? Les notes saisies seront perdues.")
     ) {
       e.preventDefault();
+      return;
+    }
+    // go back to the page the teacher came from (Exercices de maison, Devoirs, a lesson…)
+    if (location.key !== "default") {
+      e.preventDefault();
+      navigate(-1);
     }
   };
 
@@ -487,7 +497,7 @@ export default function NotesSaisie() {
       className="mb-2 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
     >
       <ArrowLeft className="h-4 w-4" />
-      Retour aux évaluations
+      Retour
     </Link>
   );
 

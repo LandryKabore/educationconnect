@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
+import { fetchLessonHomework } from "@/lib/homework";
 import { fetchAttendanceCounts } from "@/lib/scaleApi";
 import { cn, fullName, personName } from "@/lib/utils";
 import type { GradeRow, Subject } from "@/lib/types";
@@ -182,6 +183,15 @@ export default function StudentHome() {
             matieres: { name: string } | null;
           }[]
         ).filter((e) => !gradedEvalIds.has(e.id));
+
+        // homework written in the lessons counts as an exercice de maison too
+        const lessonHomework = await fetchLessonHomework(classId).catch(() => []);
+        pendingExercices = [
+          ...pendingExercices,
+          ...lessonHomework
+            .filter((h) => !h.eval_date || h.eval_date >= todayIso)
+            .map((h) => ({ id: h.id, title: h.title, due_date: h.eval_date, matieres: h.matieres })),
+        ].sort((x, y) => (x.due_date ?? "9999").localeCompare(y.due_date ?? "9999"));
 
         const { data: examensData } = await supabase
           .from("evaluations")

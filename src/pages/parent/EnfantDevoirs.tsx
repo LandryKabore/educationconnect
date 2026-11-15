@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { fetchLessonHomework, sortByDue } from "@/lib/homework";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
 import { type DevoirListItem } from "@/components/DevoirsClearList";
 import { DevoirsView } from "@/pages/eleve/MesDevoirs";
@@ -59,9 +60,11 @@ export default function EnfantDevoirs({ isExam }: Props) {
         );
       }
 
+      // exercices de maison = exercises + the homework written in the lessons
+      const lessonHomework = isExam ? [] : await fetchLessonHomework(classId).catch(() => []);
       return {
         className,
-        items: (rows ?? []) as DevoirListItem[],
+        items: isExam ? ((rows ?? []) as DevoirListItem[]) : sortByDue([...((rows ?? []) as DevoirListItem[]), ...lessonHomework]),
         gradedIds: [...gradedIds],
       };
     },

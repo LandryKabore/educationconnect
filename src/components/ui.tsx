@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
@@ -620,23 +620,29 @@ export function BackLink({
   to,
   label = "Retour",
   className,
+  preferHistory = true,
 }: {
   to: string;
   label?: string;
   className?: string;
+  /** go back to the page the user came from when there is one (`to` is only the fallback) */
+  preferHistory?: boolean;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  // "default" = the first page of the visit: nothing to go back to
+  const canGoBack = preferHistory && location.key !== "default";
   return (
     <button
       type="button"
-      onClick={() => navigate(to)}
+      onClick={() => (canGoBack ? navigate(-1) : navigate(to))}
       className={cn(
         "mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
         className,
       )}
     >
       <ArrowLeft className="h-4 w-4" />
-      {label}
+      {canGoBack ? "Retour" : label}
     </button>
   );
 }

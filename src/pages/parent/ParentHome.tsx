@@ -59,7 +59,7 @@ const CARD_LABEL =
 
 /** Button at the bottom of the summary cards (same teal as the panel buttons). */
 const CARD_BTN =
-  "flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-700 px-4 text-sm font-medium !text-white transition hover:bg-brand-800 group-hover:bg-brand-800";
+  "flex min-h-11 w-full items-center justify-center rounded-xl bg-brand-700 px-4 text-sm font-medium text-white transition hover:bg-brand-800 group-hover:bg-brand-800";
 
 const STRIP_CELL: Record<AttendanceStatus, string> = {
   present: "bg-emerald-200 dark:bg-emerald-700/70",
@@ -755,7 +755,7 @@ function SelectedChildCard({
         </div>
         <Link
           to={`/enfants/${child.id}/bulletin`}
-          className="shrink-0 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider !text-sky-800 transition hover:bg-sky-200"
+          className="shrink-0 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-sky-800 transition hover:bg-sky-200"
         >
           Bulletin
         </Link>

@@ -25,7 +25,7 @@ export default function Telecharger() {
       detail: "Windows (.exe) · Mac (.dmg)",
       body: "L’application complète, ouverte d’un clic depuis votre bureau.",
       action: (
-        <a href={DOWNLOAD_SECTION} target="_blank" rel="noreferrer" className={cn(BTN, "bg-brand-700 !text-white hover:bg-brand-800")}>
+        <a href={DOWNLOAD_SECTION} target="_blank" rel="noreferrer" className={cn(BTN, "bg-brand-700 text-white hover:bg-brand-800")}>
           Télécharger sur le site
           <ArrowUpRight className="h-4 w-4" />
         </a>
@@ -38,7 +38,7 @@ export default function Telecharger() {
       detail: "Téléphones et tablettes",
       body: "Notes, présences et messages directement sur le téléphone.",
       action: APK_DOWNLOAD_URL ? (
-        <a href={APK_DOWNLOAD_URL} download className={cn(BTN, "bg-brand-700 !text-white hover:bg-brand-800")}>
+        <a href={APK_DOWNLOAD_URL} download className={cn(BTN, "bg-brand-700 text-white hover:bg-brand-800")}>
           Télécharger l’APK
         </a>
       ) : null,
@@ -60,7 +60,7 @@ export default function Telecharger() {
         <BrandLogo file="edufaso-logo-tight.png" className="h-12 w-auto max-w-[8rem]" imgClassName="h-12" />
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold !text-slate-600 transition hover:bg-slate-100 hover:!text-slate-900 dark:!text-slate-300 dark:hover:bg-[var(--surface-2)]"
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]"
         >
           <ArrowLeft className="h-4 w-4" />
           Retour
@@ -159,7 +159,7 @@ export default function Telecharger() {
               to="/"
               className={cn(
                 BTN,
-                "mt-4 border border-slate-300 bg-white !text-slate-800 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:!text-slate-100",
+                "mt-4 border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-slate-100",
               )}
             >
               Continuer dans le navigateur

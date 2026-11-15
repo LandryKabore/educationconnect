@@ -320,6 +320,26 @@ export default function TeacherHome() {
     [weekSlots],
   );
 
+  /**
+   * Roll calls due today: the classes this teacher has a slot with today (none on Sunday),
+   * plus any class already called. Without a timetable at all, every class counts as before.
+   */
+  const appels = useMemo(() => {
+    if (!data) return null;
+    const useTimetable = !edtLoading && !edtError && weekSlots.length > 0;
+    const todayIds = new Set(
+      isSunday(new Date()) ? [] : todaySlots.map((s) => s.class_section_id).filter((id): id is string => !!id),
+    );
+    const rows = useTimetable
+      ? data.attendanceToday.filter((r) => todayIds.has(r.classId) || r.recorded > 0)
+      : data.attendanceToday;
+    return {
+      rows,
+      pending: rows.filter((r) => r.status !== "done" && r.studentCount > 0).length,
+      done: rows.filter((r) => r.status === "done").length,
+    };
+  }, [data, todaySlots, weekSlots.length, edtLoading, edtError]);
+
   const mobileSchedule = useMemo(() => {
     if (!data) return null;
     const now = new Date();
@@ -354,7 +374,8 @@ export default function TeacherHome() {
   const metricChips = useMemo((): MetricChipModel[] => {
     if (!data) return [];
     const unread = unreadInbox.discussions;
-    const pending = data.attendancePending;
+    const pending = appels?.pending ?? 0;
+    const doneToday = appels?.done ?? 0;
     const appel =
       pending > 0
         ? {
@@ -364,18 +385,18 @@ export default function TeacherHome() {
             ariaLabel: `${frCount(pending, "appel", "appels")} à faire aujourd’hui`,
           }
         : {
-            value: String(data.attendanceDone),
+            value: String(doneToday),
             label:
               data.uniqueClasses === 0
                 ? "appels"
-                : data.attendanceDone === 1
+                : doneToday === 1
                   ? "appel fait"
                   : "appels faits",
             valueClass: "text-emerald-800 dark:text-emerald-200",
             ariaLabel:
               data.uniqueClasses === 0
                 ? "Aucune classe"
-                : `${frCount(data.attendanceDone, "appel fait", "appels faits")} aujourd’hui`,
+                : `${frCount(doneToday, "appel fait", "appels faits")} aujourd’hui`,
           };
     return [
       {
@@ -435,7 +456,7 @@ export default function TeacherHome() {
         ariaLabel: `${frCount(data.studentsCount, "élève", "élèves")} dans vos classes`,
       },
     ];
-  }, [data, unreadInbox.discussions]);
+  }, [data, appels, unreadInbox.discussions]);
 
   if (isLoading || !data) {
     if (!isLoading) {
@@ -485,12 +506,14 @@ export default function TeacherHome() {
   }
   // Counts for classes already listed in Maintenant / Ensuite stay out of this panel
   // until an appel has actually been recorded.
-  const presenceRows = data.attendanceToday.filter(
+  const presenceRows = (appels?.rows ?? []).filter(
     (row) => row.recorded > 0 || !timetableClassIds.has(row.classId),
   );
 
-  const appelsTotal = data.attendancePending + data.attendanceDone;
-  const appelsPct = appelsTotal ? Math.round((data.attendanceDone / appelsTotal) * 100) : 0;
+  const appelsPending = appels?.pending ?? 0;
+  const appelsDone = appels?.done ?? 0;
+  const appelsTotal = appelsPending + appelsDone;
+  const appelsPct = appelsTotal ? Math.round((appelsDone / appelsTotal) * 100) : 0;
 
   return (
     // squarer corners on this page only
@@ -539,26 +562,26 @@ export default function TeacherHome() {
               ) : (
                 <>
                   <p className="mt-3 text-xl font-bold text-slate-900">
-                    {data.attendancePending > 0
-                      ? `${data.attendancePending} appel${data.attendancePending > 1 ? "s" : ""} à faire`
+                    {appelsPending > 0
+                      ? `${appelsPending} appel${appelsPending > 1 ? "s" : ""} à faire`
                       : "Tous les appels sont faits"}
                   </p>
                   <div className="mt-2 h-2 overflow-hidden rounded-sm bg-slate-100">
                     <div
-                      className={cn("h-full rounded-sm", data.attendancePending ? "bg-brand-600" : "bg-emerald-500")}
+                      className={cn("h-full rounded-sm", appelsPending ? "bg-brand-600" : "bg-emerald-500")}
                       style={{ width: `${appelsPct}%` }}
                     />
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    {data.attendanceDone} sur {appelsTotal} classe{appelsTotal > 1 ? "s" : ""}
+                    {appelsDone} sur {appelsTotal} classe{appelsTotal > 1 ? "s" : ""}
                   </p>
                 </>
               )}
               <Link
                 to="/presences"
-                className="mt-4 flex h-10 items-center justify-center rounded-md bg-brand-700 text-sm font-semibold !text-white transition hover:bg-brand-800"
+                className="mt-4 flex h-10 items-center justify-center rounded-md bg-brand-700 text-sm font-semibold text-white transition hover:bg-brand-800"
               >
-                {data.attendancePending > 0 ? "Faire l’appel" : "Voir les présences"}
+                {appelsPending > 0 ? "Faire l’appel" : "Voir les présences"}
               </Link>
             </div>
           </div>
@@ -595,7 +618,13 @@ export default function TeacherHome() {
             }
           >
             {presenceRows.length === 0 ? (
-              <PanelEmpty message="Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »." />
+              <PanelEmpty
+                message={
+                  appelsTotal === 0
+                    ? "Pas de cours aujourd’hui : aucun appel à faire."
+                    : "Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »."
+                }
+              />
             ) : (
               <ul className="space-y-2">
                 {presenceRows.slice(0, 6).map((c) => (
@@ -894,9 +923,9 @@ export default function TeacherHome() {
 function BannerStat({ label, value, hint, to }: { label: string; value: string; hint: string; to: string }) {
   return (
     <Link to={to} className="block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15 transition hover:bg-white/15">
-      <p className="truncate text-[11px] font-semibold uppercase tracking-wider !text-white/70">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums !text-white lg:text-[1.75rem]">{value}</p>
-      <p className="mt-0.5 truncate text-xs !text-white/80">{hint}</p>
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-white lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-white/80">{hint}</p>
     </Link>
   );
 }

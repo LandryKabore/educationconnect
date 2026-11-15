@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { NotesHistoryModal } from "@/components/NotesHistoryModal";
 import { PeriodClosedBanner } from "@/components/PeriodClosedBanner";
 import { usePeriodClosed } from "@/hooks/usePeriodClosed";
-import { ArrowLeft, CheckCircle2, History, Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
 import { formatExamSchedule, formatTimeHm } from "@/lib/assignmentKinds";
@@ -22,8 +22,9 @@ import { periodOptionLabel } from "@/lib/gradingPeriod";
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import { fullName, joinProfile } from "@/lib/utils";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
-import { Badge, Button, Card, EmptyState, Input, Label, Select, Textarea, TimeInput24 } from "@/components/ui";
+import { BackLink, Badge, Button, Card, EmptyState, Input, Label, Select, Textarea, TimeInput24 } from "@/components/ui";
 import { PageBanner } from "@/components/PageBanner";
+import { Modal } from "@/components/Modal";
 
 const PERIODS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"] as const;
 
@@ -35,7 +36,7 @@ function dueLabel(type: EvaluationType): string {
 
 export default function Notes() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fromDevoirs = searchParams.get("from") === "devoirs";
   const paramSubject = searchParams.get("subject");
   const paramPeriod = searchParams.get("period");
@@ -372,6 +373,19 @@ export default function Notes() {
     setShowForm(true);
   };
 
+  // ?nouveau=1 (or ?nouveau=interrogation / devoir): open the creation form straight away,
+  // used by « Nouvelle évaluation » and the lesson screen
+  const wantsNew = searchParams.get("nouveau");
+  useEffect(() => {
+    if (!wantsNew || periodClosed) return;
+    openCreate();
+    if (wantsNew === "interrogation" || wantsNew === "devoir") setNewType(wantsNew);
+    const next = new URLSearchParams(searchParams);
+    next.delete("nouveau");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsNew, periodClosed]);
+
   const isExam = newType === "examen";
 
   const handleSubmit = async () => {
@@ -597,7 +611,8 @@ export default function Notes() {
           if (pendingDelete) await handleDelete(pendingDelete);
         }}
       />
-      <Link
+      <BackLink
+        preferHistory={!isProxy}
         to={
           isProxy
             ? `/saisie-enseignant?teacherId=${encodeURIComponent(proxyTeacherId!)}`
@@ -605,15 +620,8 @@ export default function Notes() {
               ? "/devoirs"
               : `/classes/${id}`
         }
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {isProxy
-          ? "Retour à la saisie enseignant"
-          : fromDevoirs
-            ? "Retour aux devoirs & évaluations"
-            : "Retour à la classe"}
-      </Link>
+        label={isProxy ? "Retour à la saisie enseignant" : fromDevoirs ? "Retour aux devoirs & évaluations" : "Retour à la classe"}
+      />
 
       <PageBanner
         title="Devoirs & évaluations"
@@ -716,11 +724,11 @@ export default function Notes() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={periodClosed && !showForm}
-                  onClick={() => (showForm ? resetForm() : openCreate())}
+                  disabled={periodClosed}
+                  onClick={openCreate}
                 >
                   <Plus className="h-4 w-4" />
-                  {showForm ? "Fermer" : "Nouveau"}
+                  Nouveau
                 </Button>
               </div>
             </div>
@@ -735,8 +743,15 @@ export default function Notes() {
               />
             ) : null}
 
-            {showForm ? (
-              <Card className="mb-4 max-w-xl">
+            <Modal
+              open={showForm}
+              title={editingId ? "Modifier l’évaluation" : "Nouvelle évaluation"}
+              onClose={resetForm}
+              closeDisabled={saving}
+              size="lg"
+              className="rounded-lg"
+            >
+              <div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label>Type</Label>
@@ -868,8 +883,8 @@ export default function Notes() {
                     Annuler
                   </Button>
                 </div>
-              </Card>
-            ) : null}
+              </div>
+            </Modal>
 
             {evalLoading ? (
               <p className="text-slate-500">Chargement…</p>

@@ -71,9 +71,9 @@ export function PageBanner({
                 className={cn(
                   "flex shrink-0 flex-wrap gap-2",
                   "[&_button]:shadow-sm",
-                  "[&_.bg-brand-700]:bg-white [&_.bg-brand-700]:!text-brand-800 [&_.bg-brand-700:hover]:bg-brand-50",
-                  "[&_.border-slate-300]:border-white/30 [&_.border-slate-300]:bg-white/10 [&_.border-slate-300]:!text-white [&_.border-slate-300:hover]:bg-white/20",
-                  "[&_.text-slate-700]:!text-white [&_.text-slate-700:hover]:bg-white/15",
+                  "[&_.bg-brand-700]:bg-white [&_.bg-brand-700]:text-brand-800 [&_.bg-brand-700:hover]:bg-brand-50",
+                  "[&_.border-slate-300]:border-white/30 [&_.border-slate-300]:bg-white/10 [&_.border-slate-300]:text-white [&_.border-slate-300:hover]:bg-white/20",
+                  "[&_.text-slate-700]:text-white [&_.text-slate-700:hover]:bg-white/15",
                 )}
               >
                 {actions}
@@ -102,9 +102,9 @@ export function PageBanner({
 function BannerStatTile({ label, value, hint, to }: BannerStatItem) {
   const body = (
     <>
-      <p className="truncate text-[11px] font-semibold uppercase tracking-wider !text-white/70">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums !text-white">{value}</p>
-      {hint ? <p className="mt-0.5 truncate text-xs !text-white/80">{hint}</p> : null}
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-xs text-white/80">{hint}</p> : null}
     </>
   );
   const cls = "block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15";

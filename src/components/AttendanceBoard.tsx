@@ -399,7 +399,7 @@ export function AttendanceBoard({ studentId, keyRoot, audience, title, childFirs
                 </p>
                 <Link
                   to="/messages"
-                  className="mt-3 inline-flex items-center gap-2 rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold !text-white transition hover:bg-brand-800"
+                  className="mt-3 inline-flex items-center gap-2 rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-800"
                 >
                   <MessageSquare className="h-4 w-4" />
                   Écrire à l’école

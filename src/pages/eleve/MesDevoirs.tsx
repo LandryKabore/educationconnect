@@ -5,6 +5,7 @@ import { CalendarClock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
 import { supabase } from "@/lib/supabase";
+import { fetchLessonHomework, sortByDue } from "@/lib/homework";
 import { formatExamSchedule } from "@/lib/assignmentKinds";
 import { formatDateSafe } from "@/lib/dateFr";
 import { cn, joinOne } from "@/lib/utils";
@@ -78,9 +79,11 @@ export default function MesDevoirs({ isExam }: Props) {
         );
       }
 
+      // exercices de maison = exercises + the homework written in the lessons
+      const lessonHomework = isExam ? [] : await fetchLessonHomework(row.class_section_id).catch(() => []);
       return {
         className,
-        items: (rows ?? []) as DevoirListItem[],
+        items: isExam ? ((rows ?? []) as DevoirListItem[]) : sortByDue([...((rows ?? []) as DevoirListItem[]), ...lessonHomework]),
         gradedIds: [...gradedIds],
       };
     },

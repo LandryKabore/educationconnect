@@ -21,7 +21,9 @@ export function BrandLogo({
     <img
       src={`${import.meta.env.BASE_URL}${file}`}
       alt={alt}
-      className={cn("object-contain", imgClassName, className)}
+      // the wordmark is navy: on dark backgrounds it sits on a light tile
+      // (bg-[#fff], not bg-white, which the dark theme turns dark)
+      className={cn("object-contain dark:rounded-md dark:bg-[#fff] dark:p-1", imgClassName, className)}
       decoding="async"
     />
   );

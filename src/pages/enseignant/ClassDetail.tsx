@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ClipboardList, Users } from "lucide-react";
+import { BookOpen, ClipboardList, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ClassProgrammeRow, Subject } from "@/lib/types";
-import { cn, fullName, joinProfile } from "@/lib/utils";
+import { cn, fullName, joinProfile, matchesSearch } from "@/lib/utils";
 import { PersonName } from "@/components/PersonName";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { BackLink, Button, Card, EmptyState, Input } from "@/components/ui";
@@ -17,6 +17,7 @@ type Tab = "overview" | "programme";
 type AssignmentRow = {
   id: string;
   subject_id: string;
+  teacher_id: string;
   matieres: { name: string } | null;
   profils: { first_name: string; last_name: string } | null;
 };
@@ -25,10 +26,14 @@ type ProgrammeRow = ClassProgrammeRow & {
   matieres: { name: string; coefficient: number } | null;
 };
 
+function initialsOf(first?: string | null, last?: string | null) {
+  return `${(first ?? "").trim()[0] ?? ""}${(last ?? "").trim()[0] ?? ""}`.toUpperCase() || "?";
+}
+
 export default function ClassDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { role, schoolId } = useAuth();
+  const { role, schoolId, user } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
   const [pendingRemove, setPendingRemove] = useState<ProgrammeRow | null>(null);
@@ -46,6 +51,7 @@ export default function ClassDetail() {
   };
 
   const [pendingAdds, setPendingAdds] = useState<Record<string, string>>({});
+  const [rosterSearch, setRosterSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: cls, isLoading } = useQuery({
@@ -68,7 +74,8 @@ export default function ClassDetail() {
   });
 
   const { data: roster = [] } = useQuery({
-    queryKey: ["class-roster", id],
+    // own key: the roll call keeps a different shape under ["class-roster", id]
+    queryKey: ["class-roster-detail", id],
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -93,7 +100,7 @@ export default function ClassDetail() {
       const { data, error } = await supabase
         .from("affectations_enseignement")
         .select(
-          "id, subject_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
+          "id, subject_id, teacher_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)",
         )
         .eq("class_section_id", id!);
       if (error) throw error;
@@ -137,6 +144,11 @@ export default function ClassDetail() {
     }
     return map;
   }, [assignments]);
+
+  const mySubjectIds = new Set(assignments.filter((a) => a.teacher_id === user?.id).map((a) => a.subject_id));
+  const sortedRoster = [...roster].sort((x, y) =>
+    fullName(x.profils?.first_name, x.profils?.last_name).localeCompare(fullName(y.profils?.first_name, y.profils?.last_name), "fr"),
+  );
 
   const programmeSubjectIds = new Set(programme.map((p) => p.subject_id));
   const availableSubjects = subjects.filter((s) => !programmeSubjectIds.has(s.id));
@@ -270,6 +282,15 @@ export default function ClassDetail() {
           [cls.grade_level, cls.annees_scolaires?.label].filter(Boolean).join(" · ") ||
           undefined
         }
+        stats={[
+          { label: "Élèves", value: String(roster.length), hint: cls.capacity ? `capacité ${cls.capacity}` : "inscrits" },
+          { label: "Matières", value: String(programme.length), hint: "au programme" },
+          {
+            label: isAdmin ? "Enseignants" : "Vos matières",
+            value: String(isAdmin ? new Set(assignments.map((a) => a.teacher_id)).size : mySubjectIds.size),
+            hint: isAdmin ? "affectés" : "dans cette classe",
+          },
+        ]}
         actions={
           isAdmin ? (
             <div className="flex flex-wrap gap-2">
@@ -290,15 +311,24 @@ export default function ClassDetail() {
                 Programme
               </Button>
             </div>
-          ) : undefined
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/classes/${id}/presences`}>
+                <Button type="button" size="sm">
+                  <Users className="h-4 w-4" />
+                  Faire l’appel
+                </Button>
+              </Link>
+              <Link to={`/classes/${id}/notes`}>
+                <Button type="button" size="sm" variant="outline">
+                  <ClipboardList className="h-4 w-4" />
+                  Notes & évaluations
+                </Button>
+              </Link>
+            </div>
+          )
         }
       />
-
-      <p className="mb-6 text-sm text-slate-500">
-        {roster.length} élève(s) inscrit(s)
-        {cls.capacity ? ` · capacité ${cls.capacity}` : ""}
-        {programme.length > 0 ? ` · ${programme.length} matière(s)` : ""}
-      </p>
 
       {tab === "programme" && isAdmin ? (
         <div className="space-y-6">
@@ -484,107 +514,108 @@ export default function ClassDetail() {
           ) : null}
         </div>
       ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link to={`/classes/${id}/presences`}>
-              <Card className="flex items-center gap-4 transition hover:border-brand-300">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Présences</h3>
-                  <p className="text-sm text-slate-500">
-                    {isAdmin
-                      ? "Consulter / marquer les présences"
-                      : "Marquer les présences du jour"}
-                  </p>
-                </div>
-              </Card>
-            </Link>
-            <Link to={`/classes/${id}/notes`}>
-              <Card className="flex items-center gap-4 transition hover:border-brand-300">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-                  <ClipboardList className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Devoirs & évaluations</h3>
-                  <p className="text-sm text-slate-500">
-                    Interrogations, exercices, compositions, devoirs — et les
-                    notes
-                  </p>
-                </div>
-              </Card>
-            </Link>
-            {isAdmin ? (
-              <button type="button" onClick={() => setTab("programme")} className="text-left">
-                <Card className="flex items-center gap-4 transition hover:border-brand-300">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-                    <BookOpen className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Programme</h3>
-                    <p className="text-sm text-slate-500">
-                      Coefficients, matières et enseignants
-                    </p>
-                  </div>
-                </Card>
-              </button>
-            ) : null}
-          </div>
-
-          {!isAdmin && programme.length > 0 ? (
-            <Card className="mt-8">
-              <h3 className="mb-3 font-semibold">Matières de la classe</h3>
-              <ul className="space-y-1 text-sm text-slate-600">
-                {programme.map((p) => {
-                  const teachers = teachersBySubject.get(p.subject_id) ?? [];
-                  const teacherNames = teachers
-                    .map((t) =>
-                      t.profils
-                        ? fullName(t.profils.first_name, t.profils.last_name)
-                        : null,
-                    )
-                    .filter(Boolean);
-                  return (
-                    <li key={p.id}>
-                      {p.matieres?.name ?? "—"} · coef. {p.coefficient}
-                      {" · "}
-                      {teacherNames.length > 0 ? (
-                        teacherNames.join(", ")
-                      ) : (
-                        <span className="text-amber-700 dark:text-amber-400">
-                          Non affecté
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          ) : null}
-
-          <div className="mt-8">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Effectif
-            </h3>
-            {roster.length === 0 ? (
-              <EmptyState message="Aucun élève dans cette classe." />
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {roster.map((row) => (
-                  <Card key={row.id}>
-                    <p className="font-medium">
-                      <PersonName
-                        first={row.profils?.first_name}
-                        last={row.profils?.last_name}
-                      />
-                    </p>
-                  </Card>
-                ))}
+        <div className="grid gap-6 lg:h-[calc(100dvh-24.5rem)] lg:min-h-[320px] lg:grid-cols-12">
+          {/* ── Students ── */}
+          <Card className="flex min-h-0 flex-col p-0 lg:col-span-7">
+            <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-[var(--border)]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+                <Users className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-slate-900 dark:text-slate-50">Élèves</h3>
+                <p className="text-xs text-slate-500">
+                  {roster.length} inscrit{roster.length > 1 ? "s" : ""}
+                  {cls.capacity ? ` sur ${cls.capacity} places` : ""}
+                </p>
               </div>
+              <label className="relative w-full sm:w-56">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={rosterSearch}
+                  onChange={(e) => setRosterSearch(e.target.value)}
+                  placeholder="Chercher un élève"
+                  className="h-9 rounded-md pl-9"
+                />
+              </label>
+            </div>
+            {roster.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-500">Aucun élève dans cette classe.</p>
+            ) : (
+              <ol className="grid min-h-0 flex-1 content-start overflow-y-auto sm:grid-cols-2">
+                {sortedRoster
+                  .filter((r) => matchesSearch(rosterSearch, r.profils?.first_name, r.profils?.last_name))
+                  .map((row, i) => (
+                    <li
+                      key={row.id}
+                      title={fullName(row.profils?.first_name, row.profils?.last_name)}
+                      className="flex items-center gap-3 border-b border-slate-100 px-5 py-2.5 dark:border-[var(--border)] sm:odd:border-r"
+                    >
+                      <span className="w-6 shrink-0 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-100 text-[11px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+                        {initialsOf(row.profils?.first_name, row.profils?.last_name)}
+                      </span>
+                      <span className="min-w-0 truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                        <PersonName first={row.profils?.first_name} last={row.profils?.last_name} />
+                      </span>
+                    </li>
+                  ))}
+              </ol>
             )}
-          </div>
-        </>
+          </Card>
+
+          {/* ── Subjects ── */}
+          <Card className="flex min-h-0 flex-col p-0 lg:col-span-5">
+            <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-[var(--border)]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+                <BookOpen className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-slate-900 dark:text-slate-50">Matières de la classe</h3>
+                <p className="text-xs text-slate-500">Coefficients et enseignants</p>
+              </div>
+              {isAdmin ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => setTab("programme")}>
+                  Programme
+                </Button>
+              ) : null}
+            </div>
+            {programme.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-500">Aucune matière au programme.</p>
+            ) : (
+              <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-[var(--border)]">
+                {[...programme]
+                  .sort((x, y) => Number(mySubjectIds.has(y.subject_id)) - Number(mySubjectIds.has(x.subject_id)) || Number(y.coefficient) - Number(x.coefficient))
+                  .map((p) => {
+                    const teachers = teachersBySubject.get(p.subject_id) ?? [];
+                    const names = teachers
+                      .map((t) => (t.profils ? fullName(t.profils.first_name, t.profils.last_name) : null))
+                      .filter(Boolean);
+                    const mine = mySubjectIds.has(p.subject_id);
+                    return (
+                      <li key={p.id} className={cn("flex items-center gap-3 px-5 py-3", mine && "bg-brand-50/60 dark:bg-brand-950/20")}>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              {p.matieres?.name ?? "—"}
+                            </span>
+                            {mine ? (
+                              <span className="rounded-md bg-brand-700 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">Vous</span>
+                            ) : null}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {names.length ? names.join(", ") : <span className="text-amber-700">Non affecté</span>}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-700 dark:bg-[var(--surface-2)] dark:text-slate-200">
+                          coef. {String(p.coefficient).replace(".", ",")}
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -334,14 +334,14 @@ export default function EcoleOverview() {
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
                   {[getTimeGreeting(), data.yearLabel ? `Année ${data.yearLabel}` : null].filter(Boolean).join(" · ")}
                 </p>
-                <h1 className="mt-2 truncate text-3xl font-bold tracking-tight lg:text-[2rem]">{school?.name ?? "Mon école"}</h1>
+                <h1 className="mt-2 line-clamp-2 text-3xl font-bold leading-tight tracking-tight lg:text-[2rem]">{school?.name ?? "Mon école"}</h1>
                 <p className="mt-2 text-sm font-medium text-white/85">
                   {[name, "Administrateur"].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <Link
                 to="/ecole/parametres"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-3 py-2 text-xs font-semibold !text-white ring-1 ring-white/20 transition hover:bg-white/20"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20"
               >
                 <Settings className="h-3.5 w-3.5" />
                 Paramètres
@@ -382,10 +382,10 @@ export default function EcoleOverview() {
                     <li key={t.key}>
                       <Link
                         to={t.to}
-                        className="flex items-center justify-between gap-3 py-2.5 text-sm font-semibold !text-slate-900 hover:!text-brand-800"
+                        className="flex items-center justify-between gap-3 py-2.5 text-sm font-semibold text-slate-900 hover:text-brand-800"
                       >
                         {t.text}
-                        <span className="shrink-0 rounded-md bg-brand-700 px-2.5 py-1 text-xs font-semibold !text-white">
+                        <span className="shrink-0 rounded-md bg-brand-700 px-2.5 py-1 text-xs font-semibold text-white">
                           Voir
                         </span>
                       </Link>
@@ -797,9 +797,9 @@ export default function EcoleOverview() {
 function BannerStat({ label, value, hint, to }: { label: string; value: string; hint: string; to: string }) {
   return (
     <Link to={to} className="block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15 transition hover:bg-white/15">
-      <p className="truncate text-[11px] font-semibold uppercase tracking-wider !text-white/70">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums !text-white lg:text-[1.75rem]">{value}</p>
-      <p className="mt-0.5 truncate text-xs !text-white/80">{hint}</p>
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-white lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-white/80">{hint}</p>
     </Link>
   );
 }

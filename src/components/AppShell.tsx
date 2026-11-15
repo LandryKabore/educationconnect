@@ -29,6 +29,7 @@ import {
   UserPlus,
   Users,
   X,
+  ListTodo,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStudentsWithoutClassCount } from "@/hooks/useStudentsWithoutClassCount";
@@ -75,6 +76,8 @@ import { cn, personName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { isDesktopApp } from "@/lib/platform";
+import { useNow } from "@/lib/weekGrid";
+import { useTeacherTodo } from "@/hooks/useTeacherTodo";
 
 interface NavItem {
   to: string;
@@ -92,7 +95,8 @@ interface NavItem {
     | "presence-updates"
     | "exercices-updates"
     | "compositions-updates"
-    | "enfants-attention";
+    | "enfants-attention"
+    | "teacher-todo";
   /** Only highlight on an exact path match. */
   exact?: boolean;
 }
@@ -215,34 +219,24 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
   teacher: [
     {
       items: [
-        {
-          to: "/tableau-de-bord",
-          label: "Tableau de bord",
-          icon: <LayoutDashboard className="h-4 w-4" />,
-        },
+        { to: "/tableau-de-bord", label: "Ma journée", icon: <LayoutDashboard className="h-4 w-4" /> },
+        { to: "/a-faire", label: "À faire", icon: <ListTodo className="h-4 w-4" />, badgeKey: "teacher-todo" },
       ],
     },
     {
       label: "Enseignement",
       items: [
-        { to: "/mes-classes", label: "Classes", icon: <Users className="h-4 w-4" /> },
+        { to: "/mes-classes", label: "Mes classes", icon: <Users className="h-4 w-4" /> },
         { to: "/mes-eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
+        { to: "/exercices-maison", label: "Exercices de maison", icon: <BookOpenCheck className="h-4 w-4" /> },
+        { to: "/devoirs", label: "Examens & évaluations", icon: <ClipboardList className="h-4 w-4" /> },
+      ],
+    },
+    {
+      label: "Planning",
+      items: [
+        { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <CalendarDays className="h-4 w-4" /> },
         { to: "/presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" /> },
-        {
-          to: "/mon-emploi-du-temps",
-          label: "Mon emploi du temps",
-          icon: <CalendarDays className="h-4 w-4" />,
-        },
-        {
-          to: "/cahier-de-textes",
-          label: "Cahier de textes",
-          icon: <BookOpenCheck className="h-4 w-4" />,
-        },
-        {
-          to: "/devoirs",
-          label: "Examens & évaluations",
-          icon: <ClipboardList className="h-4 w-4" />,
-        },
       ],
     },
     {
@@ -525,6 +519,9 @@ export function AppShell() {
     useExercicesPendingChanges();
   const { pendingCount: compositionsUpdatesCount = 0 } =
     useCompositionsPendingChanges();
+  // teacher: late roll calls / cahiers and evaluations to grade (only fetched for teachers)
+  const shellNow = useNow(5 * 60_000);
+  const teacherTodo = useTeacherTodo(shellNow, role === "teacher");
   const enfantsAttentionCount =
     notesUpdatesCount +
     presenceUpdatesCount +
@@ -596,6 +593,13 @@ export function AppShell() {
       return {
         count: compositionsUpdatesCount,
         title: `${compositionsUpdatesCount} composition(s) à consulter`,
+        tone: "amber",
+      };
+    }
+    if (item.badgeKey === "teacher-todo" && teacherTodo.count > 0) {
+      return {
+        count: teacherTodo.count,
+        title: `${teacherTodo.count} tâche(s) à faire`,
         tone: "amber",
       };
     }
@@ -1017,14 +1021,14 @@ function StudentSidebar({
       >
         <span className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/[0.07]" />
         <span className="relative flex items-center gap-3 px-3.5 py-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/15 text-sm font-bold !text-white ring-1 ring-white/25">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/15 text-sm font-bold text-white ring-1 ring-white/25">
             {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : initials}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-bold !text-white">
+            <span className="block truncate text-sm font-bold text-white">
               {name || <span className="inline-block h-4 w-24 animate-pulse rounded bg-white/25" />}
             </span>
-            <span className="block truncate text-xs !text-white/85">{schoolName ? `${roleLabel} · ${schoolName}` : roleLabel}</span>
+            <span className="block truncate text-xs text-white/85">{schoolName ? `${roleLabel} · ${schoolName}` : roleLabel}</span>
           </span>
         </span>
         <span className="flex h-1" aria-hidden>
