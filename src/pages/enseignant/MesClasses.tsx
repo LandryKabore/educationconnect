@@ -264,13 +264,12 @@ export default function MesClasses() {
                   </div>
                 </Link>
 
-                <div className="grid grid-cols-3 border-t border-slate-100 dark:border-[var(--border)]">
+                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3 dark:border-[var(--border)]">
                   <FooterLink to={`/devoirs?classe=${c.classId}`} icon={<BookOpen className="h-4 w-4" />} label="Évaluations" />
                   <FooterLink
                     to={`/classes/${c.classId}/presences`}
                     icon={<ClipboardCheck className="h-4 w-4" />}
                     label="Appel"
-                    className="border-x border-slate-100 dark:border-[var(--border)]"
                   />
                   <FooterLink to={`/mes-eleves?classe=${c.classId}`} icon={<GraduationCap className="h-4 w-4" />} label="Élèves" />
                 </div>
@@ -288,7 +287,7 @@ function FooterLink({ to, icon, label, className }: { to: string; icon: React.Re
     <Link
       to={to}
       className={cn(
-        "flex items-center justify-center gap-1.5 px-2 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-[var(--surface-2)] dark:hover:text-brand-300",
+        "flex items-center justify-center gap-1.5 rounded-md bg-brand-700 px-2 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800",
         className,
       )}
     >

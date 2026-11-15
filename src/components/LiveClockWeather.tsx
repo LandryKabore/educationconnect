@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Sun,
   CloudSun,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -196,7 +197,7 @@ async function fetchWeather(cityFallback: string): Promise<WeatherInfo> {
 function sourceHint(source: LocationSource) {
   if (source === "gps") return "GPS";
   if (source === "ip") return "position";
-  return "ecole";
+  return "école";
 }
 
 export function LiveClockWeather({ className }: { className?: string }) {
@@ -234,19 +235,18 @@ export function LiveClockWeather({ className }: { className?: string }) {
     }
   };
 
+  const day = format(now, "EEEE d MMMM", { locale: fr });
+
   return (
     <div
       className={cn(
-        "rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700",
+        "overflow-hidden rounded-md border border-slate-200 bg-white text-slate-700 dark:border-[var(--border)] dark:text-slate-300",
         className,
       )}
     >
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-        {format(now, "EEEE d MMM", { locale: fr })}
-      </p>
-      <div className="mt-0.5 flex items-center gap-1.5">
-        <p className="text-lg font-semibold tabular-nums text-slate-900">
-          {format(now, "HH:mm:ss")}
+      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+        <p className="truncate text-[11px] font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
+          {day}
         </p>
         <button
           type="button"
@@ -254,22 +254,38 @@ export function LiveClockWeather({ className }: { className?: string }) {
           disabled={refreshing}
           title="Actualiser la page"
           aria-label="Actualiser la page"
-          className="rounded-md p-1 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-60"
+          className="-mr-1 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60 dark:hover:bg-[var(--surface-2)] dark:hover:text-slate-200"
         >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
-          />
+          <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
         </button>
       </div>
-      <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
-        <Icon className="h-3.5 w-3.5 shrink-0 text-brand-700" />
+
+      <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-1">
+        <p className="font-bold tabular-nums leading-none text-slate-900 dark:text-slate-100">
+          <span className="text-2xl">{format(now, "HH:mm")}</span>
+          <span className="ml-0.5 text-sm text-slate-400">{format(now, "ss")}</span>
+        </p>
         {weather ? (
-          <span className="min-w-0 truncate" title={`Source: ${sourceHint(weather.source)}`}>
-            {weather.temp}°C · {weather.label}
-            {weather.city ? ` · ${weather.city}` : ""}
+          <div className="flex items-center gap-1.5" title={weather.label}>
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="leading-tight">
+              <span className="block text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{weather.temp}°C</span>
+              <span className="block max-w-[6.5rem] truncate text-[11px] text-slate-500">{weather.label}</span>
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-1.5 border-t border-slate-100 bg-slate-50/70 px-3 py-1.5 text-xs text-slate-500 dark:border-[var(--border)] dark:bg-[var(--surface-2)]">
+        <MapPin className="h-3 w-3 shrink-0" />
+        {weather ? (
+          <span className="min-w-0 truncate" title={`Source : ${sourceHint(weather.source)}`}>
+            {weather.city || "Ma position"}
           </span>
         ) : (
-          <span className="text-slate-400">Detection position...</span>
+          <span className="text-slate-400">Détection de la position…</span>
         )}
       </div>
     </div>
