@@ -11,7 +11,9 @@ import { formatDateSafe } from "@/lib/dateFr";
 import { cn, joinOne } from "@/lib/utils";
 import { type DevoirListItem } from "@/components/DevoirsClearList";
 import { ExercicesTimeline } from "@/components/ExercicesTimeline";
-import { ExamensSubjectBoards, type ExamScore } from "@/components/ExamensSubjectBoards";
+import { ExamensSubjectBoards, normalizePeriod, PLANNED_EXAMS, type ExamScore } from "@/components/ExamensSubjectBoards";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
+import { TRIMESTER_PERIODS } from "@/lib/averages";
 
 type Props = {
   isExam: boolean;
@@ -121,10 +123,12 @@ type ViewProps = {
   className: string;
   /** parent screens: the child's first name changes the wording */
   childFirstName?: string | null;
+  /** Notes page of the student / child (exams link to it for the grades) */
+  notesHref?: string;
 };
 
 /** Banner + list, shared by the student and the parent screens. */
-export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, className, childFirstName }: ViewProps) {
+export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, className, childFirstName, notesHref }: ViewProps) {
   const forParent = childFirstName !== undefined;
   // same buckets as the list below: graded, past (deadline gone), still to do
   let upcomingCount = 0;
@@ -141,6 +145,19 @@ export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, 
       .sort((a, b) => (a.eval_date ?? "").localeCompare(b.eval_date ?? ""))[0] ?? null;
 
   const word = isExam ? "examen" : "exercice";
+
+  // exams: done (taken or graded) and what is left in the current trimester (3 per subject)
+  const { schoolId } = useAuth();
+  const { period } = useGradingPeriodState(TRIMESTER_PERIODS, { schoolId });
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const taken = (it: DevoirListItem) => gradedIds.has(it.id) || (!!it.eval_date && it.eval_date < todayStr);
+  const examDone = items.filter(taken).length;
+  const subjectCount = new Set(items.map((it) => it.matieres?.name ?? "")).size;
+  const plannedInPeriod = subjectCount * PLANNED_EXAMS;
+  const remaining = Math.max(
+    0,
+    plannedInPeriod - items.filter((it) => normalizePeriod(it.period_label) === period && taken(it)).length,
+  );
 
   return (
     // squarer corners on this page only: the shared list keeps its radius on the parent screen
@@ -175,12 +192,21 @@ export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, 
                 value={String(upcomingCount)}
                 hint={upcomingCount > 0 ? `${word}${upcomingCount > 1 ? "s" : ""} à venir` : "rien pour l’instant"}
               />
-              <BannerStat label="Notés" value={String(gradedIds.size)} hint={`voir dans ${forParent ? "Notes" : "Mes notes"}`} />
-              <BannerStat
-                label={isExam ? "Passés" : "Échéance passée"}
-                value={String(pastCount)}
-                hint={isExam ? "pas encore notés" : "date dépassée"}
-              />
+              {isExam ? (
+                <>
+                  <BannerStat label="Passés" value={String(examDone)} hint="notes dans « Notes »" />
+                  <BannerStat
+                    label={`Restants · ${period}`}
+                    value={String(remaining)}
+                    hint={remaining ? `sur ${plannedInPeriod} prévus` : "trimestre terminé"}
+                  />
+                </>
+              ) : (
+                <>
+                  <BannerStat label="Notés" value={String(gradedIds.size)} hint={`voir dans ${forParent ? "Notes" : "Mes notes"}`} />
+                  <BannerStat label="Échéance passée" value={String(pastCount)} hint="date dépassée" />
+                </>
+              )}
             </div>
           </div>
           <div className="lg:col-span-5">
@@ -198,7 +224,7 @@ export function DevoirsView({ items, gradedIds, scores = {}, isLoading, isExam, 
         <ExamensSubjectBoards
           items={items}
           gradedIds={gradedIds}
-          scores={scores}
+          notesHref={notesHref ?? "/mes-notes"}
           isLoading={isLoading}
           emptyMessage="Aucun examen confirmé pour le moment."
         />

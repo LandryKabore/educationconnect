@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
 import { EmptyState } from "@/components/ui";
-import { PageBanner } from "@/components/PageBanner";
+import { NotesBanner } from "@/pages/eleve/MesNotes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
 import { ANNUAL_PERIOD_LABEL, programmeToCoefMap, TRIMESTER_PERIODS } from "@/lib/averages";
@@ -101,18 +101,20 @@ export default function EnfantNotes() {
 
   return (
     <div>
-      <PageBanner
-        title={
-          child
-            ? `Notes — ${fullName(child.first_name, child.last_name)}`
-            : "Notes"
-        }
+      <NotesBanner
+        eyebrow={child ? `Résultats scolaires · ${fullName(child.first_name, child.last_name)}` : "Résultats scolaires"}
+        title={child ? `Notes de ${child.first_name}` : "Notes"}
+        subtitle="Moyennes calculées avec les coefficients de la classe, comme sur le bulletin."
+        grades={grades}
+        coefMap={coefMap}
+        period={period}
+        bulletinHref={`/enfants/${id}/bulletin`}
       />
 
       <div
         role="tablist"
         aria-label="Période"
-        className="sticky top-0 z-20 mb-6 flex gap-1 overflow-x-auto rounded-lg border border-brand-200 bg-brand-50/95 p-1 backdrop-blur dark:border-[var(--border)] dark:bg-[var(--surface)]/95"
+        className="sticky top-0 z-20 my-6 flex gap-1 overflow-x-auto rounded-lg border border-brand-200 bg-brand-50/95 p-1 backdrop-blur dark:border-[var(--border)] dark:bg-[var(--surface)]/95"
       >
         {NOTES_PERIODS.map((p) => {
           const active = p === period;

@@ -282,11 +282,6 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           badgeKey: "exercices-updates",
         },
         {
-          to: "/mes-devoirs",
-          label: "Examens",
-          icon: <FileText className="h-4 w-4" />,
-        },
-        {
           to: "/mes-compositions",
           label: "Compositions",
           icon: <BookMarked className="h-4 w-4" />,
@@ -376,7 +371,6 @@ function buildParentGroups(): NavGroup[] {
       items: [
         { to: `/enfants/:child/cahier`, childPage: "cahier", label: "Cahier de textes", icon: <BookOpenCheck className="h-4 w-4" /> },
         { to: `/enfants/:child/exercices`, childPage: "exercices", label: "Exercices de maison", icon: <ClipboardList className="h-4 w-4" />, badgeKey: "exercices-updates" },
-        { to: `/enfants/:child/devoirs`, childPage: "devoirs", label: "Examens", icon: <FileText className="h-4 w-4" /> },
         { to: `/enfants/:child/compositions`, childPage: "compositions", label: "Compositions", icon: <BookMarked className="h-4 w-4" />, badgeKey: "compositions-updates" },
       ],
     },

@@ -1,12 +1,17 @@
 import { Link, Navigate } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight, Globe, Monitor, Smartphone, TabletSmartphone } from "lucide-react";
-import { APK_DOWNLOAD_URL, WEBSITE_URL } from "@/lib/config";
+import { ArrowLeft, Download, Globe, Monitor, Smartphone, TabletSmartphone } from "lucide-react";
+import { APK_DOWNLOAD_URL, MAC_DOWNLOAD_URL, WINDOWS_DOWNLOAD_URL } from "@/lib/config";
 import { isDesktopApp } from "@/lib/platform";
 import { BrandLogo } from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
-const SITE_URL = WEBSITE_URL || "https://edufaso.lovable.app";
-const DOWNLOAD_SECTION = `${SITE_URL.replace(/\/$/, "")}/#telecharger`;
+/** The visitor's computer, to put the right installer first. */
+function computerOs(): "mac" | "windows" | null {
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua)) return "mac";
+  if (/Windows/i.test(ua)) return "windows";
+  return null;
+}
 
 /** Link styled as a button. Links inherit their colour globally, hence the forced text colours. */
 const BTN =
@@ -18,17 +23,40 @@ export default function Telecharger() {
     return <Navigate to="/connexion" replace />;
   }
 
+  const os = computerOs();
   const platforms = [
     {
       icon: Monitor,
       name: "Ordinateur",
-      detail: "Windows (.exe) · Mac (.dmg)",
+      detail: "Windows 10 et 11 · Mac (Intel et Apple Silicon)",
       body: "L’application complète, ouverte d’un clic depuis votre bureau.",
       action: (
-        <a href={DOWNLOAD_SECTION} target="_blank" rel="noreferrer" className={cn(BTN, "bg-brand-700 text-white hover:bg-brand-800")}>
-          Télécharger sur le site
-          <ArrowUpRight className="h-4 w-4" />
-        </a>
+        <div className={cn("grid gap-2", os === "mac" ? "[&>*:first-child]:order-2" : "")}>
+          <a
+            href={WINDOWS_DOWNLOAD_URL}
+            className={cn(
+              BTN,
+              os === "mac"
+                ? "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-slate-100"
+                : "bg-brand-700 text-white hover:bg-brand-800",
+            )}
+          >
+            <Download className="h-4 w-4" />
+            Windows (.exe)
+          </a>
+          <a
+            href={MAC_DOWNLOAD_URL}
+            className={cn(
+              BTN,
+              os === "mac"
+                ? "bg-brand-700 text-white hover:bg-brand-800"
+                : "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-slate-100",
+            )}
+          >
+            <Download className="h-4 w-4" />
+            Mac (.dmg)
+          </a>
+        </div>
       ),
       available: true,
     },
@@ -131,8 +159,13 @@ export default function Telecharger() {
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">Installer sur ordinateur</h2>
             <ol className="mt-4 grid gap-4 sm:grid-cols-3">
               {[
-                { t: "Ouvrir le site", d: "Cliquez sur « Télécharger sur le site » ci-dessus." },
-                { t: "Choisir votre système", d: "Windows (.exe) ou Mac (.dmg), puis lancez le fichier." },
+                { t: "Télécharger", d: "Choisissez Windows (.exe) ou Mac (.dmg) ci-dessus." },
+                {
+                  t: "Installer",
+                  d: os === "mac"
+                    ? "Ouvrez le .dmg et glissez EduFaso dans Applications. Au premier lancement : clic droit › Ouvrir."
+                    : "Lancez le fichier .exe. Si Windows affiche un avertissement : « Informations complémentaires » › « Exécuter quand même ».",
+                },
                 { t: "Se connecter", d: "Utilisez l’identifiant fourni par votre établissement." },
               ].map((step, i) => (
                 <li key={step.t} className="flex gap-3">

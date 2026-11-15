@@ -26,7 +26,8 @@ function daysUntil(date: string | null | undefined): number | null {
 function groupLabel(date: string | null) {
   if (!date) return { title: "Sans date", hint: "à préparer quand le professeur le demande" };
   const d = daysUntil(date)!;
-  const long = capitalize(format(new Date(`${date}T12:00:00`), "EEEE d MMMM", { locale: fr }));
+  const sameYear = date.slice(0, 4) === String(new Date().getFullYear());
+  const long = capitalize(format(new Date(`${date}T12:00:00`), sameYear ? "EEEE d MMMM" : "EEEE d MMMM yyyy", { locale: fr }));
   if (d === 0) return { title: "Aujourd’hui", hint: long };
   if (d === 1) return { title: "Demain", hint: long };
   if (d === -1) return { title: "Hier", hint: long };
@@ -108,7 +109,8 @@ export function ExercicesTimeline({
     .sort((a, b) =>
       tab === "todo"
         ? (a.item.eval_date ?? "9999").localeCompare(b.item.eval_date ?? "9999")
-        : (b.item.eval_date ?? "").localeCompare(a.item.eval_date ?? ""),
+        : (b.item.eval_date ?? b.item.created_at ?? "").localeCompare(a.item.eval_date ?? a.item.created_at ?? "") ||
+          (b.item.created_at ?? "").localeCompare(a.item.created_at ?? ""),
     );
 
   const groups = useMemo(() => {
@@ -133,9 +135,10 @@ export function ExercicesTimeline({
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-12">
+    // on wide screens the block fits the window: it sticks to the top and the list scrolls inside it
+    <div className="grid gap-6 lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)] lg:grid-cols-12">
       {/* filters */}
-      <aside className="space-y-4 lg:col-span-3">
+      <aside className="space-y-4 lg:col-span-3 lg:overflow-y-auto">
         <div className="rounded-md border border-slate-200 bg-white p-1.5 dark:border-[var(--border)] dark:bg-[var(--surface)]">
           {TABS.map((t) => {
             const active = t.key === tab;
@@ -192,7 +195,7 @@ export function ExercicesTimeline({
       </aside>
 
       {/* timeline */}
-      <div className="space-y-6 lg:col-span-9">
+      <div className="space-y-6 lg:col-span-9 lg:overflow-y-auto lg:pr-2">
         {groups.length === 0 ? (
           <EmptyState message="Aucun exercice dans cet onglet." />
         ) : (

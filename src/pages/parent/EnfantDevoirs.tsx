@@ -93,6 +93,7 @@ export default function EnfantDevoirs({ isExam }: Props) {
           isExam={isExam}
           className={className}
           childFirstName={link?.profils?.first_name ?? null}
+          notesHref={`/enfants/${id}/notes`}
         />
       )}
     </ParentChildGate>

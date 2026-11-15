@@ -25,10 +25,11 @@ import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
-type Grade = GradeRow & {
+export type NotesGrade = GradeRow & {
   matieres: Subject;
   evaluations: { type: EvaluationType; title: string; eval_date: string | null } | null;
 };
+type Grade = NotesGrade;
 
 const NOTES_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
@@ -88,114 +89,17 @@ export default function MesNotes() {
     classSectionId: enrollment?.class_section_id,
     schoolId,
   });
-  const isAnnual = period === ANNUAL_PERIOD_LABEL;
-
-  const annual = useMemo(
-    () => computeAnnualAverage(grades, { coefficientBySubject: coefMap }),
-    [grades, coefMap],
-  );
-  const periodAverage = useMemo(() => {
-    if (isAnnual) return annual.annualAverage;
-    return computeWeightedAverage(
-      grades.filter((g) => g.period_label === period),
-      { coefficientBySubject: coefMap },
-    ).generalAverage;
-  }, [grades, coefMap, period, isAnnual, annual.annualAverage]);
-
-  const index = TRIMESTER_PERIODS.indexOf(period as (typeof TRIMESTER_PERIODS)[number]);
-  const previous = index > 0 ? (annual.trimesters[index - 1]?.generalAverage ?? null) : null;
-  const delta =
-    !isAnnual && periodAverage != null && previous != null ? periodAverage - previous : null;
-
-  const periodGradeCount = useMemo(() => {
-    if (isAnnual) return grades.length;
-    return grades.filter((g) => g.period_label === period).length;
-  }, [grades, period, isAnnual]);
-
-  const latest = useMemo(() => {
-    const pool = isAnnual ? grades : grades.filter((g) => g.period_label === period);
-    const sorted = [...pool].sort((a, b) =>
-      ((b as { created_at?: string }).created_at ?? "").localeCompare(
-        (a as { created_at?: string }).created_at ?? "",
-      ),
-    );
-    return sorted[0] ?? null;
-  }, [grades, period, isAnnual]);
-
   return (
     <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
-      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
-        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
-        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
-          <div className="space-y-5 lg:col-span-7">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-                Résultats scolaires
-              </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">Mes notes</h1>
-              <p className="mt-2 text-sm font-medium text-white/85">
-                Moyennes calculées avec les coefficients de ta classe, comme sur le bulletin.
-              </p>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <BannerStat
-                label={isAnnual ? "Moyenne annuelle" : period}
-                value={periodAverage != null ? formatAverage(periodAverage, 2) : "—"}
-                hint={
-                  periodAverage == null ? (
-                    "Pas encore de note"
-                  ) : isAnnual ? (
-                    `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
-                  ) : (
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                      {bulletinMention(periodAverage)}
-                      {delta != null && Math.abs(delta) > 0.05 ? (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-0.5 rounded px-1 font-bold",
-                            delta > 0 ? "bg-emerald-400/25 text-emerald-50" : "bg-rose-400/25 text-rose-50",
-                          )}
-                        >
-                          {delta > 0 ? (
-                            <ArrowUpRight className="h-3 w-3" />
-                          ) : (
-                            <ArrowDownRight className="h-3 w-3" />
-                          )}
-                          {formatAverage(Math.abs(delta), 1)}
-                        </span>
-                      ) : null}
-                    </span>
-                  )
-                }
-              />
-              <BannerStat
-                to="/mon-bulletin"
-                label="Moyenne annuelle"
-                value={annual.annualAverage != null ? formatAverage(annual.annualAverage, 2) : "—"}
-                hint={
-                  annual.annualAverage != null
-                    ? `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
-                    : "Pas encore de note"
-                }
-              />
-              <BannerStat
-                label={isAnnual ? "Notes publiées" : `Notes ${periodTabLabel(period)}`}
-                value={String(periodGradeCount)}
-                hint={isAnnual ? "depuis le début de l’année" : "sur ce trimestre"}
-              />
-            </div>
-          </div>
-          <div className="lg:col-span-5">
-            <LatestGradeCard grade={latest} />
-          </div>
-        </div>
-        <div className="flex h-1" aria-hidden>
-          <span className="flex-1 bg-faso-red" />
-          <span className="flex-1 bg-faso-yellow" />
-          <span className="flex-1 bg-faso-green" />
-        </div>
-      </section>
+      <NotesBanner
+        eyebrow="Résultats scolaires"
+        title="Mes notes"
+        subtitle="Moyennes calculées avec les coefficients de ta classe, comme sur le bulletin."
+        grades={grades}
+        coefMap={coefMap}
+        period={period}
+        bulletinHref="/mon-bulletin"
+      />
 
       {/* Sticky trimestre tabs — same pattern as Mon bulletin */}
       <div
@@ -330,5 +234,132 @@ function LatestGradeCard({ grade }: { grade: Grade | null }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/** Teal banner of the Notes pages (student and parent): averages of the period, the year, and the latest grade. */
+export function NotesBanner({
+  eyebrow,
+  title,
+  subtitle,
+  grades,
+  coefMap,
+  period,
+  bulletinHref,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  grades: Grade[];
+  coefMap: Record<string, number>;
+  period: string;
+  bulletinHref: string;
+}) {
+  const isAnnual = period === ANNUAL_PERIOD_LABEL;
+  const annual = useMemo(
+    () => computeAnnualAverage(grades, { coefficientBySubject: coefMap }),
+    [grades, coefMap],
+  );
+  const periodAverage = useMemo(() => {
+    if (isAnnual) return annual.annualAverage;
+    return computeWeightedAverage(
+      grades.filter((g) => g.period_label === period),
+      { coefficientBySubject: coefMap },
+    ).generalAverage;
+  }, [grades, coefMap, period, isAnnual, annual.annualAverage]);
+
+  const index = TRIMESTER_PERIODS.indexOf(period as (typeof TRIMESTER_PERIODS)[number]);
+  const previous = index > 0 ? (annual.trimesters[index - 1]?.generalAverage ?? null) : null;
+  const delta =
+    !isAnnual && periodAverage != null && previous != null ? periodAverage - previous : null;
+
+  const periodGradeCount = useMemo(() => {
+    if (isAnnual) return grades.length;
+    return grades.filter((g) => g.period_label === period).length;
+  }, [grades, period, isAnnual]);
+
+  const latest = useMemo(() => {
+    const pool = isAnnual ? grades : grades.filter((g) => g.period_label === period);
+    const sorted = [...pool].sort((a, b) =>
+      ((b as { created_at?: string }).created_at ?? "").localeCompare(
+        (a as { created_at?: string }).created_at ?? "",
+      ),
+    );
+    return sorted[0] ?? null;
+  }, [grades, period, isAnnual]);
+
+  return (
+      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
+          <div className="space-y-5 lg:col-span-7">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                {eyebrow}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{title}</h1>
+              <p className="mt-2 text-sm font-medium text-white/85">
+                {subtitle}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BannerStat
+                label={isAnnual ? "Moyenne annuelle" : period}
+                value={periodAverage != null ? formatAverage(periodAverage, 2) : "—"}
+                hint={
+                  periodAverage == null ? (
+                    "Pas encore de note"
+                  ) : isAnnual ? (
+                    `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
+                  ) : (
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      {bulletinMention(periodAverage)}
+                      {delta != null && Math.abs(delta) > 0.05 ? (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-0.5 rounded px-1 font-bold",
+                            delta > 0 ? "bg-emerald-400/25 text-emerald-50" : "bg-rose-400/25 text-rose-50",
+                          )}
+                        >
+                          {delta > 0 ? (
+                            <ArrowUpRight className="h-3 w-3" />
+                          ) : (
+                            <ArrowDownRight className="h-3 w-3" />
+                          )}
+                          {formatAverage(Math.abs(delta), 1)}
+                        </span>
+                      ) : null}
+                    </span>
+                  )
+                }
+              />
+              <BannerStat
+                to={bulletinHref}
+                label="Moyenne annuelle"
+                value={annual.annualAverage != null ? formatAverage(annual.annualAverage, 2) : "—"}
+                hint={
+                  annual.annualAverage != null
+                    ? `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
+                    : "Pas encore de note"
+                }
+              />
+              <BannerStat
+                label={isAnnual ? "Notes publiées" : `Notes ${periodTabLabel(period)}`}
+                value={String(periodGradeCount)}
+                hint={isAnnual ? "depuis le début de l’année" : "sur ce trimestre"}
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-5">
+            <LatestGradeCard grade={latest} />
+          </div>
+        </div>
+        <div className="flex h-1" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
+        </div>
+      </section>
   );
 }

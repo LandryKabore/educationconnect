@@ -1,7 +1,7 @@
 {
   "name": "edufaso",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "EduFaso — système de gestion scolaire",
   "author": "EduFaso",
   "main": "electron/main.cjs",
@@ -15,9 +15,9 @@
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron:multi": "wait-on http://localhost:5173 && concurrently -k \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=1 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=2 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=3 electron .\"",
     "electron:pack": "npm run build:electron && electron-builder --dir",
-    "dist:win": "npm run build:electron && electron-builder --win nsis portable",
-    "dist:mac": "npm run build:electron && electron-builder --mac dmg",
-    "dist:desktop": "npm run build:electron && electron-builder --win nsis --mac dmg",
+    "dist:win": "npm run build:electron && electron-builder --win nsis portable --x64",
+    "dist:mac": "npm run build:electron && electron-builder --mac dmg --universal",
+    "dist:desktop": "npm run build:electron && electron-builder --win nsis --x64 && electron-builder --mac dmg --universal",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:add:android": "npx cap add android"
