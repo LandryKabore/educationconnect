@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { TodoFocusPanel } from "@/components/TodoFocusPanel";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -106,6 +107,8 @@ export default function EnfantNotes() {
             : "Notes"
         }
       />
+
+      <TodoFocusPanel childId={id} kind="low-grades" />
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>

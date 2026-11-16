@@ -282,12 +282,103 @@ export function useParentInbox(userId: string | undefined) {
   });
 }
 
+export type LowGrade = {
+  id: string;
+  score: number;
+  max_score: number;
+  period_label: string | null;
+  created_at: string;
+  comment: string | null;
+  subject: string | null;
+  title: string | null;
+  eval_date: string | null;
+};
+
+/**
+ * Every grade under LOW_GRADE_ON_20 published in the last LOW_GRADE_WINDOW_DAYS days, newest
+ * first. Queried on its own so the « À faire » count is exact (the children summary only
+ * carries the 5 latest grades).
+ */
+export function useLowGrades(childId: string | undefined) {
+  return useQuery({
+    queryKey: ["parent-home", "low-grades", childId],
+    enabled: !!childId,
+    queryFn: async (): Promise<LowGrade[]> => {
+      const since = subDays(new Date(), LOW_GRADE_WINDOW_DAYS).toISOString();
+      const { data, error } = await supabase
+        .from("notes")
+        .select("id, score, max_score, period_label, created_at, comment, is_absent, matieres(name), evaluations(title, eval_date)")
+        .eq("student_id", childId!)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      type Row = {
+        id: string;
+        score: number;
+        max_score: number;
+        period_label: string | null;
+        created_at: string;
+        comment: string | null;
+        is_absent: boolean | null;
+        matieres: { name: string } | { name: string }[] | null;
+        evaluations: { title: string | null; eval_date: string | null } | { title: string | null; eval_date: string | null }[] | null;
+      };
+      const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
+      return ((data ?? []) as unknown as Row[])
+        .filter((n) => {
+          if (n.is_absent) return false;
+          const v = scoreOn20(Number(n.score), Number(n.max_score));
+          return v !== null && v < LOW_GRADE_ON_20;
+        })
+        .map((n) => ({
+          id: n.id,
+          score: Number(n.score),
+          max_score: Number(n.max_score),
+          period_label: n.period_label,
+          created_at: n.created_at,
+          comment: n.comment?.trim() || null,
+          subject: one(n.matieres)?.name ?? null,
+          title: one(n.evaluations)?.title ?? null,
+          eval_date: one(n.evaluations)?.eval_date ?? null,
+        }));
+    },
+  });
+}
+
+/** Unjustified absences of the last TODO_WINDOW_DAYS days, newest first (the list behind the count). */
+export function useChildUnjustifiedAbsences(childId: string | undefined) {
+  return useQuery({
+    queryKey: ["parent-home", "absences-list", childId],
+    enabled: !!childId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("presences")
+        .select("id, date, note, matieres(name)")
+        .eq("student_id", childId!)
+        .eq("status", "absent")
+        .gte("date", iso(subDays(new Date(), TODO_WINDOW_DAYS)))
+        .order("date", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      type Row = { id: string; date: string; note: string | null; matieres: { name: string } | { name: string }[] | null };
+      return ((data ?? []) as unknown as Row[]).map((r) => ({
+        id: r.id,
+        date: r.date,
+        note: r.note,
+        subject: (Array.isArray(r.matieres) ? r.matieres[0] : r.matieres)?.name ?? null,
+      }));
+    },
+  });
+}
+
 /** « À faire » items for one child, from data we already have (no new table). */
 export function useChildTodos(
   childId: string,
   child: ChildSummary | undefined,
   snapshot: ChildSnapshot | undefined,
 ): TodoItem[] {
+  const { data: lowGrades } = useLowGrades(childId);
   return useMemo(() => {
     const items: TodoItem[] = [];
     const abs = snapshot?.absences;
@@ -301,16 +392,12 @@ export function useChildTodos(
             .slice(0, 3)
             .map((a) => [a.subject, shortDateFr(a.date)].filter(Boolean).join(" "))
             .join(" · ") || undefined,
-        to: `/enfants/${childId}/presences`,
+        to: `/enfants/${childId}/presences?a-faire=absences`,
         cta: "Voir",
       });
     }
-    const cutoff = subDays(new Date(), LOW_GRADE_WINDOW_DAYS).getTime();
-    const low = (child?.recentNotes ?? []).filter((n) => {
-      if (n.is_absent) return false;
-      const v = scoreOn20(n.score, n.max_score);
-      return v !== null && v < LOW_GRADE_ON_20 && new Date(n.created_at).getTime() >= cutoff;
-    });
+    // every low grade of the window (exact), not only the few latest grades of the summary
+    const low = lowGrades ?? [];
     if (low.length > 0) {
       const n0 = low[0];
       const v0 = scoreOn20(n0.score, n0.max_score);
@@ -319,13 +406,13 @@ export function useChildTodos(
         tone: "warning",
         text:
           low.length > 1
-            ? `${low.length} notes inférieures à ${LOW_GRADE_ON_20}/20`
-            : `Note inférieure à ${LOW_GRADE_ON_20}/20`,
+            ? `${low.length} notes à retravailler`
+            : "1 note à retravailler",
         detail: `${n0.subject ?? "Matière"} · ${v0 !== null ? v0.toFixed(1).replace(".", ",") : "—"}/20`,
-        to: `/enfants/${childId}/notes`,
+        to: `/enfants/${childId}/notes?a-faire=low-grades`,
         cta: "Voir",
       });
     }
     return items;
-  }, [childId, child, snapshot]);
+  }, [childId, snapshot, lowGrades]);
 }

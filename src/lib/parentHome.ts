@@ -5,8 +5,11 @@ import { TRIMESTER_PERIODS } from "@/lib/averages";
 import { calendarGradingPeriod } from "@/lib/gradingPeriod";
 import type { AttendanceStatus } from "@/lib/types";
 
-/** Below this score (/20) a recent grade is flagged in the « À faire » banner. */
-export const LOW_GRADE_ON_20 = 8;
+/**
+ * Below this score (/20) a recent grade is flagged in the « À faire » banner, as a
+ * « note à retravailler ». Kept low on purpose: only clearly low grades, the app stays encouraging.
+ */
+export const LOW_GRADE_ON_20 = 6;
 /** How far back absences / low grades count as « to look at ». */
 export const TODO_WINDOW_DAYS = 30;
 export const LOW_GRADE_WINDOW_DAYS = 14;
