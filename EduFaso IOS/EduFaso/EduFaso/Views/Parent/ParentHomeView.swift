@@ -9,7 +9,7 @@ struct ParentChildHome: Equatable {
     var annual: AnnualAverageResult?
     /// Latest published grades, newest first.
     var recentGrades: [GradeRow] = []
-    /// Grades under 8/20 published in the last 14 days.
+    /// Grades under 6/20 published in the last 14 days (« notes à retravailler »).
     var lowGrades: [GradeRow] = []
     /// Attendance over the current trimester.
     var attendance: AttendanceTotals?
@@ -43,7 +43,8 @@ struct ParentUpcomingItem: Hashable, Identifiable {
 }
 
 enum ParentHomeLoader {
-    static let lowGradeOn20 = 8.0
+    /// Only clearly low grades are flagged, so the app stays encouraging.
+    static let lowGradeOn20 = 6.0
     static let lowGradeWindowDays = 14
     static let absenceWindowDays = 30
     static let upcomingWindowDays = 7
@@ -83,6 +84,8 @@ enum ParentHomeLoader {
         home.className = enrollment?.className
 
         async let gradesTask = api.fetchGrades(studentId: childId, limit: 40)
+        // every grade of the low-grade window, not just the latest ones (the count must be exact)
+        async let windowGradesTask = api.fetchGrades(studentId: childId, since: lowGradeStart, limit: 1000)
         async let attendanceTask = api.fetchAttendance(studentId: childId, limit: 300)
         async let totalsTask = api.fetchAttendanceTotals(
             studentId: childId,
@@ -155,12 +158,13 @@ enum ParentHomeLoader {
 
         if let grades = try? await gradesTask {
             home.recentGrades = Array(grades.prefix(4))
-            home.lowGrades = grades.filter { grade in
-                guard let on20 = scoreOn20(grade), on20 < lowGradeOn20 else { return false }
-                return (grade.createdAt.map { String($0.prefix(10)) } ?? "") >= lowGradeStart
-            }
         } else {
             failed = true
+        }
+        let windowGrades = (try? await windowGradesTask) ?? []
+        home.lowGrades = windowGrades.filter { grade in
+            guard let on20 = scoreOn20(grade), on20 < lowGradeOn20 else { return false }
+            return (grade.createdAt.map { String($0.prefix(10)) } ?? "") >= lowGradeStart
         }
 
         if let rows = try? await attendanceTask {
@@ -272,7 +276,7 @@ struct ParentHomeView: View {
             CoachMarkStep(
                 id: "parent.watch", icon: "exclamationmark.triangle.fill",
                 title: "À faire",
-                message: "Absences à justifier, notes faibles récentes et messages non lus. Touchez « Voir » pour le détail."
+                message: "Absences à justifier, notes à retravailler et messages non lus. Touchez « Voir » pour le détail."
             ),
             CoachMarkStep(
                 id: "parent.results", icon: "chart.bar.fill",
@@ -587,7 +591,7 @@ struct ParentHomeView: View {
         enum Target { case attendance, grades, messages }
     }
 
-    /// Same rules as the web: unjustified absences (30 days), grades under 8/20 (14 days), unread messages.
+    /// Same rules as the web: unjustified absences (30 days), grades under 6/20 (14 days), unread messages.
     private func todoItems(for child: ChildSummary, includeUnread: Bool) -> [TodoItem] {
         var out: [TodoItem] = []
         if let home = homes[child.id] {
@@ -607,7 +611,7 @@ struct ParentHomeView: View {
                 let value = ParentHomeLoader.scoreOn20(first).map { Self.format($0, digits: 1) } ?? "—"
                 out.append(TodoItem(
                     id: "low-grades", tone: .warning,
-                    text: low.count > 1 ? "\(low.count) notes inférieures à 8/20" : "Note inférieure à 8/20",
+                    text: low.count > 1 ? "\(low.count) notes à retravailler" : "1 note à retravailler",
                     detail: "\(first.matieres?.name ?? "Matière") · \(value)/20", target: .grades
                 ))
             }
@@ -648,8 +652,10 @@ struct ParentHomeView: View {
                             Spacer(minLength: 8)
                             NavigationLink {
                                 switch item.target {
-                                case .attendance: StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child))
-                                case .grades: StudentGradesView(studentIdOverride: child.id, childName: firstName(child))
+                                case .attendance:
+                                    ParentTodoDetailView(kind: .absences, childId: child.id, childName: firstName(child), absences: homes[child.id]?.recentAbsences ?? [])
+                                case .grades:
+                                    ParentTodoDetailView(kind: .lowGrades, childId: child.id, childName: firstName(child), grades: homes[child.id]?.lowGrades ?? [])
                                 case .messages: MessagesView()
                                 }
                             } label: {
@@ -1048,7 +1054,7 @@ struct ParentHomeView: View {
                 quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
                 quickLink("Examens", icon: "list.clipboard") { ExamsBoardView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Exercices", icon: "square.and.pencil") { ExercisesBoardView(studentIdOverride: child.id, childName: firstName(child)) }
-                quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView(studentIdOverride: child.id) }
+                quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView(studentIdOverride: child.id, childName: firstName(child)) }
             }
         }
         .padding(14)
@@ -1443,7 +1449,7 @@ struct ChildDetailView: View {
                         EvaluationsBrowser(studentId: child.id, type: "interrogation", title: "Interrogations")
                     }
                     NavigationLink("Compositions") {
-                        StudentCompositionsView(studentIdOverride: child.id)
+                        StudentCompositionsView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName)
                     }
                     NavigationLink("Bulletin") { BulletinBoard(studentId: child.id) }
                     NavigationLink("Emploi du temps") {
@@ -1456,5 +1462,161 @@ struct ChildDetailView: View {
         }
         .premiumTitle(child.fullName)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+
+// MARK: - « À faire » detail: the exact grades / absences behind the count
+
+struct ParentTodoDetailView: View {
+    enum Kind { case lowGrades, absences }
+    let kind: Kind
+    let childId: String
+    let childName: String
+    var grades: [GradeRow] = []
+    var absences: [AttendanceRow] = []
+
+    private static let rose = Color(red: 225 / 255, green: 29 / 255, blue: 72 / 255)
+    private static let roseText = Color(red: 159 / 255, green: 18 / 255, blue: 57 / 255)
+    private static let amberText = Color(red: 120 / 255, green: 53 / 255, blue: 15 / 255)
+
+    private var title: String {
+        kind == .lowGrades
+            ? "\(grades.count) note\(grades.count > 1 ? "s" : "") à retravailler"
+            : "\(absences.count) absence\(absences.count > 1 ? "s" : "") non justifiée\(absences.count > 1 ? "s" : "")"
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(kind == .lowGrades ? Self.amberText : Self.roseText)
+                        Text(kind == .lowGrades
+                             ? "Notes \(ParentHomeView.de(childName)) sous 6/20 ces 14 derniers jours. Un petit coup de pouce à la maison l’aidera à remonter !"
+                             : "Absences \(ParentHomeView.de(childName)) ces 30 derniers jours que l’école n’a pas encore justifiées.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 0) {
+                        if kind == .lowGrades {
+                            ForEach(Array(grades.enumerated()), id: \.element.id) { i, g in
+                                gradeRow(g).overlay(alignment: .top) { if i > 0 { divider } }
+                            }
+                        } else {
+                            ForEach(Array(absences.enumerated()), id: \.element.id) { i, a in
+                                absenceRow(a).overlay(alignment: .top) { if i > 0 { divider } }
+                            }
+                        }
+                    }
+                    .modifier(HomeCardStyle())
+
+                    if kind == .absences {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Une absence à justifier ?").font(.headline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                            Text("Écrivez à l’école : seule l’administration peut justifier une absence.")
+                                .font(.subheadline).foregroundStyle(EduTheme.muted)
+                            NavigationLink { MessagesView() } label: { solidButton("Écrire à l’école", icon: "message") }
+                                .buttonStyle(.plain)
+                                .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .modifier(HomeCardStyle())
+                    }
+
+                    NavigationLink {
+                        if kind == .lowGrades {
+                            StudentGradesView(studentIdOverride: childId, childName: childName)
+                        } else {
+                            StudentAttendanceView(studentIdOverride: childId, childName: childName)
+                        }
+                    } label: {
+                        solidButton(kind == .lowGrades ? "Voir toutes les notes" : "Voir toutes les présences", icon: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(16)
+            }
+        }
+        .premiumTitle(kind == .lowGrades ? "Notes à retravailler" : "Absences")
+    }
+
+    private var divider: some View { Rectangle().fill(EduTheme.border).frame(height: 1) }
+
+    private func gradeRow(_ g: GradeRow) -> some View {
+        let on20 = NotesMath.on20(g)
+        let date = g.evaluations?.evalDate ?? g.createdAt
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(SubjectPalette.swatch(for: g.matieres?.name).border)
+                .frame(width: 4, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(g.matieres?.name ?? "Matière")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Text([g.evaluations?.type.map(NotesMath.typeLabel), g.evaluations?.title, date.map { ExamsBoardView.format($0, "EEE d MMM") }, g.periodLabel]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .lineLimit(2)
+                if let c = g.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !c.isEmpty {
+                    Text("« \(c) »").font(.caption.italic()).foregroundStyle(EduTheme.muted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(NotesMath.plain(g.score)).font(.title3.weight(.bold).monospacedDigit()).foregroundStyle(Self.amberText)
+                    Text("/\(NotesMath.plain(g.maxScore))").font(.caption.weight(.semibold)).foregroundStyle(EduTheme.subtle)
+                }
+                if let on20, g.maxScore != 20 {
+                    Text("soit \(NotesMath.format(on20, 1))/20").font(.caption2).foregroundStyle(EduTheme.muted)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func absenceRow(_ a: AttendanceRow) -> some View {
+        HStack(spacing: 12) {
+            VStack(spacing: 0) {
+                Text(ExamsBoardView.format(a.date, "d")).font(.title3.weight(.bold).monospacedDigit()).foregroundStyle(EduTheme.ink)
+                Text(ExamsBoardView.format(a.date, "MMM").uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(EduTheme.muted)
+            }
+            .frame(width: 40)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(SubjectPalette.swatch(for: a.matieres?.name).border)
+                .frame(width: 4, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(a.matieres?.name ?? "Cours").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                Text(ExamsBoardView.format(a.date, "EEEE d MMMM").capitalized).font(.caption).foregroundStyle(EduTheme.muted)
+                if let note = a.note, !note.isEmpty {
+                    Text(note).font(.caption).foregroundStyle(EduTheme.muted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Text("Absent")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Self.roseText)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Self.rose.opacity(0.12), in: RoundedRectangle(cornerRadius: EduTheme.radius))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func solidButton(_ text: String, icon: String) -> some View {
+        Label(text, systemImage: icon)
+            .labelStyle(TrailingIconLabelStyle())
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
     }
 }

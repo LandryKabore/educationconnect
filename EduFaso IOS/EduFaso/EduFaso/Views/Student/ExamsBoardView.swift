@@ -491,6 +491,7 @@ struct ExamsBoardView: View {
             className = enrollment.className ?? ""
             let rows = try await api.fetchEvaluations(classId: enrollment.classId, type: "examen", confirmedOnly: true)
             graded = (try? await api.fetchGradedEvaluationIds(studentId: sid, evaluationIds: rows.map(\.id))) ?? []
+            if Task.isCancelled { return }
             exams = rows
             if !didPickPeriod {
                 let base: [AttendancePeriod]
@@ -505,6 +506,7 @@ struct ExamsBoardView: View {
             }
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false

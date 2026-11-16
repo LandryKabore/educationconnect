@@ -541,11 +541,13 @@ struct ExercisesBoardView: View {
                     fromLesson: true
                 )
             }
+            if Task.isCancelled { return }
             items = fromExercises + fromLessons
             // open a tab that has something
             if count(tab) == 0, let first = Tab.allCases.first(where: { count($0) > 0 }) { tab = first }
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false

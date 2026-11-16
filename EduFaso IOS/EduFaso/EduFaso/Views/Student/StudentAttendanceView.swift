@@ -626,10 +626,12 @@ struct StudentAttendanceView: View {
         let api = EduAPI()
         let p = period
         do {
-            totals = try await api.fetchAttendanceTotals(
+            let fetchedTotals = try await api.fetchAttendanceTotals(
                 studentId: sid, from: p?.from, to: p?.to,
                 subjectId: subjectId.isEmpty ? nil : subjectId
             )
+            if Task.isCancelled { return }
+            totals = fetchedTotals
             if let range = calendarRange,
                let rowsInRange = try? await api.fetchAttendanceRange(studentId: sid, from: range.from, to: range.to, subjectId: subjectId.isEmpty ? nil : subjectId) {
                 let rank = ["absent": 3, "late": 2, "excused": 1, "present": 0]
@@ -643,6 +645,7 @@ struct StudentAttendanceView: View {
             error = nil
             await reloadList(reset: true)
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
     }
@@ -659,9 +662,11 @@ struct StudentAttendanceView: View {
                 offset: reset ? 0 : rows.count,
                 limit: pageSize
             )
+            if Task.isCancelled { return }
             rows = reset ? page : rows + page
             hasMore = page.count == pageSize
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         listLoading = false

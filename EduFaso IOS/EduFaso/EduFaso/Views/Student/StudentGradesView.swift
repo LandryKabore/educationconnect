@@ -591,7 +591,9 @@ struct StudentGradesView: View {
             async let gradesTask = api.fetchGrades(studentId: sid, subjectIds: subjectIds)
             async let enrollmentTask = api.activeEnrollment(studentId: sid)
             async let periodTask = api.fetchAttendancePeriodContext()
-            rows = try await gradesTask
+            let fetched = try await gradesTask
+            if Task.isCancelled { return }
+            rows = fetched
             if let classId = (try? await enrollmentTask)??.classId {
                 coefficients = await api.fetchClassCoefficients(classId: classId)
             }
@@ -609,6 +611,7 @@ struct StudentGradesView: View {
             }
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false

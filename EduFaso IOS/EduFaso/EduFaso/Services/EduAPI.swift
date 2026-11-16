@@ -13,12 +13,14 @@ actor EduAPI {
     func fetchGrades(
         studentId: String,
         subjectIds: [String]? = nil,
+        since: String? = nil,
         limit: Int = 400
     ) async throws -> [GradeRow] {
         var query = client
             .from("notes")
             .select("id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, comment, matieres(id, name), evaluations(type, title, eval_date)")
             .eq("student_id", value: studentId)
+        if let since { query = query.gte("created_at", value: since) }
         if let subjectIds, !subjectIds.isEmpty {
             query = query.in("subject_id", values: subjectIds)
         }
@@ -763,5 +765,17 @@ actor EduAPI {
                 papers: bySession[$0.id] ?? []
             )
         }
+    }
+}
+
+
+extension Error {
+    /// A request cancelled on purpose (e.g. the parent switched child while it loaded).
+    var isCancellation: Bool {
+        if self is CancellationError { return true }
+        if let url = self as? URLError, url.code == .cancelled { return true }
+        let ns = self as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        return String(describing: self).contains("CancellationError")
     }
 }

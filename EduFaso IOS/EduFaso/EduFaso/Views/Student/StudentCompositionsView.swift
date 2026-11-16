@@ -16,7 +16,56 @@ struct StudentCompositionsView: View {
 
     @EnvironmentObject private var auth: AuthViewModel
     var studentIdOverride: String? = nil
+    /// Parent view: the child's first name, shown in the titles.
+    var childName: String? = nil
     @State private var sessions: [StudentCompositionSession] = []
+
+    @State private var tour = TabTour(key: "compositions")
+    @State private var ownCoach = CoachMarkRegistry()
+    @Environment(CoachMarkRegistry.self) private var outerCoach: CoachMarkRegistry?
+    private var coach: CoachMarkRegistry { outerCoach ?? ownCoach }
+
+    private static let brand800 = Color(red: 17 / 255, green: 94 / 255, blue: 89 / 255)
+    private static let brand600 = Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)
+
+    private var pageTitle: String { childName.map { "Compositions \(ParentHomeView.de($0))" } ?? "Mes compositions" }
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "child.switcher", icon: "arrow.left.arrow.right",
+                title: "Changer d’enfant",
+                message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
+                requiresAction: true,
+                doneMessage: "Voilà ! La page affiche maintenant les compositions de cet enfant."
+            ),
+            CoachMarkStep(
+                id: "compo.stats", icon: "chart.bar.fill",
+                title: "En un coup d’œil",
+                message: "Nombre de compositions de l’année, celles à venir et celle en cours."
+            ),
+            CoachMarkStep(
+                id: "compo.filters", icon: "line.3.horizontal.decrease.circle",
+                title: "Filtrer",
+                message: "Tout, à venir, en cours ou terminées."
+            ),
+            CoachMarkStep(
+                id: "compo.timetable", icon: "tablecells",
+                title: "Emploi du temps de la composition",
+                message: "La composition en cours ou la prochaine : chaque jour en colonne, chaque épreuve à son heure, une couleur par matière."
+            ),
+            CoachMarkStep(
+                id: "compo.sessions", icon: "list.bullet.rectangle",
+                title: "Toutes les compositions",
+                message: "Chaque composition avec ses dates, son statut et la liste des épreuves. Les notes arrivent dans « Notes » une fois saisies."
+            ),
+            CoachMarkStep(
+                id: "compo.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
     @State private var expandedIds: Set<String> = []
     @State private var statusFilter: StatusFilter = .all
     @State private var className: String?
@@ -67,129 +116,172 @@ struct StudentCompositionsView: View {
                     LoadingBlock()
                 } else if let error {
                     Text(error).foregroundStyle(EduTheme.fasoRed).padding()
-                } else if sessions.isEmpty {
-                    PremiumEmpty(
-                        title: "Aucune composition",
-                        systemImage: "doc.on.doc",
-                        message: "Aucune composition programmée pour le moment."
-                    )
                 } else {
-                    VStack(spacing: 0) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            summaryCard
-                            statusChips
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(EduTheme.loginBackground)
-
+                    ScrollViewReader { proxy in
                         TimelineView(.periodic(from: .now, by: 30)) { context in
                             ScrollView {
-                                LazyVStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    banner
                                     hintCard
-
-                                    if let featured = featuredSession, !featured.papers.isEmpty {
-                                        featuredTimetableCard(featured)
-                                    }
-
-                                    if filteredSessions.isEmpty {
-                                        Text("Rien à afficher avec ce filtre.")
+                                    if sessions.isEmpty {
+                                        Text("Aucune composition programmée pour le moment.")
                                             .font(.subheadline)
                                             .foregroundStyle(EduTheme.muted)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(16)
-                                            .background(cardBackground)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 28)
+                                            .modifier(HomeCardStyle())
                                     } else {
-                                        ForEach(filteredSessions) { session in
-                                            sessionCard(session, now: context.date)
+                                        statusChips.coachMarkTarget("compo.filters")
+                                        VStack(spacing: 10) {
+                                            if filteredSessions.isEmpty {
+                                                Text("Rien à afficher avec ce filtre.")
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(EduTheme.muted)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .padding(16)
+                                                    .background(cardBackground)
+                                            } else {
+                                                ForEach(filteredSessions) { session in
+                                                    sessionCard(session, now: context.date)
+                                                }
+                                            }
                                         }
+                                        .coachMarkTarget("compo.sessions")
                                     }
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.bottom, 24)
+                                .padding(.top, 8)
+                                .padding(.bottom, 32)
                             }
                             .refreshable { await load() }
+                            .tabTour(tour, registry: coach, scroller: proxy)
                         }
                     }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
             }
         }
-        .premiumTitle("Mes compositions")
-        .task { await load() }
+        .environment(coach)
+        .premiumTitle(pageTitle)
+        .task(id: studentIdOverride) { await load() }
+        .onChange(of: studentIdOverride) { _, _ in
+            guard tour.showing, tour.steps.indices.contains(tour.index),
+                  tour.steps[tour.index].requiresAction else { return }
+            tour.steps[tour.index].doneMessage = "Voilà ! La page affiche maintenant les compositions \(childName.map { ParentHomeView.de($0) } ?? "de cet enfant"). Le bouton plein, en haut, montre toujours l’enfant affiché."
+            tour.actionDone = true
+        }
         .onChange(of: statusFilter) { _, _ in
             expandedIds.removeAll()
         }
     }
 
-    private var summaryCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(EduTheme.teal.opacity(0.12))
-                Image(systemName: "graduationcap.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(EduTheme.teal)
+    /// Teal banner, like the web PageBanner.
+    private var banner: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Épreuves de fin de Trimestre" + ((className ?? "").isEmpty ? "" : " · Classe \(className!)"))
+                            .font(.caption.weight(.semibold))
+                            .tracking(1.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(pageTitle)
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-0.4)
+                            .foregroundStyle(.white)
+                        Text("Programme des compositions planifiées par l’établissement.")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    TourHelpButton { tour.start(tourSteps, registry: coach) }
+                        .coachMarkTarget("compo.help")
+                }
+                HStack(alignment: .top, spacing: 10) {
+                    bannerStat("Compositions", "\(sessions.count)", "cette année")
+                    bannerStat("À venir", "\(upcomingCount)", upcomingCount == 0 ? "rien de prévu" : "programmée\(upcomingCount > 1 ? "s" : "")")
+                    bannerStat("En cours", "\(ongoingCount)", ongoingCount == 0 ? "aucune" : "en ce moment")
+                }
+                .coachMarkTarget("compo.stats")
             }
-            .frame(width: 52, height: 52)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text((className ?? "Ma classe").uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(EduTheme.muted)
-                    .tracking(0.5)
-                Text("\(sessions.count) composition\(sessions.count == 1 ? "" : "s")")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink)
-                Text("\(upcomingCount) à venir · \(ongoingCount) en cours")
-                    .font(.caption)
-                    .foregroundStyle(EduTheme.muted)
+            .padding(20)
+            HStack(spacing: 0) {
+                EduTheme.fasoRed
+                EduTheme.fasoYellow
+                EduTheme.fasoGreen
             }
-            Spacer(minLength: 0)
+            .frame(height: 4)
+            .accessibilityHidden(true)
         }
-        .padding(16)
-        .background(cardBackground)
+        .background {
+            ZStack {
+                LinearGradient(colors: [Self.brand800, EduTheme.teal, Self.brand600], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Circle().fill(.white.opacity(0.06)).frame(width: 260, height: 260).offset(x: 150, y: -120)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: Self.brand800.opacity(0.25), radius: 14, y: 8)
+    }
+
+    private func bannerStat(_ label: String, _ value: String, _ hint: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.7))
+            Text(value)
+                .font(.title2.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
+            Text(hint)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 80, alignment: .topLeading)
+        .padding(10)
+        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(.white.opacity(0.15), lineWidth: 1))
     }
 
     private var statusChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(StatusFilter.allCases) { chip in
-                    Button {
-                        statusFilter = chip
-                    } label: {
-                        Text(chip.label)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .foregroundStyle(statusFilter == chip ? EduTheme.navy : EduTheme.muted)
-                            .background(
-                                Capsule()
-                                    .fill(statusFilter == chip ? EduTheme.navy.opacity(0.1) : Color.white)
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(
-                                        statusFilter == chip ? EduTheme.navy.opacity(0.35) : Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255),
-                                        lineWidth: 1
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 4) {
+            ForEach(StatusFilter.allCases) { chip in
+                let active = statusFilter == chip
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { statusFilter = chip }
+                } label: {
+                    Text(chip.label)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(active ? .white : EduTheme.ink.opacity(0.8))
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background {
+                            if active { RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(EduTheme.teal) }
+                        }
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
+        .padding(4)
+        .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: statusFilter)
     }
 
     private var hintCard: some View {
-        Text("Chaque composition regroupe les épreuves de ta classe. Les notes apparaissent dans « Mes notes » une fois saisies.")
+        Text(childName == nil
+             ? "Chaque composition regroupe les épreuves de ta classe. Les notes apparaissent dans « Mes notes » une fois saisies."
+             : "Chaque composition regroupe les épreuves de la classe. Les notes apparaissent dans « Notes » une fois saisies.")
             .font(.footnote)
             .foregroundStyle(EduTheme.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(EduTheme.brand50)
             )
     }
@@ -214,7 +306,7 @@ struct StudentCompositionsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .stroke(EduTheme.teal.opacity(0.2), lineWidth: 1)
         )
     }
@@ -257,7 +349,7 @@ struct StudentCompositionsView: View {
                                     .font(.caption)
                                     .foregroundStyle(EduTheme.muted)
                             }
-                            if let countdown = countdownChip(for: session, now: now) {
+                            if let countdown = countdownChip(for: session, now: now), countdown.text != status {
                                 Text(countdown.text)
                                     .font(.caption2.weight(.bold))
                                     .foregroundStyle(countdown.color)
@@ -293,6 +385,20 @@ struct StudentCompositionsView: View {
             }
             .buttonStyle(.plain)
 
+            // the running / next composition shows its timetable inside its own card
+            if featuredSession?.id == session.id, !session.papers.isEmpty {
+                Rectangle().fill(EduTheme.border).frame(height: 1)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("EMPLOI DU TEMPS DE LA COMPOSITION")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(EduTheme.muted)
+                    CompositionMiniTimetableView(papers: session.papers, compact: false)
+                }
+                .padding(14)
+                .coachMarkTarget("compo.timetable")
+            }
+
             if expanded {
                 Divider().padding(.horizontal, 14)
                 if session.papers.isEmpty {
@@ -317,7 +423,7 @@ struct StudentCompositionsView: View {
         }
         .background(cardBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .stroke(EduTheme.teal.opacity(status == "En cours" ? 0.35 : 0.12), lineWidth: 1)
         )
     }
@@ -336,7 +442,7 @@ struct StudentCompositionsView: View {
         .frame(width: 48)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .fill(active ? EduTheme.teal.opacity(0.12) : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
         )
     }
@@ -370,14 +476,19 @@ struct StudentCompositionsView: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .fill(swatch.fill.opacity(0.28))
         )
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
             .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
     }
 
     private func statusColor(_ label: String) -> Color {
@@ -435,7 +546,7 @@ struct StudentCompositionsView: View {
         let startOfNow = Calendar.current.startOfDay(for: now)
         let days = Calendar.current.dateComponents([.day], from: startOfNow, to: startOfStart).day ?? 0
         if days > 0 {
-            return (days == 1 ? "Dans 1 j" : "Dans \(days) j", days <= 3 ? Color.orange : EduTheme.navy)
+            return (days == 1 ? "Dans 1 j" : "Dans \(days) j", days <= 3 ? Color.orange : EduTheme.teal)
         }
         if let ends = session.endsOn, today > ends {
             return nil
@@ -461,9 +572,12 @@ struct StudentCompositionsView: View {
                 return
             }
             className = enrollment.className
-            sessions = try await api.fetchCompositionSessions(classSectionId: enrollment.classId)
+            let fetchedSessions = try await api.fetchCompositionSessions(classSectionId: enrollment.classId)
+            if Task.isCancelled { return }
+            sessions = fetchedSessions
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false
@@ -562,10 +676,10 @@ private struct CompositionMiniTimetableView: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                         .stroke(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255), lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
             }
         }
     }

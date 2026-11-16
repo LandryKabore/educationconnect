@@ -559,7 +559,7 @@ struct ScreenHost: View {
         case .childExercises:
             ChildGate(title: "Exercices", keepsContentOnSwitch: true) { ExercisesBoardView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childCompositions:
-            ChildGate(title: "Compositions") { StudentCompositionsView(studentIdOverride: $0.id) }
+            ChildGate(title: "Compositions", keepsContentOnSwitch: true) { StudentCompositionsView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childBulletin:
             ChildGate(title: "Bulletins") { BulletinBoard(studentId: $0.id, title: "Bulletin") }
         case .childTimetable:
