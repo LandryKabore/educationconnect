@@ -406,8 +406,8 @@ export function useChildTodos(
         tone: "warning",
         text:
           low.length > 1
-            ? `${low.length} notes inférieures à ${LOW_GRADE_ON_20}/20`
-            : `Note inférieure à ${LOW_GRADE_ON_20}/20`,
+            ? `${low.length} notes à retravailler`
+            : "1 note à retravailler",
         detail: `${n0.subject ?? "Matière"} · ${v0 !== null ? v0.toFixed(1).replace(".", ",") : "—"}/20`,
         to: `/enfants/${childId}/notes?a-faire=low-grades`,
         cta: "Voir",

@@ -58,12 +58,12 @@ export function TodoFocusPanel({ childId, kind }: { childId: string | undefined;
             {loading
               ? "Chargement…"
               : isGrades
-                ? `${count} ${plural(count, `note inférieure à ${LOW_GRADE_ON_20}/20`, `notes inférieures à ${LOW_GRADE_ON_20}/20`)}`
+                ? `${count} ${plural(count, "note à retravailler", "notes à retravailler")}`
                 : `${count} ${plural(count, "absence non justifiée", "absences non justifiées")}`}
           </h2>
           <p className="text-xs text-slate-600 dark:text-slate-300">
             {isGrades
-              ? `Notes publiées ces ${LOW_GRADE_WINDOW_DAYS} derniers jours, sous ${LOW_GRADE_ON_20}/20.`
+              ? `Notes sous ${LOW_GRADE_ON_20}/20 ces ${LOW_GRADE_WINDOW_DAYS} derniers jours. Un petit coup de pouce à la maison aidera à remonter !`
               : `Ces ${TODO_WINDOW_DAYS} derniers jours, pas encore justifiées par l’école.`}
           </p>
         </div>
@@ -94,7 +94,7 @@ export function TodoFocusPanel({ childId, kind }: { childId: string | undefined;
                       {n.comment ? <p className="truncate text-xs italic text-slate-500">« {n.comment} »</p> : null}
                     </div>
                     <p className="shrink-0 text-right tabular-nums">
-                      <span className="text-lg font-bold text-rose-700 dark:text-rose-400">{n.score}</span>
+                      <span className="text-lg font-bold text-amber-800 dark:text-amber-300">{n.score}</span>
                       <span className="text-xs font-semibold text-slate-400">/{n.max_score}</span>
                       {n.max_score !== 20 && v !== null ? (
                         <span className="block text-[11px] text-slate-500">soit {v.toFixed(1).replace(".", ",")}/20</span>
