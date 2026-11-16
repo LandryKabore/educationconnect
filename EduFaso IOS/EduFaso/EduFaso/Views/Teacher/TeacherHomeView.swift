@@ -1164,20 +1164,22 @@ struct TeacherHomeView: View {
 
 private enum SlotStatus { case done, current, upcoming }
 
+/// White card, thin slate border, small radius (redesign). The radius argument is
+/// kept so existing call sites compile; every card now uses the shared radius.
 struct HomeCardStyle: ViewModifier {
-    var cornerRadius: CGFloat = 22
+    var cornerRadius: CGFloat = EduTheme.radius
 
     func body(content: Content) -> some View {
         content
             .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(.white)
-                    .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.06), radius: 3, y: 1)
     }
 }
 

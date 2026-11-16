@@ -17,7 +17,7 @@ enum EduTheme {
 
     // Redesign tokens (same as the web redesign): flat page, white surfaces,
     // thin slate borders, small square-ish radius, colour only for status.
-    static let page = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255) // slate-50
+    static let page = Color(red: 238 / 255, green: 242 / 255, blue: 246 / 255) // between slate-100 and 200: white cards read clearly on it
     static let border = Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255) // slate-200
     static let borderStrong = Color(red: 203 / 255, green: 213 / 255, blue: 225 / 255) // slate-300
     static let subtle = Color(red: 148 / 255, green: 163 / 255, blue: 184 / 255) // slate-400
@@ -44,6 +44,7 @@ struct EduSurface: ViewModifier {
                 RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .stroke(EduTheme.border, lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.05), radius: 2, y: 1)
     }
 }
 
