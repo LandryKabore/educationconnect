@@ -1,5 +1,5 @@
 -- School modules: the super admin builds each school's system module by module.
--- Proposal prepared 16 Nov 2026. NOT applied to any live database.
+-- Applied to the live database on 16 Nov 2026 (Supabase SQL editor).
 --
 --  * modules_catalogue : one row per module the platform offers (Notes, Présences, Bulletins…,
 --                        and later Frais de scolarité, Discipline, Cantine…). Read by everyone
