@@ -17,21 +17,24 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                EduTheme.loginBackground.ignoresSafeArea()
+                EduTheme.page.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     ScrollView {
-                        VStack(spacing: 28) {
+                        VStack(alignment: .leading, spacing: 28) {
+                            AuthBrand()
                             header
-                            formCard
+                            if !saved.isEmpty { savedAccounts }
+                            form
+                            footer
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 28)
-                        .padding(.bottom, 24)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+                        .padding(.bottom, 28)
                     }
                     .scrollDismissesKeyboard(.interactively)
 
-                    marketingStrip
+                    bottomBand
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -61,77 +64,112 @@ struct LoginView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            Image("EduFasoLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: 168)
-                .accessibilityLabel("EduFaso")
-
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Connexion")
+                .font(.system(size: 34, weight: .regular))
+                .tracking(-0.5)
+                .foregroundStyle(EduTheme.ink)
             Text("Système de gestion scolaire")
-                .font(.subheadline)
+                .font(.body.weight(.light))
                 .foregroundStyle(EduTheme.muted)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
     }
 
-    private var formCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if !saved.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("COMPTES ENREGISTRÉS")
-                        .font(.caption2.weight(.semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(EduTheme.muted)
-                    ForEach(saved) { entry in
-                        HStack(spacing: 8) {
-                            Button {
-                                pickSaved(entry)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "person.fill")
-                                        .foregroundStyle(EduTheme.navy)
-                                        .frame(width: 36, height: 36)
-                                        .background(EduTheme.brand50, in: Circle())
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.identifiant)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(EduTheme.ink)
-                                            .lineLimit(1)
-                                        Text(SavedLoginsStore.password(for: entry.identifiant) == nil
-                                             ? "Appuyer pour remplir"
-                                             : "Appuyer pour se connecter")
-                                            .font(.caption)
-                                            .foregroundStyle(EduTheme.muted)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
-                                )
-                            }
-                            .buttonStyle(.plain)
+    /// Teal band at the bottom: the product in one line, with the flag colours.
+    private var bottomBand: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Notes, présences et devoirs, au même endroit.")
+                .font(.title3.weight(.regular))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Pour élèves, parents, enseignants et directions.")
+                .font(.subheadline.weight(.light))
+                .foregroundStyle(.white.opacity(0.8))
+            EduFlagStripe(width: 26)
+                .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 24)
+        .background(EduTheme.accent.ignoresSafeArea(edges: .bottom))
+    }
 
-                            Button {
-                                SavedLoginsStore.remove(identifiant: entry.identifiant)
-                                saved = SavedLoginsStore.list()
-                            } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(EduTheme.fasoRed)
-                                    .frame(width: 36, height: 36)
+    private var savedAccounts: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Comptes enregistrés")
+                .font(.footnote)
+                .foregroundStyle(EduTheme.muted)
+            VStack(spacing: 0) {
+                ForEach(Array(saved.enumerated()), id: \.element.id) { index, entry in
+                    HStack(spacing: 12) {
+                        Button {
+                            pickSaved(entry)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(String(entry.identifiant.prefix(1)).uppercased())
+                                    .font(.subheadline)
+                                    .foregroundStyle(EduTheme.accent)
+                                    .frame(width: 32, height: 32)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                            .fill(EduTheme.brand50)
+                                    )
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(entry.identifiant)
+                                        .font(.subheadline)
+                                        .foregroundStyle(EduTheme.ink)
+                                        .lineLimit(1)
+                                    Text(SavedLoginsStore.password(for: entry.identifiant) == nil
+                                         ? "Appuyer pour remplir"
+                                         : "Appuyer pour se connecter")
+                                        .font(.caption)
+                                        .foregroundStyle(EduTheme.muted)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.subtle)
                             }
-                            .accessibilityLabel("Supprimer ce compte enregistré")
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            SavedLoginsStore.remove(identifiant: entry.identifiant)
+                            saved = SavedLoginsStore.list()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.subtle)
+                                .frame(width: 28, height: 28)
+                        }
+                        .accessibilityLabel("Supprimer ce compte enregistré")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .overlay(alignment: .top) {
+                        if index > 0 {
+                            Rectangle().fill(EduTheme.border).frame(height: 1)
                         }
                     }
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.border, lineWidth: 1)
+            )
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Identifiant ou e-mail")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline)
                     .foregroundStyle(EduTheme.ink)
 
                 TextField("ex. prenom.nom", text: $identifiant)
@@ -140,28 +178,25 @@ struct LoginView: View {
                     .keyboardType(.emailAddress)
                     .textContentType(.username)
                     .foregroundStyle(EduTheme.ink)
-                    .tint(EduTheme.navy)
+                    .tint(EduTheme.accent)
                     .focused($focusedField, equals: .identifiant)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .password }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 13)
-                    .background(fieldBackground)
+                    .modifier(AuthFieldBox(focused: focusedField == .identifiant))
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Mot de passe")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline)
                         .foregroundStyle(EduTheme.ink)
                     Spacer(minLength: 8)
                     NavigationLink {
                         ForgotPasswordView()
                     } label: {
                         Text("Mot de passe oublié ?")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(EduTheme.navy)
-                            .underline()
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.accent)
                     }
                 }
 
@@ -175,7 +210,7 @@ struct LoginView: View {
                     }
                     .textContentType(.password)
                     .foregroundStyle(EduTheme.ink)
-                    .tint(EduTheme.navy)
+                    .tint(EduTheme.accent)
                     .focused($focusedField, equals: .password)
                     .submitLabel(.go)
                     .onSubmit { signIn() }
@@ -184,111 +219,53 @@ struct LoginView: View {
                         showPassword.toggle()
                     } label: {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(EduTheme.muted)
+                            .foregroundStyle(EduTheme.subtle)
                             .frame(width: 28, height: 28)
                     }
                     .accessibilityLabel(showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe")
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background(fieldBackground)
+                .modifier(AuthFieldBox(focused: focusedField == .password))
             }
 
             if let err = auth.authError {
-                Text(err)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(Color(red: 0.72, green: 0.11, blue: 0.11))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Button(action: signIn) {
-                HStack(spacing: 10) {
-                    if auth.busy {
-                        ProgressView()
-                            .tint(.white)
-                    }
-                    Text(auth.busy ? "Connexion…" : "Se connecter")
-                        .font(.body.weight(.bold))
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle")
+                    Text(err)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(canSubmit ? EduTheme.navy : EduTheme.navy.opacity(0.45))
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .font(.footnote)
+                .foregroundStyle(Color(red: 0.72, green: 0.11, blue: 0.11))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .disabled(!canSubmit)
-            .padding(.top, 4)
 
-            Text("Compte créé par votre établissement.")
+            AuthPrimaryButton(
+                title: "Se connecter",
+                busyTitle: "Connexion…",
+                busy: auth.busy,
+                enabled: canSubmit,
+                action: signIn
+            )
+            .padding(.top, 4)
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Rectangle().fill(EduTheme.border).frame(height: 1)
+            Text("Votre compte est créé par votre établissement.")
                 .font(.footnote)
                 .foregroundStyle(EduTheme.muted)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
-                .padding(.top, 2)
-
+                .fixedSize(horizontal: false, vertical: true)
             NavigationLink {
                 VerifyDocumentView()
             } label: {
-                Text("Vérifier un bulletin")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(EduTheme.navy)
-                    .underline()
+                HStack(spacing: 6) {
+                    Image(systemName: "qrcode.viewfinder")
+                    Text("Vérifier un bulletin")
+                }
+                .font(.footnote)
+                .foregroundStyle(EduTheme.accent)
             }
-            .frame(maxWidth: .infinity)
         }
-        .padding(22)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.white)
-                .shadow(color: Color.black.opacity(0.08), radius: 24, y: 10)
-        )
-        .overlay(alignment: .top) {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 22,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 22,
-                style: .continuous
-            )
-            .fill(EduTheme.navy)
-            .frame(height: 4)
-        }
-    }
-
-    private var fieldBackground: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(EduTheme.fieldBorder.opacity(0.85), lineWidth: 1)
-            )
-    }
-
-    private var marketingStrip: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Notes, présences et examens, au même endroit.")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Pour élèves, parents, enseignants et directions.")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.82))
-
-            HStack(spacing: 8) {
-                Capsule().fill(EduTheme.fasoRed).frame(width: 36, height: 5)
-                Capsule().fill(EduTheme.fasoYellow).frame(width: 36, height: 5)
-                Capsule().fill(EduTheme.fasoGreen).frame(width: 36, height: 5)
-            }
-            .padding(.top, 4)
-            .accessibilityHidden(true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.top, 22)
-        .padding(.bottom, 28)
-        .background(EduTheme.navy.ignoresSafeArea(edges: .bottom))
     }
 
     private var canSubmit: Bool {

@@ -7,9 +7,9 @@ struct PremiumScreenChrome<Content: View>: View {
     var body: some View {
         content()
             .scrollContentBackground(.hidden)
-            .background(EduTheme.loginBackground.ignoresSafeArea())
+            .background(EduTheme.page.ignoresSafeArea())
             .preferredColorScheme(.light)
-            .tint(EduTheme.navy)
+            .tint(EduTheme.accent)
     }
 }
 
@@ -17,8 +17,12 @@ struct PremiumCardBackground: ViewModifier {
     func body(content: Content) -> some View {
         content
             .listRowBackground(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .stroke(EduTheme.border, lineWidth: 1)
+                    )
                     .padding(.vertical, 2)
             )
     }
@@ -36,7 +40,7 @@ struct PremiumNavTitle: ViewModifier {
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackground(EduTheme.page, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
     }
 }

@@ -1,52 +1,46 @@
 import SwiftUI
 
-/// Shared light auth layout: brand gradient + white navy-top card.
+/// Shared sign-in layout: flat page, small logo, one white bordered card.
 struct AuthChrome<Content: View>: View {
     var showsLogo: Bool = true
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         ZStack {
-            EduTheme.loginBackground.ignoresSafeArea()
+            EduTheme.page.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 24) {
                     if showsLogo {
-                        Image("EduFasoLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: 132)
-                            .accessibilityLabel("EduFaso")
-                            .padding(.top, 12)
+                        AuthBrand()
+                            .padding(.top, 8)
                     }
 
                     content()
-                        .padding(22)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .fill(.white)
-                                .shadow(color: Color.black.opacity(0.08), radius: 24, y: 10)
-                        )
-                        .overlay(alignment: .top) {
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 22,
-                                bottomLeadingRadius: 0,
-                                bottomTrailingRadius: 0,
-                                topTrailingRadius: 22,
-                                style: .continuous
-                            )
-                            .fill(EduTheme.navy)
-                            .frame(height: 4)
-                        }
+                        .eduSurface(padding: 20)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.top, 16)
                 .padding(.bottom, 36)
             }
             .scrollDismissesKeyboard(.interactively)
         }
         .preferredColorScheme(.light)
+    }
+}
+
+/// Logo, left aligned, with the flag line under it.
+struct AuthBrand: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image("EduFasoLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 40)
+                .accessibilityLabel("EduFaso")
+            EduFlagStripe(width: 18)
+        }
     }
 }
 
@@ -65,9 +59,9 @@ struct AuthTextField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(EduTheme.ink)
 
             HStack(spacing: 10) {
@@ -83,7 +77,7 @@ struct AuthTextField: View {
                 .autocorrectionDisabled(keyboard == .emailAddress || isSecure)
                 .textContentType(contentType)
                 .foregroundStyle(EduTheme.ink)
-                .tint(EduTheme.navy)
+                .tint(EduTheme.accent)
                 .focused($focused)
                 .submitLabel(submitLabel)
                 .onSubmit { onSubmit?() }
@@ -93,23 +87,33 @@ struct AuthTextField: View {
                         reveal.toggle()
                     } label: {
                         Image(systemName: reveal ? "eye.slash" : "eye")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(EduTheme.muted)
+                            .foregroundStyle(EduTheme.subtle)
                             .frame(width: 28, height: 28)
                     }
+                    .accessibilityLabel(reveal ? "Masquer le mot de passe" : "Afficher le mot de passe")
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(EduTheme.fieldBorder.opacity(0.85), lineWidth: 1)
-                    )
-            )
+            .modifier(AuthFieldBox(focused: focused))
         }
+    }
+}
+
+/// White field with a thin border that turns teal while typing.
+struct AuthFieldBox: ViewModifier {
+    var focused: Bool
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(focused ? EduTheme.accent : EduTheme.borderStrong, lineWidth: 1)
+            )
+            .animation(.easeOut(duration: 0.15), value: focused)
     }
 }
 
@@ -125,13 +129,15 @@ struct AuthPrimaryButton: View {
             HStack(spacing: 10) {
                 if busy { ProgressView().tint(.white) }
                 Text(busy ? busyTitle : title)
-                    .font(.body.weight(.bold))
+                    .font(.body.weight(.medium))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background((enabled && !busy) ? EduTheme.navy : EduTheme.navy.opacity(0.45))
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill((enabled && !busy) ? EduTheme.accent : EduTheme.accent.opacity(0.4))
+            )
             .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .disabled(!enabled || busy)
     }

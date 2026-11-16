@@ -15,12 +15,54 @@ enum EduTheme {
     static let muted = Color(red: 100 / 255, green: 116 / 255, blue: 139 / 255)
     static let fieldBorder = Color(red: 148 / 255, green: 163 / 255, blue: 184 / 255)
 
+    // Redesign tokens (same as the web redesign): flat page, white surfaces,
+    // thin slate borders, small square-ish radius, colour only for status.
+    static let page = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255) // slate-50
+    static let border = Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255) // slate-200
+    static let borderStrong = Color(red: 203 / 255, green: 213 / 255, blue: 225 / 255) // slate-300
+    static let subtle = Color(red: 148 / 255, green: 163 / 255, blue: 184 / 255) // slate-400
+    static let accent = teal
+    static let radius: CGFloat = 6
+
+    /// Kept for the screens that still use it: now a flat page colour, no gradient.
     static var loginBackground: LinearGradient {
-        LinearGradient(
-            colors: [brand50, sand, Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        LinearGradient(colors: [page, page], startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// White surface with a thin border and the small radius.
+struct EduSurface: ViewModifier {
+    var padding: CGFloat = 16
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.border, lineWidth: 1)
+            )
+    }
+}
+
+extension View {
+    func eduSurface(padding: CGFloat = 16) -> some View {
+        modifier(EduSurface(padding: padding))
+    }
+}
+
+/// The three-colour flag line used as a quiet brand mark.
+struct EduFlagStripe: View {
+    var width: CGFloat = 22
+    var body: some View {
+        HStack(spacing: 3) {
+            Rectangle().fill(EduTheme.fasoRed).frame(width: width, height: 3)
+            Rectangle().fill(EduTheme.fasoYellow).frame(width: width, height: 3)
+            Rectangle().fill(EduTheme.fasoGreen).frame(width: width, height: 3)
+        }
+        .accessibilityHidden(true)
     }
 }
 
