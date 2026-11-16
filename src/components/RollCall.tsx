@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, CheckCircle2, Clock, Lock, Search, TriangleAlert, X } from "lucide-react";
@@ -61,6 +62,7 @@ export function RollCall({
   const { actingTeacherId, isProxy } = useActingTeacherId();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
+  const readOnly = useModuleReadOnly("presences");
   const asTeacher = !isAdmin || isProxy;
   const [saving, setSaving] = useState(false);
 
@@ -244,7 +246,9 @@ export function RollCall({
     setStatuses(next);
   };
   const pct = students.length ? Math.round(((summary.present + summary.late) / students.length) * 100) : 0;
-  const buttonLabel = saving
+  const buttonLabel = readOnly
+    ? "Consultation seulement"
+    : saving
     ? "Enregistrement…"
     : validated
       ? changed
@@ -273,6 +277,7 @@ export function RollCall({
   return (
     <>
       <UnsavedChangesDialog blocker={blocker} />
+      {readOnly ? <ReadOnlyBanner module="presences" /> : null}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
         {/* ── The class ── */}
         <div className="min-w-0">
@@ -383,7 +388,7 @@ export function RollCall({
                       </Badge>
                     ) : null}
                     </div>
-                    {locked ? null : (
+                    {locked || readOnly ? null : (
                       <div
                         className="grid grid-cols-3 overflow-hidden rounded-md border border-slate-200 dark:border-[var(--border)]"
                         role="group"
@@ -440,7 +445,7 @@ export function RollCall({
               </div>
             </div>
             {counts}
-            <Button type="button" size="lg" className="w-full" disabled={saving || !canSubmit || !subjectId} onClick={() => void handleSave()}>
+            <Button type="button" size="lg" className="w-full" disabled={readOnly || saving || !canSubmit || !subjectId} onClick={() => void handleSave()}>
               {buttonLabel}
             </Button>
             <p className="text-xs leading-relaxed text-slate-500">
@@ -460,7 +465,7 @@ export function RollCall({
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex-1">{counts}</div>
-          <Button type="button" size="lg" disabled={saving || !canSubmit || !subjectId} onClick={() => void handleSave()} className="sm:min-w-[11rem]">
+          <Button type="button" size="lg" disabled={readOnly || saving || !canSubmit || !subjectId} onClick={() => void handleSave()} className="sm:min-w-[11rem]">
             {buttonLabel}
           </Button>
         </div>

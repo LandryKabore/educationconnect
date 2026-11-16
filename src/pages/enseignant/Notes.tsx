@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
@@ -59,6 +60,7 @@ export default function Notes() {
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const periodClosed = usePeriodClosed(id, period);
+  const readOnly = useModuleReadOnly("notes");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newType, setNewType] = useState<EvaluationType>("devoir");
   const [newTitle, setNewTitle] = useState("");
@@ -724,7 +726,7 @@ export default function Notes() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={periodClosed}
+                  disabled={periodClosed || readOnly}
                   onClick={openCreate}
                 >
                   <Plus className="h-4 w-4" />
@@ -732,6 +734,7 @@ export default function Notes() {
                 </Button>
               </div>
             </div>
+            {readOnly ? <ReadOnlyBanner module="notes" /> : null}
             {periodClosed ? <PeriodClosedBanner periodLabel={period} /> : null}
             {id ? (
               <NotesHistoryModal
@@ -955,9 +958,9 @@ export default function Notes() {
                           ) : (
                             <Pencil className="h-4 w-4" />
                           )}
-                          Noter
+                          {readOnly ? "Voir" : "Noter"}
                         </Button>
-                        {canEditEval(ev) ? (
+                        {canEditEval(ev) && !readOnly ? (
                           <>
                             <Button
                               type="button"

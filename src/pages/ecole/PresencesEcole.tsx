@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
@@ -73,6 +74,7 @@ function readIsoDate(raw: string | null, fallback: string): string {
 
 export default function PresencesEcole() {
   const { schoolId, user } = useAuth();
+  const readOnly = useModuleReadOnly("presences");
   const qc = useQueryClient();
   const { page, pageSize, setPage, setPageSize } = usePageParams();
   const [searchParams] = useSearchParams();
@@ -294,7 +296,7 @@ export default function PresencesEcole() {
   );
 
   const rowAction = (r: PresenceRow) =>
-    r.status === "absent" ? (
+    readOnly ? null : r.status === "absent" ? (
       <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: "justify", rows: [r] })}>
         Justifier
       </Button>
@@ -367,6 +369,7 @@ export default function PresencesEcole() {
         title="Présences"
         subtitle="Passez en revue les absences et justifiez-les en lot"
       />
+      {readOnly ? <ReadOnlyBanner module="presences" /> : null}
 
       <Card className="mb-4">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -533,7 +536,7 @@ export default function PresencesEcole() {
         </>
       )}
 
-      <BulkBar count={selection.count} noun="ligne" onClear={selection.clear}>
+      <BulkBar count={readOnly ? 0 : selection.count} noun="ligne" onClear={selection.clear}>
         <Button
           type="button"
           size="sm"

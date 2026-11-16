@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import {
   Link,
   useLocation,
@@ -117,6 +118,8 @@ export default function NotesSaisie() {
   });
 
   const periodClosed = usePeriodClosed(id, openEval?.period_label);
+  const readOnly = useModuleReadOnly("notes");
+  const locked = periodClosed || readOnly;
 
   const { data: className } = useQuery({
     queryKey: ["class-name", id],
@@ -400,7 +403,7 @@ export default function NotesSaisie() {
   };
 
   const canSave =
-    changedCount > 0 && invalidCount === 0 && !savingGrades && !periodClosed;
+    changedCount > 0 && invalidCount === 0 && !savingGrades && !locked;
   const saveRef = useRef(() => {});
   saveRef.current = () => {
     if (canSave) void saveGrades();
@@ -528,14 +531,16 @@ export default function NotesSaisie() {
       size={size}
       saving={savingGrades}
       dirty={changedCount > 0}
-      disabled={invalidCount > 0 || periodClosed}
+      disabled={invalidCount > 0 || locked}
       saveLabel={`Enregistrer (${changedCount})`}
       className={className}
       onClick={() => void saveGrades()}
     />
   );
 
-  const statusHint = periodClosed
+  const statusHint = readOnly
+    ? "Consultation seulement"
+    : periodClosed
     ? "Période clôturée : notes verrouillées"
     : invalidCount > 0
       ? `Corrigez ${invalidCount} note${invalidCount > 1 ? "s" : ""} (0 à ${openEval.max_score})`
@@ -605,6 +610,7 @@ export default function NotesSaisie() {
         </div>
       </div>
 
+      {readOnly ? <ReadOnlyBanner module="notes" /> : null}
       {periodClosed ? <PeriodClosedBanner periodLabel={openEval.period_label} /> : null}
       <div className="mb-3 flex justify-end">
         <button
@@ -626,7 +632,7 @@ export default function NotesSaisie() {
         />
       ) : null}
 
-      <fieldset disabled={periodClosed} className="m-0 min-w-0 border-0 p-0">
+      <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0">
       {total === 0 ? (
         <EmptyState message="Aucun élève dans cette classe." />
       ) : isDesktop ? (
