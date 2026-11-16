@@ -868,7 +868,7 @@ struct ParentHomeView: View {
             title: "Devoirs \(Self.de(firstName(child))) cette semaine",
             subtitle: "Exercices et devoirs des 7 prochains jours",
             actionTitle: "Tous les exercices",
-            destination: { EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices") }
+            destination: { ExercisesBoardView(studentIdOverride: child.id, childName: firstName(child)) }
         ) {
             if home == nil {
                 cardLoading
@@ -885,7 +885,7 @@ struct ParentHomeView: View {
                             if isExam {
                                 ExamsBoardView(studentIdOverride: child.id, childName: firstName(child))
                             } else {
-                                EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices")
+                                ExercisesBoardView(studentIdOverride: child.id, childName: firstName(child))
                             }
                         } label: {
                             HStack(spacing: 12) {
@@ -1047,7 +1047,7 @@ struct ParentHomeView: View {
                 quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
                 quickLink("Examens", icon: "list.clipboard") { ExamsBoardView(studentIdOverride: child.id, childName: firstName(child)) }
-                quickLink("Exercices", icon: "square.and.pencil") { EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices") }
+                quickLink("Exercices", icon: "square.and.pencil") { ExercisesBoardView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView(studentIdOverride: child.id) }
             }
         }

@@ -113,7 +113,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .childNotes: return "Notes"
         case .childAttendance: return "Présences"
         case .childExams: return "Examens"
-        case .childExercises: return "Interrogations"
+        case .childExercises: return "Exercices"
         case .childCompositions: return "Compositions"
         case .childBulletin: return "Bulletins"
         case .childTimetable: return "Emploi du temps"

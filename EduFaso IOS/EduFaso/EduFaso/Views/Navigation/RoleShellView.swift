@@ -557,7 +557,7 @@ struct ScreenHost: View {
         case .childExams:
             ChildGate(title: "Examens", keepsContentOnSwitch: true) { ExamsBoardView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childExercises:
-            ChildGate(title: "Interrogations") { EvaluationsBrowser(studentId: $0.id, type: "interrogation", title: "Interrogations") }
+            ChildGate(title: "Exercices", keepsContentOnSwitch: true) { ExercisesBoardView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childCompositions:
             ChildGate(title: "Compositions") { StudentCompositionsView(studentIdOverride: $0.id) }
         case .childBulletin:

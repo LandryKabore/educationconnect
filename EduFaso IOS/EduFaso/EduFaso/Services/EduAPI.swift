@@ -68,6 +68,31 @@ actor EduAPI {
         return try await query.limit(2000).execute().value
     }
 
+    struct EvaluationScore: Hashable { let score: Double?; let max: Double?; let absent: Bool }
+
+    /// One student's grade for each of these evaluations (graded exercises on the Exercices page).
+    func fetchEvaluationScores(studentId: String, evaluationIds: [String]) async -> [String: EvaluationScore] {
+        guard !evaluationIds.isEmpty else { return [:] }
+        struct Row: Decodable {
+            let evaluation_id: String?
+            let score: Double?
+            let max_score: Double?
+            let is_absent: Bool?
+        }
+        let rows: [Row] = (try? await client
+            .from("notes")
+            .select("evaluation_id, score, max_score, is_absent")
+            .eq("student_id", value: studentId)
+            .in("evaluation_id", values: evaluationIds)
+            .execute()
+            .value) ?? []
+        var out: [String: EvaluationScore] = [:]
+        for r in rows {
+            if let id = r.evaluation_id { out[id] = EvaluationScore(score: r.score, max: r.max_score, absent: r.is_absent ?? false) }
+        }
+        return out
+    }
+
     func fetchAttendanceCounts(studentId: String) async throws -> StudentAttendanceCounts {
         try await client
             .rpc("ef_attendance_counts", params: ["p_student": studentId])
