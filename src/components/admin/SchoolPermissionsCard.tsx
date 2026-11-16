@@ -19,6 +19,7 @@ import {
 } from "@/lib/modules";
 import { schoolModulesKey, useSchoolModules } from "@/hooks/useSchoolModules";
 import { AdminCard, AdminLoading } from "@/components/admin/AdminKit";
+import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 
 const LEVEL_TONE: Record<AccessLevel, string> = {
   aucun: "text-slate-400",
@@ -26,11 +27,44 @@ const LEVEL_TONE: Record<AccessLevel, string> = {
   modifier: "text-brand-700",
 };
 
+const LEVEL_RANK: Record<AccessLevel, number> = {
+  aucun: 0,
+  consulter: 1,
+  modifier: 2,
+};
+
+const ROLE_PEOPLE: Record<SchoolRole, string> = {
+  school_admin: "Les membres de l’administration",
+  teacher: "Les enseignants",
+  student: "Les élèves",
+  parent: "Les parents",
+};
+
+const LEVEL_EFFECT: Record<AccessLevel, (who: string, mod: string) => string> = {
+  aucun: (who, mod) =>
+    `${who} ne verront plus ${mod} : le module disparaît de leurs menus.`,
+  consulter: (who, mod) =>
+    `${who} pourront voir ${mod}, mais plus rien y ajouter, modifier ou supprimer.`,
+  modifier: (who, mod) => `${who} pourront voir ${mod} et y saisir des données.`,
+};
+
 /** Super admin: what each role can do in each module of one school. */
-export function SchoolPermissionsCard({ schoolId }: { schoolId: string }) {
+export function SchoolPermissionsCard({
+  schoolId,
+  schoolName,
+}: {
+  schoolId: string;
+  schoolName?: string;
+}) {
   const qc = useQueryClient();
   const { data, isLoading } = useSchoolModules(schoolId);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pending, setPending] = useState<{
+    mod: ModuleDef;
+    role: SchoolRole;
+    from: AccessLevel;
+    to: AccessLevel;
+  } | null>(null);
 
   const states = resolveModuleStates(data?.rows);
   const rows = data?.permissions;
@@ -64,12 +98,34 @@ export function SchoolPermissionsCard({ schoolId }: { schoolId: string }) {
       toast.error(e instanceof Error ? e.message : "Modification impossible");
     } finally {
       setBusy(null);
+      setPending(null);
       void qc.invalidateQueries({ queryKey: schoolModulesKey(schoolId) });
     }
   };
 
   return (
     <AdminCard className="mt-4 overflow-hidden">
+      {pending ? (
+        <AdminConfirmDialog
+          open
+          title="Modifier cette permission ?"
+          confirmLabel="Confirmer"
+          danger={LEVEL_RANK[pending.to] < LEVEL_RANK[pending.from]}
+          busy={busy === `${pending.mod.key}:${pending.role}`}
+          onConfirm={() => void change(pending.mod, pending.role, pending.to)}
+          onCancel={() => setPending(null)}
+        >
+          <p>
+            <span className="font-medium text-slate-900">
+              {SCHOOL_ROLE_LABELS[pending.role]} · {pending.mod.name}
+            </span>
+            {" : "}
+            {ACCESS_LABELS[pending.from]} → {ACCESS_LABELS[pending.to]}
+            {schoolName ? ` à « ${schoolName} »` : ""}.
+          </p>
+          <p>{LEVEL_EFFECT[pending.to](ROLE_PEOPLE[pending.role], pending.mod.name)}</p>
+        </AdminConfirmDialog>
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-medium text-slate-900">
           Permissions par rôle
@@ -152,7 +208,12 @@ export function SchoolPermissionsCard({ schoolId }: { schoolId: string }) {
                                 value={level}
                                 disabled={missing || !!busy}
                                 onChange={(e) =>
-                                  void change(m, r, e.target.value as AccessLevel)
+                                  setPending({
+                                    mod: m,
+                                    role: r,
+                                    from: level,
+                                    to: e.target.value as AccessLevel,
+                                  })
                                 }
                                 className={cn(
                                   "w-40 shrink-0 rounded-sm border bg-white px-2 py-1 text-sm transition focus:border-brand-500 focus:outline-none disabled:opacity-60",

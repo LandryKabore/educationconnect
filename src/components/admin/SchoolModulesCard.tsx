@@ -16,12 +16,20 @@ import {
 } from "@/lib/modules";
 import { schoolModulesKey, useSchoolModules } from "@/hooks/useSchoolModules";
 import { AdminCard, AdminLoading } from "@/components/admin/AdminKit";
+import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 
 /** Super admin: turn each module on or off for one school. */
-export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
+export function SchoolModulesCard({
+  schoolId,
+  schoolName,
+}: {
+  schoolId: string;
+  schoolName?: string;
+}) {
   const qc = useQueryClient();
   const { data, isLoading, error } = useSchoolModules(schoolId);
   const [busy, setBusy] = useState<ModuleKey | null>(null);
+  const [pending, setPending] = useState<ModuleDef | null>(null);
 
   const states = resolveModuleStates(data?.rows);
   const tableMissing = data?.tableMissing ?? false;
@@ -81,12 +89,32 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
       toast.error(e instanceof Error ? e.message : "Modification impossible");
     } finally {
       setBusy(null);
+      setPending(null);
       void qc.invalidateQueries({ queryKey: schoolModulesKey(schoolId) });
     }
   };
 
   return (
     <AdminCard className="mt-4 overflow-hidden">
+      {pending ? (
+        <ModuleConfirm
+          mod={pending}
+          turningOn={!states[pending.key]}
+          schoolName={schoolName}
+          also={
+            !states[pending.key]
+              ? pending.requires
+                  .filter((r) => !states[r])
+                  .map((r) => moduleDef(r)?.name ?? r)
+              : dependentsOf(pending.key)
+                  .filter((d) => states[d.key])
+                  .map((d) => d.name)
+          }
+          busy={busy === pending.key}
+          onConfirm={() => void toggle(pending)}
+          onCancel={() => setPending(null)}
+        />
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-medium text-slate-900">
           Modules
@@ -138,7 +166,7 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
                       on={states[m.key]}
                       disabled={!m.available || tableMissing || !!busy}
                       busy={busy === m.key}
-                      onToggle={() => void toggle(m)}
+                      onToggle={() => setPending(m)}
                     />
                   ))}
                 </ul>
@@ -204,5 +232,48 @@ function ModuleRow({
         </button>
       ) : null}
     </li>
+  );
+}
+
+function ModuleConfirm({
+  mod,
+  turningOn,
+  schoolName,
+  also,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  mod: ModuleDef;
+  turningOn: boolean;
+  schoolName?: string;
+  also: string[];
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const school = schoolName ? `« ${schoolName} »` : "cette école";
+  return (
+    <AdminConfirmDialog
+      open
+      title={`${turningOn ? "Activer" : "Désactiver"} ${mod.name} ?`}
+      confirmLabel={turningOn ? "Activer" : "Désactiver"}
+      danger={!turningOn}
+      busy={busy}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    >
+      <p>
+        {turningOn
+          ? `${mod.name} apparaîtra dans les menus de ${school}, pour les rôles qui y ont accès.`
+          : `${mod.name} disparaîtra des menus de ${school}, pour tous les rôles. Les données déjà saisies sont conservées.`}
+      </p>
+      {also.length ? (
+        <p className="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+          {turningOn ? "Sera aussi activé : " : "Sera aussi désactivé : "}
+          {also.join(", ")}.
+        </p>
+      ) : null}
+    </AdminConfirmDialog>
   );
 }
