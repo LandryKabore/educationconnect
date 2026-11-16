@@ -539,7 +539,7 @@ struct ParentHomeView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                NavigationLink { BulletinBoard(studentId: child.id, title: "Bulletin") } label: {
+                NavigationLink { BulletinBoard(studentId: child.id, title: "Bulletin", childName: firstName(child)) } label: {
                     Text("BULLETIN")
                         .font(.system(size: 11, weight: .bold))
                         .tracking(0.8)
@@ -1049,9 +1049,9 @@ struct ParentHomeView: View {
             cardLabel("Accès rapide · \(firstName(child))")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 quickLink("Notes", icon: "book") { StudentGradesView(studentIdOverride: child.id, childName: firstName(child)) }
-                quickLink("Bulletin", icon: "doc.text") { BulletinBoard(studentId: child.id, title: "Bulletin") }
+                quickLink("Bulletin", icon: "doc.text") { BulletinBoard(studentId: child.id, title: "Bulletin", childName: firstName(child)) }
                 quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) }
-                quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
+                quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Examens", icon: "list.clipboard") { ExamsBoardView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Exercices", icon: "square.and.pencil") { ExercisesBoardView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView(studentIdOverride: child.id, childName: firstName(child)) }
@@ -1451,9 +1451,9 @@ struct ChildDetailView: View {
                     NavigationLink("Compositions") {
                         StudentCompositionsView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName)
                     }
-                    NavigationLink("Bulletin") { BulletinBoard(studentId: child.id) }
+                    NavigationLink("Bulletin") { BulletinBoard(studentId: child.id, childName: child.firstName ?? child.fullName) }
                     NavigationLink("Emploi du temps") {
-                        TimetableView(mode: .student, studentIdOverride: child.id)
+                        TimetableView(mode: .student, studentIdOverride: child.id, childName: child.firstName ?? child.fullName)
                     }
                     NavigationLink("Cahier de textes") { CahierFeedView(studentId: child.id) }
                 }

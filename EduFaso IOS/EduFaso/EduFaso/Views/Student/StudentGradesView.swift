@@ -181,7 +181,7 @@ struct StudentGradesView: View {
                     }
                     NavigationLink {
                         if let sid = studentIdOverride ?? auth.userId {
-                            BulletinBoard(studentId: sid, title: childName == nil ? "Mon bulletin" : "Bulletin")
+                            BulletinBoard(studentId: sid, title: childName == nil ? "Mon bulletin" : "Bulletin", childName: childName)
                         }
                     } label: {
                         bannerStat(label: "Moyenne annuelle", value: annual.average.map { NotesMath.format($0, 2) } ?? "—") {

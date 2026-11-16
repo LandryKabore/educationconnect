@@ -2178,7 +2178,54 @@ struct CahierFeedView: View {
 struct BulletinBoard: View {
     let studentId: String
     var title: String = "Bulletin"
+    /// Parent view: the child's first name, shown in the title.
+    var childName: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
+
+    // guided tour (shares targets with ChildGate's child switcher when there is one)
+    @State private var tour = TabTour(key: "bulletin")
+    @State private var ownCoach = CoachMarkRegistry()
+    @Environment(CoachMarkRegistry.self) private var outerCoach: CoachMarkRegistry?
+    private var coach: CoachMarkRegistry { outerCoach ?? ownCoach }
+
+    private var pageTitle: String { childName.map { "Bulletin \(ParentHomeView.de($0))" } ?? title }
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "child.switcher", icon: "arrow.left.arrow.right",
+                title: "Changer d’enfant",
+                message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
+                requiresAction: true,
+                doneMessage: "Voilà ! La page affiche maintenant le bulletin de cet enfant."
+            ),
+            CoachMarkStep(
+                id: "bulletin.periods", icon: "calendar",
+                title: "Choisir la période",
+                message: "Trimestre 1, 2, 3 ou l’année entière."
+            ),
+            CoachMarkStep(
+                id: "bulletin.stats", icon: "chart.bar.fill",
+                title: "Moyenne générale",
+                message: "La moyenne de la période, le rang dans la classe, la moyenne de la classe, les absences et les retards."
+            ),
+            CoachMarkStep(
+                id: "bulletin.subjects", icon: "list.bullet.rectangle",
+                title: "Matières",
+                message: "Chaque matière avec son coefficient, l’enseignant et la moyenne. Touchez une matière pour voir ses notes."
+            ),
+            CoachMarkStep(
+                id: "bulletin.pdf", icon: "arrow.down.doc.fill",
+                title: "Bulletin officiel",
+                message: "Ce bouton télécharge ou partage le bulletin en PDF, avec son code QR de vérification."
+            ),
+            CoachMarkStep(
+                id: "bulletin.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
     @State private var period = "Trimestre 1"
     @State private var stats: BulletinClassStats?
     @State private var grades: [GradeRow] = []
@@ -2213,6 +2260,7 @@ struct BulletinBoard: View {
                 } else if let error {
                     Text(error).foregroundStyle(EduTheme.fasoRed).padding()
                 } else {
+                    ScrollViewReader { proxy in
                     VStack(spacing: 0) {
                         stickyHeader
                             .padding(.horizontal, 16)
@@ -2245,8 +2293,12 @@ struct BulletinBoard: View {
                                         .padding(16)
                                         .background(cardBackground)
                                 } else {
-                                    ForEach(subjects) { line in
-                                        subjectDropdown(line)
+                                    ForEach(Array(subjects.enumerated()), id: \.element.id) { index, line in
+                                        if index == 0 {
+                                            subjectDropdown(line).coachMarkTarget("bulletin.subjects")
+                                        } else {
+                                            subjectDropdown(line)
+                                        }
                                     }
                                 }
                             }
@@ -2255,10 +2307,14 @@ struct BulletinBoard: View {
                         }
                         .refreshable { await load(reset: true) }
                     }
+                    .tabTour(tour, registry: coach, scroller: proxy)
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
             }
         }
-        .premiumTitle(title)
+        .environment(coach)
+        .premiumTitle(pageTitle)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -2272,6 +2328,7 @@ struct BulletinBoard: View {
                 }
                 .disabled(exporting || !canExport)
                 .accessibilityLabel("Télécharger le bulletin PDF")
+                .coachMarkTarget("bulletin.pdf")
             }
         }
         .alert("Export impossible", isPresented: Binding(
@@ -2282,7 +2339,19 @@ struct BulletinBoard: View {
         } message: {
             Text(exportError ?? "")
         }
-        .task { await load(reset: true) }
+        .task(id: studentId) {
+            // another child: forget the previous one's class and name, keep the screen in place
+            classId = nil
+            className = nil
+            studentName = nil
+            await load(reset: true)
+        }
+        .onChange(of: studentId) { _, _ in
+            guard tour.showing, tour.steps.indices.contains(tour.index),
+                  tour.steps[tour.index].requiresAction else { return }
+            tour.steps[tour.index].doneMessage = "Voilà ! La page affiche maintenant le bulletin \(childName.map { ParentHomeView.de($0) } ?? "de cet enfant"). Le bouton plein, en haut, montre toujours l’enfant affiché."
+            tour.actionDone = true
+        }
         .onChange(of: period) { _, _ in
             expandedIds.removeAll()
             Task { await load(reset: false) }
@@ -2377,10 +2446,15 @@ struct BulletinBoard: View {
 
     private var stickyHeader: some View {
         VStack(spacing: 12) {
-            EduPeriodSegmentPicker(
-                options: periods.map { ($0, $0) },
-                selection: $period
-            )
+            HStack(spacing: 10) {
+                EduPeriodSegmentPicker(
+                    options: periods.map { ($0, $0) },
+                    selection: $period
+                )
+                .coachMarkTarget("bulletin.periods")
+                TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                    .coachMarkTarget("bulletin.help")
+            }
 
             VStack(spacing: 10) {
                 if let className = stats?.className ?? className {
@@ -2414,6 +2488,7 @@ struct BulletinBoard: View {
             .padding(.vertical, 14)
             .padding(.horizontal, 12)
             .background(cardBackground)
+            .coachMarkTarget("bulletin.stats")
         }
     }
 
@@ -2650,10 +2725,14 @@ struct BulletinBoard: View {
                 periodLabel: period
             )
             async let gradesTask = api.fetchGrades(studentId: studentId)
-            stats = try await statsTask
-            grades = (try? await gradesTask) ?? grades
+            let fetched = try await statsTask
+            let fetchedGrades = (try? await gradesTask) ?? grades
+            if Task.isCancelled { return }
+            stats = fetched
+            grades = fetchedGrades
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false

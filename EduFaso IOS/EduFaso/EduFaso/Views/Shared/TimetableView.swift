@@ -6,6 +6,56 @@ struct TimetableView: View {
 
     let mode: Mode
     var studentIdOverride: String? = nil
+    /// Parent view: the child's first name, shown in the title.
+    var childName: String? = nil
+
+    // guided tour (shares targets with ChildGate's child switcher when there is one)
+    @State private var tour = TabTour(key: "emploi-du-temps.v4")
+    @State private var ownCoach = CoachMarkRegistry()
+    @Environment(CoachMarkRegistry.self) private var outerCoach: CoachMarkRegistry?
+    private var coach: CoachMarkRegistry { outerCoach ?? ownCoach }
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "child.switcher", icon: "arrow.left.arrow.right",
+                title: "Changer d’enfant",
+                message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
+                requiresAction: true,
+                doneMessage: "Voilà ! La page affiche maintenant l’emploi du temps de cet enfant."
+            ),
+            CoachMarkStep(
+                id: "edt.scope", icon: "calendar",
+                title: "Jour ou semaine",
+                message: "Voyez la journée heure par heure, ou toute la semaine d’un coup."
+            ),
+            CoachMarkStep(
+                id: "edt.days", icon: "calendar.day.timeline.left",
+                title: "Choisir un jour",
+                message: "Touchez un jour, ou glissez la journée vers la gauche ou la droite. Les points montrent combien de cours il y a."
+            ),
+            CoachMarkStep(
+                id: "edt.summary", icon: "clock.fill",
+                title: "En ce moment",
+                message: "Suit la journée en direct : le cours en cours et le temps qui reste, la récréation et la reprise, ou le premier cours de demain."
+            ),
+            CoachMarkStep(
+                id: "edt.timeline", icon: "list.bullet",
+                title: "La journée heure par heure",
+                message: "Chaque cours avec son heure, son professeur et sa salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés, les récréations et la pause déjeuner sont nommées."
+            ),
+            CoachMarkStep(
+                id: "edt.pdf", icon: "arrow.down.doc.fill",
+                title: "Télécharger",
+                message: "Téléchargez ou partagez l’emploi du temps de la semaine en PDF."
+            ),
+            CoachMarkStep(
+                id: "edt.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
 
     @EnvironmentObject private var auth: AuthViewModel
     @State private var slots: [TimetableSlot] = []
@@ -20,10 +70,12 @@ struct TimetableView: View {
     /// 0 = current calendar week; ±1 previous/next, etc.
     @State private var weekOffset: Int = 0
 
-    private let pauseGapMin = 90
+    /// Every gap of 10 minutes or more between two lessons is shown (récréation, déjeuner…).
+    private let pauseGapMin = 10
     private let weekPickerRange = -2...2
 
     private var titleText: String {
+        if let childName { return "Emploi du temps \(ParentHomeView.de(childName))" }
         switch mode {
         case .student, .teacher: return "Mon emploi du temps"
         case .classSection: return "Emploi du temps"
@@ -45,7 +97,7 @@ struct TimetableView: View {
     private var todayWeekday: Int { EduDates.weekday() }
 
     private var isViewingToday: Bool {
-        selectedDay == todayWeekday && todayWeekday != 7
+        weekOffset == 0 && selectedDay == todayWeekday && todayWeekday != 7
     }
 
     private var daySlots: [TimetableSlot] {
@@ -106,44 +158,43 @@ struct TimetableView: View {
                         message: "L’emploi du temps n’est pas encore publié."
                     )
                 } else {
+                    ScrollViewReader { proxy in
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         ScrollView {
                             VStack(alignment: .leading, spacing: 16) {
-                                scopePicker
+                                header
+                                scopePicker.coachMarkTarget("edt.scope")
                                 if scope == .day {
-                                    dayStrip
-                                    daySummaryCard(at: context.date)
+                                    dayStrip.coachMarkTarget("edt.days")
+                                    daySummaryCard(at: context.date).coachMarkTarget("edt.summary")
                                     dayTimeline(at: context.date)
+                                        .coachMarkTarget("edt.timeline")
+                                        .simultaneousGesture(daySwipe)
                                 } else {
-                                    weekStrip
-                                    weekSummaryCard
-                                    weekList(at: context.date)
+                                    weekStrip.coachMarkTarget("edt.days")
+                                    weekSummaryCard.coachMarkTarget("edt.summary")
+                                    weekList(at: context.date).coachMarkTarget("edt.timeline")
                                 }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                         }
                         .refreshable { await load(isRefresh: true) }
+                        .tabTour(tour, registry: coach, scroller: proxy)
                     }
+                    .onChange(of: scope) { _, newScope in
+                        guard newScope == .week else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            withAnimation { proxy.scrollTo("week-day-\(selectedDay)", anchor: .top) }
+                        }
+                    }
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
             }
         }
+        .environment(coach)
         .premiumTitle(titleText)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await exportPdf() }
-                } label: {
-                    if exporting {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "square.and.arrow.down")
-                    }
-                }
-                .disabled(exporting || slots.isEmpty || !ready)
-                .accessibilityLabel("Télécharger PDF")
-            }
-        }
         .alert("Export impossible", isPresented: Binding(
             get: { exportError != nil },
             set: { if !$0 { exportError = nil } }
@@ -152,7 +203,13 @@ struct TimetableView: View {
         } message: {
             Text(exportError ?? "")
         }
-        .task { await load(isRefresh: false) }
+        .task(id: studentIdOverride) { await load(isRefresh: ready) }
+        .onChange(of: studentIdOverride) { _, _ in
+            guard tour.showing, tour.steps.indices.contains(tour.index),
+                  tour.steps[tour.index].requiresAction else { return }
+            tour.steps[tour.index].doneMessage = "Voilà ! La page affiche maintenant l’emploi du temps \(childName.map { ParentHomeView.de($0) } ?? "de cet enfant"). Le bouton plein, en haut, montre toujours l’enfant affiché."
+            tour.actionDone = true
+        }
         .onAppear { snapToNow() }
     }
 
@@ -200,9 +257,53 @@ struct TimetableView: View {
     }
 
     private func snapToNow() {
-        weekOffset = 0
-        selectedDay = Self.defaultSelectedDay()
+        let start = smartStart()
+        weekOffset = start.weekOffset
+        selectedDay = start.day
         scope = .day
+    }
+
+    /// The day worth showing now: today while lessons are still ahead, else the next school day
+    /// (tomorrow, or Monday of next week after Saturday's last lesson and on Sunday).
+    private func smartStart(now: Date = Date()) -> (weekOffset: Int, day: Int) {
+        let today = EduDates.weekday(now)
+        let nowMin = minutesNow(now)
+        let schoolDays = Set(slots.map(\.dayOfWeek)).filter { (1...6).contains($0) }
+        guard !schoolDays.isEmpty else { return (0, today == 7 ? 1 : today) }
+        if today != 7 {
+            let lastEnd = slots.filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
+            if let lastEnd, nowMin < lastEnd { return (0, today) }
+            if let next = (today + 1...6).first(where: { schoolDays.contains($0) }) { return (0, next) }
+        }
+        return (1, (1...6).first(where: { schoolDays.contains($0) }) ?? 1)
+    }
+
+    /// First lesson of the next school day after the selected one (for « Journée terminée »).
+    private func nextSchoolDayFirst() -> (label: String, slot: TimetableSlot)? {
+        let order = Array(selectedDay + 1...max(selectedDay + 1, 6)) + Array(1...6)
+        for day in order where day != selectedDay && (1...6).contains(day) {
+            if let first = slots.filter({ $0.dayOfWeek == day }).min(by: { $0.startTime < $1.startTime }) {
+                let label = (day == selectedDay + 1) ? "Demain" : dayName(day)
+                return (label, first)
+            }
+        }
+        return nil
+    }
+
+    /// « dans 12 min », « dans 1 h 05 »
+    private static func inMinutes(_ m: Int) -> String {
+        if m <= 0 { return "maintenant" }
+        if m < 60 { return "dans \(m) min" }
+        let h = m / 60, r = m % 60
+        return r == 0 ? "dans \(h) h" : "dans \(h) h \(String(format: "%02d", r))"
+    }
+
+    /// Name of a break from its length and time of day.
+    static func pauseName(start: Int, end: Int) -> String {
+        let length = end - start
+        if length >= 60 && start >= 11 * 60 && start <= 14 * 60 + 30 { return "Pause déjeuner" }
+        if length <= 30 { return "Récréation" }
+        return "Pause"
     }
 
     // MARK: - Header controls
@@ -217,12 +318,12 @@ struct TimetableView: View {
     private var dayStrip: some View {
         let todayIndex = EduDates.weekday()
         return HStack(spacing: 6) {
-            ForEach(WeekCalendar.week(containing: Date())) { day in
+            ForEach(WeekCalendar.week(containing: referenceDate)) { day in
                 let selected = selectedDay == day.dayOfWeek
-                let isToday = day.dayOfWeek == todayIndex
+                let isToday = weekOffset == 0 && day.dayOfWeek == todayIndex
+                let count = slots.filter { $0.dayOfWeek == day.dayOfWeek }.count
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        weekOffset = 0
                         selectedDay = day.dayOfWeek
                         scope = .day
                     }
@@ -230,7 +331,7 @@ struct TimetableView: View {
                     VStack(spacing: 4) {
                         Text(day.shortName)
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(isToday ? EduTheme.fasoGreen : (selected ? EduTheme.navy : EduTheme.muted))
+                            .foregroundStyle(isToday ? EduTheme.fasoGreen : (selected ? EduTheme.teal : EduTheme.muted))
                         Text("\(day.dayNumber)")
                             .font(.body.weight(.bold).monospacedDigit())
                             .foregroundStyle(selected || isToday ? EduTheme.ink : EduTheme.muted)
@@ -242,16 +343,19 @@ struct TimetableView: View {
                                 .padding(.vertical, 2)
                                 .background(EduTheme.fasoGreen, in: Capsule())
                         } else {
-                            Circle()
-                                .fill(day.hasSlots(in: slots) ? (selected ? EduTheme.navy : EduTheme.teal) : Color.clear)
-                                .frame(width: 5, height: 5)
-                                .padding(.vertical, 3)
+                            // one dot per lesson (up to 4): a quick idea of how busy the day is
+                            HStack(spacing: 2) {
+                                ForEach(0..<min(count, 4), id: \.self) { _ in
+                                    Circle().fill(EduTheme.teal.opacity(selected ? 1 : 0.6)).frame(width: 4, height: 4)
+                                }
+                            }
+                            .frame(height: 11)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                             .fill(
                                 selected
                                 ? Color.white
@@ -259,7 +363,7 @@ struct TimetableView: View {
                             )
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                             .stroke(
                                 isToday ? EduTheme.fasoGreen : Color.clear,
                                 lineWidth: isToday ? 1.5 : 0
@@ -272,7 +376,7 @@ struct TimetableView: View {
         }
         .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
         )
     }
@@ -294,11 +398,11 @@ struct TimetableView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
-                        .foregroundStyle(weekOffset == option.offset ? EduTheme.navy : EduTheme.muted)
+                        .foregroundStyle(weekOffset == option.offset ? EduTheme.teal : EduTheme.muted)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                                 .fill(weekOffset == option.offset ? Color.white : Color.clear)
                         )
                         .contentShape(Rectangle())
@@ -309,7 +413,7 @@ struct TimetableView: View {
             .padding(4)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
         )
     }
@@ -346,81 +450,105 @@ struct TimetableView: View {
     }
 
     private func daySummaryCard(at date: Date) -> some View {
+        let now = minutesNow(date)
         let live = nowSlot(at: date)
         let upcoming = nextSlot(at: date)
-        let clockLabel = Self.clockStatic(minutesNow(date))
+        let first = daySlots.first
+        let clockLabel = Self.clockStatic(now)
+        let accent: Color = live != nil ? EduTheme.fasoGreen : EduTheme.teal
 
-        return HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill((live != nil ? EduTheme.fasoGreen : EduTheme.navy).opacity(0.12))
-                Image(systemName: live != nil ? "clock.fill" : "calendar")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(live != nil ? EduTheme.fasoGreen : EduTheme.navy)
-            }
-            .frame(width: 52, height: 52)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(selectedDaySubtitle.uppercased())
-                        .font(.caption2.weight(.bold))
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(selectedDaySubtitle.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(EduTheme.muted)
+                    .tracking(0.5)
+                    .lineLimit(1)
+                if isViewingToday {
+                    Text(clockLabel)
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(EduTheme.teal)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(EduTheme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                }
+                Spacer(minLength: 0)
+                if dayCourseCount > 0 {
+                    Text("\(dayCourseCount) cours")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(EduTheme.muted)
-                        .tracking(0.5)
-                        .lineLimit(1)
-                    if isViewingToday {
-                        Text(clockLabel)
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .foregroundStyle(EduTheme.navy)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(EduTheme.navy.opacity(0.08), in: Capsule())
+                }
+            }
+
+            if dayCourseCount == 0 {
+                summaryLine(icon: "sun.max.fill", color: EduTheme.teal,
+                            title: isViewingToday ? "Pas de cours aujourd’hui" : "Pas de cours ce jour",
+                            detail: nextSchoolDayFirst().map { "\($0.label) : \($0.slot.matieres?.name ?? "Cours") à \(blockStart($0.slot))" })
+            } else if !isViewingToday {
+                summaryLine(icon: "calendar", color: EduTheme.teal,
+                            title: "\(dayCourseCount) cours" + (dayWindowLabel.map { " · \($0)" } ?? ""),
+                            detail: first.map { "Premier cours : \($0.matieres?.name ?? "Cours") à \(blockStart($0))" })
+            } else if let live {
+                let start = minutes(live.startTime), end = minutes(live.endTime)
+                summaryLine(icon: "clock.fill", color: EduTheme.fasoGreen,
+                            title: live.matieres?.name ?? "Cours",
+                            detail: "En cours · se termine \(Self.inMinutes(end - now))" + (formatRoom(live.room).map { " · \($0)" } ?? ""))
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2).fill(EduTheme.fasoGreen.opacity(0.15))
+                        RoundedRectangle(cornerRadius: 2).fill(EduTheme.fasoGreen)
+                            .frame(width: geo.size.width * CGFloat(Double(now - start) / Double(max(end - start, 1))))
                     }
                 }
-
-                if dayCourseCount == 0 {
-                    Text(isViewingToday ? "Aucun cours aujourd’hui" : "Aucun cours")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                } else if let live {
-                    Text("En cours · \(live.matieres?.name ?? "Cours")")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                        .lineLimit(1)
-                    Text("\(blockStart(live)) – \(clock(minutes(live.endTime)))")
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.fasoGreen)
-                } else if let upcoming {
-                    Text("Prochain · \(upcoming.matieres?.name ?? "Cours")")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                        .lineLimit(1)
-                    Text("À \(blockStart(upcoming))")
+                .frame(height: 6)
+                if let upcoming {
+                    Text("Ensuite : \(upcoming.matieres?.name ?? "Cours") à \(blockStart(upcoming))")
                         .font(.caption)
                         .foregroundStyle(EduTheme.muted)
-                } else if isViewingToday {
-                    Text("Journée terminée")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                    if let dayWindowLabel {
-                        Text("\(dayCourseCount) cours · \(dayWindowLabel)")
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-                    }
-                } else {
-                    Text("\(dayCourseCount) cours")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                    if let dayWindowLabel {
-                        Text(dayWindowLabel)
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-                    }
+                }
+            } else if let upcoming, let first, now < minutes(first.startTime) {
+                summaryLine(icon: "sunrise.fill", color: EduTheme.teal,
+                            title: "Les cours commencent à \(blockStart(first))",
+                            detail: "\(first.matieres?.name ?? "Cours") · \(Self.inMinutes(minutes(upcoming.startTime) - now))")
+            } else if let upcoming {
+                let prevEnd = daySlots.filter { minutes($0.endTime) <= now }.map { minutes($0.endTime) }.max() ?? now
+                summaryLine(icon: "cup.and.saucer.fill", color: EduTheme.teal,
+                            title: "\(Self.pauseName(start: prevEnd, end: minutes(upcoming.startTime))) · reprise à \(blockStart(upcoming))",
+                            detail: "\(upcoming.matieres?.name ?? "Cours") · \(Self.inMinutes(minutes(upcoming.startTime) - now))")
+            } else {
+                summaryLine(icon: "checkmark.circle.fill", color: EduTheme.teal,
+                            title: "Journée terminée",
+                            detail: nextSchoolDayFirst().map { "\($0.label) : \($0.slot.matieres?.name ?? "Cours") à \(blockStart($0.slot))" })
+            }
+        }
+        .padding(16)
+        .background(cardBackground)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2).fill(accent).frame(width: 4).padding(.vertical, 12)
+        }
+    }
+
+    private func summaryLine(icon: String, color: Color, title: String, detail: String?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+                .frame(width: 40, height: 40)
+                .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail {
+                    Text(detail)
+                        .font(.subheadline)
+                        .foregroundStyle(color == EduTheme.fasoGreen ? EduTheme.fasoGreen : EduTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
-        .background(cardBackground)
     }
 
     private var selectedDaySubtitle: String {
@@ -431,6 +559,25 @@ struct TimetableView: View {
         return dayName(selectedDay)
     }
 
+    // MARK: - Day swipe
+
+    /// Swipe left / right on the day to go to the next / previous school day.
+    private var daySwipe: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                      abs(value.translation.width) > 60 else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if value.translation.width < 0 {
+                        if selectedDay >= 6 { selectedDay = 1; weekOffset += 1 } else { selectedDay += 1 }
+                    } else {
+                        if selectedDay <= 1 { selectedDay = 6; weekOffset -= 1 } else { selectedDay -= 1 }
+                    }
+                }
+            }
+    }
+
+    @ViewBuilder
     // MARK: - Day timeline
 
     private func dayTimeline(at date: Date) -> some View {
@@ -446,6 +593,7 @@ struct TimetableView: View {
                         timelineRow(block, at: date)
                     }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
                 .background(cardBackground)
             }
         }
@@ -459,6 +607,14 @@ struct TimetableView: View {
         let livePause: Bool = {
             if case .pause(let start, let end) = block.kind { return isLivePause(start: start, end: end, at: date) }
             return false
+        }()
+
+        let finished: Bool = {
+            guard isViewingToday, !liveCourse, !livePause else { return false }
+            switch block.kind {
+            case .course(let slot): return minutes(slot.endTime) <= minutesNow(date)
+            case .pause(_, let end): return end <= minutesNow(date)
+            }
         }()
 
         return HStack(alignment: .top, spacing: 12) {
@@ -485,16 +641,14 @@ struct TimetableView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(liveCourse || livePause ? EduTheme.fasoGreen.opacity(0.08) : Color.clear)
-        )
+        .background(liveCourse || livePause ? EduTheme.fasoGreen.opacity(0.08) : Color.clear)
+        .opacity(finished ? 0.45 : 1)
     }
 
     private func courseRow(_ slot: TimetableSlot, isLive: Bool, isNext: Bool) -> some View {
         let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
         return HStack(alignment: .top, spacing: 10) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
+            Rectangle()
                 .fill(isLive ? EduTheme.fasoGreen : swatch.border)
                 .frame(width: 4)
                 .padding(.vertical, 2)
@@ -511,14 +665,14 @@ struct TimetableView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(EduTheme.fasoGreen, in: Capsule())
+                            .background(EduTheme.fasoGreen, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                     } else if isNext {
                         Text("PROCHAIN")
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(EduTheme.navy)
+                            .foregroundStyle(EduTheme.teal)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(EduTheme.navy.opacity(0.1), in: Capsule())
+                            .background(EduTheme.teal.opacity(0.1), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
                     }
                 }
 
@@ -544,7 +698,7 @@ struct TimetableView: View {
             Image(systemName: "cup.and.saucer.fill")
                 .font(.caption)
                 .foregroundStyle(isLive ? EduTheme.fasoGreen : EduTheme.muted)
-            Text(isLive ? "Pause en cours" : "Pause")
+            Text(Self.pauseName(start: start, end: end) + (isLive ? " en cours" : ""))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isLive ? EduTheme.fasoGreen : EduTheme.muted)
             Text("· \(clock(start)) – \(clock(end))")
@@ -555,8 +709,12 @@ struct TimetableView: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 10)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(EduTheme.border, lineWidth: 1)
+                )
         )
     }
 
@@ -585,6 +743,12 @@ struct TimetableView: View {
         VStack(spacing: 12) {
             ForEach(weekDays) { day in
                 let dayItems = slots.filter { $0.dayOfWeek == day.dayOfWeek }.sorted { $0.startTime < $1.startTime }
+                weekDayButton(day, dayItems, at: date).id("week-day-\(day.dayOfWeek)")
+            }
+        }
+    }
+
+    private func weekDayButton(_ day: WeekDayItem, _ dayItems: [TimetableSlot], at date: Date) -> some View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedDay = day.dayOfWeek
@@ -630,7 +794,7 @@ struct TimetableView: View {
                                 }
                             }
                             .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                                     .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
                             )
                         }
@@ -638,19 +802,17 @@ struct TimetableView: View {
                     .padding(14)
                     .background(cardBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                             .stroke(
                                 day.isToday && weekOffset == 0
                                 ? EduTheme.fasoGreen.opacity(0.45)
-                                : (day.dayOfWeek == selectedDay ? EduTheme.navy.opacity(0.28) : Color.clear),
+                                : (day.dayOfWeek == selectedDay ? EduTheme.teal.opacity(0.28) : Color.clear),
                                 lineWidth: 1.5
                             )
                     )
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            }
-        }
     }
 
     private func isSlotLive(_ slot: TimetableSlot, at date: Date) -> Bool {
@@ -687,7 +849,7 @@ struct TimetableView: View {
                     } else if isNext {
                         Text("PROCHAIN")
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(EduTheme.navy)
+                            .foregroundStyle(EduTheme.teal)
                     }
                 }
                 Text([
@@ -707,8 +869,49 @@ struct TimetableView: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
             .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    /// Same header as the web page: title, class and « du lundi au samedi », PDF button.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(titleText)
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(EduTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(({ if case .student = mode, let c = className { return "Classe \(c) · " } else { return "" } }()) + "du lundi au samedi · mis à jour en direct")
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.muted)
+                }
+                Spacer(minLength: 0)
+                TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                    .coachMarkTarget("edt.help")
+            }
+            Button {
+                Task { await exportPdf() }
+            } label: {
+                HStack(spacing: 8) {
+                    if exporting { ProgressView().tint(.white) } else { Image(systemName: "arrow.down.doc") }
+                    Text(exporting ? "Export…" : "Télécharger le PDF")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(exporting || slots.isEmpty || !ready)
+            .coachMarkTarget("edt.pdf")
+        }
     }
 
     // MARK: - Data
@@ -733,14 +936,18 @@ struct TimetableView: View {
                 guard let sid, let enrollment = try await api.activeEnrollment(studentId: sid) else {
                     slots = []; loading = false; ready = true; return
                 }
+                let fetched = try await api.fetchTimetable(classSectionId: enrollment.classId)
+                if Task.isCancelled { return }
                 className = enrollment.className
-                slots = try await api.fetchTimetable(classSectionId: enrollment.classId)
+                slots = fetched
             }
             if !isRefresh {
-                weekOffset = 0
-                selectedDay = Self.defaultSelectedDay()
+                let start = smartStart()
+                weekOffset = start.weekOffset
+                selectedDay = start.day
             }
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false
