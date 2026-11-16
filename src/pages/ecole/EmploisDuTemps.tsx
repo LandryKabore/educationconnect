@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -86,6 +87,7 @@ function clockRange(startMin: number): { start: string; end: string } {
 }
 
 export default function EmploisDuTemps() {
+  const readOnly = useModuleReadOnly("emplois_du_temps");
   const { schoolId, schools } = useAuth();
   const qc = useQueryClient();
   useSchoolTimetableRealtime(schoolId);
@@ -583,6 +585,7 @@ export default function EmploisDuTemps() {
   };
 
   const openCreate = (prefill?: { day: number; startMin: number }) => {
+    if (readOnly) return;
     const day = prefill?.day ?? todayDow ?? 1;
     const range = clockRange(prefill?.startMin ?? 8 * 60);
     setEditingId(null);
@@ -597,6 +600,7 @@ export default function EmploisDuTemps() {
   };
 
   const openEdit = (id: string) => {
+    if (readOnly) return;
     const slot = slots.find((item) => item.id === id);
     if (!slot) return;
     setEditingId(slot.id);
@@ -736,13 +740,14 @@ export default function EmploisDuTemps() {
               <Download className="h-4 w-4" />
               {exporting ? "Export…" : "PDF"}
             </Button>
-            <Button onClick={() => openCreate()}>
+            <Button onClick={() => openCreate()} disabled={readOnly}>
               <Plus className="h-4 w-4" />
               Ajouter un créneau
             </Button>
           </div>
         }
       />
+      {readOnly ? <ReadOnlyBanner module="emplois_du_temps" /> : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-[var(--surface-2)]">

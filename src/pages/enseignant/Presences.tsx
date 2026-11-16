@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Lock, Search, TriangleAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { ATTENDANCE_LABELS } from "@/lib/attendance";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceStatus, Profile, Subject } from "@/lib/types";
@@ -70,6 +71,7 @@ export default function Presences() {
   const { actingTeacherId, isProxy, proxyTeacherId } = useActingTeacherId();
   const qc = useQueryClient();
   const isAdmin = role === "school_admin";
+  const readOnly = useModuleReadOnly("presences");
   /** Admin acting for a specific teacher — behave like that teacher for subjects. */
   const asTeacher = !isAdmin || isProxy;
   const [date, setDate] = useState(() => initialDate(searchParams.get("date")));
@@ -301,6 +303,7 @@ export default function Presences() {
   return (
     <div className="pb-28">
       <UnsavedChangesDialog blocker={blocker} />
+      {readOnly ? <ReadOnlyBanner module="presences" /> : null}
       <Link
         to={
           isProxy
@@ -476,6 +479,7 @@ export default function Presences() {
                 const value = getStatus(s.id);
                 const note = savedByStudent.get(s.id)?.note;
                 const locked = value === "excused" && (asTeacher || !isAdmin);
+                const statusOnly = readOnly && !locked;
                 return (
                   <div
                     key={s.id}
@@ -507,7 +511,11 @@ export default function Presences() {
                         </p>
                       ) : null}
                     </div>
-                    {locked ? (
+                    {statusOnly ? (
+                      <Badge tone={value === "absent" ? "danger" : value === "late" ? "warning" : "success"}>
+                        {ATTENDANCE_LABELS[value]}
+                      </Badge>
+                    ) : locked ? (
                       <Badge tone="info">
                         <Lock className="mr-1 h-3 w-3" />
                         Justifié
@@ -568,11 +576,13 @@ export default function Presences() {
               <Button
                 type="button"
                 size="lg"
-                disabled={saving || !canSubmit || !subjectId}
+                disabled={readOnly || saving || !canSubmit || !subjectId}
                 onClick={() => void handleSave()}
                 className="sm:min-w-[11rem]"
               >
-                {saving
+                {readOnly
+                  ? "Consultation seulement"
+                  : saving
                   ? "Enregistrement…"
                   : validated
                     ? changed

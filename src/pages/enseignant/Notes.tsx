@@ -9,6 +9,7 @@ import { usePeriodClosed } from "@/hooks/usePeriodClosed";
 import { ArrowLeft, CheckCircle2, History, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActingTeacherId } from "@/hooks/useActingTeacherId";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { formatExamSchedule, formatTimeHm } from "@/lib/assignmentKinds";
 import { supabase } from "@/lib/supabase";
 import type { Evaluation, EvaluationType, Profile, Subject } from "@/lib/types";
@@ -68,6 +69,7 @@ export default function Notes() {
   const [showForm, setShowForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const periodClosed = usePeriodClosed(id, period);
+  const readOnly = useModuleReadOnly("notes");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newType, setNewType] = useState<EvaluationType>("devoir");
   const [newTitle, setNewTitle] = useState("");
@@ -726,7 +728,7 @@ export default function Notes() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={periodClosed && !showForm}
+                  disabled={(periodClosed || readOnly) && !showForm}
                   onClick={() => (showForm ? resetForm() : openCreate())}
                 >
                   <Plus className="h-4 w-4" />
@@ -734,6 +736,7 @@ export default function Notes() {
                 </Button>
               </div>
             </div>
+            {readOnly ? <ReadOnlyBanner module="notes" /> : null}
             {periodClosed ? <PeriodClosedBanner periodLabel={period} /> : null}
             {id ? (
               <NotesHistoryModal
@@ -945,14 +948,14 @@ export default function Notes() {
                           variant="outline"
                           onClick={() => navigate(gradeEntryPath(ev.id))}
                         >
-                          {complete ? (
+                          {complete || readOnly ? (
                             <CheckCircle2 className="h-4 w-4" />
                           ) : (
                             <Pencil className="h-4 w-4" />
                           )}
-                          Noter
+                          {readOnly ? "Voir" : "Noter"}
                         </Button>
-                        {canEditEval(ev) ? (
+                        {canEditEval(ev) && !readOnly ? (
                           <>
                             <Button
                               type="button"
