@@ -15,6 +15,11 @@ struct CoachMarkStep: Identifiable, Equatable {
     let icon: String
     let title: String
     let message: String
+    /// Interactive step: the user must do something (shown by the screen's `actionView`)
+    /// before « Suivant » is enabled.
+    var requiresAction: Bool = false
+    /// Message shown once the action is done.
+    var doneMessage: String? = nil
 }
 
 /// Where each marked element currently is on screen (global coordinates).
@@ -103,6 +108,9 @@ struct CoachMarkOverlay: View {
     @Binding var index: Int
     let registry: CoachMarkRegistry
     var accent: Color = EduTheme.teal
+    /// Interactive steps: whether the action is done, and the controls to do it.
+    var actionDone: Bool = false
+    var actionView: ((CoachMarkStep) -> AnyView?)? = nil
     let onFinish: () -> Void
 
     @State private var bubbleHeight: CGFloat = 200
@@ -117,6 +125,7 @@ struct CoachMarkOverlay: View {
 
     private var step: CoachMarkStep? { steps.indices.contains(index) ? steps[index] : nil }
     private var isLast: Bool { index >= steps.count - 1 }
+    private var waitingForAction: Bool { step?.requiresAction == true && !actionDone }
 
     var body: some View {
         GeometryReader { geo in
@@ -218,10 +227,20 @@ struct CoachMarkOverlay: View {
                 Spacer(minLength: 0)
             }
 
-            Text(step.message)
+            Text(step.requiresAction && actionDone ? (step.doneMessage ?? step.message) : step.message)
                 .font(.subheadline)
                 .foregroundStyle(EduTheme.ink.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
+
+            if step.requiresAction {
+                if actionDone {
+                    Label("Bien joué !", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(accent)
+                } else if let custom = actionView?(step) {
+                    custom
+                }
+            }
 
             HStack(spacing: 10) {
                 if !isLast {
@@ -260,8 +279,9 @@ struct CoachMarkOverlay: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
                         .frame(minHeight: 44)
-                        .background(accent, in: Capsule())
+                        .background(accent.opacity(waitingForAction ? 0.35 : 1), in: Capsule())
                 }
+                .disabled(waitingForAction)
             }
         }
         .padding(16)
@@ -278,7 +298,7 @@ struct CoachMarkOverlay: View {
     }
 
     private func next() {
-        guard !closing else { return }
+        guard !closing, !waitingForAction else { return }
         if isLast { close() } else { index += 1 }
     }
 
@@ -291,5 +311,128 @@ struct CoachMarkOverlay: View {
             try? await Task.sleep(for: .milliseconds(220))
             onFinish()
         }
+    }
+}
+
+// MARK: - Per-tab tour helper
+//
+// Every tab gets its own short tour. Usage in a screen:
+//   @State private var tour = TabTour(key: "notes")
+//   @State private var ownCoach = CoachMarkRegistry()
+//   @Environment(CoachMarkRegistry.self) private var outerCoach: CoachMarkRegistry?
+//   let coach = outerCoach ?? ownCoach        // shares targets with ChildGate's switcher
+//   ScrollViewReader { proxy in ... .tabTour(tour, registry: coach, scroller: proxy) }
+//   .environment(coach)
+//   TourHelpButton { tour.start(steps, registry: coach) }   // replay
+//   tour.autoStartOnce(steps, registry: coach)              // first visit, once data is shown
+
+@Observable
+final class TabTour {
+    let key: String
+    var steps: [CoachMarkStep] = []
+    var index = 0
+    var showing = false
+    /// Interactive step done (e.g. the user switched child during the tour).
+    var actionDone = false
+    private var scheduled = false
+
+    init(key: String) { self.key = "edufaso.tour.\(key).v1" }
+
+    var done: Bool { UserDefaults.standard.bool(forKey: key) }
+
+    func start(_ catalog: [CoachMarkStep], registry: CoachMarkRegistry) {
+        let visible = registry.steps(catalog)
+        guard !visible.isEmpty else { return }
+        steps = visible
+        index = 0
+        actionDone = false
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { showing = true }
+    }
+
+    /// First visit only: waits for the screen to settle, then runs the tour.
+    func autoStartOnce(_ catalog: @escaping () -> [CoachMarkStep], registry: CoachMarkRegistry) {
+        guard !done, !scheduled, !showing else { return }
+        scheduled = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            self.start(catalog(), registry: registry)
+        }
+    }
+
+    func finish() {
+        UserDefaults.standard.set(true, forKey: key)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { showing = false }
+    }
+}
+
+private struct TabTourModifier: ViewModifier {
+    @Bindable var tour: TabTour
+    let registry: CoachMarkRegistry
+    let scroller: ScrollViewProxy?
+    var actionView: ((CoachMarkStep) -> AnyView?)?
+
+    func body(content: Content) -> some View {
+        content
+            .scrollDisabled(tour.showing)
+            .onChange(of: tour.index) { _, i in
+                guard tour.showing, tour.steps.indices.contains(i) else { return }
+                withAnimation(.easeInOut(duration: 0.4)) { scroller?.scrollTo(tour.steps[i].id, anchor: .center) }
+            }
+            .onChange(of: tour.showing) { _, on in
+                guard on, let first = tour.steps.first else { return }
+                withAnimation(.easeInOut(duration: 0.4)) { scroller?.scrollTo(first.id, anchor: .center) }
+            }
+            // Drawn as an overlay of the scrolling content, not a full-screen cover: bars
+            // pinned above the content (the child switcher) stay on top and tappable, so an
+            // interactive step can ask the user to really use them.
+            .overlay {
+                if tour.showing {
+                    CoachMarkOverlay(
+                        steps: tour.steps,
+                        index: $tour.index,
+                        registry: registry,
+                        actionDone: tour.actionDone,
+                        actionView: actionView
+                    ) { tour.finish() }
+                        .ignoresSafeArea()
+                }
+            }
+    }
+}
+
+extension View {
+    func tabTour(
+        _ tour: TabTour,
+        registry: CoachMarkRegistry,
+        scroller: ScrollViewProxy?,
+        actionView: ((CoachMarkStep) -> AnyView?)? = nil
+    ) -> some View {
+        modifier(TabTourModifier(tour: tour, registry: registry, scroller: scroller, actionView: actionView))
+    }
+}
+
+/// "?" button that replays a tab's tour. `onDark` for teal banners.
+struct TourHelpButton: View {
+    var onDark: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "questionmark")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(onDark ? .white : EduTheme.ink)
+                .frame(width: 40, height: 40)
+                .background((onDark ? Color.white.opacity(0.12) : Color.white), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .stroke(onDark ? Color.white.opacity(0.18) : EduTheme.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Revoir le guide de cette page")
     }
 }

@@ -215,12 +215,8 @@ struct ParentHomeView: View {
     @State private var detailChild: ChildSummary?
 
     // guided tour
-    @AppStorage("edufaso.tour.parentHome.v2") private var tourDone = false
+    @State private var tour = TabTour(key: "parentHome.v3")
     @State private var coach = CoachMarkRegistry()
-    @State private var tourSteps: [CoachMarkStep] = []
-    @State private var tourIndex = 0
-    @State private var showTour = false
-    @State private var tourScheduled = false
 
     private static let brand800 = Color(red: 17 / 255, green: 94 / 255, blue: 89 / 255)
     private static let brand600 = Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)
@@ -264,11 +260,13 @@ struct ParentHomeView: View {
             ),
         ]
         if count > 1 {
-            steps.append(CoachMarkStep(
-                id: "parent.switcher", icon: "hand.tap.fill",
-                title: "Vos enfants",
-                message: "Touchez « Voir le suivi » sur la carte d’un enfant : toute la page affiche alors son suivi."
-            ))
+            steps.insert(CoachMarkStep(
+                id: "child.switcher", icon: "arrow.left.arrow.right",
+                title: "Changer d’enfant",
+                message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
+                requiresAction: true,
+                doneMessage: "Voilà ! Toute la page affiche maintenant le suivi de cet enfant. Le bouton plein, en haut, montre toujours l’enfant affiché."
+            ), at: 0)
         }
         steps.append(contentsOf: [
             CoachMarkStep(
@@ -339,7 +337,6 @@ struct ParentHomeView: View {
                         if children.isEmpty || selected == nil {
                             noChildrenCard.coachMarkTarget("parent.empty")
                         } else if let child = selected {
-                            childrenSection.coachMarkTarget("parent.switcher")
                             todoBanner(child).coachMarkTarget("parent.watch")
                             tomorrowCard(child)
                             VStack(spacing: 12) {
@@ -363,20 +360,25 @@ struct ParentHomeView: View {
                 .padding(.bottom, 32)
                 .animation(.easeInOut(duration: 0.2), value: selected?.id)
             }
-            .scrollDisabled(showTour)
-            .onChange(of: tourIndex) { _, index in
-                guard showTour, tourSteps.indices.contains(index) else { return }
-                withAnimation(.easeInOut(duration: 0.4)) { scroller.scrollTo(tourSteps[index].id, anchor: .center) }
-            }
-            .onChange(of: showTour) { _, isOn in
-                guard isOn, let first = tourSteps.first else { return }
-                withAnimation(.easeInOut(duration: 0.4)) { scroller.scrollTo(first.id, anchor: .center) }
+            .tabTour(tour, registry: coach, scroller: scroller)
+        }
+        // sticky child switcher, same as on the child tabs
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if ready && children.count > 1 {
+                ChildSwitcherBar(children: children, selectedId: selected?.id ?? "") { id in
+                    withAnimation(.snappy(duration: 0.25)) { selectedChildId = id }
+                }
             }
         }
         .environment(coach)
-        .fullScreenCover(isPresented: $showTour) {
-            CoachMarkOverlay(steps: tourSteps, index: $tourIndex, registry: coach) { endTour() }
-                .presentationBackground(.clear)
+        .onChange(of: selectedChildId) { _, id in
+            // interactive tour step: the parent really used the bar at the top
+            guard tour.showing, tour.steps.indices.contains(tour.index),
+                  tour.steps[tour.index].requiresAction else { return }
+            if let child = children.first(where: { $0.id == id }) {
+                tour.steps[tour.index].doneMessage = "Voilà ! Toute la page affiche maintenant le suivi \(Self.de(firstName(child))). Le bouton plein, en haut, montre toujours l’enfant affiché."
+            }
+            tour.actionDone = true
         }
         .onChange(of: home != nil) { _, loaded in if loaded { scheduleFirstTour() } }
         .onChange(of: ready) { _, isReady in if isReady, children.isEmpty { scheduleFirstTour() } }
@@ -573,93 +575,6 @@ struct ParentHomeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: Vos enfants
-
-    @ViewBuilder private var childrenSection: some View {
-        if children.count > 1 {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Vos enfants")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                    Spacer()
-                    Text("Choisissez un enfant")
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                }
-                VStack(spacing: 8) {
-                    ForEach(children) { child in childChip(child) }
-                }
-                .sensoryFeedback(.selection, trigger: selectedChildId)
-            }
-        }
-    }
-
-    /// One compact row per child: all children visible at once, no sideways scrolling.
-    private func childChip(_ child: ChildSummary) -> some View {
-        let isOn = child.id == selected?.id
-        let c = colors(for: child)
-        let attention = homes[child.id].map { _ in todoItems(for: child, includeUnread: false).count } ?? 0
-        return Button {
-            withAnimation(.snappy(duration: 0.25)) { selectedChildId = child.id }
-        } label: {
-            HStack(spacing: 12) {
-                Text(Self.initials(child.fullName))
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(c.text)
-                    .frame(width: 40, height: 40)
-                    .background(c.fill, in: Circle())
-                    .overlay(alignment: .topTrailing) {
-                        if attention > 0 {
-                            Text("\(attention)")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(minWidth: 18, minHeight: 18)
-                                .background(Self.rose, in: Circle())
-                                .offset(x: 5, y: -5)
-                        }
-                    }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(child.fullName)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                        .lineLimit(1)
-                    Text(homes[child.id]?.className ?? child.className ?? "Sans classe")
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                if isOn {
-                    Label("Affiché", systemImage: "checkmark")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
-                } else {
-                    Text("Voir le suivi")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(EduTheme.teal)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.teal, lineWidth: 1))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isOn ? EduTheme.teal : EduTheme.border, lineWidth: isOn ? 2 : 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isOn ? "\(child.fullName), suivi affiché" : "Voir le suivi de \(child.fullName)")
-    }
-
     // MARK: À faire
 
     private struct TodoItem: Identifiable {
@@ -734,7 +649,7 @@ struct ParentHomeView: View {
                             NavigationLink {
                                 switch item.target {
                                 case .attendance: StudentAttendanceView(studentIdOverride: child.id)
-                                case .grades: StudentGradesView(studentIdOverride: child.id)
+                                case .grades: StudentGradesView(studentIdOverride: child.id, childName: firstName(child))
                                 case .messages: MessagesView()
                                 }
                             } label: {
@@ -831,7 +746,7 @@ struct ParentHomeView: View {
     private func averageCard(_ child: ChildSummary) -> some View {
         let value = home?.annual?.annualAverage
         let trimesters = home?.annual?.trimesters ?? []
-        return NavigationLink { StudentGradesView(studentIdOverride: child.id) } label: {
+        return NavigationLink { StudentGradesView(studentIdOverride: child.id, childName: firstName(child)) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 cardLabel("Moyennes \(Self.de(firstName(child))) · année")
                 if home == nil {
@@ -999,7 +914,7 @@ struct ParentHomeView: View {
             title: "Dernières notes \(Self.de(firstName(child)))",
             subtitle: "Publiées par ses enseignants",
             actionTitle: "Toutes les notes",
-            destination: { StudentGradesView(studentIdOverride: child.id) }
+            destination: { StudentGradesView(studentIdOverride: child.id, childName: firstName(child)) }
         ) {
             if home == nil {
                 cardLoading
@@ -1123,7 +1038,7 @@ struct ParentHomeView: View {
         VStack(alignment: .leading, spacing: 10) {
             cardLabel("Accès rapide · \(firstName(child))")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                quickLink("Notes", icon: "book") { StudentGradesView(studentIdOverride: child.id) }
+                quickLink("Notes", icon: "book") { StudentGradesView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Bulletin", icon: "doc.text") { BulletinBoard(studentId: child.id, title: "Bulletin") }
                 quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id) }
                 quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
@@ -1441,29 +1356,11 @@ struct ParentHomeView: View {
     // MARK: Guided tour
 
     private func scheduleFirstTour() {
-        guard !tourDone, !tourScheduled, !showTour else { return }
-        tourScheduled = true
-        Task {
-            try? await Task.sleep(for: .milliseconds(900))
-            startTour()
-        }
+        tour.autoStartOnce({ Self.tour(forChildCount: children.count) }, registry: coach)
     }
 
     private func startTour() {
-        let steps = coach.steps(Self.tour(forChildCount: children.count))
-        guard !steps.isEmpty else { return }
-        tourSteps = steps
-        tourIndex = 0
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { showTour = true }
-    }
-
-    private func endTour() {
-        tourDone = true
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { showTour = false }
+        tour.start(Self.tour(forChildCount: children.count), registry: coach)
     }
 
     // MARK: Loading
@@ -1533,7 +1430,7 @@ struct ChildDetailView: View {
                 }
 
                 Section("Vie scolaire") {
-                    NavigationLink("Notes") { StudentGradesView(studentIdOverride: child.id) }
+                    NavigationLink("Notes") { StudentGradesView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName) }
                     NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: child.id) }
                     NavigationLink("Examens") {
                         EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")

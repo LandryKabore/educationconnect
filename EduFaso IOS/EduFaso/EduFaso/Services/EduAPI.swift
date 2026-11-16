@@ -17,7 +17,7 @@ actor EduAPI {
     ) async throws -> [GradeRow] {
         var query = client
             .from("notes")
-            .select("id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, matieres(id, name), evaluations(type, title, eval_date)")
+            .select("id, score, max_score, period_label, subject_id, evaluation_id, created_at, is_absent, comment, matieres(id, name), evaluations(type, title, eval_date)")
             .eq("student_id", value: studentId)
         if let subjectIds, !subjectIds.isEmpty {
             query = query.in("subject_id", values: subjectIds)
@@ -27,6 +27,22 @@ actor EduAPI {
             .limit(limit)
             .execute()
             .value
+    }
+
+    /// Coefficient of each subject in a class (programme_classe), as used by the bulletin.
+    func fetchClassCoefficients(classId: String) async -> [String: Double] {
+        struct Row: Decodable { let subject_id: String?; let coefficient: Double? }
+        let rows: [Row] = (try? await client
+            .from("programme_classe")
+            .select("subject_id, coefficient")
+            .eq("class_section_id", value: classId)
+            .execute()
+            .value) ?? []
+        var out: [String: Double] = [:]
+        for r in rows {
+            if let id = r.subject_id, let c = r.coefficient, c > 0 { out[id] = c }
+        }
+        return out
     }
 
     func fetchAttendance(studentId: String, limit: Int = 200) async throws -> [AttendanceRow] {

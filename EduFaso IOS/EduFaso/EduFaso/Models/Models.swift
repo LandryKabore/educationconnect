@@ -115,9 +115,10 @@ struct GradeRow: Codable, Identifiable, Hashable {
     let matieres: NamedEntity?
     let evaluations: EvaluationBrief?
     let evaluationId: String?
+    let comment: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, score
+        case id, score, comment
         case maxScore = "max_score"
         case periodLabel = "period_label"
         case subjectId = "subject_id"
@@ -137,6 +138,7 @@ struct GradeRow: Codable, Identifiable, Hashable {
         matieres = try c.decodeIfPresent(NamedEntity.self, forKey: .matieres)
         evaluations = try c.decodeIfPresent(EvaluationBrief.self, forKey: .evaluations)
         evaluationId = try c.decodeIfPresent(String.self, forKey: .evaluationId)
+        comment = try? c.decodeIfPresent(String.self, forKey: .comment)
         score = Self.flexDouble(c, for: .score)
         maxScore = Self.flexDouble(c, for: .maxScore)
     }

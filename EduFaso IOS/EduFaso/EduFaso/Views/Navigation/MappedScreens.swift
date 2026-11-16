@@ -2,13 +2,90 @@ import SwiftUI
 
 // MARK: - Shared pieces
 
+/// Sticky bar at the top of parent screens: every child as a button, the one shown in
+/// solid teal. Shared by the parent home and every child tab. Tour target: "child.switcher".
+struct ChildSwitcherBar: View {
+    let children: [ChildSummary]
+    let selectedId: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EduTheme.teal)
+                Text("Changer d’enfant")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Spacer()
+                Text("Touchez un prénom")
+                    .font(.caption2)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: max(1, min(children.count, 3))),
+                spacing: 6
+            ) {
+                ForEach(children) { child in
+                    let isOn = child.id == selectedId
+                    Button {
+                        onSelect(child.id)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                                .font(.subheadline)
+                            Text(child.firstName ?? child.fullName)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                        .foregroundStyle(isOn ? .white : EduTheme.teal)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .padding(.horizontal, 6)
+                        .background(isOn ? EduTheme.teal : .white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                .stroke(EduTheme.teal, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isOn ? "\(child.fullName), affiché" : "Afficher \(child.fullName)")
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white)
+        .overlay(alignment: .bottom) { Rectangle().fill(EduTheme.border).frame(height: 1) }
+        .coachMarkTarget("child.switcher")
+        .sensoryFeedback(.selection, trigger: selectedId)
+    }
+}
+
+/// Lets a child tab (and its tour) see the parent's children and switch between them.
+@Observable
+final class ChildSwitchContext {
+    var children: [ChildSummary] = []
+    var selectedId = ""
+    var select: (String) -> Void = { _ in }
+}
+
 struct ChildGate<Content: View>: View {
     let title: String
+    /// true: the tab stays in place and reloads itself when the child changes
+    /// (needed for an interactive tour step). false: the tab is rebuilt for each child.
+    var keepsContentOnSwitch: Bool = false
     @ViewBuilder var content: (ChildSummary) -> Content
     @State private var children: [ChildSummary] = []
-    @State private var childId = ""
+    /// Same key as the parent home: the child picked there is the one shown here.
+    @AppStorage("edufaso.parent.selectedChild") private var childId = ""
     @State private var loading = true
     @State private var error: String?
+    /// Shared with the tab inside, so its tour can point at the switcher.
+    @State private var coach = CoachMarkRegistry()
+    @State private var switchContext = ChildSwitchContext()
 
     private var selected: ChildSummary? {
         children.first { $0.id == childId } ?? children.first
@@ -27,41 +104,41 @@ struct ChildGate<Content: View>: View {
             }
             else if let child = selected {
                 content(child)
-                    .id(child.id)
+                    .id(keepsContentOnSwitch ? "child-tab" : child.id)
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        if children.count > 1 {
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle")
-                                    .foregroundStyle(EduTheme.teal)
-                                Picker("Enfant", selection: $childId) {
-                                    ForEach(children) { Text($0.fullName).tag($0.id) }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(EduTheme.navy)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.white)
-                            .overlay(alignment: .bottom) { Divider() }
-                        }
+                        if children.count > 1 { switcher }
                     }
             }
         }
+        .environment(coach)
+        .environment(switchContext)
+        .onChange(of: childId) { _, id in switchContext.selectedId = id }
         .premiumTitle(title)
         .scrollContentBackground(.hidden)
-        .background(EduTheme.loginBackground.ignoresSafeArea())
+        .background(EduTheme.page.ignoresSafeArea())
         .preferredColorScheme(.light)
-        .tint(EduTheme.navy)
+        .tint(EduTheme.teal)
         .task { await load() }
+    }
+
+    private var switcher: some View {
+        ChildSwitcherBar(children: children, selectedId: selected?.id ?? "") { id in
+            withAnimation(.snappy(duration: 0.25)) { childId = id }
+        }
     }
 
     private func load() async {
         loading = children.isEmpty
         do {
             children = try await EduAPI().fetchChildren()
-            if childId.isEmpty { childId = children.first?.id ?? "" }
+            if childId.isEmpty || !children.contains(where: { $0.id == childId }) {
+                childId = children.first?.id ?? ""
+            }
+            switchContext.children = children
+            switchContext.selectedId = childId
+            switchContext.select = { id in
+                withAnimation(.snappy(duration: 0.25)) { childId = id }
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -3178,6 +3255,7 @@ struct StudentFileView: View {
                         NavigationLink("Notes") {
                             StudentGradesView(
                                 studentIdOverride: studentId,
+                                childName: name.split(separator: " ").first.map(String.init) ?? name,
                                 subjectIds: effectiveSubjectIds
                             )
                         }
