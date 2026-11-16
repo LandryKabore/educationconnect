@@ -17,6 +17,7 @@ import {
 import { SchoolFieldsForm } from "@/components/SchoolFieldsForm";
 import { SaveButton } from "@/components/SaveButton";
 import { SchoolModulesCard } from "@/components/admin/SchoolModulesCard";
+import { SchoolPermissionsCard } from "@/components/admin/SchoolPermissionsCard";
 import { isFormDirty } from "@/lib/formDirty";
 import {
   Badge,
@@ -617,6 +618,7 @@ export default function EcoleDetail() {
       </div>
 
       <SchoolModulesCard schoolId={school.id} />
+      <SchoolPermissionsCard schoolId={school.id} />
     </div>
   );
 }

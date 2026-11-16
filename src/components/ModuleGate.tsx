@@ -23,11 +23,11 @@ export function ModuleGate({ children }: { children: ReactNode }) {
         <Blocks className="h-6 w-6" strokeWidth={1.5} aria-hidden />
       </div>
       <h1 className="text-xl font-normal text-slate-900">
-        {mod.name} n’est pas activé
+        {mod.name} n’est pas disponible
       </h1>
       <p className="mt-2 text-sm text-slate-500">
-        Ce module n’est pas activé pour votre établissement. Contactez l’équipe
-        EduFaso pour l’ajouter.
+        Ce module n’est pas activé pour votre établissement, ou votre compte n’y
+        a pas accès. Contactez l’administration de l’école ou l’équipe EduFaso.
       </p>
       <Link
         to={homePath}

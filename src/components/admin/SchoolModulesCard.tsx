@@ -25,7 +25,9 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
 
   const states = resolveModuleStates(data?.rows);
   const tableMissing = data?.tableMissing ?? false;
-  const activeCount = MODULES.filter((m) => m.available && states[m.key]).length;
+  const activeCount = MODULES.filter(
+    (m) => m.available && states[m.key],
+  ).length;
   const availableCount = MODULES.filter((m) => m.available).length;
 
   const save = async (key: ModuleKey, enabled: boolean) => {
@@ -62,10 +64,15 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
         }
         await save(mod.key, false);
       }
-      void logAudit(next ? "module_active" : "module_desactive", "ecole", schoolId, {
-        module: mod.key,
-        aussi: also,
-      });
+      void logAudit(
+        next ? "module_active" : "module_desactive",
+        "ecole",
+        schoolId,
+        {
+          module: mod.key,
+          aussi: also,
+        },
+      );
       toast.success(
         `${mod.name} ${next ? "activé" : "désactivé"}` +
           (also.length ? ` (et ${also.join(", ")})` : ""),
@@ -79,7 +86,7 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <AdminCard className="mt-4">
+    <AdminCard className="mt-4 overflow-hidden">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-medium text-slate-900">
           Modules
@@ -90,15 +97,16 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
           ) : null}
         </h2>
         <p className="text-xs text-slate-500">
-          Un module désactivé disparaît des menus de l’école, pour tous les rôles.
+          Un module désactivé disparaît des menus de l’école, pour tous les
+          rôles.
         </p>
       </div>
 
       {tableMissing ? (
         <p className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
-          La base de données n’a pas encore les tables des modules : l’école utilise
-          tous les modules par défaut. Appliquez la migration « school_modules » pour
-          pouvoir les modifier.
+          La base de données n’a pas encore les tables des modules : l’école
+          utilise tous les modules par défaut. Appliquez la migration «
+          school_modules » pour pouvoir les modifier.
         </p>
       ) : null}
       {error ? (
@@ -110,12 +118,15 @@ export function SchoolModulesCard({ schoolId }: { schoolId: string }) {
       {isLoading ? (
         <AdminLoading />
       ) : (
-        <div className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="-mb-px -mr-px grid sm:grid-cols-2 xl:grid-cols-3">
           {MODULE_CATEGORY_ORDER.map((cat) => {
             const mods = MODULES.filter((m) => m.category === cat);
             if (mods.length === 0) return null;
             return (
-              <section key={cat} className="bg-white">
+              <section
+                key={cat}
+                className="border-b border-r border-slate-200 bg-white"
+              >
                 <h3 className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
                   {MODULE_CATEGORY_LABELS[cat]}
                 </h3>
