@@ -540,15 +540,11 @@ struct StudentAttendanceView: View {
             Text("\(isParent ? "Écrivez" : "Écris") à l’école : seule l’administration peut justifier une absence.")
                 .font(.subheadline)
                 .foregroundStyle(EduTheme.muted)
-            NavigationLink { MessagesView() } label: {
-                Label("Écrire à l’école", systemImage: "message")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 44)
-                    .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
-            }
-            .buttonStyle(.plain)
+            WriteToSchoolButton(
+                subject: childName.map { "Absence \(ParentHomeView.de($0))" } ?? "Mon absence",
+                message: childName.map { "Bonjour,\n\nJe vous écris au sujet d’une absence \(ParentHomeView.de($0)) le … (matière : …).\n\nMotif : \n\nMerci et bonne journée." }
+                    ?? "Bonjour,\n\nJe vous écris au sujet de mon absence le … (matière : …).\n\nMotif : \n\nMerci."
+            )
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

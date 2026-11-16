@@ -1520,8 +1520,7 @@ struct ParentTodoDetailView: View {
                             Text("Une absence à justifier ?").font(.headline.weight(.semibold)).foregroundStyle(EduTheme.ink)
                             Text("Écrivez à l’école : seule l’administration peut justifier une absence.")
                                 .font(.subheadline).foregroundStyle(EduTheme.muted)
-                            NavigationLink { MessagesView() } label: { solidButton("Écrire à l’école", icon: "message") }
-                                .buttonStyle(.plain)
+                            WriteToSchoolButton(subject: absenceSubject, message: absenceMessage)
                                 .padding(.top, 4)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1547,6 +1546,25 @@ struct ParentTodoDetailView: View {
     }
 
     private var divider: some View { Rectangle().fill(EduTheme.border).frame(height: 1) }
+
+    private var absenceLines: [String] {
+        absences.map { a in
+            "– \(ExamsBoardView.format(a.date, "EEEE d MMMM")) (\(a.matieres?.name ?? "cours"))"
+        }
+    }
+
+    private var absenceSubject: String {
+        absences.count == 1
+            ? "Absence \(ParentHomeView.de(childName)) du \(ExamsBoardView.format(absences[0].date, "d MMMM"))"
+            : "Absences \(ParentHomeView.de(childName))"
+    }
+
+    private var absenceMessage: String {
+        let intro = absences.count == 1
+            ? "Bonjour,\n\nJe vous écris au sujet de l’absence \(ParentHomeView.de(childName)) :"
+            : "Bonjour,\n\nJe vous écris au sujet des absences \(ParentHomeView.de(childName)) :"
+        return intro + "\n" + absenceLines.joined(separator: "\n") + "\n\nMotif : \n\nMerci et bonne journée."
+    }
 
     private func gradeRow(_ g: GradeRow) -> some View {
         let on20 = NotesMath.on20(g)

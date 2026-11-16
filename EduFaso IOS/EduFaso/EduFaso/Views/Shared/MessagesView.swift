@@ -1047,6 +1047,10 @@ struct MessageDetailView: View {
 
 struct ComposeMessageSheet: View {
     var announcementsOnly = false
+    /// Opens with every contact of this role as recipient (e.g. "school_admin" for « Écrire à l’école »).
+    var presetRole: String? = nil
+    var presetSubject: String? = nil
+    var presetBody: String? = nil
     var onSent: () -> Void
 
     @EnvironmentObject private var auth: AuthViewModel
@@ -1263,7 +1267,13 @@ struct ComposeMessageSheet: View {
             }
             .task {
                 await loadContacts()
-                if !announcementsOnly {
+                if let presetRole, !announcementsOnly {
+                    selectedTo = contacts.filter { $0.normalizedRole == presetRole }
+                    roleFilter = presetRole
+                    if let presetSubject { subject = presetSubject }
+                    if let presetBody { bodyText = presetBody }
+                    focused = .body
+                } else if !announcementsOnly {
                     activeField = .to
                     focused = .to
                     let hasTeachers = contacts.contains { $0.normalizedRole == "teacher" }
@@ -2121,5 +2131,35 @@ private extension View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color.black.opacity(0.04), lineWidth: 1)
         )
+    }
+}
+
+
+/// « Écrire à l’école »: opens a message already addressed to the school's administration,
+/// with a subject and a first line the parent can complete.
+struct WriteToSchoolButton: View {
+    var title: String = "Écrire à l’école"
+    var subject: String
+    var message: String
+    @State private var composing = false
+    @State private var sent = false
+
+    var body: some View {
+        Button {
+            composing = true
+        } label: {
+            Label(sent ? "Message envoyé" : title, systemImage: sent ? "checkmark" : "square.and.pencil")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $composing) {
+            ComposeMessageSheet(presetRole: "school_admin", presetSubject: subject, presetBody: message) {
+                composing = false
+                sent = true
+            }
+        }
     }
 }
