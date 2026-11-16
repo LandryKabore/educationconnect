@@ -17,7 +17,14 @@ export function useModuleReadOnly(key: ModuleKey): boolean {
 }
 
 /** Shown on a page whose module the user can only view. */
-export function ReadOnlyBanner({ module }: { module: ModuleKey }) {
+export function ReadOnlyBanner({
+  module,
+  detail,
+}: {
+  module: ModuleKey;
+  /** replaces the default « ajouter, modifier ou supprimer » sentence */
+  detail?: string;
+}) {
   const name = moduleDef(module)?.name ?? module;
   return (
     <div
@@ -27,8 +34,8 @@ export function ReadOnlyBanner({ module }: { module: ModuleKey }) {
       <Eye className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
       <p>
         <span className="font-medium">{name} : consultation seulement.</span>{" "}
-        Votre établissement vous donne accès en lecture à ce module. Vous pouvez
-        tout voir, mais pas ajouter, modifier ou supprimer.
+        {detail ??
+          "Votre établissement vous donne accès en lecture à ce module. Vous pouvez tout voir, mais pas ajouter, modifier ou supprimer."}
       </p>
     </div>
   );

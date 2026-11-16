@@ -178,9 +178,9 @@ export function SchoolPermissionsCard({ schoolId }: { schoolId: string }) {
         </div>
       )}
       <p className="border-t border-slate-200 px-4 py-2.5 text-xs text-slate-500">
-        « — » : ce rôle n’utilise pas ce module dans l’application. Pour
-        l’instant, « Aucun accès » retire le module des menus et des pages ; «
-        Consulter » sera appliqué module par module.
+        « — » : ce rôle n’utilise pas ce module dans l’application. Les
+        permissions sont appliquées dans l’application et par la base de
+        données : un rôle en « Consulter » ne peut rien enregistrer.
       </p>
     </AdminCard>
   );
