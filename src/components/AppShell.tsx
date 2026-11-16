@@ -75,6 +75,9 @@ import { cn, personName } from "@/lib/utils";
 import type { AppRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { isDesktopApp } from "@/lib/platform";
+import { ModuleGate } from "@/components/ModuleGate";
+import { useMyModules } from "@/hooks/useSchoolModules";
+import { moduleForPath } from "@/lib/modules";
 
 interface NavItem {
   to: string;
@@ -470,8 +473,19 @@ export function AppShell() {
       ? buildParentGroups()
       : NAV_GROUPS_BY_ROLE[role]
     : [];
+  // Hide the menu items of modules that are off for this school.
+  const { isOn: moduleOn } = useMyModules();
+  const visibleRoleGroups = roleGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => {
+        const mod = moduleForPath(item.to);
+        return !mod || moduleOn(mod.key);
+      }),
+    }))
+    .filter((g) => g.items.length > 0);
   const navGroups: NavGroup[] = [
-    ...roleGroups,
+    ...visibleRoleGroups,
     {
       ...ACCOUNT_GROUP,
       items: [
@@ -858,7 +872,9 @@ export function AppShell() {
             compact
             resetKeys={[location.pathname, location.search]}
           >
-            <Outlet />
+            <ModuleGate>
+              <Outlet />
+            </ModuleGate>
           </ErrorBoundary>
         </main>
         {canSearch && searchOpen ? (
