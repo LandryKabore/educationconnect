@@ -541,7 +541,7 @@ struct ScreenHost: View {
         case .exercises:
             EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
         case .exams:
-            EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
+            ExamsBoardView()
         case .compositions:
             StudentCompositionsView()
         case .attendance:
@@ -555,7 +555,7 @@ struct ScreenHost: View {
         case .childAttendance:
             ChildGate(title: "Présences", keepsContentOnSwitch: true) { StudentAttendanceView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childExams:
-            ChildGate(title: "Examens") { EvaluationsBrowser(studentId: $0.id, type: "examen", confirmedOnly: true, title: "Examens") }
+            ChildGate(title: "Examens", keepsContentOnSwitch: true) { ExamsBoardView(studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childExercises:
             ChildGate(title: "Interrogations") { EvaluationsBrowser(studentId: $0.id, type: "interrogation", title: "Interrogations") }
         case .childCompositions:

@@ -882,7 +882,11 @@ struct ParentHomeView: View {
                         let day = String((row.evalDate ?? "").prefix(10))
                         let isExam = row.type == "examen"
                         NavigationLink {
-                            EvaluationsBrowser(studentId: child.id, type: isExam ? "examen" : "devoir", confirmedOnly: isExam, title: isExam ? "Examens" : "Exercices")
+                            if isExam {
+                                ExamsBoardView(studentIdOverride: child.id, childName: firstName(child))
+                            } else {
+                                EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices")
+                            }
                         } label: {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1042,7 +1046,7 @@ struct ParentHomeView: View {
                 quickLink("Bulletin", icon: "doc.text") { BulletinBoard(studentId: child.id, title: "Bulletin") }
                 quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
-                quickLink("Examens", icon: "list.clipboard") { EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens") }
+                quickLink("Examens", icon: "list.clipboard") { ExamsBoardView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Exercices", icon: "square.and.pencil") { EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices") }
                 quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView(studentIdOverride: child.id) }
             }
@@ -1433,7 +1437,7 @@ struct ChildDetailView: View {
                     NavigationLink("Notes") { StudentGradesView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName) }
                     NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName) }
                     NavigationLink("Examens") {
-                        EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")
+                        ExamsBoardView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName)
                     }
                     NavigationLink("Interrogations") {
                         EvaluationsBrowser(studentId: child.id, type: "interrogation", title: "Interrogations")
