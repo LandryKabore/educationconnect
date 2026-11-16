@@ -648,7 +648,7 @@ struct ParentHomeView: View {
                             Spacer(minLength: 8)
                             NavigationLink {
                                 switch item.target {
-                                case .attendance: StudentAttendanceView(studentIdOverride: child.id)
+                                case .attendance: StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child))
                                 case .grades: StudentGradesView(studentIdOverride: child.id, childName: firstName(child))
                                 case .messages: MessagesView()
                                 }
@@ -797,7 +797,7 @@ struct ParentHomeView: View {
     private func presenceCard(_ child: ChildSummary) -> some View {
         let att = home?.attendance
         let rate = att?.ratePercent
-        return NavigationLink { StudentAttendanceView(studentIdOverride: child.id) } label: {
+        return NavigationLink { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 cardLabel("Présence \(Self.de(firstName(child)))" + (trimester.map { " · \(Self.shortPeriod($0.label))" } ?? ""))
                 if home == nil {
@@ -850,7 +850,7 @@ struct ParentHomeView: View {
                     .foregroundStyle(EduTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            NavigationLink { StudentAttendanceView(studentIdOverride: child.id) } label: { cardButton("Voir le détail") }
+            NavigationLink { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) } label: { cardButton("Voir le détail") }
                 .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1040,7 +1040,7 @@ struct ParentHomeView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 quickLink("Notes", icon: "book") { StudentGradesView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Bulletin", icon: "doc.text") { BulletinBoard(studentId: child.id, title: "Bulletin") }
-                quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id) }
+                quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView(studentIdOverride: child.id, childName: firstName(child)) }
                 quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student, studentIdOverride: child.id) }
                 quickLink("Examens", icon: "list.clipboard") { EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens") }
                 quickLink("Exercices", icon: "square.and.pencil") { EvaluationsBrowser(studentId: child.id, type: "devoir", title: "Exercices") }
@@ -1431,7 +1431,7 @@ struct ChildDetailView: View {
 
                 Section("Vie scolaire") {
                     NavigationLink("Notes") { StudentGradesView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName) }
-                    NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: child.id) }
+                    NavigationLink("Présences") { StudentAttendanceView(studentIdOverride: child.id, childName: child.firstName ?? child.fullName) }
                     NavigationLink("Examens") {
                         EvaluationsBrowser(studentId: child.id, type: "examen", confirmedOnly: true, title: "Examens")
                     }

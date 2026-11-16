@@ -56,6 +56,18 @@ actor EduAPI {
             .value
     }
 
+    /// One student's attendance rows in a date range (calendar of the Présences page).
+    func fetchAttendanceRange(studentId: String, from: String, to: String, subjectId: String?) async throws -> [AttendanceRow] {
+        var query = client
+            .from("presences")
+            .select("id, date, status, subject_id, note, matieres(name)")
+            .eq("student_id", value: studentId)
+            .gte("date", value: from)
+            .lte("date", value: to)
+        if let subjectId, !subjectId.isEmpty { query = query.eq("subject_id", value: subjectId) }
+        return try await query.limit(2000).execute().value
+    }
+
     func fetchAttendanceCounts(studentId: String) async throws -> StudentAttendanceCounts {
         try await client
             .rpc("ef_attendance_counts", params: ["p_student": studentId])
