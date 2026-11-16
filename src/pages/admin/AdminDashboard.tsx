@@ -1,288 +1,339 @@
-import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import {
-  Building2,
-  ClipboardList,
-  CreditCard,
-  Mail,
-  Plus,
-  School,
-  Settings,
-  Shield,
-  UserCog,
-  Users,
-} from "lucide-react";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { AlertTriangle, CheckCircle2, Plus, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { schoolTypeLabel } from "@/lib/schoolForm";
+import { getTimeGreeting } from "@/lib/greeting";
+import { relativeFr } from "@/lib/portalHomeFormat";
+import { formatDateSafe } from "@/lib/dateFr";
+import { fullName, cn } from "@/lib/utils";
 import type { School as SchoolRow } from "@/lib/types";
-import { Badge, Button, Card, PageHeader } from "@/components/ui";
-import { PortalGreeting } from "@/components/PortalGreeting";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui";
+import {
+  AdminEmpty,
+  AdminList,
+  AdminListRow,
+  AdminLoading,
+  AdminPageHeader,
+  AdminSection,
+  AdminStat,
+  AdminStatusDot,
+} from "@/components/admin/AdminKit";
 
-const ADMIN_LINKS = [
-  {
-    to: "/admin/ecoles",
-    title: "Gérer les écoles",
-    description: "Créer, modifier, activer / désactiver",
-    icon: School,
-  },
-  {
-    to: "/admin/utilisateurs",
-    title: "Utilisateurs",
-    description: "Comptes, rôles et actions de support",
-    icon: Users,
-  },
-  {
-    to: "/admin/invitations",
-    title: "Invitations",
-    description: "En attente et récemment acceptées",
-    icon: Mail,
-  },
-  {
-    to: "/admin/parametres",
-    title: "Paramètres",
-    description: "Configuration globale de la plateforme",
-    icon: Settings,
-  },
-  {
-    to: "/admin/rapports",
-    title: "Rapports",
-    description: "Alertes et statistiques",
-    icon: ClipboardList,
-  },
-  {
-    to: "/admin/audit",
-    title: "Journal d'audit",
-    description: "Historique des actions",
-    icon: Shield,
-  },
-  {
-    to: "/admin/abonnements",
-    title: "Abonnements",
-    description: "Plans et facturation par école",
-    icon: CreditCard,
-  },
-  {
-    to: "/admin/super-admins",
-    title: "Super admins",
-    description: "Inviter et gérer les super administrateurs",
-    icon: UserCog,
-  },
-] as const;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type PendingInvite = {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role: string;
+  school_id: string | null;
+  expires_at: string;
+  created_at: string;
+  ecoles: { name: string } | null;
+};
+
+type AttentionItem = {
+  key: string;
+  to: string;
+  title: string;
+  detail: string;
+  tone: "warning" | "danger";
+};
 
 export default function AdminDashboard() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const refreshing = useIsFetching() > 0;
 
   const { data: schools = [], isLoading: loadingSchools } = useQuery({
     queryKey: ["ecoles"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ecoles")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("ecoles").select("*").order("name");
       if (error) throw error;
       return data as SchoolRow[];
     },
   });
 
-  const { data: adminCount = 0 } = useQuery({
-    queryKey: ["admin-school-admin-count"],
+  const { data: adminRoles = [] } = useQuery({
+    queryKey: ["admin-dashboard-school-admins"],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("roles_utilisateurs")
-        .select("id", { count: "exact", head: true })
+        .select("school_id")
         .eq("role", "school_admin")
         .eq("active", true);
       if (error) throw error;
-      return count ?? 0;
+      return (data ?? []) as { school_id: string | null }[];
     },
   });
 
-  const { data: pendingInvites = [] } = useQuery({
-    queryKey: ["admin-pending-invites"],
+  const { data: pendingInvites = [], isLoading: loadingInvites } = useQuery({
+    queryKey: ["admin-dashboard-pending-invites"],
     refetchInterval: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invitations")
-        .select("id, email, first_name, last_name, school_id, expires_at, created_at, ecoles(name)")
-        .eq("role", "school_admin")
+        .select(
+          "id, email, first_name, last_name, role, school_id, expires_at, created_at, ecoles(name)",
+        )
         .is("accepted_at", null)
         .is("cancelled_at", null)
         .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(200);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as PendingInvite[];
     },
   });
 
-  const activeSchools = schools.filter((s) => s.active).length;
-  const inactiveSchools = schools.length - activeSchools;
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const active = schools.filter((s) => s.active);
+    const withAdmin = new Set(
+      adminRoles.map((r) => r.school_id).filter(Boolean) as string[],
+    );
+    const withoutAdmin = active.filter((s) => !withAdmin.has(s.id));
+    const expiringInvites = pendingInvites.filter(
+      (i) => new Date(i.expires_at).getTime() - now < 2 * DAY_MS,
+    );
+    const pastDue = active.filter((s) => s.billing_status === "past_due");
+    const endingSoon = active.filter((s) => {
+      if (!s.subscription_ends_at || s.billing_status === "cancelled") return false;
+      const left = new Date(s.subscription_ends_at).getTime() - now;
+      return left >= 0 && left < 30 * DAY_MS;
+    });
+    const recent = [...schools]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 6);
+
+    const attention: AttentionItem[] = [
+      ...pastDue.map((s) => ({
+        key: `due-${s.id}`,
+        to: "/admin/abonnements",
+        title: s.name,
+        detail: "Abonnement impayé",
+        tone: "danger" as const,
+      })),
+      ...withoutAdmin.map((s) => ({
+        key: `admin-${s.id}`,
+        to: `/admin/ecoles/${s.id}`,
+        title: s.name,
+        detail: "Aucun administrateur actif",
+        tone: "warning" as const,
+      })),
+      ...endingSoon.map((s) => ({
+        key: `end-${s.id}`,
+        to: "/admin/abonnements",
+        title: s.name,
+        detail: `Abonnement jusqu’au ${formatDateSafe(s.subscription_ends_at, "d MMMM yyyy", { locale: fr })}`,
+        tone: "warning" as const,
+      })),
+      ...expiringInvites.map((i) => ({
+        key: `inv-${i.id}`,
+        to: "/admin/invitations",
+        title: fullName(i.first_name, i.last_name),
+        detail: `Invitation qui expire ${relativeFr(i.expires_at)}`,
+        tone: "warning" as const,
+      })),
+    ];
+
+    return {
+      total: schools.length,
+      active: active.length,
+      inactive: schools.length - active.length,
+      adminCount: adminRoles.length,
+      withoutAdmin: withoutAdmin.length,
+      pending: pendingInvites.length,
+      expiring: expiringInvites.length,
+      paying: schools.filter((s) => s.billing_status === "active").length,
+      trial: schools.filter((s) => (s.billing_status ?? "trial") === "trial").length,
+      pastDue: pastDue.length,
+      recent,
+      attention,
+    };
+  }, [schools, adminRoles, pendingInvites]);
+
+  const firstName = profile?.first_name?.trim();
+  const today = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
 
   return (
-    <div>
-      <PortalGreeting />
-      <PageHeader
+    <div className="space-y-6">
+      <AdminPageHeader
         title="Tableau de bord"
-        subtitle="Super administration EduFaso"
+        subtitle={
+          <>
+            {getTimeGreeting()}
+            {firstName ? `, ${firstName}` : ""} · {today}
+          </>
+        }
         actions={
-          <Link to="/admin/ecoles">
-            <Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-md font-normal"
+              onClick={() => void qc.invalidateQueries()}
+              disabled={refreshing}
+              aria-label="Actualiser les données"
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+              Actualiser
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-md font-normal"
+              onClick={() => navigate("/admin/ecoles")}
+            >
               <Plus className="h-4 w-4" />
               Nouvelle école
             </Button>
-          </Link>
+          </>
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-            <School className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{schools.length}</p>
-            <p className="text-sm text-slate-500">Écoles</p>
-            <p className="text-xs text-slate-400">
-              {activeSchools} actives · {inactiveSchools} inactives
-            </p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-            <UserCog className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{adminCount}</p>
-            <p className="text-sm text-slate-500">Admins d'école</p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-            <Mail className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{pendingInvites.length}</p>
-            <p className="text-sm text-slate-500">Invitations en attente</p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-            <Building2 className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{activeSchools}</p>
-            <p className="text-sm text-slate-500">Écoles actives</p>
-          </div>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <AdminStat
+          to="/admin/ecoles"
+          label="Écoles"
+          value={stats.total}
+          hint={`${stats.active} active${stats.active > 1 ? "s" : ""} · ${stats.inactive} inactive${stats.inactive > 1 ? "s" : ""}`}
+          tone="brand"
+        />
+        <AdminStat
+          to="/admin/utilisateurs"
+          label="Administrateurs d’école"
+          value={stats.adminCount}
+          hint={
+            stats.withoutAdmin > 0
+              ? `${stats.withoutAdmin} école${stats.withoutAdmin > 1 ? "s" : ""} sans administrateur`
+              : "Chaque école active en a un"
+          }
+          tone={stats.withoutAdmin > 0 ? "warning" : "success"}
+        />
+        <AdminStat
+          to="/admin/invitations"
+          label="Invitations en attente"
+          value={stats.pending}
+          hint={
+            stats.expiring > 0
+              ? `${stats.expiring} expire${stats.expiring > 1 ? "nt" : ""} sous 48 h`
+              : "Aucune n’expire sous 48 h"
+          }
+          tone={stats.expiring > 0 ? "warning" : "neutral"}
+        />
+        <AdminStat
+          to="/admin/abonnements"
+          label="Abonnements actifs"
+          value={stats.paying}
+          hint={`${stats.trial} en essai · ${stats.pastDue} impayé${stats.pastDue > 1 ? "s" : ""}`}
+          tone={stats.pastDue > 0 ? "danger" : "neutral"}
+        />
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {ADMIN_LINKS.map(({ to, title, description, icon: Icon }) => (
-          <Link key={to} to={to}>
-            <Card className="flex h-full items-start gap-3 transition hover:border-brand-300">
-              <Icon className="h-5 w-5 shrink-0 text-brand-700" />
-              <div>
-                <h3 className="font-semibold">{title}</h3>
-                <p className="text-sm text-slate-500">{description}</p>
-              </div>
-            </Card>
-          </Link>
-        ))}
-        <button
-          type="button"
-          className="text-left"
-          onClick={() => {
-            void qc.invalidateQueries();
-            toast.success("Données actualisées");
-          }}
-        >
-          <Card className="flex h-full items-start gap-3 transition hover:border-brand-300">
-            <Mail className="h-5 w-5 text-brand-700" />
-            <div>
-              <h3 className="font-semibold">Actualiser</h3>
-              <p className="text-sm text-slate-500">Recharger stats et invitations</p>
-            </div>
-          </Card>
-        </button>
-      </div>
+      <AdminSection
+        title="À traiter"
+        count={loadingSchools ? undefined : stats.attention.length}
+        linkTo={stats.attention.length > 0 ? "/admin/rapports" : undefined}
+        linkLabel="Voir les rapports"
+      >
+        {loadingSchools ? (
+          <AdminLoading />
+        ) : stats.attention.length === 0 ? (
+          <p className="flex items-center gap-2 px-4 py-4 text-sm text-slate-600">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
+            Rien à traiter pour le moment.
+          </p>
+        ) : (
+          <AdminList>
+            {stats.attention.slice(0, 6).map((item) => (
+              <AdminListRow
+                key={item.key}
+                to={item.to}
+                primary={
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0",
+                        item.tone === "danger" ? "text-red-600" : "text-amber-600",
+                      )}
+                      aria-hidden
+                    />
+                    <span className="truncate">{item.title}</span>
+                  </span>
+                }
+                secondary={<span className="pl-[1.375rem]">{item.detail}</span>}
+              />
+            ))}
+          </AdminList>
+        )}
+      </AdminSection>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold">Écoles récentes</h2>
-            <Link to="/admin/ecoles" className="text-sm text-brand-700 hover:underline">
-              Tout voir
-            </Link>
-          </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <AdminSection title="Écoles récentes" linkTo="/admin/ecoles">
           {loadingSchools ? (
-            <p className="text-sm text-slate-500">Chargement…</p>
-          ) : schools.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune école pour le moment.</p>
+            <AdminLoading />
+          ) : stats.recent.length === 0 ? (
+            <AdminEmpty message="Aucune école pour le moment." />
           ) : (
-            <ul className="space-y-2">
-              {schools.slice(0, 6).map((s) => (
-                <li key={s.id}>
-                  <Link
-                    to={`/admin/ecoles/${s.id}`}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-brand-300"
-                  >
-                    <span>
-                      <span className="font-medium">{s.name}</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">
-                        {[schoolTypeLabel(s.school_type), s.city]
-                          .filter((x) => x && x !== "—")
-                          .join(" · ")}
-                      </span>
-                    </span>
-                    <Badge tone={s.active ? "success" : "danger"}>
-                      {s.active ? "Active" : "Inactive"}
-                    </Badge>
-                  </Link>
-                </li>
+            <AdminList>
+              {stats.recent.map((s) => (
+                <AdminListRow
+                  key={s.id}
+                  to={`/admin/ecoles/${s.id}`}
+                  primary={s.name}
+                  secondary={[schoolTypeLabel(s.school_type), s.city, `créée ${relativeFr(s.created_at)}`]
+                    .filter((x) => x && x !== "—")
+                    .join(" · ")}
+                  aside={
+                    <AdminStatusDot
+                      tone={s.active ? "success" : "danger"}
+                      label={s.active ? "Active" : "Inactive"}
+                    />
+                  }
+                />
               ))}
-            </ul>
+            </AdminList>
           )}
-        </Card>
+        </AdminSection>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold">Invitations en attente</h2>
-            <Link to="/admin/invitations" className="text-sm text-brand-700 hover:underline">
-              Tout voir
-            </Link>
-          </div>
-          {pendingInvites.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune invitation en cours.</p>
+        <AdminSection
+          title="Invitations en attente"
+          count={loadingInvites ? undefined : stats.pending}
+          linkTo="/admin/invitations"
+        >
+          {loadingInvites ? (
+            <AdminLoading />
+          ) : pendingInvites.length === 0 ? (
+            <AdminEmpty message="Aucune invitation en cours." />
           ) : (
-            <ul className="space-y-2">
-              {pendingInvites.map((inv) => {
-                const schoolName =
-                  (inv as { ecoles?: { name?: string } | null }).ecoles?.name ??
-                  "École";
-                return (
-                  <li
-                    key={inv.id}
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm"
-                  >
-                    <p className="font-medium">
-                      {inv.first_name} {inv.last_name}
-                    </p>
-                    <p className="text-xs text-slate-600">{inv.email}</p>
-                    <p className="mt-1 text-xs text-slate-500">{schoolName}</p>
-                    <Link
-                      to={`/admin/ecoles/${inv.school_id}`}
-                      className="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline"
-                    >
-                      Voir l'école
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <AdminList>
+              {pendingInvites.slice(0, 6).map((inv) => (
+                <AdminListRow
+                  key={inv.id}
+                  to={inv.school_id ? `/admin/ecoles/${inv.school_id}` : "/admin/super-admins"}
+                  primary={fullName(inv.first_name, inv.last_name)}
+                  secondary={`${inv.email} · ${
+                    inv.role === "super_admin" ? "Super admin" : (inv.ecoles?.name ?? "École")
+                  }`}
+                  aside={
+                    <span className="text-xs text-slate-500">
+                      expire {relativeFr(inv.expires_at)}
+                    </span>
+                  }
+                />
+              ))}
+            </AdminList>
           )}
-        </Card>
+        </AdminSection>
       </div>
+
     </div>
   );
 }
