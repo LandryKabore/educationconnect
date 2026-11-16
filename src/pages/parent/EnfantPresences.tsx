@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { TodoFocusPanel } from "@/components/TodoFocusPanel";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -58,6 +59,8 @@ export default function EnfantPresences() {
         }
         subtitle="Taux de présence, absences et retards"
       />
+
+      <TodoFocusPanel childId={id} kind="absences" />
 
       <AttendanceOverview
         keyRoot="enfant-presences"
