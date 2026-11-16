@@ -617,8 +617,8 @@ export default function EcoleDetail() {
         </Card>
       </div>
 
-      <SchoolModulesCard schoolId={school.id} />
-      <SchoolPermissionsCard schoolId={school.id} />
+      <SchoolModulesCard schoolId={school.id} schoolName={school.name} />
+      <SchoolPermissionsCard schoolId={school.id} schoolName={school.name} />
     </div>
   );
 }
