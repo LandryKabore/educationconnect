@@ -146,26 +146,39 @@ export function SchoolPermissionsCard({ schoolId }: { schoolId: string }) {
                               {acc.max === "aucun" ? "—" : ACCESS_LABELS[level]}
                             </span>
                           ) : (
-                            <select
-                              aria-label={`${m.name}, ${SCHOOL_ROLE_LABELS[r]}`}
-                              value={level}
-                              disabled={missing || !!busy}
-                              onChange={(e) =>
-                                void change(m, r, e.target.value as AccessLevel)
-                              }
-                              className={cn(
-                                "w-full max-w-[9.5rem] rounded-sm border border-slate-200 bg-white px-2 py-1 text-sm transition focus:border-brand-500 focus:outline-none disabled:opacity-60",
-                                LEVEL_TONE[level],
-                                busy === cell && "animate-pulse",
-                              )}
-                            >
-                              {options.map((l) => (
-                                <option key={l} value={l}>
-                                  {ACCESS_LABELS[l]}
-                                  {l === acc.default ? " (par défaut)" : ""}
-                                </option>
-                              ))}
-                            </select>
+                            <span className="flex items-center gap-2">
+                              <select
+                                aria-label={`${m.name}, ${SCHOOL_ROLE_LABELS[r]}`}
+                                value={level}
+                                disabled={missing || !!busy}
+                                onChange={(e) =>
+                                  void change(m, r, e.target.value as AccessLevel)
+                                }
+                                className={cn(
+                                  "w-40 shrink-0 rounded-sm border bg-white px-2 py-1 text-sm transition focus:border-brand-500 focus:outline-none disabled:opacity-60",
+                                  level === acc.default
+                                    ? "border-slate-200"
+                                    : "border-amber-400",
+                                  LEVEL_TONE[level],
+                                  busy === cell && "animate-pulse",
+                                )}
+                              >
+                                {options.map((l) => (
+                                  <option key={l} value={l}>
+                                    {ACCESS_LABELS[l]}
+                                    {l === acc.default ? " (défaut)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {level !== acc.default ? (
+                                <span
+                                  className="text-[11px] text-amber-700"
+                                  title={`Par défaut : ${ACCESS_LABELS[acc.default]}`}
+                                >
+                                  Modifié
+                                </span>
+                              ) : null}
+                            </span>
                           )}
                         </td>
                       );
