@@ -9,6 +9,13 @@ struct UserAvatarView: View {
     var preview: UIImage? = nil
     var showCameraBadge: Bool = false
     var busy: Bool = false
+    /// Square corners (e.g. EduTheme.radius) instead of a circle.
+    var cornerRadius: CGFloat? = nil
+
+    private var shape: AnyShape {
+        if let cornerRadius { return AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) }
+        return AnyShape(Circle())
+    }
 
     private var initials: String {
         let f = firstName?.trimmingCharacters(in: .whitespaces).prefix(1) ?? ""
@@ -49,15 +56,15 @@ struct UserAvatarView: View {
                 }
             }
             .frame(width: size, height: size)
-            .clipShape(Circle())
+            .clipShape(shape)
             .overlay(
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.85), lineWidth: size >= 72 ? 3 : 1.5)
+                shape
+                    .stroke(Color.white.opacity(0.85), lineWidth: size >= 72 ? 3 : 1.5)
             )
             .shadow(color: EduTheme.navy.opacity(0.12), radius: size >= 72 ? 10 : 4, y: 3)
 
             if busy {
-                Circle()
+                shape
                     .fill(.black.opacity(0.4))
                     .frame(width: size, height: size)
                     .overlay(ProgressView().tint(.white))

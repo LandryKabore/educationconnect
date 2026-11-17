@@ -12,21 +12,58 @@ struct ProfileView: View {
     @State private var confirmRemove = false
     @State private var toast: String?
 
+    // parent profile (web-style editable form)
+    @State private var form = ProfileForm()
+    @State private var baseline = ProfileForm()
+    @State private var saving = false
+    @State private var formError: String?
+    @State private var tour = TabTour(key: "profil-parent")
+    @State private var coach = CoachMarkRegistry()
+
+    struct ProfileForm: Equatable {
+        var firstName = ""
+        var lastName = ""
+        var phone = ""
+        var gender = ""
+    }
+
+    private var isParent: Bool { auth.primaryRole == .parent }
+
     var body: some View {
         PremiumScreenChrome {
-            ScrollView {
-                VStack(spacing: 18) {
-                    heroCard
-                    identityCard
-                    contactCard
-                    extrasCard
-                    signOutCard
+            if isParent {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        parentContent
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 28)
+                    }
+                    .tabTour(tour, registry: coach, scroller: proxy)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 28)
+                .onAppear {
+                    resetForm()
+                    tour.autoStartOnce({ parentTourSteps }, registry: coach)
+                }
+                .onChange(of: auth.profile) { _, _ in
+                    if form == baseline { resetForm() } else { baseline = Self.formFrom(auth.profile) }
+                }
+            } else {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        heroCard
+                        identityCard
+                        contactCard
+                        extrasCard
+                        signOutCard
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
+                }
             }
         }
+        .environment(coach)
         .premiumTitle("Profil")
         .alert("Supprimer la photo ?", isPresented: $confirmRemove) {
             Button("Annuler", role: .cancel) {}
@@ -354,5 +391,441 @@ struct ProfileView: View {
             return String(email.dropLast("@edufaso.local".count))
         }
         return email
+    }
+}
+
+// MARK: - Parent profile (like the web « Mon profil »)
+
+extension ProfileView {
+    fileprivate static func formFrom(_ p: Profile?) -> ProfileForm {
+        ProfileForm(
+            firstName: p?.firstName ?? "",
+            lastName: p?.lastName ?? "",
+            phone: p?.phone ?? "",
+            gender: p?.gender ?? ""
+        )
+    }
+}
+
+private extension ProfileView {
+    var parentTourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "prof.hero", icon: "person.crop.square.fill",
+                title: "Votre profil",
+                message: "Votre nom, votre école et votre identifiant de connexion. Touchez la photo pour la changer."
+            ),
+            CoachMarkStep(
+                id: "prof.progress", icon: "chart.bar.fill",
+                title: "Profil complété",
+                message: "Ce qu’il manque encore à votre profil. Un profil complet permet à l’école de vous joindre facilement."
+            ),
+            CoachMarkStep(
+                id: "prof.form", icon: "square.and.pencil",
+                title: "Vos informations",
+                message: "Modifiez votre prénom, votre nom, votre téléphone et votre sexe, puis touchez « Enregistrer »."
+            ),
+            CoachMarkStep(
+                id: "prof.account", icon: "person.text.rectangle",
+                title: "Mon compte",
+                message: "Votre identifiant pour vous connecter et votre école."
+            ),
+            CoachMarkStep(
+                id: "prof.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    func resetForm() {
+        baseline = Self.formFrom(auth.profile)
+        form = baseline
+    }
+
+    var schoolName: String { auth.schools.first?.name ?? "—" }
+    var identifiant: String { displayEmail(auth.profile?.email) ?? "—" }
+
+    var missing: [String] {
+        var out: [String] = []
+        if baseline.firstName.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Prénom") }
+        if baseline.lastName.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Nom") }
+        if baseline.phone.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Téléphone") }
+        if baseline.gender.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Sexe") }
+        if !hasPhoto { out.append("Photo") }
+        return out
+    }
+
+    var percent: Int { Int((Double(5 - missing.count) / 5 * 100).rounded()) }
+
+    var dirty: Bool { form != baseline }
+
+    var squareCard: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    var parentContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            parentHero
+            infoCard.coachMarkTarget("prof.form")
+            photoCard
+            accountCard.coachMarkTarget("prof.account")
+            parentSignOut
+        }
+    }
+
+    // MARK: Hero
+
+    var parentHero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                    UserAvatarView(
+                        url: auth.profile?.avatarUrl,
+                        firstName: auth.profile?.firstName,
+                        lastName: auth.profile?.lastName,
+                        size: 84,
+                        preview: localPreview,
+                        showCameraBadge: true,
+                        busy: photoBusy,
+                        cornerRadius: EduTheme.radius
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(photoBusy)
+                .accessibilityLabel("Changer la photo de profil")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("MON PROFIL")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(auth.profile?.fullName.isEmpty == false ? auth.profile!.fullName : "—")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    Text("Parent · \(schoolName)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                    Label(identifiant, systemImage: "at")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .padding(.top, 4)
+                }
+                Spacer(minLength: 0)
+                TourHelpButton(onDark: true) { tour.start(parentTourSteps, registry: coach) }
+                    .coachMarkTarget("prof.help")
+            }
+            .coachMarkTarget("prof.hero")
+
+            if let photoError {
+                Text(photoError)
+                    .font(.caption)
+                    .foregroundStyle(.white)
+            }
+
+            progressCard.coachMarkTarget("prof.progress")
+        }
+        .padding(18)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [EduTheme.tealDark, EduTheme.teal, Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 0) {
+                EduTheme.fasoRed
+                EduTheme.fasoYellow
+                EduTheme.fasoGreen
+            }
+            .frame(height: 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    var progressCard: some View {
+        let complete = percent == 100
+        let green = Color(red: 5 / 255, green: 150 / 255, blue: 105 / 255)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("PROFIL COMPLÉTÉ")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.6)
+                    .foregroundStyle(EduTheme.muted)
+                Spacer()
+                Text("\(percent) %")
+                    .font(.title2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(complete ? green : EduTheme.ink)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(EduTheme.border)
+                    Rectangle()
+                        .fill(complete ? green : EduTheme.teal)
+                        .frame(width: geo.size.width * CGFloat(percent) / 100)
+                }
+            }
+            .frame(height: 8)
+            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            if missing.isEmpty {
+                Label("Tout est à jour.", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(green)
+            } else {
+                Text("À compléter : \(missing.joined(separator: ", "))")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            }
+        }
+        .padding(14)
+        .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    // MARK: Form
+
+    var infoCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Informations personnelles")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text("Elles permettent à l’école de vous joindre.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            field("Prénom", required: true, text: $form.firstName, content: .givenName)
+            field("Nom", required: true, text: $form.lastName, content: .familyName)
+            field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Sexe").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                HStack(spacing: 0) {
+                    ForEach([("M", "Masculin"), ("F", "Féminin"), ("other", "Autre")], id: \.0) { value, label in
+                        let selected = form.gender.uppercased() == value.uppercased()
+                        Button {
+                            form.gender = value
+                        } label: {
+                            Text(label)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(selected ? .white : EduTheme.muted)
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(selected ? EduTheme.teal : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255))
+                )
+            }
+
+            if let formError {
+                Text(formError).font(.caption).foregroundStyle(EduTheme.fasoRed)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    Task { await saveParentProfile() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if saving { ProgressView().tint(.white) }
+                        Text(saving ? "Enregistrement…" : "Enregistrer")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .fill(dirty && !saving ? EduTheme.teal : EduTheme.subtle)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!dirty || saving)
+
+                Text(dirty ? "Modifications non enregistrées" : "Aucune modification")
+                    .font(.caption)
+                    .foregroundStyle(dirty ? Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255) : EduTheme.muted)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(16)
+        .background(squareCard)
+    }
+
+    func field(
+        _ label: String,
+        required: Bool,
+        text: Binding<String>,
+        content: UITextContentType,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            (Text(label).foregroundStyle(EduTheme.ink) + (required ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
+                .font(.subheadline.weight(.semibold))
+            TextField(label, text: text)
+                .textContentType(content)
+                .keyboardType(keyboard)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                .stroke(EduTheme.borderStrong, lineWidth: 1)
+                        )
+                )
+        }
+    }
+
+    func saveParentProfile() async {
+        formError = nil
+        let trimmed = ProfileForm(
+            firstName: form.firstName.trimmingCharacters(in: .whitespacesAndNewlines),
+            lastName: form.lastName.trimmingCharacters(in: .whitespacesAndNewlines),
+            phone: form.phone.trimmingCharacters(in: .whitespacesAndNewlines),
+            gender: form.gender
+        )
+        for (label, value) in [("Prénom", trimmed.firstName), ("Nom", trimmed.lastName), ("Téléphone", trimmed.phone)] where value.isEmpty {
+            formError = "Le champ « \(label) » est obligatoire."
+            return
+        }
+        var updates = ["first_name": trimmed.firstName, "last_name": trimmed.lastName, "phone": trimmed.phone]
+        if !trimmed.gender.isEmpty { updates["gender"] = trimmed.gender }
+        saving = true
+        let ok = await auth.saveProfile(updates)
+        saving = false
+        if ok {
+            resetForm()
+            flash("Profil enregistré")
+        } else {
+            formError = auth.authError ?? "Enregistrement impossible."
+        }
+    }
+
+    // MARK: Photo & account
+
+    var photoCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Photo de profil")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text("Visible par l’école et les professeurs.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                    Label(hasPhoto ? "Changer la photo" : "Ajouter une photo", systemImage: "photo.on.rectangle.angled")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                .disabled(photoBusy)
+                if hasPhoto {
+                    Button {
+                        confirmRemove = true
+                    } label: {
+                        Label("Retirer", systemImage: "trash")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(EduTheme.fasoRed)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 42)
+                            .background(
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                    .stroke(EduTheme.fasoRed.opacity(0.35), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(photoBusy)
+                }
+            }
+        }
+        .padding(16)
+        .background(squareCard)
+    }
+
+    var accountCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Mon compte")
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+                .padding(.bottom, 6)
+            accountRow("at", "Identifiant", identifiant)
+            Divider()
+            accountRow("building.2", "École", schoolName)
+        }
+        .padding(16)
+        .background(squareCard)
+    }
+
+    func accountRow(_ icon: String, _ label: String, _ value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.subtle)
+                .frame(width: 18)
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(width: 90, alignment: .leading)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(EduTheme.ink)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+    }
+
+    var parentSignOut: some View {
+        Button {
+            Task { await auth.signOut() }
+        } label: {
+            HStack(spacing: 8) {
+                if auth.busy && !photoBusy && !saving { ProgressView() }
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                Text("Se déconnecter").fontWeight(.semibold)
+            }
+            .font(.subheadline)
+            .foregroundStyle(EduTheme.fasoRed)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .stroke(EduTheme.fasoRed.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(auth.busy)
     }
 }
