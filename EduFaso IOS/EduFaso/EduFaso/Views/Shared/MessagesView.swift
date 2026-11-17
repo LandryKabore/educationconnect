@@ -74,8 +74,8 @@ struct MessagesView: View {
     var body: some View {
         if auth.primaryRole == .parent {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
-        } else if auth.primaryRole == .student && !announcementsOnly {
-            ParentMessagesView()
+        } else if auth.primaryRole == .student {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else {
             staffBody
         }
@@ -2261,13 +2261,25 @@ extension EduAPI {
             .execute().value
         for row in admins {
             guard let p = row.profils, let id = p.id, id != parentId, map[id] == nil else { continue }
-            map[id] = ParentContact(id: id, name: name(p), kind: .admin, subjects: [])
+            map[id] = ParentContact(id: id, name: "Administration", kind: .admin, subjects: [])
         }
 
         return map.values.sorted { a, b in
             if a.kind != b.kind { return a.kind == .teacher }
             return a.name.localizedCompare(b.name) == .orderedAscending
         }
+    }
+}
+
+extension EduAPI {
+    /// Ids of the school's active administrators (their messages and announcements show as « Administration »).
+    func fetchSchoolAdminIds(schoolId: String) async throws -> Set<String> {
+        struct Row: Decodable { let user_id: String? }
+        let rows: [Row] = try await client.from("roles_utilisateurs")
+            .select("user_id")
+            .eq("school_id", value: schoolId).eq("role", value: "school_admin").eq("active", value: true)
+            .execute().value
+        return Set(rows.compactMap(\.user_id))
     }
 }
 
@@ -2330,6 +2342,12 @@ struct ParentMessagesView: View {
         Dictionary(contacts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     }
 
+    /// The administration is shown as « Administration », never by the administrator's name.
+    private func displayName(_ convo: MessageConversation) -> String {
+        if contactById[convo.otherId]?.kind == .admin { return "Administration" }
+        return convo.otherName.isEmpty ? "Contact" : convo.otherName
+    }
+
     private var totalUnread: Int { conversations.reduce(0) { $0 + $1.unreadCount } }
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -2341,18 +2359,23 @@ struct ParentMessagesView: View {
 
     private var shownConversations: [MessageConversation] {
         conversations.filter {
-            matches($0.otherName, $0.lastMessage.body, $0.lastMessage.subject, contactById[$0.otherId]?.line)
+            matches(displayName($0), $0.lastMessage.body, $0.lastMessage.subject, contactById[$0.otherId]?.line)
         }
     }
 
     private var shownContacts: [ParentContact] {
-        contacts.filter { c in matches(c.name, c.line) || c.subjects.contains { matches($0) } }
+        // one « Administration » entry, even when the school has several administrators
+        let firstAdmin = contacts.first { $0.kind == .admin }?.id
+        return contacts.filter { c in
+            (c.kind != .admin || c.id == firstAdmin)
+                && (matches(c.name, c.line) || c.subjects.contains { matches($0) })
+        }
     }
 
     var body: some View {
         PremiumScreenChrome {
             Group {
-                if loading && inbox.isEmpty && sent.isEmpty {
+                if (loading && inbox.isEmpty && sent.isEmpty) || contactsLoading {  // wait for contacts: they tell who is « Administration »
                     LoadingBlock()
                 } else if let error {
                     VStack(spacing: 12) {
@@ -2536,7 +2559,7 @@ struct ParentMessagesView: View {
                 ForEach(Array(shownConversations.enumerated()), id: \.element.id) { index, convo in
                     if index > 0 { Divider().padding(.leading, 70) }
                     Button {
-                        open(convo.otherId, convo.otherName, contactById[convo.otherId]?.line)
+                        open(convo.otherId, displayName(convo), contactById[convo.otherId]?.line)
                     } label: {
                         discussionRow(convo)
                     }
@@ -2554,10 +2577,10 @@ struct ParentMessagesView: View {
         let last = convo.lastMessage
         let contact = contactById[convo.otherId]
         return HStack(alignment: .center, spacing: 12) {
-            SquareAvatar(name: convo.otherName, size: 44, admin: contact?.kind == .admin)
+            SquareAvatar(name: displayName(convo), size: 44, admin: contact?.kind == .admin)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(convo.otherName.isEmpty ? "Contact" : convo.otherName)
+                    Text(displayName(convo))
                         .font(.subheadline.weight(unread ? .bold : .semibold))
                         .foregroundStyle(EduTheme.ink)
                         .lineLimit(1)
@@ -2735,6 +2758,9 @@ struct SquareAvatar: View {
 
 struct ParentAnnouncementsView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    /// Parents get "vous", students "tu" (web `formal`).
+    private var formal: Bool { auth.primaryRole != .student }
+    private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
 
     @State private var inbox: [MessageRow] = []
     @State private var search = ""
@@ -2750,22 +2776,22 @@ struct ParentAnnouncementsView: View {
             CoachMarkStep(
                 id: "ann.search", icon: "magnifyingglass",
                 title: "Rechercher",
-                message: "Retrouvez une annonce par un mot de son titre, de son texte ou par son auteur."
+                message: t("Retrouvez une annonce par un mot de son titre, de son texte ou par son auteur.", "Retrouve une annonce par un mot de son titre, de son texte ou par son auteur.")
             ),
             CoachMarkStep(
                 id: "ann.filter", icon: "line.3.horizontal.decrease.circle",
                 title: "Toutes ou non lues",
-                message: "Affichez seulement les annonces que vous n’avez pas encore lues."
+                message: t("Affichez seulement les annonces que vous n’avez pas encore lues.", "Affiche seulement les annonces que tu n’as pas encore lues.")
             ),
             CoachMarkStep(
                 id: "ann.list", icon: "megaphone.fill",
                 title: "Les annonces",
-                message: "Les informations de l’établissement et des professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touchez pour la lire et y répondre."
+                message: t("Les informations de l’établissement et des professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touchez pour la lire et y répondre.", "Les informations de l’établissement et de tes professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touche pour la lire et y répondre.")
             ),
             CoachMarkStep(
                 id: "ann.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: t("Touchez ce bouton à tout moment pour relancer la visite.", "Touche ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }
@@ -2782,9 +2808,13 @@ struct ParentAnnouncementsView: View {
         }
     }
 
-    static func senderName(_ a: MessageRow) -> String {
+    @State private var adminIds: Set<String> = []
+
+    /// Announcements from an administrator show « Administration », not their name.
+    static func senderName(_ a: MessageRow, adminIds: Set<String> = []) -> String {
+        if let id = a.senderId, adminIds.contains(id) { return "Administration" }
         let n = a.sender?.fullName ?? ""
-        return n.isEmpty ? "L’établissement" : n
+        return n.isEmpty ? "Administration" : n
     }
 
     var body: some View {
@@ -2902,7 +2932,7 @@ struct ParentAnnouncementsView: View {
                 Text("Aucune annonce")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text("Les informations de l’établissement et des professeurs arrivent ici.")
+                Text(t("Les informations de l’établissement et des professeurs arrivent ici.", "Les informations de l’établissement et de tes professeurs arrivent ici."))
                     .font(.caption)
                     .foregroundStyle(EduTheme.muted)
                     .multilineTextAlignment(.center)
@@ -2925,7 +2955,7 @@ struct ParentAnnouncementsView: View {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, a in
                     if index > 0 { Divider() }
                     NavigationLink {
-                        ParentAnnouncementDetail(announcement: a) { markRead(a) }
+                        ParentAnnouncementDetail(announcement: a, adminIds: adminIds) { markRead(a) }
                     } label: {
                         row(a)
                     }
@@ -2947,7 +2977,7 @@ struct ParentAnnouncementsView: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(Self.senderName(a))
+                    Text(Self.senderName(a, adminIds: adminIds))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(EduTheme.muted)
                         .lineLimit(1)
@@ -3009,8 +3039,16 @@ struct ParentAnnouncementsView: View {
         guard let uid = auth.userId else { return }
         if inbox.isEmpty { loading = true }
         do {
-            let rows = try await EduAPI().fetchInbox(userId: uid, announcementsOnly: true, limit: 500)
+            let api = EduAPI()
+            let schoolId = auth.schoolId
+            async let admins: Set<String> = {
+                guard let schoolId else { return [] }
+                return (try? await api.fetchSchoolAdminIds(schoolId: schoolId)) ?? []
+            }()
+            let rows = try await api.fetchInbox(userId: uid, announcementsOnly: true, limit: 500)
+            let ids = await admins
             if Task.isCancelled { return }
+            adminIds = ids
             inbox = rows
             error = nil
         } catch {
@@ -3024,9 +3062,10 @@ struct ParentAnnouncementsView: View {
 /// One announcement, read in full (web: right-hand reader). Opening it marks it read.
 struct ParentAnnouncementDetail: View {
     let announcement: MessageRow
+    var adminIds: Set<String> = []
     var onOpen: () -> Void
 
-    private var sender: String { ParentAnnouncementsView.senderName(announcement) }
+    private var sender: String { ParentAnnouncementsView.senderName(announcement, adminIds: adminIds) }
 
     private static func longDate(_ iso: String) -> String {
         let parsers: [ISO8601DateFormatter] = {
@@ -3091,7 +3130,7 @@ struct ParentAnnouncementDetail: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "bubble.left.fill")
-                                Text("Répondre à \(sender.split(separator: " ").first.map(String.init) ?? sender)")
+                                Text(sender == "Administration" ? "Répondre à l’administration" : "Répondre à \(sender.split(separator: " ").first.map(String.init) ?? sender)")
                             }
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
