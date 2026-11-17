@@ -84,7 +84,8 @@ struct TimetableView: View {
     private var titleText: String {
         if let childName { return "Emploi du temps \(ParentHomeView.de(childName))" }
         switch mode {
-        case .student, .teacher: return "Mon emploi du temps"
+        case .student: return "Mon emploi du temps"
+        case .teacher: return "Emploi du temps"
         case .classSection: return "Emploi du temps"
         }
     }

@@ -4140,7 +4140,7 @@ struct TeacherAttendanceOverview: View {
                 }
             }
         }
-        .premiumTitle("Présences")
+        .premiumTitle("Appel")
         .task { await load() }
     }
 

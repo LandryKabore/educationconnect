@@ -100,12 +100,12 @@ enum AppScreen: String, Identifiable, Hashable {
         case .signalements: return "Signalements"
         case .teacherTodo: return "À faire"
         case .teacherClasses: return "Mes classes"
-        case .teacherStudents: return "Élèves"
-        case .teacherAttendance: return "Présences"
+        case .teacherStudents: return "Mes élèves"
+        case .teacherAttendance: return "Appel"
         case .timetable: return "Mon emploi du temps"
         case .teacherCahier: return "Cahier de textes"
         case .teacherExercises: return "Exercices de maison"
-        case .teacherEvaluations: return "Examens & évaluations"
+        case .teacherEvaluations: return "Évaluations & notes"
         case .cahier: return "Cahier de textes"
         case .grades: return "Mes notes"
         case .exercises: return "Exercices de maison"
@@ -170,6 +170,8 @@ func menuTitle(_ screen: AppScreen, role: AppRole?) -> String {
         if role == .teacher { return "Ma journée" }
         if role == .schoolAdmin { return "Mon école" }
     }
+    // a teacher only ever sees their own timetable
+    if screen == .timetable && role == .teacher { return "Emploi du temps" }
     return screen.title
 }
 

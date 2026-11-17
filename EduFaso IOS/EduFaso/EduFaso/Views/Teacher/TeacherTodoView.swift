@@ -115,7 +115,7 @@ struct TeacherTodoView: View {
                          meta: [e.matieres?.name, e.classes?.name, e.evalDate.map { H.shortDay($0) }]
                             .compactMap { $0 }.joined(separator: " · "),
                          cta: "Voir", quiet: true) {
-                        EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
+                        TeacherEvaluationsView(initialClassId: e.classSectionId)
                     }
                 }
             }

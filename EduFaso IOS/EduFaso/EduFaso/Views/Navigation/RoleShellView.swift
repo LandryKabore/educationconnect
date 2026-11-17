@@ -556,7 +556,7 @@ struct ScreenHost: View {
         case .teacherExercises:
             TeacherExercisesView()
         case .teacherEvaluations:
-            EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
+            TeacherEvaluationsView()
         case .cahier:
             CahierFeedView()
         case .grades:

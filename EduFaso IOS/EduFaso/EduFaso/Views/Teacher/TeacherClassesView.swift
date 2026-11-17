@@ -267,8 +267,7 @@ struct TeacherClassesView: View {
             Divider()
             HStack(spacing: 8) {
                 footer("Évaluations", "book") {
-                    EvaluationsBrowser(classId: c.classId, teacherId: auth.userId, allowEntry: true,
-                                       recordedBy: auth.userId, title: "Évaluations · \(c.className)")
+                    TeacherEvaluationsView(initialClassId: c.classId)
                 }
                 footer("Appel", "checklist") {
                     TeacherAttendanceView(initialClassId: c.classId)

@@ -139,13 +139,17 @@ struct TeacherExercisesView: View {
             if isReady { tour.autoStartOnce({ tourSteps }, registry: coach) }
         }
         .sheet(item: $newFor) { c in
-            ExerciseFormSheet(classRow: c, defaultPeriod: defaultPeriod, editing: nil) { Task { await load() } }
+            EvaluationFormSheet(classId: c.classId, className: c.className, subjects: c.subjects,
+                                defaultPeriod: defaultPeriod, defaultType: "devoir") { _, _ in Task { await load() } }
         }
         .sheet(item: $editing) { h in
             if h.source == .lesson {
                 LessonHomeworkSheet(item: h) { Task { await load() } }
             } else if let c = classes.first(where: { $0.classId == h.classId }) {
-                ExerciseFormSheet(classRow: c, defaultPeriod: defaultPeriod, editing: h) { Task { await load() } }
+                EvaluationFormSheet(classId: c.classId, className: c.className, subjects: c.subjects,
+                                    defaultPeriod: defaultPeriod, editing: EditableEvaluation(
+                                        id: h.itemId, subjectId: h.subjectId, period: h.period ?? defaultPeriod, type: "devoir",
+                                        title: h.title, description: h.details, maxScore: h.maxScore ?? 20, date: h.due)) { _, _ in Task { await load() } }
             }
         }
         .confirmationDialog(
@@ -512,144 +516,6 @@ struct TeacherExercisesView: View {
     }
 }
 
-// MARK: - New / edit exercise
-
-private struct ExerciseFormSheet: View {
-    let classRow: TeacherExercisesView.ClassRow
-    let defaultPeriod: String
-    let editing: TeacherExercisesView.Homework?
-    var onSaved: () -> Void
-
-    @EnvironmentObject private var auth: AuthViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var subjectId = ""
-    @State private var period = "Trimestre 1"
-    @State private var title = ""
-    @State private var details = ""
-    @State private var hasDate = false
-    @State private var due = Date()
-    @State private var graded = false
-    @State private var maxScore = "20"
-    @State private var saving = false
-    @State private var error: String?
-
-    /// A new exercise that is not graded is plain homework (no trimester, no grade sheet).
-    private var plainHomework: Bool { editing == nil && !graded }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("Classe ").foregroundStyle(EduTheme.muted) + Text(classRow.className).bold()
-                }
-                if editing == nil {
-                    Section {
-                        Toggle(isOn: $graded) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Noté")
-                                Text(graded ? "Une note sera saisie pour chaque élève." : "Non noté : les élèves voient seulement le travail et la date.")
-                                    .font(.caption).foregroundStyle(EduTheme.muted)
-                            }
-                        }
-                        .tint(EduTheme.teal)
-                    }
-                }
-                Section {
-                    if classRow.subjects.count > 1 {
-                        Picker("Matière", selection: $subjectId) {
-                            ForEach(classRow.subjects) { s in Text(s.name).tag(s.id) }
-                        }
-                    }
-                    if !plainHomework {
-                        Picker("Trimestre", selection: $period) {
-                            ForEach(["Trimestre 1", "Trimestre 2", "Trimestre 3"], id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-                    TextField("Titre (ex. Exercices page 42)", text: $title)
-                    Toggle("Pour quand ?", isOn: $hasDate).tint(EduTheme.teal)
-                    if hasDate {
-                        DatePicker("Date", selection: $due, in: (editing == nil ? Calendar.current.startOfDay(for: Date()) : .distantPast)..., displayedComponents: .date)
-                            .environment(\.locale, Locale(identifier: "fr_FR"))
-                    }
-                    if !plainHomework {
-                        HStack {
-                            Text("Note maximale")
-                            Spacer()
-                            TextField("20", text: $maxScore)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 70)
-                        }
-                    }
-                }
-                Section("Description (facultatif)") {
-                    TextField("Ex. Exercices 1 à 4, à présenter en classe…", text: $details, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                if let error {
-                    Section { Text(error).foregroundStyle(EduTheme.fasoRed) }
-                }
-            }
-            .navigationTitle(editing == nil ? "Nouvel exercice" : "Modifier l’exercice")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(saving)
-                }
-            }
-        }
-        .tint(EduTheme.teal)
-        .preferredColorScheme(.light)
-        .onAppear(perform: fill)
-    }
-
-    private func fill() {
-        subjectId = editing?.subjectId ?? classRow.subjects.first?.id ?? ""
-        period = editing?.period ?? defaultPeriod
-        title = editing?.title ?? ""
-        details = editing?.details ?? ""
-        if let d = editing?.due.flatMap(EduDates.parseDay) { hasDate = true; due = d }
-        if let m = editing?.maxScore { maxScore = m.rounded() == m ? String(Int(m)) : String(m) }
-    }
-
-    private func save() async {
-        guard let tid = auth.userId else { return }
-        guard !subjectId.isEmpty else { error = "Choisissez une matière"; return }
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { error = "Donnez un titre"; return }
-        let d = details.trimmingCharacters(in: .whitespacesAndNewlines)
-        let date = hasDate ? EduDates.day(due) : nil
-        saving = true
-        defer { saving = false }
-        do {
-            let api = EduAPI()
-            if plainHomework {
-                // saved like the « travail à faire » of the cahier: shown in Exercices de maison, never graded
-                try await api.insertCahier(CahierInsert(
-                    class_section_id: classRow.classId, subject_id: subjectId, entry_date: EduDates.day(),
-                    content: "", homework: [t, d].filter { !$0.isEmpty }.joined(separator: "\n"), homework_due: date))
-            } else {
-                guard let max = Double(maxScore.replacingOccurrences(of: ",", with: ".")), max > 0 else {
-                    error = "Note maximale invalide"; return
-                }
-                let payload = ExercisePayload(class_section_id: classRow.classId, subject_id: subjectId, teacher_id: tid,
-                                              period_label: period, type: "devoir", title: t, description: d.isEmpty ? nil : d,
-                                              max_score: max, eval_date: date, start_time: nil, end_time: nil)
-                if let editing { try await api.updateExercise(id: editing.itemId, payload) }
-                else { try await api.insertExercise(payload) }
-            }
-            onSaved()
-            dismiss()
-        } catch {
-            if !error.isCancellation { self.error = error.localizedDescription }
-        }
-    }
-}
-
 // MARK: - Edit lesson homework
 
 /// Edit the « travail à faire » of a lesson (text and due date), without touching the lesson content.
@@ -799,8 +665,11 @@ extension EduAPI {
             .value
     }
 
-    func insertExercise(_ p: ExercisePayload) async throws {
-        try await client.from("evaluations").insert(p).execute()
+    @discardableResult
+    func insertExercise(_ p: ExercisePayload) async throws -> String {
+        struct Created: Decodable { let id: String }
+        let c: Created = try await client.from("evaluations").insert(p).select("id").single().execute().value
+        return c.id
     }
 
     func updateExercise(id: String, _ p: ExercisePayload) async throws {
