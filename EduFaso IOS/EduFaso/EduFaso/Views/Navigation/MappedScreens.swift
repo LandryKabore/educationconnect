@@ -4861,6 +4861,10 @@ struct TeacherAttendanceOverview: View {
 }
 
 struct TeacherCahierView: View {
+    var initialClassId: String? = nil
+    var initialSubjectId: String? = nil
+    /// yyyy-MM-dd of the lesson (defaults to today).
+    var initialDate: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
     @State private var assignments: [TeachingAssignment] = []
     @State private var selected: TeachingAssignment?
@@ -5015,6 +5019,11 @@ struct TeacherCahierView: View {
         guard let tid = auth.userId else { loading = false; return }
         let api = EduAPI()
         assignments = (try? await api.fetchTeachingAssignments(teacherId: tid)) ?? []
+        if selected == nil, let initialClassId {
+            selected = assignments.first { $0.classSectionId == initialClassId && (initialSubjectId == nil || $0.subjectId == initialSubjectId) }
+                ?? assignments.first { $0.classSectionId == initialClassId }
+            if let initialDate, let d = EduDates.parseDay(initialDate) { date = d }
+        }
         entries = (try? await api.fetchCahierForTeacher(teacherId: tid)) ?? []
         loading = false
     }

@@ -91,7 +91,6 @@ struct CompleteProfileView: View {
                     Text("Choisir…").tag("")
                     Text("Masculin").tag("M")
                     Text("Féminin").tag("F")
-                    Text("Autre").tag("other")
                 }
                 .pickerStyle(.segmented)
             }

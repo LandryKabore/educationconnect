@@ -1,1138 +1,865 @@
 import SwiftUI
 
+/// Teacher « Ma journée », like the web TeacherDay: teal banner with today's figures and the lesson
+/// happening now, today's lessons with their two jobs (roll call, cahier de textes), late jobs from
+/// the previous days, grades still to enter and shortcuts.
 struct TeacherHomeView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var assignments: [TeachingAssignment] = []
-    @State private var todaySlots: [TimetableSlot] = []
-    @State private var evaluations: [EvaluationRow] = []
+    @State private var snapshot = TeacherLessons.Snapshot()
     @State private var unreadMessages = 0
-    @State private var unreadAnnouncements = 0
     @State private var ready = false
     @State private var loadFailed = false
-    @State private var showCreateEval = false
 
-    private static let sky = Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
-    private static let softFill = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
+    @State private var tour = TabTour(key: "accueil-enseignant")
+    @State private var coach = CoachMarkRegistry()
 
-    // MARK: - Derived
+    static let brand800 = Color(red: 17 / 255, green: 94 / 255, blue: 89 / 255)
+    static let brand600 = Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)
+    static let brand50 = Color(red: 240 / 255, green: 253 / 255, blue: 250 / 255)
+    static let emerald = Color(red: 5 / 255, green: 150 / 255, blue: 105 / 255)
+    static let emerald50 = Color(red: 236 / 255, green: 253 / 255, blue: 245 / 255)
+    static let amber = Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255)
+    static let amber50 = Color(red: 255 / 255, green: 251 / 255, blue: 235 / 255)
+    static let amberDot = Color(red: 245 / 255, green: 158 / 255, blue: 11 / 255)
+    static let sky = Color(red: 7 / 255, green: 89 / 255, blue: 133 / 255)
+    static let sky100 = Color(red: 224 / 255, green: 242 / 255, blue: 254 / 255)
+    static let slate100 = Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255)
 
-    private var today: String { EduDates.day() }
+    private var name: String { auth.profile?.fullName.trimmingCharacters(in: .whitespaces) ?? "" }
 
-    private var firstName: String {
-        if let first = auth.profile?.firstName.trimmingCharacters(in: .whitespaces), !first.isEmpty {
-            return first
-        }
-        return auth.profile?.fullName.split(separator: " ").first.map(String.init) ?? ""
-    }
-
-    private var upcomingEvals: [EvaluationRow] {
-        evaluations
-            .filter { eventDay($0).map { $0 >= today } ?? true }
-            .sorted { (eventDay($0) ?? "9999") < (eventDay($1) ?? "9999") }
-    }
-
-    private var needsConfirm: [EvaluationRow] {
-        evaluations.filter { isPendingConfirm($0) }
-    }
-
-    /// Confirmations first, then soonest upcoming (capped on screen).
-    private var priorityEvals: [EvaluationRow] {
-        var seen = Set<String>()
-        var out: [EvaluationRow] = []
-        for row in needsConfirm + upcomingEvals {
-            if seen.insert(row.id).inserted { out.append(row) }
-        }
-        return out
-    }
-
-    private var uniqueClasses: [(id: String, name: String, subjects: [String])] {
-        var order: [String] = []
-        var names: [String: String] = [:]
-        var subjects: [String: [String]] = [:]
-        for a in assignments {
-            let id = a.classSectionId
-            if names[id] == nil {
-                order.append(id)
-                names[id] = a.classes?.name ?? "Classe"
-            }
-            if let subject = a.matieres?.name, !subject.isEmpty {
-                var list = subjects[id] ?? []
-                if !list.contains(subject) { list.append(subject) }
-                subjects[id] = list
-            }
-        }
-        return order.map { id in (id, names[id] ?? "Classe", subjects[id] ?? []) }
-    }
-
-    private func isPendingConfirm(_ row: EvaluationRow) -> Bool {
-        row.adminConfirmed == false && (row.type == "examen" || row.type == "composition")
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "teacher.stats", icon: "chart.bar.fill",
+                title: "Votre journée en chiffres",
+                message: "Vos cours du jour, les tâches du jour faites (appels et cahiers) et ce qui est en retard. Touchez « En retard » pour ouvrir la liste À faire."
+            ),
+            CoachMarkStep(
+                id: "teacher.now", icon: "clock.fill",
+                title: "Maintenant",
+                message: "Le cours en cours ou le prochain, avec le bon bouton : faire l’appel, puis remplir le cahier de textes."
+            ),
+            CoachMarkStep(
+                id: "teacher.compo", icon: "pencil.and.list.clipboard",
+                title: "Compositions",
+                message: "Quand une de vos classes compose, ses épreuves s’affichent ici. Vos cours dans cette classe sont suspendus : pas d’appel ni de cahier à remplir ces jours-là."
+            ),
+            CoachMarkStep(
+                id: "teacher.today", icon: "calendar",
+                title: "Aujourd’hui",
+                message: "Chaque cours du jour avec son appel et son cahier. Vert : c’est fait. Orange : c’est à faire. Touchez un cours pour le compléter."
+            ),
+            CoachMarkStep(
+                id: "teacher.late", icon: "exclamationmark.triangle.fill",
+                title: "Jours précédents",
+                message: "Les appels et cahiers oubliés des 7 derniers jours. Vous pouvez encore les rattraper."
+            ),
+            CoachMarkStep(
+                id: "teacher.grades", icon: "pencil.and.list.clipboard",
+                title: "Notes à saisir",
+                message: "Les interrogations et examens passés dont il manque des notes."
+            ),
+            CoachMarkStep(
+                id: "teacher.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
     }
 
     // MARK: - Body
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                if ready {
-                    TimelineView(.everyMinute) { context in
-                        VStack(alignment: .leading, spacing: 24) {
-                            hero(now: context.date)
-                            if unreadMessages > 0 || unreadAnnouncements > 0 { inboxPills }
-                            if loadFailed { errorBanner }
-                            nowCard(now: context.date)
-                            if todaySlots.count > 1 { dayTimeline(now: context.date) }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if ready {
+                        TimelineView(.everyMinute) { context in
+                            content(now: context.date)
                         }
+                    } else {
+                        loadingSkeleton
                     }
-
-                    quickActions
-                    prioritiesSection
-                    classesSection
-                } else {
-                    loadingSkeleton
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .refreshable { await load() }
+            .tabTour(tour, registry: coach, scroller: proxy)
         }
-        .refreshable { await load(isRefresh: true) }
-        .background(EduTheme.loginBackground.ignoresSafeArea())
+        .environment(coach)
+        .background(EduTheme.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.light)
-        .sheet(isPresented: $showCreateEval) {
-            CreateEvaluationSheet {
-                showCreateEval = false
-                Task { await load(isRefresh: true) }
-            }
-            .environmentObject(auth)
+        .task { await load() }
+        .onChange(of: ready) { _, isReady in
+            if isReady { tour.autoStartOnce({ tourSteps }, registry: coach) }
         }
-        .task { await load(isRefresh: false) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && ready {
-                Task { await load(isRefresh: true) }
-            }
+            if phase == .active && ready { Task { await load() } }
         }
     }
 
-    // MARK: - Hero
+    @ViewBuilder
+    private func content(now: Date) -> some View {
+        let lessons = TeacherLessons.lessons(snapshot, now: now)
+        let today = TeacherLessons.today(lessons, now: now)
+        let late = TeacherLessons.late(lessons, now: now)
+        let todayIso = EduDates.day(now)
+        let previous = late.filter { $0.date != todayIso }
+        let lateCount = late.filter { $0.appelDue && $0.appel != .done }.count
+            + late.filter { $0.cahierDue && $0.cahier != .done }.count
 
-    private func hero(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let remaining = todaySlots.filter { Self.minutes($0.endTime) > nowMin }.count
-
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(Self.todayCaption(now))
-                        .font(.caption.weight(.bold))
-                        .tracking(0.8)
-                        .textCase(.uppercase)
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text("\(TimeGreeting.current(at: now)), \(firstName.isEmpty ? "…" : firstName)")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    Label(auth.schools.first?.name ?? "Espace enseignant", systemImage: "building.columns.fill")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "person.fill.checkmark")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 16) {
+            banner(now: now, today: today, lateCount: lateCount)
+            if loadFailed { errorBanner }
+            let compos = CompositionSchedule.teacherCurrent(byClass: snapshot.compositions, now: now)
+            if !compos.isEmpty {
+                compositionCard(compos, now: now).coachMarkTarget("teacher.compo")
             }
-            .accessibilityElement(children: .combine)
-
-            HStack(spacing: 10) {
-                heroStat(
-                    value: todaySlots.isEmpty ? "0" : "\(remaining)",
-                    label: todaySlots.isEmpty ? "Cours aujourd’hui" : "Cours restants",
-                    systemImage: "clock.fill"
-                )
-                heroStat(value: "\(uniqueClasses.count)", label: "Classes", systemImage: "person.3.fill")
-                heroStat(value: "\(upcomingEvals.count)", label: "Évals à venir", systemImage: "doc.text.fill")
-            }
+            todaySection(today, now: now).coachMarkTarget("teacher.today")
+            previousCard(previous).coachMarkTarget("teacher.late")
+            gradesCard.coachMarkTarget("teacher.grades")
+            shortcuts(todo: lateCount + snapshot.ungraded.count)
         }
-        .padding(20)
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Banner
+
+    private func dueCounts(_ today: [TeacherLessons.Lesson]) -> (done: Int, total: Int) {
+        today.reduce(into: (done: 0, total: 0)) { acc, l in
+            if l.appelDue { acc.total += 1; if l.appel == .done { acc.done += 1 } }
+            if l.cahierDue { acc.total += 1; if l.cahier == .done { acc.done += 1 } }
+        }
+    }
+
+    private func banner(now: Date, today: [TeacherLessons.Lesson], lateCount: Int) -> some View {
+        let due = dueCounts(today)
+        let pending = max(0, due.total - due.done)
+        let over = today.filter { $0.timing == .over }.count
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(TimeGreeting.current(at: now)) · \(Self.dayLong(now))")
+                            .font(.caption.weight(.semibold))
+                            .tracking(1.2)
+                            .textCase(.uppercase)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text("\(name.isEmpty ? "Ma journée" : name) 👋")
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-0.4)
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                        Text(today.isEmpty
+                             ? "Pas de cours aujourd’hui."
+                             : "\(today.count) cours aujourd’hui · \(pending) tâche\(pending > 1 ? "s" : "") en attente")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Spacer(minLength: 0)
+                    TourHelpButton(onDark: true) { tour.start(tourSteps, registry: coach) }
+                        .coachMarkTarget("teacher.help")
+                }
+
+                HStack(spacing: 8) {
+                    bannerTile(
+                        label: "Cours aujourd’hui",
+                        value: "\(today.count)",
+                        hint: today.isEmpty ? "journée libre" : "\(over) terminé\(over > 1 ? "s" : "")"
+                    )
+                    bannerTile(
+                        label: "Tâches du jour",
+                        value: due.total > 0 ? "\(due.done)/\(due.total)" : "—",
+                        hint: due.total == 0 ? "rien pour l’instant" : (due.done == due.total ? "tout est fait" : "appels et cahiers")
+                    )
+                    NavigationLink { TeacherTodoView() } label: {
+                        bannerTile(label: "En retard", value: "\(lateCount)", hint: lateCount > 0 ? "voir la liste" : "rien en retard")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .coachMarkTarget("teacher.stats")
+
+                nowCard(now: now, today: today, due: due).coachMarkTarget("teacher.now")
+            }
+            .padding(20)
+
+            HStack(spacing: 0) {
+                EduTheme.fasoRed
+                EduTheme.fasoYellow
+                EduTheme.fasoGreen
+            }
+            .frame(height: 4)
+            .accessibilityHidden(true)
+        }
         .background {
             ZStack {
-                LinearGradient(
-                    colors: [EduTheme.navyDark, EduTheme.navy, EduTheme.teal],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Circle()
-                    .fill(.white.opacity(0.07))
-                    .frame(width: 220, height: 220)
-                    .offset(x: 140, y: -90)
-                Circle()
-                    .fill(.white.opacity(0.05))
-                    .frame(width: 140, height: 140)
-                    .offset(x: -150, y: 90)
+                LinearGradient(colors: [Self.brand800, EduTheme.teal, Self.brand600], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Circle().fill(.white.opacity(0.06)).frame(width: 260, height: 260).offset(x: 150, y: -120)
+                Circle().fill(.white.opacity(0.04)).frame(width: 220, height: 220).offset(x: -40, y: 200)
             }
         }
-        .overlay(alignment: .bottom) { fasoStripe }
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .shadow(color: EduTheme.navy.opacity(0.28), radius: 18, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .shadow(color: Self.brand800.opacity(0.25), radius: 14, y: 8)
     }
 
-    private var fasoStripe: some View {
-        HStack(spacing: 0) {
-            EduTheme.fasoRed
-            EduTheme.fasoYellow
-            EduTheme.fasoGreen
-        }
-        .frame(height: 4)
-        .accessibilityHidden(true)
-    }
-
-    private func heroStat(value: String, label: String, systemImage: String) -> some View {
+    private func bannerTile(label: String, value: String, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white.opacity(0.8))
-                .accessibilityHidden(true)
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.title2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.white)
-                .contentTransition(.numericText())
-            Text(label)
-                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(hint)
+                .font(.caption2)
                 .foregroundStyle(.white.opacity(0.8))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
+        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(.white.opacity(0.15), lineWidth: 1))
     }
 
-    // MARK: - Inbox
+    // MARK: - Now card (white card inside the banner)
 
-    private var inboxPills: some View {
-        HStack(spacing: 10) {
-            if unreadMessages > 0 {
-                NavigationLink { MessagesView() } label: {
-                    Label(
-                        "\(unreadMessages) message\(unreadMessages > 1 ? "s" : "") non lu\(unreadMessages > 1 ? "s" : "")",
-                        systemImage: "envelope.fill"
-                    )
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 40)
-                    .background(EduTheme.navy, in: Capsule())
-                    .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-            }
-            if unreadAnnouncements > 0 {
-                NavigationLink { MessagesView(announcementsOnly: true) } label: {
-                    Label(
-                        "\(unreadAnnouncements) annonce\(unreadAnnouncements > 1 ? "s" : "")",
-                        systemImage: "megaphone.fill"
-                    )
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 40)
-                    .background(EduTheme.fasoYellow.opacity(0.18), in: Capsule())
-                    .overlay(Capsule().stroke(EduTheme.fasoYellow.opacity(0.5), lineWidth: 1))
-                    .foregroundStyle(EduTheme.ink)
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer(minLength: 0)
+    /// What the teacher should do next for a lesson (web `nextAction`).
+    private func nextAction(_ l: TeacherLessons.Lesson) -> (label: String, cahier: Bool, primary: Bool)? {
+        if l.timing == .upcoming { return ("Préparer", false, false) }
+        if l.appel != .done && l.studentCount > 0 { return ("Faire l’appel", false, true) }
+        if l.cahier != .done { return ("Remplir le cahier", true, l.timing == .over) }
+        return nil
+    }
+
+    @ViewBuilder
+    private func lessonDestination(_ l: TeacherLessons.Lesson, cahier: Bool?) -> some View {
+        if cahier == true {
+            TeacherCahierView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+        } else if cahier == false {
+            TeacherAttendanceView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+        } else {
+            ClassHubView(classId: l.classId, className: l.className)
         }
+    }
+
+    @ViewBuilder
+    private func nowCard(now: Date, today: [TeacherLessons.Lesson], due: (done: Int, total: Int)) -> some View {
+        let nowMin = TeacherLessons.minutes(of: now)
+        let live = today.first { $0.timing == .live }
+        let upcoming = today.first { $0.timing == .upcoming }
+        VStack(alignment: .leading, spacing: 0) {
+            if let lesson = live ?? upcoming {
+                let action = nextAction(lesson)
+                let start = TeacherLessons.minutes(lesson.start)
+                let end = TeacherLessons.minutes(lesson.end)
+                let inMin = start - nowMin
+                HStack {
+                    tag(live != nil ? "En cours" : "Prochain cours", icon: "clock",
+                        fg: live != nil ? Self.emerald : Self.sky, bg: live != nil ? Self.emerald50 : Self.sky100)
+                    Spacer()
+                    Text(live != nil ? "fin à \(lesson.end.prefix(5))" : (inMin < 60 ? "dans \(inMin) min" : "à \(lesson.start.prefix(5))"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(EduTheme.muted)
+                }
+                Text("\(lesson.subjectName) · \(lesson.className)")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                    .padding(.top, 12)
+                Text(Self.meta(lesson))
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+                    .padding(.top, 2)
+                if live != nil {
+                    let progress = end > start ? min(1, max(0, Double(nowMin - start) / Double(end - start))) : 0
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Rectangle().fill(Self.slate100)
+                            Rectangle().fill(Self.emerald).frame(width: geo.size.width * progress)
+                        }
+                    }
+                    .frame(height: 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                    .padding(.top, 12)
+                }
+                NavigationLink { lessonDestination(lesson, cahier: action?.cahier ?? false) } label: {
+                    Label(live != nil ? (action?.label ?? "Ouvrir le cours") : "Préparer le cours",
+                          systemImage: action?.cahier == true ? "book" : "checklist")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(.white)
+                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+            } else if !today.isEmpty {
+                tag("Journée terminée", icon: "checkmark", fg: Self.emerald, bg: Self.emerald50)
+                Text(due.done == due.total ? "Tout est fait. Bravo !" : "\(due.total - due.done) tâche\(due.total - due.done > 1 ? "s" : "") à terminer")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(EduTheme.ink)
+                    .padding(.top, 12)
+                Text("\(due.done) sur \(due.total) appels et cahiers remplis aujourd’hui.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+                    .padding(.top, 2)
+            } else {
+                tag("Pas de cours aujourd’hui", icon: "calendar", fg: Self.sky, bg: Self.sky100)
+                if let next = TeacherLessons.nextDay(snapshot.slots, compositions: snapshot.compositions, now: now) {
+                    Text("\(Self.weekdayName(next.date)) à \(next.first.startTime.prefix(5))")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(EduTheme.ink)
+                        .padding(.top, 12)
+                    Text("\(next.first.matieres?.name ?? "") · \(next.first.classes?.name ?? "") — \(next.count) cours ce jour-là")
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.muted)
+                        .padding(.top, 2)
+                } else {
+                    Text("Aucun cours prévu cette semaine.")
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.muted)
+                        .padding(.top, 12)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .shadow(color: Self.brand800.opacity(0.25), radius: 12, y: 6)
+    }
+
+    private func tag(_ text: String, icon: String, fg: Color, bg: Color) -> some View {
+        Label(text.uppercased(), systemImage: icon)
+            .font(.system(size: 11, weight: .bold))
+            .tracking(0.6)
+            .foregroundStyle(fg)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(bg, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    // MARK: - Compositions
+
+    /// Classes composing today (or within a week): their papers replace the lessons.
+    private func compositionCard(_ items: [(classId: String, session: StudentCompositionSession)], now: Date) -> some View {
+        let todayIso = EduDates.day(now)
+        let nowMin = TeacherLessons.minutes(of: now)
+        let mySubjects = Set(snapshot.slots.compactMap { $0.matieres?.name })
+        return VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(items.enumerated()), id: \.element.session.id) { index, item in
+                if index > 0 { Divider() }
+                let s = item.session
+                let running = (s.startsOn.map { String($0.prefix(10)) <= todayIso } ?? false)
+                let className = snapshot.slots.first { $0.classSectionId == item.classId }?.classes?.name ?? "Classe"
+                let papers = s.papers
+                    .filter { $0.evalDate.map { String($0.prefix(10)) } == (running ? todayIso : $0.evalDate.map { String($0.prefix(10)) }) }
+                    .sorted { (($0.evalDate ?? "") + ($0.startTime ?? "")) < (($1.evalDate ?? "") + ($1.startTime ?? "")) }
+                let shown = running ? papers : Array(papers.prefix(3))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(running ? "COMPOSITIONS EN COURS · \(className)" : "COMPOSITIONS À VENIR · \(className)")
+                                .font(.caption2.weight(.bold))
+                                .tracking(0.5)
+                                .foregroundStyle(TimetableView.compoText)
+                            Text(s.title?.isEmpty == false ? s.title! : (s.periodLabel ?? "Compositions"))
+                                .font(.headline)
+                                .foregroundStyle(EduTheme.ink)
+                            Text(running
+                                 ? "Vos cours en \(className) sont suspendus jusqu’au \(Self.shortDate(s.endsOn))."
+                                 : "À partir du \(Self.shortDate(s.startsOn)) : vos cours en \(className) seront suspendus.")
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if running && shown.isEmpty {
+                        Text("Pas d’épreuve aujourd’hui.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                    ForEach(shown) { p in
+                        let start = p.startTime.map { TeacherLessons.minutes($0) } ?? 0
+                        let end = p.endTime.map { TeacherLessons.minutes($0) } ?? 0
+                        let isToday = p.evalDate.map { String($0.prefix(10)) } == todayIso
+                        let live = isToday && nowMin >= start && nowMin < end
+                        let done = isToday && nowMin >= end
+                        let mine = mySubjects.contains(p.matieres?.name ?? "")
+                        HStack(spacing: 10) {
+                            Text(running ? "\(p.startTime?.prefix(5) ?? "")" : Self.shortDay(p.evalDate ?? ""))
+                                .font(.caption.weight(.bold).monospacedDigit())
+                                .foregroundStyle(live ? Self.emerald : EduTheme.ink)
+                                .frame(width: 46, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(p.matieres?.name ?? "Épreuve")
+                                    .font(.subheadline.weight(mine ? .bold : .semibold))
+                                    .foregroundStyle(done ? EduTheme.muted : EduTheme.ink)
+                                    .strikethrough(done)
+                                Text("\(p.startTime?.prefix(5) ?? "") – \(p.endTime?.prefix(5) ?? "")" + (mine ? " · votre matière" : ""))
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            Spacer(minLength: 4)
+                            if live {
+                                Text("EN COURS")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Self.emerald, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(live ? Self.emerald50 : TimetableView.compoBg.opacity(0.45), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    }
+                }
+            }
+            NavigationLink { TimetableView(mode: .teacher) } label: {
+                Text("Voir l’emploi du temps")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .foregroundStyle(.white)
+                    .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .padding(.leading, 4)
+        .background(.white)
+        .overlay(alignment: .leading) { Rectangle().fill(TimetableView.compoEdge).frame(width: 4) }
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1))
+    }
+
+    private static func shortDate(_ iso: String?) -> String {
+        guard let iso, let d = EduDates.parseDay(iso) else { return "—" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "d MMMM"
+        return f.string(from: d)
+    }
+
+    // MARK: - Today
+
+    private func todaySection(_ today: [TeacherLessons.Lesson], now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Aujourd’hui")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(EduTheme.ink)
+                Spacer()
+                NavigationLink { TimetableView(mode: .teacher) } label: {
+                    Text("Emploi du temps")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.teal)
+                }
+            }
+            if today.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "calendar")
+                        .font(.title2)
+                        .foregroundStyle(EduTheme.teal)
+                        .frame(width: 48, height: 48)
+                        .background(Self.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    Text("Pas de cours aujourd’hui")
+                        .font(.headline)
+                        .foregroundStyle(EduTheme.ink)
+                    Text(noLessonText(now: now))
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.muted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+                .padding(.horizontal, 16)
+                .modifier(HomeCardStyle())
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(today) { l in lessonRow(l, now: now) }
+                }
+            }
+        }
+    }
+
+    private func noLessonText(now: Date) -> String {
+        if snapshot.slots.isEmpty { return "Votre emploi du temps n’est pas encore saisi par l’établissement." }
+        guard let next = TeacherLessons.nextDay(snapshot.slots, compositions: snapshot.compositions, now: now) else { return "Aucun cours cette semaine." }
+        return "Prochain cours : \(Self.dayLong(EduDates.parseDay(next.date) ?? now).lowercased()) à \(next.first.startTime.prefix(5)) — \(next.first.matieres?.name ?? "") · \(next.first.classes?.name ?? "")"
+    }
+
+    private func lessonRow(_ l: TeacherLessons.Lesson, now: Date) -> some View {
+        let action = nextAction(l)
+        let complete = action == nil && l.timing != .upcoming
+        let live = l.timing == .live
+        let inMin = TeacherLessons.minutes(l.start) - TeacherLessons.minutes(of: now)
+        return HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(l.start.prefix(5))
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(live ? Self.emerald : EduTheme.ink)
+                    .lineLimit(1)
+                    .fixedSize()
+                Text(l.end.prefix(5))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(EduTheme.muted)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .frame(minWidth: 48, alignment: .trailing)
+            .padding(.top, 14)
+
+            Circle()
+                .fill(complete || live ? Self.emerald : (l.timing == .over ? Self.amberDot : .white))
+                .overlay(Circle().stroke(complete || live || l.timing == .over ? .clear : EduTheme.borderStrong, lineWidth: 2))
+                .frame(width: 12, height: 12)
+                .padding(.top, 18)
+
+            NavigationLink { lessonDestination(l, cahier: action?.cahier) } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("\(l.subjectName) · \(l.className)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(EduTheme.ink)
+                            .lineLimit(1)
+                        if live {
+                            Text("EN COURS")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Self.emerald, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                        }
+                    }
+                    Text(Self.roomAndStudents(l) + (l.timing == .upcoming && inMin <= 90 ? " · dans \(inMin) min" : ""))
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                    HStack(spacing: 6) {
+                        jobChip("Appel", state: l.appel, due: l.appelDue)
+                        jobChip("Cahier", state: l.cahier, due: l.cahierDue)
+                    }
+                    if let action {
+                        Label(action.label, systemImage: "arrow.right")
+                            .labelStyle(TrailingIconLabelStyle())
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
+                            .foregroundStyle(action.primary ? .white : EduTheme.ink)
+                            .background(action.primary ? EduTheme.teal : .white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(action.primary ? .clear : EduTheme.borderStrong, lineWidth: 1))
+                    } else {
+                        Label("Complet", systemImage: "checkmark")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 34)
+                            .foregroundStyle(Self.emerald)
+                            .background(Self.emerald50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .stroke(live ? Self.emerald.opacity(0.6) : EduTheme.borderStrong.opacity(0.7), lineWidth: live ? 2 : 1)
+                )
+                .opacity(l.timing == .over && complete ? 0.75 : 1)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func jobChip(_ label: String, state: TeacherLessons.Job, due: Bool) -> some View {
+        let fg: Color = state == .done ? Self.emerald : (due ? Self.amber : EduTheme.muted)
+        let bg: Color = state == .done ? Self.emerald50 : (due ? Self.amber50 : Self.slate100)
+        let suffix = state == .done ? "" : (state == .partial ? " commencé" : (due ? " à faire" : ""))
+        return HStack(spacing: 3) {
+            if state == .done { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)) }
+            Text(label + suffix)
+        }
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(fg)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(bg, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    // MARK: - Previous days
+
+    private func previousCard(_ previous: [TeacherLessons.Lesson]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            cardHeader(
+                icon: previous.isEmpty ? "checkmark" : "exclamationmark.triangle",
+                tint: previous.isEmpty ? Self.emerald : Self.amber,
+                bg: previous.isEmpty ? Self.emerald50 : Self.amber50,
+                title: "Jours précédents",
+                subtitle: "Appels et cahiers des 7 derniers jours"
+            ) { EmptyView() }
+            if previous.isEmpty {
+                Text("Tout est à jour.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(previous.prefix(5).enumerated()), id: \.element.id) { index, l in
+                        if index > 0 { Divider() }
+                        NavigationLink { lessonDestination(l, cahier: l.appel == .done) } label: {
+                            HStack(spacing: 10) {
+                                Text(Self.shortDay(l.date))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(EduTheme.muted)
+                                    .frame(width: 52, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(l.subjectName) · \(l.className)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(EduTheme.ink)
+                                        .lineLimit(1)
+                                    Text([l.appel != .done ? "appel" : nil, l.cahier != .done ? "cahier" : nil].compactMap { $0 }.joined(separator: " et ") + " à faire")
+                                        .font(.caption)
+                                        .foregroundStyle(Self.amber)
+                                }
+                                Spacer(minLength: 4)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if previous.count > 5 {
+                    NavigationLink { TeacherTodoView() } label: {
+                        Text("Voir les \(previous.count)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(EduTheme.teal)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .modifier(HomeCardStyle())
+    }
+
+    // MARK: - Grades to enter
+
+    private var gradesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            cardHeader(
+                icon: "pencil.and.list.clipboard", tint: EduTheme.teal, bg: Self.brand50,
+                title: "Notes à saisir",
+                subtitle: "Évaluations passées sans toutes les notes"
+            ) {
+                Text("\(snapshot.ungraded.count)")
+                    .font(.title2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(EduTheme.ink)
+            }
+            ForEach(snapshot.ungraded.prefix(3)) { u in
+                NavigationLink { GradeEntryView(evaluation: u.evaluation, recordedBy: auth.userId) } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(u.evaluation.title?.isEmpty == false ? u.evaluation.title! : u.evaluation.typeLabel)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EduTheme.ink)
+                                .lineLimit(1)
+                            Text("\(u.evaluation.classes?.name ?? "Classe") · \(u.missing) note\(u.missing > 1 ? "s" : "") manquante\(u.missing > 1 ? "s" : "")")
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Self.slate100.opacity(0.7), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            if snapshot.ungraded.count > 3 {
+                NavigationLink { TeacherTodoView() } label: {
+                    Text("Tout voir")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.teal)
+                }
+            }
+        }
+        .padding(16)
+        .modifier(HomeCardStyle())
+    }
+
+    private func cardHeader<Trailing: View>(
+        icon: String, tint: Color, bg: Color, title: String, subtitle: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(bg, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            Spacer(minLength: 4)
+            trailing()
+        }
+    }
+
+    // MARK: - Shortcuts
+
+    private func shortcuts(todo: Int) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            NavigationLink { TeacherTodoView() } label: { shortcut("À faire", icon: "checklist.unchecked", badge: todo) }
+                .buttonStyle(.plain)
+            NavigationLink { MessagesView() } label: { shortcut("Messages", icon: "message", badge: unreadMessages) }
+                .buttonStyle(.plain)
+            NavigationLink { TeacherClassesView() } label: { shortcut("Mes classes", icon: "person.2", badge: 0) }
+                .buttonStyle(.plain)
+            NavigationLink { TeacherCahierView() } label: { shortcut("Cahier de textes", icon: "book", badge: 0) }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func shortcut(_ title: String, icon: String, badge: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(EduTheme.teal)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(EduTheme.ink)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .overlay(alignment: .topTrailing) {
+            if badge > 0 {
+                Text("\(badge)")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .frame(minWidth: 20, minHeight: 20)
+                    .background(EduTheme.fasoRed, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    .padding(10)
+            }
+        }
+        .modifier(HomeCardStyle())
     }
 
     // MARK: - Loading & error
 
     private var loadingSkeleton: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(EduTheme.navy.opacity(0.15))
-                .frame(maxWidth: .infinity, minHeight: 190)
+        VStack(alignment: .leading, spacing: 16) {
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .fill(EduTheme.teal.opacity(0.15))
+                .frame(maxWidth: .infinity, minHeight: 300)
             ForEach(0..<3, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(.white)
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .frame(maxWidth: .infinity, minHeight: 96)
             }
         }
         .redacted(reason: .placeholder)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Chargement en cours")
     }
 
     private var errorBanner: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.orange)
-                .accessibilityHidden(true)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.orange)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Certaines données n’ont pas pu être chargées.")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(EduTheme.ink)
-                Text("Vérifie ta connexion puis réessaie.")
-                    .font(.footnote)
-                    .foregroundStyle(EduTheme.muted)
-                Button("Réessayer") {
-                    Task { await load(isRefresh: true) }
-                }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(EduTheme.teal)
-                .frame(minHeight: 44, alignment: .leading)
+                Button("Réessayer") { Task { await load() } }
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(EduTheme.teal)
             }
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Now card
-
-    @ViewBuilder
-    private func nowCard(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let current = todaySlots.first {
-            Self.minutes($0.startTime) <= nowMin && nowMin < Self.minutes($0.endTime)
-        }
-        let upcoming = todaySlots.first { Self.minutes($0.startTime) > nowMin }
-
-        if let slot = current ?? upcoming {
-            let isCurrent = current != nil
-            let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
-            let start = Self.minutes(slot.startTime)
-            let end = Self.minutes(slot.endTime)
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    statusCapsule(live: isCurrent)
-                    Spacer(minLength: 0)
-                    Text(timeRange(slot))
-                        .font(.subheadline.weight(.bold).monospacedDigit())
-                        .foregroundStyle(EduTheme.ink)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(slot.matieres?.name ?? "Cours")
-                        .font(.title.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 14) {
-                        if let className = slot.classes?.name, !className.isEmpty {
-                            Label(className, systemImage: "person.3.fill")
-                        }
-                        if let room = formatRoom(slot.room) {
-                            Label(room, systemImage: "mappin.and.ellipse")
-                        }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink.opacity(0.72))
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityLabel(
-                    "\(isCurrent ? "En cours" : "Prochain cours") : \(slot.matieres?.name ?? "Cours"), \(spokenRange(slot))"
-                        + ((slot.classes?.name?.isEmpty == false) ? ", \(slot.classes!.name!)" : "")
-                        + ((slot.room?.isEmpty == false) ? ", salle \(slot.room!)" : "")
-                )
-
-                if isCurrent {
-                    let progress = min(1, max(0, Double(nowMin - start) / Double(max(end - start, 1))))
-                    VStack(alignment: .leading, spacing: 8) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(EduTheme.ink.opacity(0.08))
-                                Capsule()
-                                    .fill(swatch.border)
-                                    .frame(width: max(10, geo.size.width * progress))
-                            }
-                        }
-                        .frame(height: 8)
-                        HStack {
-                            Text("Il reste \(Self.duration(end - nowMin))")
-                                .font(.footnote.weight(.bold))
-                                .foregroundStyle(EduTheme.ink)
-                            Spacer()
-                            Text("\(Int(progress * 100)) %")
-                                .font(.footnote.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(EduTheme.muted)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Il reste \(Self.duration(end - nowMin)) sur ce cours")
-                } else {
-                    Label("Commence dans \(Self.duration(start - nowMin))", systemImage: "hourglass")
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(swatch.fill.opacity(0.6), in: Capsule())
-                }
-
-                HStack(spacing: 10) {
-                    NavigationLink {
-                        TeacherAttendanceView(
-                            initialClassId: slot.classSectionId,
-                            initialSubjectId: slot.subjectId
-                        )
-                    } label: {
-                        Label("Faire l’appel", systemImage: "checklist")
-                            .font(.body.weight(.bold))
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(
-                                LinearGradient(
-                                    colors: [EduTheme.teal, EduTheme.tealDark],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            )
-                            .foregroundStyle(.white)
-                            .shadow(color: EduTheme.teal.opacity(0.3), radius: 8, y: 4)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Ouvre l’appel pour ce cours")
-
-                    if let classId = slot.classSectionId {
-                        NavigationLink {
-                            ClassHubView(classId: classId, className: slot.classes?.name ?? "Classe")
-                        } label: {
-                            Image(systemName: "person.3.sequence.fill")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(EduTheme.navy)
-                                .frame(width: 56, height: 52)
-                                .background(EduTheme.navy.opacity(0.08), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Ouvrir la classe")
-                        .accessibilityHint("Ouvre la fiche de la classe")
-                    }
-                }
-            }
-            .padding(18)
-            .padding(.leading, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack(alignment: .leading) {
-                    Color.white
-                    LinearGradient(
-                        colors: [swatch.fill.opacity(0.55), .white.opacity(0)],
-                        startPoint: .topTrailing,
-                        endPoint: .bottomLeading
-                    )
-                    swatch.border.frame(width: 6)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(swatch.border.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
-        } else {
-            emptyNowCard
-        }
-    }
-
-    private func statusCapsule(live: Bool) -> some View {
-        let tint = live ? EduTheme.fasoRed : EduTheme.teal
-        return HStack(spacing: 6) {
-            if live {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 7))
-                    .symbolEffect(.pulse, options: .repeating)
-            } else {
-                Image(systemName: "clock.fill")
-                    .font(.caption2.weight(.bold))
-            }
-            Text(live ? "En cours" : "Prochain cours")
-                .font(.caption.weight(.heavy))
-                .tracking(0.6)
-                .textCase(.uppercase)
-        }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(tint.opacity(0.12), in: Capsule())
-        .accessibilityHidden(true)
-    }
-
-    private var emptyNowCard: some View {
-        let weekday = EduDates.weekday()
-        let icon = weekday == 7 ? "sun.max.fill" : (todaySlots.isEmpty ? "cup.and.saucer.fill" : "checkmark.seal.fill")
-        let title = weekday == 7
-            ? "Bon dimanche"
-            : (todaySlots.isEmpty ? "Pas de cours aujourd’hui" : "Journée terminée")
-
-        return HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(EduTheme.teal)
-                .frame(width: 48, height: 48)
-                .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(EduTheme.ink)
-                Text(emptyNowMessage)
-                    .font(.subheadline)
-                    .foregroundStyle(EduTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                NavigationLink { TimetableView(mode: .teacher) } label: {
-                    Label("Voir l’emploi du temps", systemImage: "arrow.right")
-                        .labelStyle(TrailingIconLabelStyle())
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minHeight: 44, alignment: .leading)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(HomeCardStyle())
-    }
-
-    // MARK: - Day timeline
-
-    private func dayTimeline(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let done = todaySlots.filter { slotStatus($0, nowMin: nowMin) == .done }.count
-
-        return VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(
-                title: "Ma journée",
-                subtitle: "\(done) sur \(todaySlots.count) cours terminés"
-            ) {
-                NavigationLink { TimetableView(mode: .teacher) } label: {
-                    Text("Semaine")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-
-            VStack(spacing: 0) {
-                ForEach(Array(todaySlots.enumerated()), id: \.element.id) { index, slot in
-                    NavigationLink {
-                        TeacherAttendanceView(
-                            initialClassId: slot.classSectionId,
-                            initialSubjectId: slot.subjectId
-                        )
-                    } label: {
-                        timelineRow(
-                            slot: slot,
-                            status: slotStatus(slot, nowMin: nowMin),
-                            isFirst: index == 0,
-                            isLast: index == todaySlots.count - 1
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Ouvre l’appel pour ce cours")
-                }
-            }
-        }
-        .padding(16)
-        .modifier(HomeCardStyle())
-    }
-
-    private func timelineRow(slot: TimetableSlot, status: SlotStatus, isFirst: Bool, isLast: Bool) -> some View {
-        let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
-        let isDone = status == .done
-        let isLive = status == .current
-
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(String(slot.startTime.prefix(5)))
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(isDone ? EduTheme.muted : EduTheme.ink)
-                Text(String(slot.endTime.prefix(5)))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(EduTheme.muted)
-            }
-            .frame(width: 42, alignment: .trailing)
-
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(isFirst ? .clear : EduTheme.ink.opacity(0.1))
-                    .frame(width: 2)
-                timelineDot(status: status, color: swatch.border)
-                Rectangle()
-                    .fill(isLast ? .clear : EduTheme.ink.opacity(0.1))
-                    .frame(width: 2)
-            }
-            .frame(width: 20)
-
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(slot.matieres?.name ?? "Cours")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isDone ? EduTheme.muted : EduTheme.ink)
-                        .strikethrough(isDone, color: EduTheme.muted.opacity(0.6))
-                        .lineLimit(1)
-                    Text([slot.classes?.name, formatRoom(slot.room)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                if isLive {
-                    Text("Maintenant")
-                        .font(.caption2.weight(.heavy))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(EduTheme.fasoRed, in: Capsule())
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.muted.opacity(0.6))
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isLive ? swatch.fill.opacity(0.7) : Self.softFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isLive ? swatch.border.opacity(0.5) : .clear, lineWidth: 1.5)
-            )
-            .padding(.vertical, 4)
-            .opacity(isDone ? 0.75 : 1)
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(slotSpoken(slot, status: status))
-    }
-
-    private func timelineDot(status: SlotStatus, color: Color) -> some View {
-        ZStack {
-            switch status {
-            case .done:
-                Circle().fill(EduTheme.fasoGreen)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .heavy))
-                    .foregroundStyle(.white)
-            case .current:
-                Circle().fill(EduTheme.fasoRed.opacity(0.2)).frame(width: 20, height: 20)
-                Circle().fill(EduTheme.fasoRed).frame(width: 10, height: 10)
-            case .upcoming:
-                Circle().fill(.white)
-                Circle().stroke(color, lineWidth: 2.5)
-            }
-        }
-        .frame(width: status == .current ? 20 : 16, height: status == .current ? 20 : 16)
-        .accessibilityHidden(true)
-    }
-
-    private func slotSpoken(_ slot: TimetableSlot, status: SlotStatus) -> String {
-        let state: String
-        switch status {
-        case .done: state = "terminé"
-        case .current: state = "en cours"
-        case .upcoming: state = "à venir"
-        }
-        var label = "\(slot.matieres?.name ?? "Cours"), \(spokenRange(slot))"
-        if let className = slot.classes?.name, !className.isEmpty { label += ", \(className)" }
-        return "\(label), \(state)"
-    }
-
-    private func slotStatus(_ slot: TimetableSlot, nowMin: Int) -> SlotStatus {
-        if Self.minutes(slot.endTime) <= nowMin { return .done }
-        if Self.minutes(slot.startTime) <= nowMin { return .current }
-        return .upcoming
-    }
-
-    // MARK: - Quick actions
-
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Actions rapides", subtitle: nil) { EmptyView() }
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                NavigationLink { TeacherAttendanceOverview() } label: {
-                    actionTile("Présences", systemImage: "checklist", color: EduTheme.teal)
-                }
-                .buttonStyle(.plain)
-
-                Button { showCreateEval = true } label: {
-                    actionTile("Nouvelle éval", systemImage: "plus.square.fill", color: EduTheme.fasoRed)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Crée une interrogation")
-
-                NavigationLink {
-                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
-                } label: {
-                    actionTile("Notes", systemImage: "pencil.and.list.clipboard", color: EduTheme.navy)
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink { TeacherCahierView() } label: {
-                    actionTile("Cahier", systemImage: "book.fill", color: EduTheme.fasoYellow)
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink { TimetableView(mode: .teacher) } label: {
-                    actionTile("Emploi du temps", systemImage: "calendar", color: Self.sky)
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink { MessagesView() } label: {
-                    actionTile("Messages", systemImage: "envelope.fill", color: EduTheme.fasoGreen, badge: unreadMessages)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func actionTile(_ title: String, systemImage: String, color: Color, badge: Int = 0) -> some View {
-        VStack(spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(
-                    LinearGradient(
-                        colors: [color.opacity(0.85), color],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .shadow(color: color.opacity(0.3), radius: 6, y: 3)
-                .overlay(alignment: .topTrailing) {
-                    if badge > 0 {
-                        Text(badge > 99 ? "99+" : "\(badge)")
-                            .font(.caption2.weight(.heavy).monospacedDigit())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 20, minHeight: 20)
-                            .background(EduTheme.fasoRed, in: Capsule())
-                            .overlay(Capsule().stroke(.white, lineWidth: 2))
-                            .offset(x: 8, y: -8)
-                    }
-                }
-                .accessibilityHidden(true)
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(EduTheme.ink)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-        }
-        .frame(maxWidth: .infinity, minHeight: 104)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .modifier(HomeCardStyle(cornerRadius: 18))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(badge > 0 ? "\(title), \(badge) non lus" : title)
-        .accessibilityAddTraits(.isButton)
-    }
-
-    // MARK: - Priorities
-
-    private var prioritiesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(title: "Priorités", subtitle: prioritySubtitle) {
-                NavigationLink {
-                    EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
-                } label: {
-                    Text("Tout voir")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-            }
-
-            if priorityEvals.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(EduTheme.fasoGreen)
-                        .accessibilityHidden(true)
-                    Text("Rien d’urgent pour le moment.")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                    Button { showCreateEval = true } label: {
-                        Label("Planifier une évaluation", systemImage: "plus")
-                            .font(.subheadline.weight(.bold))
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 44)
-                            .foregroundStyle(EduTheme.navy)
-                            .background(EduTheme.navy.opacity(0.08), in: Capsule())
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(priorityEvals.prefix(4)) { row in
-                        NavigationLink {
-                            if row.classSectionId != nil, row.subjectId != nil {
-                                GradeEntryView(evaluation: row, recordedBy: auth.userId)
-                            } else {
-                                EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
-                            }
-                        } label: {
-                            priorityRow(row)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .modifier(HomeCardStyle())
-    }
-
-    private var prioritySubtitle: String {
-        let confirm = needsConfirm.count
-        let soon = upcomingEvals.count
-        if confirm == 0 && soon == 0 { return "Notes et examens à suivre" }
-        if confirm > 0 { return "\(confirm) à confirmer · \(soon) à venir" }
-        return "\(soon) à venir"
-    }
-
-    private func priorityRow(_ row: EvaluationRow) -> some View {
-        let badge = typeBadge(row)
-        let pending = isPendingConfirm(row)
-        let title = (row.title?.isEmpty == false) ? row.title! : row.typeLabel
-        let day = eventDay(row)
-
-        return HStack(spacing: 12) {
-            dateBlock(day, color: badge.color)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(badge.title)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(badge.color)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(badge.color.opacity(0.12), in: Capsule())
-                    if pending {
-                        Label("À confirmer", systemImage: "exclamationmark.circle.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(Color.orange)
-                    }
-                }
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Text([row.matieres?.name, row.classes?.name].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(EduTheme.muted)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 6) {
-                if let day, let relative = relativeDay(day) {
-                    Text(relative.text)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(relative.urgent ? EduTheme.fasoRed : EduTheme.muted)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.muted.opacity(0.6))
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Self.softFill))
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(
-            row.classSectionId != nil && row.subjectId != nil ? "Ouvre la saisie des notes" : "Ouvre la liste"
-        )
-    }
-
-    private func dateBlock(_ iso: String?, color: Color) -> some View {
-        let parts = iso?.split(separator: "-") ?? []
-        let dayNum = parts.count == 3 ? String(Int(parts[2]) ?? 0) : "—"
-        let month: String = {
-            guard parts.count == 3, let m = Int(parts[1]), (1...12).contains(m) else { return "" }
-            return Self.monthAbbr[m - 1]
-        }()
-        return VStack(spacing: 0) {
-            Text(month)
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(0.5)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
-                .background(color)
-            Text(dayNum)
-                .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(EduTheme.ink)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.white)
-        }
-        .frame(width: 46, height: 50)
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(color.opacity(0.3), lineWidth: 1)
-        )
-        .accessibilityHidden(true)
-    }
-
-    private func typeBadge(_ row: EvaluationRow) -> (title: String, color: Color) {
-        switch row.type {
-        case "interrogation": return ("Interro", Self.sky)
-        case "devoir": return ("Exercice", EduTheme.fasoRed)
-        case "examen": return ("Examen", EduTheme.navy)
-        case "composition": return ("Compo", EduTheme.teal)
-        default: return (row.typeLabel, EduTheme.muted)
-        }
-    }
-
-    // MARK: - Classes
-
-    private var classesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                title: "Mes classes",
-                subtitle: uniqueClasses.isEmpty ? nil : "\(uniqueClasses.count) classe\(uniqueClasses.count > 1 ? "s" : "") affectée\(uniqueClasses.count > 1 ? "s" : "")"
-            ) {
-                NavigationLink { TeacherClassesView() } label: {
-                    Text("Tout voir")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-
-            if uniqueClasses.isEmpty {
-                HomePanelEmpty(message: "Aucune classe affectée pour le moment.")
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(uniqueClasses, id: \.id) { item in
-                            NavigationLink {
-                                ClassHubView(classId: item.id, className: item.name)
-                            } label: {
-                                classCard(name: item.name, subjects: item.subjects)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityHint("Ouvre la classe")
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 2)
-                }
-                .scrollClipDisabled()
-            }
-        }
-    }
-
-    private func classCard(name: String, subjects: [String]) -> some View {
-        let swatch = SubjectPalette.swatch(for: name)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(Self.classInitials(name))
-                .font(.system(size: 17, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(
-                    LinearGradient(
-                        colors: [swatch.border.opacity(0.8), swatch.border],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.headline)
-                    .foregroundStyle(EduTheme.ink)
-                    .lineLimit(1)
-                Text(subjects.isEmpty ? "Classe" : subjects.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(EduTheme.muted)
-                    .lineLimit(2, reservesSpace: true)
-            }
-
-            HStack(spacing: 4) {
-                Text("Ouvrir")
-                Image(systemName: "arrow.right")
-            }
-            .font(.caption.weight(.bold))
-            .foregroundStyle(swatch.border)
-            .accessibilityHidden(true)
-        }
-        .padding(14)
-        .frame(width: 168, alignment: .leading)
-        .background {
-            ZStack(alignment: .topTrailing) {
-                Color.white
-                Circle()
-                    .fill(swatch.fill.opacity(0.6))
-                    .frame(width: 110, height: 110)
-                    .offset(x: 40, y: -45)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.05), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Section header
-
-    private func sectionHeader<Trailing: View>(
-        title: String,
-        subtitle: String?,
-        @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(EduTheme.ink)
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(EduTheme.muted)
-                }
-            }
-            Spacer()
-            trailing()
-        }
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
     }
 
     // MARK: - Text helpers
 
-    private static let monthAbbr = ["JANV", "FÉVR", "MARS", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEPT", "OCT", "NOV", "DÉC"]
-
-    private static func todayCaption(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: date)
+    private static func dayLong(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        let s = f.string(from: date)
+        return s.prefix(1).uppercased() + s.dropFirst()
     }
 
-    private static func classInitials(_ name: String) -> String {
-        let compact = name.replacingOccurrences(of: " ", with: "")
-        return String(compact.prefix(3)).uppercased()
+    private static func weekdayName(_ iso: String) -> String {
+        guard let d = EduDates.parseDay(iso) else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE"
+        let s = f.string(from: d)
+        return s.prefix(1).uppercased() + s.dropFirst()
     }
 
-    private var emptyNowMessage: String {
-        let weekday = EduDates.weekday()
-        if weekday == 7 { return "Pas de cours le dimanche. L’école reprend lundi." }
-        if todaySlots.isEmpty { return "Aucun cours n’est planifié pour aujourd’hui." }
-        return "Tous les créneaux du jour sont passés. Beau travail !"
+    static func shortDay(_ iso: String) -> String {
+        guard let d = EduDates.parseDay(iso) else { return iso }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEE d"
+        return f.string(from: d).replacingOccurrences(of: ".", with: "")
     }
 
-    private func timeRange(_ slot: TimetableSlot) -> String {
-        "\(String(slot.startTime.prefix(5)))–\(String(slot.endTime.prefix(5)))"
+    static func room(_ raw: String?) -> String? {
+        guard let r = raw?.trimmingCharacters(in: .whitespaces), !r.isEmpty else { return nil }
+        let bare = r.replacingOccurrences(of: "^salle\\s*", with: "", options: [.regularExpression, .caseInsensitive])
+        return "Salle \(bare)"
     }
 
-    private func formatRoom(_ room: String?) -> String? {
-        guard let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
-        if trimmed.lowercased().hasPrefix("salle") { return trimmed }
-        return "Salle \(trimmed)"
+    private static func roomAndStudents(_ l: TeacherLessons.Lesson) -> String {
+        [room(l.room), "\(l.studentCount) élèves"].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private func spokenRange(_ slot: TimetableSlot) -> String {
-        "de \(String(slot.startTime.prefix(5))) à \(String(slot.endTime.prefix(5)))"
-    }
-
-    private func eventDay(_ row: EvaluationRow) -> String? {
-        let raw = row.evalDate ?? row.dueDate
-        guard let raw, !raw.isEmpty else { return nil }
-        return String(raw.prefix(10))
-    }
-
-    private func relativeDay(_ iso: String) -> (text: String, urgent: Bool)? {
-        let df = DateFormatter()
-        df.calendar = Calendar(identifier: .gregorian)
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyy-MM-dd"
-        guard let date = df.date(from: iso), let todayDate = df.date(from: today) else { return nil }
-        let days = Calendar.current.dateComponents([.day], from: todayDate, to: date).day ?? 0
-        switch days {
-        case ..<0: return ("Passé", false)
-        case 0: return ("Aujourd’hui", true)
-        case 1: return ("Demain", true)
-        default: return ("Dans \(days) j", days <= 3)
-        }
+    private static func meta(_ l: TeacherLessons.Lesson) -> String {
+        ["\(l.start.prefix(5)) – \(l.end.prefix(5))", room(l.room), "\(l.studentCount) élèves"].compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: - Loading
 
-    private func load(isRefresh: Bool) async {
+    private func load() async {
         guard let tid = auth.userId else {
             ready = true
             auth.markPortalReady()
             return
         }
-        let api = EduAPI()
-
-        async let assignmentsResult = Self.capture { try await api.fetchTeachingAssignments(teacherId: tid) }
-        async let slotsResult = Self.capture { try await api.fetchTeacherTimetable(teacherId: tid) }
-        async let inboxResult = Self.capture { try await api.fetchInbox(userId: tid, kind: .all, limit: 80) }
-        async let evalsResult = Self.capture { try await api.fetchEvaluations(teacherId: tid) }
-
-        var failures = 0
-
-        switch await assignmentsResult {
-        case .success(let value): assignments = value
-        case .failure: failures += 1
+        async let snap = Self.capture { try await TeacherLessons.load(teacherId: tid) }
+        async let inbox = Self.capture { try await EduAPI().fetchInbox(userId: tid, kind: .all, limit: 80) }
+        var failed = false
+        switch await snap {
+        case .success(let value): snapshot = value
+        case .failure: failed = true
         }
-
-        switch await slotsResult {
-        case .success(let slots):
-            let weekday = EduDates.weekday()
-            todaySlots = slots.filter { $0.dayOfWeek == weekday }.sorted { $0.startTime < $1.startTime }
-        case .failure:
-            failures += 1
+        if case .success(let rows) = await inbox {
+            unreadMessages = rows.filter { $0.readAt == nil && $0.isAnnouncement != true }.count
         }
-
-        switch await inboxResult {
-        case .success(let inbox):
-            unreadMessages = inbox.filter { $0.readAt == nil && ($0.isAnnouncement != true) }.count
-            unreadAnnouncements = inbox.filter { $0.readAt == nil && ($0.isAnnouncement == true) }.count
-        case .failure:
-            failures += 1
-        }
-
-        switch await evalsResult {
-        case .success(let value): evaluations = value
-        case .failure: failures += 1
-        }
-
-        loadFailed = failures > 0
+        loadFailed = failed
         ready = true
         auth.markPortalReady()
     }
@@ -1140,29 +867,7 @@ struct TeacherHomeView: View {
     private static func capture<T>(_ work: @escaping () async throws -> T) async -> Result<T, Error> {
         do { return .success(try await work()) } catch { return .failure(error) }
     }
-
-    // MARK: - Time math
-
-    private static func minutes(_ hhmm: String) -> Int {
-        let parts = hhmm.split(separator: ":")
-        guard parts.count >= 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return 0 }
-        return h * 60 + m
-    }
-
-    private static func minutes(of date: Date) -> Int {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    }
-
-    private static func duration(_ minutes: Int) -> String {
-        let m = max(minutes, 1)
-        if m < 60 { return "\(m) min" }
-        let h = m / 60, r = m % 60
-        return r == 0 ? "\(h) h" : "\(h) h \(String(format: "%02d", r))"
-    }
 }
-
-private enum SlotStatus { case done, current, upcoming }
 
 /// White card, thin slate border, small radius (redesign). The radius argument is
 /// kept so existing call sites compile; every card now uses the shared radius.

@@ -64,6 +64,8 @@ struct TimetableView: View {
     @State private var slots: [TimetableSlot] = []
     /// Composition sessions of the class: on their days the papers replace the lessons.
     @State private var compositions: [StudentCompositionSession] = []
+    /// Teacher mode: sessions per class (each class composes on its own days).
+    @State private var teacherCompositions: [String: [StudentCompositionSession]] = [:]
     @State private var className: String?
     @State private var loading = true
     @State private var ready = false
@@ -106,13 +108,29 @@ struct TimetableView: View {
     }
 
     /// The viewed week, with composition days showing their papers instead of the lessons.
-    private var weekSlots: [TimetableSlot] {
-        CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: weekOffset)
+    private var isTeacherMode: Bool {
+        if case .teacher = mode { return true }
+        return false
+    }
+
+    private var weekSlots: [TimetableSlot] { slotsForWeek(weekOffset) }
+
+    private func slotsForWeek(_ offset: Int) -> [TimetableSlot] {
+        if case .teacher = mode {
+            return CompositionSchedule.teacherWeek(slots: slots, byClass: teacherCompositions, weekOffset: offset)
+        }
+        return CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: offset)
     }
 
     /// The composition session touching the viewed week, if any.
     private var weekComposition: StudentCompositionSession? {
-        (1...6).lazy.compactMap { day in
+        if case .teacher = mode {
+            return (1...6).lazy.compactMap { day -> StudentCompositionSession? in
+                let iso = CompositionSchedule.isoDate(weekday: day, weekOffset: weekOffset)
+                return teacherCompositions.values.lazy.compactMap { CompositionSchedule.session(on: iso, in: $0) }.first
+            }.first
+        }
+        return (1...6).lazy.compactMap { day in
             CompositionSchedule.session(on: CompositionSchedule.isoDate(weekday: day, weekOffset: weekOffset), in: compositions)
         }.first
     }
@@ -295,7 +313,7 @@ struct TimetableView: View {
         let schoolDays = Set(slots.map(\.dayOfWeek)).filter { (1...6).contains($0) }
         guard !schoolDays.isEmpty else { return (0, today == 7 ? 1 : today) }
         if today != 7 {
-            let lastEnd = CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: 0).filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
+            let lastEnd = slotsForWeek(0).filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
             if let lastEnd, nowMin < lastEnd { return (0, today) }
             if let next = (today + 1...6).first(where: { schoolDays.contains($0) }) { return (0, next) }
         }
@@ -518,7 +536,7 @@ struct TimetableView: View {
                 let start = minutes(live.startTime), end = minutes(live.endTime)
                 summaryLine(icon: "clock.fill", color: EduTheme.fasoGreen,
                             title: live.matieres?.name ?? "Cours",
-                            detail: "En cours · se termine \(Self.inMinutes(end - now))" + (formatRoom(live.room).map { " · \($0)" } ?? ""))
+                            detail: "En cours · se termine \(Self.inMinutes(end - now))" + ((isTeacherMode ? live.classes?.name : formatRoom(live.room)).map { " · \($0)" } ?? ""))
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2).fill(EduTheme.fasoGreen.opacity(0.15))
@@ -714,10 +732,14 @@ struct TimetableView: View {
                     if CompositionSchedule.isComposition(slot) {
                         Label("Épreuve · \(blockStart(slot))–\(clock(minutes(slot.endTime)))", systemImage: "pencil.and.list.clipboard")
                     }
-                    if let teacher = slot.teacherName {
+                    if isTeacherMode {
+                        if let cls = slot.classes?.name, !cls.isEmpty {
+                            Label(cls, systemImage: "person.3.fill")
+                        }
+                    } else if let teacher = slot.teacherName {
                         Label(teacher, systemImage: "person.fill")
                     }
-                    if let room = formatRoom(slot.room) {
+                    if !isTeacherMode, let room = formatRoom(slot.room) {
                         Label(room, systemImage: "mappin.and.ellipse")
                     }
                 }
@@ -908,7 +930,7 @@ struct TimetableView: View {
     private func isSlotNext(_ slot: TimetableSlot, at date: Date) -> Bool {
         guard !isSlotLive(slot, at: date) else { return false }
         let now = minutesNow(date)
-        guard let next = CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: 0)
+        guard let next = slotsForWeek(0)
             .filter({ $0.dayOfWeek == todayWeekday })
             .sorted(by: { $0.startTime < $1.startTime })
             .first(where: { minutes($0.startTime) > now })
@@ -944,8 +966,8 @@ struct TimetableView: View {
                 }
                 Text([
                     "\(blockStart(slot))–\(clock(minutes(slot.endTime)))",
-                    slot.teacherName,
-                    formatRoom(slot.room),
+                    isTeacherMode ? slot.classes?.name : slot.teacherName,
+                    isTeacherMode ? nil : formatRoom(slot.room),
                 ].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(EduTheme.muted)
@@ -1018,6 +1040,8 @@ struct TimetableView: View {
                 }
                 className = "Mes classes"
                 slots = try await api.fetchTeacherTimetable(teacherId: tid)
+                let classIds = Array(Set(slots.compactMap(\.classSectionId)))
+                teacherCompositions = (try? await api.fetchCompositionSessions(classSectionIds: classIds)) ?? [:]
             case .classSection(let classId):
                 className = nil
                 async let compoTask = api.fetchCompositionSessions(classSectionId: classId)

@@ -3,6 +3,8 @@ import SwiftUI
 struct TeacherAttendanceView: View {
     var initialClassId: String? = nil
     var initialSubjectId: String? = nil
+    /// yyyy-MM-dd of the lesson to call (defaults to today).
+    var initialDate: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
     @State private var assignments: [TeachingAssignment] = []
     @State private var selected: TeachingAssignment?
@@ -245,6 +247,7 @@ struct TeacherAttendanceView: View {
         do {
             assignments = try await EduAPI().fetchTeachingAssignments(teacherId: tid)
             guard selected == nil else { return }
+            if let initialDate, let d = EduDates.parseDay(initialDate) { date = d }
             if let initialClassId, let initialSubjectId,
                let match = assignments.first(where: {
                    $0.classSectionId == initialClassId && $0.subjectId == initialSubjectId

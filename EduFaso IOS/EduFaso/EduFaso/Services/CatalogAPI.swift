@@ -16,6 +16,16 @@ enum EduDates {
         let weekday = Calendar.current.component(.weekday, from: date)
         return weekday == 1 ? 7 : weekday - 1
     }
+
+    /// yyyy-MM-dd → noon of that day (local time).
+    static func parseDay(_ iso: String) -> Date? {
+        let df = DateFormatter()
+        df.calendar = Calendar(identifier: .gregorian)
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = .current
+        df.dateFormat = "yyyy-MM-dd"
+        return df.date(from: String(iso.prefix(10))).flatMap { Calendar.current.date(byAdding: .hour, value: 12, to: $0) }
+    }
 }
 
 extension EduAPI {

@@ -650,7 +650,7 @@ private extension ProfileView {
                 (Text("Sexe").foregroundStyle(EduTheme.ink) + (isStudent ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
                     .font(.subheadline.weight(.semibold))
                 HStack(spacing: 0) {
-                    ForEach([("M", "Masculin"), ("F", "Féminin"), ("other", "Autre")], id: \.0) { value, label in
+                    ForEach([("M", "Masculin"), ("F", "Féminin")], id: \.0) { value, label in
                         let selected = form.gender.uppercased() == value.uppercased()
                         Button {
                             form.gender = value

@@ -36,6 +36,7 @@ enum AppScreen: String, Identifiable, Hashable {
     case parents
     case signalements
 
+    case teacherTodo
     case teacherClasses
     case teacherStudents
     case teacherAttendance
@@ -96,7 +97,8 @@ enum AppScreen: String, Identifiable, Hashable {
         case .students: return "Élèves"
         case .parents: return "Parents"
         case .signalements: return "Signalements"
-        case .teacherClasses: return "Classes"
+        case .teacherTodo: return "À faire"
+        case .teacherClasses: return "Mes classes"
         case .teacherStudents: return "Élèves"
         case .teacherAttendance: return "Présences"
         case .timetable: return "Mon emploi du temps"
@@ -142,6 +144,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .schoolHomework, .teacherEvaluations, .exams, .exercises, .childExams, .childExercises: return "doc.text"
         case .schoolCompositions, .compositions, .childCompositions: return "text.book.closed"
         case .teacherEntry: return "pencil.line"
+        case .teacherTodo: return "checklist.unchecked"
         case .parents: return "figure.and.child.holdinghands"
         case .signalements: return "exclamationmark.bubble"
         }
@@ -160,7 +163,8 @@ struct AppNavSection: Identifiable {
 
 func menuTitle(_ screen: AppScreen, role: AppRole?) -> String {
     if screen == .dashboard {
-        if role == .parent { return "Accueil" }
+        if role == .parent || role == .student { return "Accueil" }
+        if role == .teacher { return "Ma journée" }
         if role == .schoolAdmin { return "Mon école" }
     }
     return screen.title
@@ -193,10 +197,11 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
         ]
     case .teacher:
         return [
-            AppNavSection(id: "main", title: nil, screens: [.dashboard]),
+            AppNavSection(id: "main", title: nil, screens: [.dashboard, .teacherTodo]),
             AppNavSection(id: "ens", title: "Enseignement", screens: [
-                .teacherClasses, .teacherStudents, .teacherAttendance, .timetable, .teacherCahier, .teacherEvaluations,
+                .teacherClasses, .teacherStudents, .teacherCahier, .teacherEvaluations,
             ]),
+            AppNavSection(id: "planning", title: "Planning", screens: [.timetable, .teacherAttendance]),
             AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
             account,
         ]

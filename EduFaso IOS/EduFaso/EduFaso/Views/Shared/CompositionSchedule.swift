@@ -71,4 +71,42 @@ enum CompositionSchedule {
             return slots.filter { $0.dayOfWeek == day }
         }
     }
+
+    // MARK: - Teachers (several classes, each with its own sessions)
+
+    /// The session of `classId` running on this ISO day, if any.
+    static func session(of classId: String?, on iso: String, in byClass: [String: [StudentCompositionSession]]) -> StudentCompositionSession? {
+        guard let classId, let sessions = byClass[classId] else { return nil }
+        return session(on: iso, in: sessions)
+    }
+
+    /// The teacher's week: on a class's composition days its lessons give way to that class's papers.
+    static func teacherWeek(slots: [TimetableSlot], byClass: [String: [StudentCompositionSession]], weekOffset: Int, now: Date = Date()) -> [TimetableSlot] {
+        guard !byClass.isEmpty else { return slots }
+        var classNames: [String: ClassLite] = [:]
+        for s in slots { if let id = s.classSectionId, classNames[id] == nil { classNames[id] = s.classes } }
+        return (1...7).flatMap { day -> [TimetableSlot] in
+            let iso = isoDate(weekday: day, weekOffset: weekOffset, now: now)
+            var out = slots.filter { $0.dayOfWeek == day && session(of: $0.classSectionId, on: iso, in: byClass) == nil }
+            for (classId, sessions) in byClass {
+                guard let s = session(on: iso, in: sessions) else { continue }
+                out += self.slots(of: s, on: iso, dayOfWeek: day).map { p in
+                    TimetableSlot(
+                        id: p.id + "-" + classId, dayOfWeek: day, startTime: p.startTime, endTime: p.endTime,
+                        room: nil, classSectionId: classId, subjectId: nil, matieres: p.matieres,
+                        classes: classNames[classId] ?? ClassLite(id: classId, name: nil, gradeLevel: nil), profils: nil
+                    )
+                }
+            }
+            return out.sorted { $0.startTime < $1.startTime }
+        }
+    }
+
+    /// Classes in composition today, or starting within `withinDays` (soonest first).
+    static func teacherCurrent(byClass: [String: [StudentCompositionSession]], withinDays: Int = 7, now: Date = Date()) -> [(classId: String, session: StudentCompositionSession)] {
+        byClass.compactMap { classId, sessions in
+            current(in: sessions, withinDays: withinDays, now: now).map { (classId, $0) }
+        }
+        .sorted { ($0.session.startsOn ?? "") < ($1.session.startsOn ?? "") }
+    }
 }

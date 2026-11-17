@@ -730,6 +730,44 @@ actor EduAPI {
         }
     }
 
+    /// Composition sessions of several classes (a teacher's), keyed by class.
+    func fetchCompositionSessions(classSectionIds: [String]) async throws -> [String: [StudentCompositionSession]] {
+        guard !classSectionIds.isEmpty else { return [:] }
+        struct SessionLite: Decodable {
+            let id: String
+            let class_section_id: String
+            let title: String?
+            let period_label: String?
+            let starts_on: String?
+            let ends_on: String?
+        }
+        let sessions: [SessionLite] = try await client
+            .from("composition_sessions")
+            .select("id, class_section_id, title, period_label, starts_on, ends_on")
+            .in("class_section_id", values: classSectionIds)
+            .order("starts_on", ascending: false)
+            .execute()
+            .value
+        guard !sessions.isEmpty else { return [:] }
+        let papers: [CompositionPaper] = try await client
+            .from("evaluations")
+            .select("id, session_id, eval_date, start_time, end_time, matieres(name)")
+            .in("session_id", values: sessions.map(\.id))
+            .eq("type", value: "composition")
+            .order("eval_date", ascending: true)
+            .execute()
+            .value
+        let bySession = Dictionary(grouping: papers, by: { $0.sessionId ?? "" })
+        var out: [String: [StudentCompositionSession]] = [:]
+        for s in sessions {
+            out[s.class_section_id, default: []].append(StudentCompositionSession(
+                id: s.id, title: s.title, periodLabel: s.period_label,
+                startsOn: s.starts_on, endsOn: s.ends_on, papers: bySession[s.id] ?? []
+            ))
+        }
+        return out
+    }
+
     func fetchCompositionSessions(classSectionId: String) async throws -> [StudentCompositionSession] {
         struct SessionLite: Decodable, Identifiable {
             let id: String
