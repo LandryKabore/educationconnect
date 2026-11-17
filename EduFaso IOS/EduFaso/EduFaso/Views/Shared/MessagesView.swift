@@ -74,6 +74,8 @@ struct MessagesView: View {
     var body: some View {
         if auth.primaryRole == .parent {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
+        } else if auth.primaryRole == .student && !announcementsOnly {
+            ParentMessagesView()
         } else {
             staffBody
         }
@@ -659,6 +661,7 @@ struct ConversationChatView: View {
     var onChanged: () -> Void
 
     @EnvironmentObject private var auth: AuthViewModel
+    private var tu: Bool { auth.primaryRole == .student }
     @State private var inbox: [MessageRow] = []
     @State private var sent: [MessageRow] = []
     @State private var draft = ""
@@ -712,7 +715,7 @@ struct ConversationChatView: View {
                                 Text(otherName.isEmpty ? "Conversation" : otherName)
                                     .font(.headline)
                                     .foregroundStyle(EduTheme.ink)
-                                Text("Aucun message. Écrivez le premier !")
+                                Text(tu ? "Aucun message. Écris le premier !" : "Aucun message. Écrivez le premier !")
                                     .font(.subheadline)
                                     .foregroundStyle(EduTheme.muted)
                             }
@@ -743,7 +746,7 @@ struct ConversationChatView: View {
             }
 
             if let lastIn = messages.last(where: { $0.direction == .inbound }), lastIn.allowReplies == false {
-                Text("Le dernier message de \(otherName.isEmpty ? "votre contact" : otherName) n’attend pas de réponse.")
+                Text("Le dernier message de \(otherName.isEmpty ? (tu ? "ton contact" : "votre contact") : otherName) n’attend pas de réponse.")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(Color(red: 120 / 255, green: 53 / 255, blue: 15 / 255))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -763,7 +766,7 @@ struct ConversationChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Écrivez un message…", text: $draft, axis: .vertical)
+                TextField(tu ? "Écris un message…" : "Écrivez un message…", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -2210,7 +2213,8 @@ struct ParentContact: Identifiable, Hashable {
 extension EduAPI {
     /// Teachers of the parent's children (with the subjects they teach them) and the school administration —
     /// same list as the web parent « Écrire ».
-    func fetchParentContacts(parentId: String, schoolId: String) async throws -> [ParentContact] {
+    /// `asStudent`: the user is the student — their own class's teachers instead of their children's.
+    func fetchParentContacts(parentId: String, schoolId: String, asStudent: Bool = false) async throws -> [ParentContact] {
         struct Link: Decodable { let student_id: String }
         struct Enrollment: Decodable { let class_section_id: String? }
         struct Person: Decodable { let id: String?; let first_name: String?; let last_name: String? }
@@ -2222,9 +2226,14 @@ extension EduAPI {
             "\(p?.first_name ?? "") \(p?.last_name ?? "")".trimmingCharacters(in: .whitespaces)
         }
 
-        let links: [Link] = try await client.from("liens_parent_eleve")
-            .select("student_id").eq("parent_id", value: parentId).execute().value
-        let studentIds = links.map(\.student_id)
+        let studentIds: [String]
+        if asStudent {
+            studentIds = [parentId]
+        } else {
+            let links: [Link] = try await client.from("liens_parent_eleve")
+                .select("student_id").eq("parent_id", value: parentId).execute().value
+            studentIds = links.map(\.student_id)
+        }
         var map: [String: ParentContact] = [:]
 
         if !studentIds.isEmpty {
@@ -2284,27 +2293,31 @@ struct ParentMessagesView: View {
     @State private var tour = TabTour(key: "messages-parent")
     @State private var coach = CoachMarkRegistry()
 
+    /// Parents get "vous", students "tu" (same page as the web, `formal`).
+    private var formal: Bool { auth.primaryRole != .student }
+    private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
+
     private var tourSteps: [CoachMarkStep] {
         [
             CoachMarkStep(
                 id: "msg.write", icon: "square.and.pencil",
                 title: "Écrire",
-                message: "Écrivez à un professeur de vos enfants ou à l’administration de l’école."
+                message: t("Écrivez à un professeur de vos enfants ou à l’administration de l’école.", "Écris à un de tes professeurs ou à l’administration de l’école.")
             ),
             CoachMarkStep(
                 id: "msg.search", icon: "magnifyingglass",
                 title: "Rechercher",
-                message: "Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière."
+                message: t("Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière.", "Retrouve une discussion par nom ou par mot. Pendant « Écrire », cherche un professeur par son nom ou sa matière.")
             ),
             CoachMarkStep(
                 id: "msg.list", icon: "bubble.left.and.bubble.right.fill",
-                title: "Vos discussions",
-                message: "Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touchez pour ouvrir et répondre."
+                title: t("Vos discussions", "Tes discussions"),
+                message: t("Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touchez pour ouvrir et répondre.", "Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touche pour ouvrir et répondre.")
             ),
             CoachMarkStep(
                 id: "msg.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: t("Touchez ce bouton à tout moment pour relancer la visite.", "Touche ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }
@@ -2403,7 +2416,7 @@ struct ParentMessagesView: View {
                         .tracking(-0.3)
                         .foregroundStyle(EduTheme.ink)
                     Text(picking
-                         ? "À qui voulez-vous écrire ?"
+                         ? t("À qui voulez-vous écrire ?", "À qui veux-tu écrire ?")
                          : totalUnread > 0
                             ? "\(totalUnread) message\(totalUnread > 1 ? "s" : "") non lu\(totalUnread > 1 ? "s" : "")"
                             : "Tout est lu")
@@ -2473,7 +2486,7 @@ struct ParentMessagesView: View {
                 Text("Aucune discussion")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text("Touchez « Écrire » pour contacter un professeur de vos enfants.")
+                Text(t("Touchez « Écrire » pour contacter un professeur de vos enfants.", "Touche « Écrire » pour contacter un de tes professeurs."))
                     .font(.caption)
                     .foregroundStyle(EduTheme.muted)
                     .multilineTextAlignment(.center)
@@ -2567,7 +2580,7 @@ struct ParentMessagesView: View {
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(last.readAt == nil ? EduTheme.subtle : EduTheme.teal)
                     }
-                    Text((last.direction == .out ? "Vous : " : "") + last.body)
+                    Text((last.direction == .out ? t("Vous : ", "Toi : ") : "") + last.body)
                         .font(.caption.weight(unread ? .semibold : .regular))
                         .foregroundStyle(unread ? EduTheme.ink : EduTheme.muted)
                         .lineLimit(1)
@@ -2612,7 +2625,7 @@ struct ParentMessagesView: View {
                 let group = shownContacts.filter { $0.kind == kind }
                 if !group.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(kind == .teacher ? "PROFESSEURS DE MES ENFANTS" : "ADMINISTRATION")
+                        Text(kind == .teacher ? t("PROFESSEURS DE MES ENFANTS", "MES PROFESSEURS") : "ADMINISTRATION")
                             .font(.caption.weight(.bold))
                             .tracking(0.6)
                             .foregroundStyle(EduTheme.muted)
@@ -2691,7 +2704,7 @@ struct ParentMessagesView: View {
     private func loadContacts() async {
         guard let uid = auth.userId, let schoolId = auth.schoolId else { contactsLoading = false; return }
         do {
-            let list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId)
+            let list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId, asStudent: !formal)
             if Task.isCancelled { return }
             contacts = list
         } catch {}
