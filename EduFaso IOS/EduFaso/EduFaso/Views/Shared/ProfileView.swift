@@ -25,13 +25,21 @@ struct ProfileView: View {
         var lastName = ""
         var phone = ""
         var gender = ""
+        /// yyyy-MM-dd (students only, as on the web)
+        var dateOfBirth = ""
     }
 
+    @State private var className: String?
+
     private var isParent: Bool { auth.primaryRole == .parent }
+    /// Students get the same page as parents, in "tu", with their class and date of birth (web `formal`).
+    private var isStudent: Bool { auth.primaryRole == .student }
+    private var usesNewProfile: Bool { isParent || isStudent }
+    private func t(_ vous: String, _ tu: String) -> String { isStudent ? tu : vous }
 
     var body: some View {
         PremiumScreenChrome {
-            if isParent {
+            if usesNewProfile {
                 ScrollViewReader { proxy in
                     ScrollView {
                         parentContent
@@ -47,6 +55,10 @@ struct ProfileView: View {
                 }
                 .onChange(of: auth.profile) { _, _ in
                     if form == baseline { resetForm() } else { baseline = Self.formFrom(auth.profile) }
+                }
+                .task {
+                    guard isStudent, let uid = auth.userId else { return }
+                    className = (try? await EduAPI().activeEnrollment(studentId: uid))??.className
                 }
             } else {
                 ScrollView {
@@ -402,7 +414,8 @@ extension ProfileView {
             firstName: p?.firstName ?? "",
             lastName: p?.lastName ?? "",
             phone: p?.phone ?? "",
-            gender: p?.gender ?? ""
+            gender: p?.gender ?? "",
+            dateOfBirth: String((p?.dateOfBirth ?? "").prefix(10))
         )
     }
 }
@@ -412,28 +425,28 @@ private extension ProfileView {
         [
             CoachMarkStep(
                 id: "prof.hero", icon: "person.crop.square.fill",
-                title: "Votre profil",
-                message: "Votre nom, votre école et votre identifiant de connexion. Touchez la photo pour la changer."
+                title: t("Votre profil", "Ton profil"),
+                message: t("Votre nom, votre école et votre identifiant de connexion. Touchez la photo pour la changer.", "Ton nom, ta classe, ton école et ton identifiant de connexion. Touche la photo pour la changer.")
             ),
             CoachMarkStep(
                 id: "prof.progress", icon: "chart.bar.fill",
                 title: "Profil complété",
-                message: "Ce qu’il manque encore à votre profil. Un profil complet permet à l’école de vous joindre facilement."
+                message: t("Ce qu’il manque encore à votre profil. Un profil complet permet à l’école de vous joindre facilement.", "Ce qu’il manque encore à ton profil. Ces informations apparaissent sur ton bulletin.")
             ),
             CoachMarkStep(
                 id: "prof.form", icon: "square.and.pencil",
-                title: "Vos informations",
-                message: "Modifiez votre prénom, votre nom, votre téléphone et votre sexe, puis touchez « Enregistrer »."
+                title: t("Vos informations", "Tes informations"),
+                message: t("Modifiez votre prénom, votre nom, votre téléphone et votre sexe, puis touchez « Enregistrer ».", "Modifie ton prénom, ton nom, ta date de naissance, ton sexe et ton téléphone, puis touche « Enregistrer ».")
             ),
             CoachMarkStep(
                 id: "prof.account", icon: "person.text.rectangle",
                 title: "Mon compte",
-                message: "Votre identifiant pour vous connecter et votre école."
+                message: t("Votre identifiant pour vous connecter et votre école.", "Ton identifiant pour te connecter, ta classe et ton école.")
             ),
             CoachMarkStep(
                 id: "prof.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: t("Touchez ce bouton à tout moment pour relancer la visite.", "Touche ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }
@@ -450,13 +463,17 @@ private extension ProfileView {
         var out: [String] = []
         if baseline.firstName.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Prénom") }
         if baseline.lastName.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Nom") }
+        if isStudent && baseline.dateOfBirth.isEmpty { out.append("Date de naissance") }
         if baseline.phone.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Téléphone") }
         if baseline.gender.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Sexe") }
         if !hasPhoto { out.append("Photo") }
         return out
     }
 
-    var percent: Int { Int((Double(5 - missing.count) / 5 * 100).rounded()) }
+    var percent: Int {
+        let total = isStudent ? 6.0 : 5.0
+        return Int(((total - Double(missing.count)) / total * 100).rounded())
+    }
 
     var dirty: Bool { form != baseline }
 
@@ -473,6 +490,11 @@ private extension ProfileView {
     var parentContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             parentHero
+            if !heroOnDark {
+                progressCard
+                    .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1))
+                    .coachMarkTarget("prof.progress")
+            }
             infoCard.coachMarkTarget("prof.form")
             photoCard
             accountCard.coachMarkTarget("prof.account")
@@ -481,6 +503,9 @@ private extension ProfileView {
     }
 
     // MARK: Hero
+
+    /// Students: plain white header (no teal block); parents keep the teal banner.
+    var heroOnDark: Bool { !isStudent }
 
     var parentHero: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -505,27 +530,27 @@ private extension ProfileView {
                     Text("MON PROFIL")
                         .font(.caption2.weight(.bold))
                         .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(heroOnDark ? .white.opacity(0.7) : EduTheme.muted)
                     Text(auth.profile?.fullName.isEmpty == false ? auth.profile!.fullName : "—")
                         .font(.system(size: 24, weight: .bold))
                         .tracking(-0.3)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(heroOnDark ? .white : EduTheme.ink)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
-                    Text("Parent · \(schoolName)")
+                    Text((isStudent ? ["Élève", className.map { "Classe \($0)" }, schoolName] : ["Parent", schoolName]).compactMap { $0 }.joined(separator: " · "))
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(heroOnDark ? .white.opacity(0.85) : EduTheme.muted)
                         .lineLimit(1)
                     Label(identifiant, systemImage: "at")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(heroOnDark ? .white : EduTheme.teal)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .background(heroOnDark ? Color.white.opacity(0.12) : EduTheme.brand50, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                         .padding(.top, 4)
                 }
                 Spacer(minLength: 0)
-                TourHelpButton(onDark: true) { tour.start(parentTourSteps, registry: coach) }
+                TourHelpButton(onDark: heroOnDark) { tour.start(parentTourSteps, registry: coach) }
                     .coachMarkTarget("prof.help")
             }
             .coachMarkTarget("prof.hero")
@@ -533,28 +558,34 @@ private extension ProfileView {
             if let photoError {
                 Text(photoError)
                     .font(.caption)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(heroOnDark ? .white : EduTheme.fasoRed)
             }
 
-            progressCard.coachMarkTarget("prof.progress")
+            if heroOnDark { progressCard.coachMarkTarget("prof.progress") }
         }
         .padding(18)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [EduTheme.tealDark, EduTheme.teal, Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .overlay(alignment: .bottom) {
-            HStack(spacing: 0) {
-                EduTheme.fasoRed
-                EduTheme.fasoYellow
-                EduTheme.fasoGreen
+        .background {
+            if heroOnDark {
+                LinearGradient(
+                    colors: [EduTheme.tealDark, EduTheme.teal, Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                squareCard
             }
-            .frame(height: 3)
+        }
+        .overlay(alignment: .bottom) {
+            if heroOnDark {
+                HStack(spacing: 0) {
+                    EduTheme.fasoRed
+                    EduTheme.fasoYellow
+                    EduTheme.fasoGreen
+                }
+                .frame(height: 3)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
     }
@@ -605,16 +636,19 @@ private extension ProfileView {
                 Text("Informations personnelles")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text("Elles permettent à l’école de vous joindre.")
+                Text(t("Elles permettent à l’école de vous joindre.", "Elles apparaissent sur ton bulletin et pour l’école."))
                     .font(.subheadline)
                     .foregroundStyle(EduTheme.muted)
             }
             field("Prénom", required: true, text: $form.firstName, content: .givenName)
             field("Nom", required: true, text: $form.lastName, content: .familyName)
-            field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
+            if isStudent { birthField } else {
+                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Sexe").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                (Text("Sexe").foregroundStyle(EduTheme.ink) + (isStudent ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
+                    .font(.subheadline.weight(.semibold))
                 HStack(spacing: 0) {
                     ForEach([("M", "Masculin"), ("F", "Féminin"), ("other", "Autre")], id: \.0) { value, label in
                         let selected = form.gender.uppercased() == value.uppercased()
@@ -638,6 +672,10 @@ private extension ProfileView {
                     RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                         .fill(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255))
                 )
+            }
+
+            if isStudent {
+                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
             }
 
             if let formError {
@@ -676,6 +714,52 @@ private extension ProfileView {
         .background(squareCard)
     }
 
+    /// Date of birth (student): French date picker; empty until chosen.
+    var birthField: some View {
+        let iso = DateFormatter()
+        iso.locale = Locale(identifier: "en_US_POSIX")
+        iso.dateFormat = "yyyy-MM-dd"
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let minDate = cal.date(byAdding: .year, value: -100, to: now) ?? now
+        let binding = Binding<Date>(
+            get: { iso.date(from: form.dateOfBirth) ?? (cal.date(byAdding: .year, value: -12, to: now) ?? now) },
+            set: { form.dateOfBirth = iso.string(from: $0) }
+        )
+        return VStack(alignment: .leading, spacing: 6) {
+            (Text("Date de naissance").foregroundStyle(EduTheme.ink) + Text(" *").foregroundStyle(EduTheme.fasoRed))
+                .font(.subheadline.weight(.semibold))
+            HStack {
+                if form.dateOfBirth.isEmpty {
+                    Button {
+                        form.dateOfBirth = iso.string(from: binding.wrappedValue)
+                    } label: {
+                        Text("Choisir une date")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    DatePicker("Date de naissance", selection: binding, in: minDate...now, displayedComponents: .date)
+                        .labelsHidden()
+                        .environment(\.locale, Locale(identifier: "fr_FR"))
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 42)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .stroke(EduTheme.borderStrong, lineWidth: 1)
+                    )
+            )
+        }
+    }
+
     func field(
         _ label: String,
         required: Bool,
@@ -708,14 +792,19 @@ private extension ProfileView {
             firstName: form.firstName.trimmingCharacters(in: .whitespacesAndNewlines),
             lastName: form.lastName.trimmingCharacters(in: .whitespacesAndNewlines),
             phone: form.phone.trimmingCharacters(in: .whitespacesAndNewlines),
-            gender: form.gender
+            gender: form.gender,
+            dateOfBirth: form.dateOfBirth
         )
-        for (label, value) in [("Prénom", trimmed.firstName), ("Nom", trimmed.lastName), ("Téléphone", trimmed.phone)] where value.isEmpty {
+        var required = [("Prénom", trimmed.firstName), ("Nom", trimmed.lastName)]
+        if isStudent { required += [("Date de naissance", trimmed.dateOfBirth), ("Sexe", trimmed.gender)] }
+        required.append(("Téléphone", trimmed.phone))
+        for (label, value) in required where value.isEmpty {
             formError = "Le champ « \(label) » est obligatoire."
             return
         }
         var updates = ["first_name": trimmed.firstName, "last_name": trimmed.lastName, "phone": trimmed.phone]
         if !trimmed.gender.isEmpty { updates["gender"] = trimmed.gender }
+        if isStudent && !trimmed.dateOfBirth.isEmpty { updates["date_of_birth"] = trimmed.dateOfBirth }
         saving = true
         let ok = await auth.saveProfile(updates)
         saving = false
@@ -778,6 +867,10 @@ private extension ProfileView {
                 .foregroundStyle(EduTheme.ink)
                 .padding(.bottom, 6)
             accountRow("at", "Identifiant", identifiant)
+            if isStudent {
+                Divider()
+                accountRow("graduationcap", "Classe", className ?? "—")
+            }
             Divider()
             accountRow("building.2", "École", schoolName)
         }

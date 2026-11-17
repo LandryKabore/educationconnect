@@ -60,6 +60,8 @@ struct RoleShellView: View {
                             }
                         }
                         ToolbarItem(placement: .topBarTrailing) {
+                            // already on Profil: no shortcut to itself
+                            if selection != .profile {
                             Button {
                                 showProfile = true
                             } label: {
@@ -71,6 +73,7 @@ struct RoleShellView: View {
                                 )
                             }
                             .accessibilityLabel("Profil")
+                            }
                         }
                     }
                     .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
