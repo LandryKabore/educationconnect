@@ -72,6 +72,14 @@ struct MessagesView: View {
     }
 
     var body: some View {
+        if !announcementsOnly && auth.primaryRole == .parent {
+            ParentMessagesView()
+        } else {
+            staffBody
+        }
+    }
+
+    private var staffBody: some View {
         PremiumScreenChrome {
             Group {
                 if loading {
@@ -646,6 +654,8 @@ private struct ContactAvatar: View {
 struct ConversationChatView: View {
     let otherId: String
     let otherName: String
+    /// e.g. « Professeur · Mathématiques » or « Administration », under the name.
+    var subtitle: String? = nil
     var onChanged: () -> Void
 
     @EnvironmentObject private var auth: AuthViewModel
@@ -661,12 +671,14 @@ struct ConversationChatView: View {
     init(
         otherId: String,
         otherName: String,
+        subtitle: String? = nil,
         seedInbox: [MessageRow] = [],
         seedSent: [MessageRow] = [],
         onChanged: @escaping () -> Void
     ) {
         self.otherId = otherId
         self.otherName = otherName
+        self.subtitle = subtitle
         self.onChanged = onChanged
         _inbox = State(initialValue: seedInbox)
         _sent = State(initialValue: seedSent)
@@ -730,6 +742,17 @@ struct ConversationChatView: View {
                 }
             }
 
+            if let lastIn = messages.last(where: { $0.direction == .inbound }), lastIn.allowReplies == false {
+                Text("Le dernier message de \(otherName.isEmpty ? "votre contact" : otherName) n’attend pas de réponse.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color(red: 120 / 255, green: 53 / 255, blue: 15 / 255))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 255 / 255, green: 251 / 255, blue: 235 / 255))
+                    .overlay(alignment: .top) { Divider() }
+            }
+
             if let sendError {
                 Text(sendError)
                     .font(.caption)
@@ -745,10 +768,10 @@ struct ConversationChatView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                             .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                                     .stroke(Color.black.opacity(0.06), lineWidth: 1)
                             )
                     )
@@ -769,7 +792,7 @@ struct ConversationChatView: View {
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(
-                        Circle().fill(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(
                             draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending
                                 ? EduTheme.muted.opacity(0.45)
                                 : bubbleTeal
@@ -791,10 +814,18 @@ struct ConversationChatView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    ContactAvatar(name: otherName, size: 30)
-                    Text(otherName.isEmpty ? "Conversation" : otherName)
-                        .font(.headline)
-                        .lineLimit(1)
+                    SquareAvatar(name: otherName, size: 30, admin: subtitle == "Administration")
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(otherName.isEmpty ? "Conversation" : otherName)
+                            .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
+                        if let subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(EduTheme.muted)
+                                .lineLimit(1)
+                        }
+                    }
                 }
             }
         }
@@ -840,7 +871,14 @@ struct ConversationChatView: View {
             .foregroundStyle(EduTheme.muted)
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(.white.opacity(0.85), in: Capsule())
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .stroke(EduTheme.border, lineWidth: 1)
+                    )
+            )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .accessibilityAddTraits(.isHeader)
@@ -849,10 +887,10 @@ struct ConversationChatView: View {
     private func bubble(_ msg: ChatBubbleMessage, groupedWithPrevious: Bool) -> some View {
         let mine = msg.direction == .out
         let shape = UnevenRoundedRectangle(
-            topLeadingRadius: !mine && groupedWithPrevious ? 6 : 20,
-            bottomLeadingRadius: mine ? 20 : 6,
-            bottomTrailingRadius: mine ? 6 : 20,
-            topTrailingRadius: mine && groupedWithPrevious ? 6 : 20,
+            topLeadingRadius: !mine && groupedWithPrevious ? 2 : 8,
+            bottomLeadingRadius: mine ? 8 : 2,
+            bottomTrailingRadius: mine ? 2 : 8,
+            topTrailingRadius: mine && groupedWithPrevious ? 2 : 8,
             style: .continuous
         )
         return HStack {
@@ -892,27 +930,14 @@ struct ConversationChatView: View {
                 .padding(.vertical, 10)
                 .background {
                     if mine {
-                        shape.fill(
-                            LinearGradient(
-                                colors: [bubbleTeal, EduTheme.tealDark],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        shape.fill(EduTheme.teal)
                     } else {
                         shape
                             .fill(.white)
-                            .shadow(color: .black.opacity(0.05), radius: 4, y: 1)
+                            .overlay(shape.stroke(EduTheme.border, lineWidth: 1))
                     }
                 }
 
-                if msg.allowReplies == false {
-                    Text("Réponses désactivées pour ce message")
-                        .font(.caption2)
-                        .italic()
-                        .foregroundStyle(EduTheme.muted)
-                        .padding(.horizontal, 4)
-                }
             }
             if !mine { Spacer(minLength: 48) }
         }
@@ -2161,5 +2186,534 @@ struct WriteToSchoolButton: View {
                 sent = true
             }
         }
+    }
+}
+
+// MARK: - Parent messages (like the web « Messages » of the parent portal)
+
+/// Someone the parent can write to: a teacher of one of their children, or the school administration.
+struct ParentContact: Identifiable, Hashable {
+    enum Kind { case teacher, admin }
+    let id: String
+    let name: String
+    let kind: Kind
+    var subjects: [String]
+
+    var line: String {
+        switch kind {
+        case .admin: return "Administration"
+        case .teacher: return subjects.isEmpty ? "Professeur" : "Professeur · \(subjects.joined(separator: ", "))"
+        }
+    }
+}
+
+extension EduAPI {
+    /// Teachers of the parent's children (with the subjects they teach them) and the school administration —
+    /// same list as the web parent « Écrire ».
+    func fetchParentContacts(parentId: String, schoolId: String) async throws -> [ParentContact] {
+        struct Link: Decodable { let student_id: String }
+        struct Enrollment: Decodable { let class_section_id: String? }
+        struct Person: Decodable { let id: String?; let first_name: String?; let last_name: String? }
+        struct Named: Decodable { let name: String? }
+        struct Assignment: Decodable { let teacher_id: String?; let matieres: Named?; let profils: Person? }
+        struct AdminRole: Decodable { let profils: Person? }
+
+        func name(_ p: Person?) -> String {
+            "\(p?.first_name ?? "") \(p?.last_name ?? "")".trimmingCharacters(in: .whitespaces)
+        }
+
+        let links: [Link] = try await client.from("liens_parent_eleve")
+            .select("student_id").eq("parent_id", value: parentId).execute().value
+        let studentIds = links.map(\.student_id)
+        var map: [String: ParentContact] = [:]
+
+        if !studentIds.isEmpty {
+            let enrollments: [Enrollment] = try await client.from("inscriptions")
+                .select("class_section_id").in("student_id", values: studentIds).eq("status", value: "active")
+                .execute().value
+            let classIds = Array(Set(enrollments.compactMap(\.class_section_id)))
+            if !classIds.isEmpty {
+                let rows: [Assignment] = try await client.from("affectations_enseignement")
+                    .select("teacher_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)")
+                    .in("class_section_id", values: classIds)
+                    .execute().value
+                for r in rows {
+                    guard let tid = r.teacher_id, tid != parentId else { continue }
+                    var c = map[tid] ?? ParentContact(id: tid, name: name(r.profils), kind: .teacher, subjects: [])
+                    if let s = r.matieres?.name, !c.subjects.contains(s) { c.subjects.append(s) }
+                    map[tid] = c
+                }
+            }
+        }
+
+        let admins: [AdminRole] = try await client.from("roles_utilisateurs")
+            .select("profils(id, first_name, last_name)")
+            .eq("school_id", value: schoolId).eq("role", value: "school_admin").eq("active", value: true)
+            .execute().value
+        for row in admins {
+            guard let p = row.profils, let id = p.id, id != parentId, map[id] == nil else { continue }
+            map[id] = ParentContact(id: id, name: name(p), kind: .admin, subjects: [])
+        }
+
+        return map.values.sorted { a, b in
+            if a.kind != b.kind { return a.kind == .teacher }
+            return a.name.localizedCompare(b.name) == .orderedAscending
+        }
+    }
+}
+
+private struct ChatTarget: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let line: String?
+}
+
+struct ParentMessagesView: View {
+    @EnvironmentObject private var auth: AuthViewModel
+
+    @State private var inbox: [MessageRow] = []
+    @State private var sent: [MessageRow] = []
+    @State private var contacts: [ParentContact] = []
+    @State private var contactsLoading = true
+    @State private var picking = false
+    @State private var search = ""
+    @State private var loading = true
+    @State private var error: String?
+    @State private var openChat: ChatTarget?
+
+    @State private var tour = TabTour(key: "messages-parent")
+    @State private var coach = CoachMarkRegistry()
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "msg.write", icon: "square.and.pencil",
+                title: "Écrire",
+                message: "Écrivez à un professeur de vos enfants ou à l’administration de l’école."
+            ),
+            CoachMarkStep(
+                id: "msg.search", icon: "magnifyingglass",
+                title: "Rechercher",
+                message: "Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière."
+            ),
+            CoachMarkStep(
+                id: "msg.list", icon: "bubble.left.and.bubble.right.fill",
+                title: "Vos discussions",
+                message: "Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touchez pour ouvrir et répondre."
+            ),
+            CoachMarkStep(
+                id: "msg.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    private var conversations: [MessageConversation] {
+        MessageConversationBuilder.build(inbox: inbox, sent: sent, userId: auth.userId)
+    }
+
+    private var contactById: [String: ParentContact] {
+        Dictionary(contacts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    private var totalUnread: Int { conversations.reduce(0) { $0 + $1.unreadCount } }
+
+    private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func matches(_ fields: String?...) -> Bool {
+        guard !query.isEmpty else { return true }
+        return fields.contains { ($0 ?? "").localizedStandardContains(query) }
+    }
+
+    private var shownConversations: [MessageConversation] {
+        conversations.filter {
+            matches($0.otherName, $0.lastMessage.body, $0.lastMessage.subject, contactById[$0.otherId]?.line)
+        }
+    }
+
+    private var shownContacts: [ParentContact] {
+        contacts.filter { c in matches(c.name, c.line) || c.subjects.contains { matches($0) } }
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            Group {
+                if loading && inbox.isEmpty && sent.isEmpty {
+                    LoadingBlock()
+                } else if let error {
+                    VStack(spacing: 12) {
+                        Text("Impossible de charger les messages")
+                            .font(.headline)
+                            .foregroundStyle(EduTheme.ink)
+                        Text(error).font(.footnote).foregroundStyle(EduTheme.muted).multilineTextAlignment(.center)
+                        Button("Réessayer") { Task { await load() } }
+                            .buttonStyle(.borderedProminent)
+                            .tint(EduTheme.teal)
+                    }
+                    .padding(24)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 14) {
+                                header
+                                searchField.coachMarkTarget("msg.search")
+                                if picking {
+                                    contactsList
+                                } else {
+                                    discussionsList
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .refreshable { await load() }
+                        .tabTour(tour, registry: coach, scroller: proxy)
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
+                }
+            }
+        }
+        .environment(coach)
+        .premiumTitle("Messages")
+        .navigationDestination(item: $openChat) { target in
+            ConversationChatView(
+                otherId: target.id,
+                otherName: target.name,
+                subtitle: target.line,
+                seedInbox: inbox,
+                seedSent: sent,
+                onChanged: { Task { await load() } }
+            )
+        }
+        .task {
+            await load()
+            await loadContacts()
+        }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(picking ? "Nouveau message" : "Messages")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(EduTheme.ink)
+                    Text(picking
+                         ? "À qui voulez-vous écrire ?"
+                         : totalUnread > 0
+                            ? "\(totalUnread) message\(totalUnread > 1 ? "s" : "") non lu\(totalUnread > 1 ? "s" : "")"
+                            : "Tout est lu")
+                        .font(.subheadline.weight(totalUnread > 0 && !picking ? .semibold : .regular))
+                        .foregroundStyle(totalUnread > 0 && !picking ? EduTheme.teal : EduTheme.muted)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 0)
+                TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                    .coachMarkTarget("msg.help")
+            }
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    picking.toggle()
+                    search = ""
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: picking ? "xmark" : "square.and.pencil")
+                    Text(picking ? "Annuler" : "Écrire")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(picking ? EduTheme.ink : .white)
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(picking ? Color.white : EduTheme.teal)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .stroke(picking ? EduTheme.borderStrong : EduTheme.teal, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .coachMarkTarget("msg.write")
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(EduTheme.muted)
+            TextField(picking ? "Nom ou matière…" : "Rechercher…", text: $search)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(EduTheme.subtle)
+                }
+                .accessibilityLabel("Effacer la recherche")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 42)
+        .background(cardBackground)
+    }
+
+    // MARK: Discussions
+
+    @ViewBuilder
+    private var discussionsList: some View {
+        if conversations.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.title2)
+                    .foregroundStyle(EduTheme.teal)
+                Text("Aucune discussion")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text("Touchez « Écrire » pour contacter un professeur de vos enfants.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .multilineTextAlignment(.center)
+                let teachers = contacts.filter { $0.kind == .teacher }.prefix(6)
+                if !teachers.isEmpty {
+                    VStack(spacing: 8) {
+                        ForEach(Array(teachers)) { c in
+                            Button { open(c.id, c.name, c.line) } label: {
+                                HStack(spacing: 10) {
+                                    SquareAvatar(name: c.name, size: 32, admin: false)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                                        if let s = c.subjects.first {
+                                            Text(s).font(.caption).foregroundStyle(EduTheme.muted)
+                                        }
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(EduTheme.subtle)
+                                }
+                                .padding(10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                        .stroke(EduTheme.border, lineWidth: 1)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .background(cardBackground)
+            .coachMarkTarget("msg.list")
+        } else if shownConversations.isEmpty {
+            Text("Aucun résultat.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(shownConversations.enumerated()), id: \.element.id) { index, convo in
+                    if index > 0 { Divider().padding(.leading, 70) }
+                    Button {
+                        open(convo.otherId, convo.otherName, contactById[convo.otherId]?.line)
+                    } label: {
+                        discussionRow(convo)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .background(cardBackground)
+            .coachMarkTarget("msg.list")
+        }
+    }
+
+    private func discussionRow(_ convo: MessageConversation) -> some View {
+        let unread = convo.unreadCount > 0
+        let last = convo.lastMessage
+        let contact = contactById[convo.otherId]
+        return HStack(alignment: .center, spacing: 12) {
+            SquareAvatar(name: convo.otherName, size: 44, admin: contact?.kind == .admin)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(convo.otherName.isEmpty ? "Contact" : convo.otherName)
+                        .font(.subheadline.weight(unread ? .bold : .semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let created = last.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption2.weight(unread ? .bold : .regular))
+                            .foregroundStyle(unread ? EduTheme.teal : EduTheme.subtle)
+                    }
+                }
+                if let contact {
+                    Text(contact.line)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(EduTheme.subtle)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    if last.direction == .out {
+                        Image(systemName: last.readAt == nil ? "checkmark" : "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(last.readAt == nil ? EduTheme.subtle : EduTheme.teal)
+                    }
+                    Text((last.direction == .out ? "Vous : " : "") + last.body)
+                        .font(.caption.weight(unread ? .semibold : .regular))
+                        .foregroundStyle(unread ? EduTheme.ink : EduTheme.muted)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if unread {
+                        Text("\(convo.unreadCount)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 20, minHeight: 20)
+                            .padding(.horizontal, convo.unreadCount > 9 ? 4 : 0)
+                            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    }
+                }
+                .padding(.top, 1)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(unread ? EduTheme.brand50 : Color.white)
+        .overlay(alignment: .leading) {
+            if unread { Rectangle().fill(EduTheme.teal).frame(width: 3) }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Contacts (« Écrire »)
+
+    @ViewBuilder
+    private var contactsList: some View {
+        if contactsLoading {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
+        } else if shownContacts.isEmpty {
+            Text("Aucun contact trouvé.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+        } else {
+            ForEach([ParentContact.Kind.teacher, .admin], id: \.self) { kind in
+                let group = shownContacts.filter { $0.kind == kind }
+                if !group.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(kind == .teacher ? "PROFESSEURS DE MES ENFANTS" : "ADMINISTRATION")
+                            .font(.caption.weight(.bold))
+                            .tracking(0.6)
+                            .foregroundStyle(EduTheme.muted)
+                        VStack(spacing: 0) {
+                            ForEach(Array(group.enumerated()), id: \.element.id) { index, c in
+                                if index > 0 { Divider().padding(.leading, 62) }
+                                Button { open(c.id, c.name, c.line) } label: {
+                                    HStack(spacing: 12) {
+                                        SquareAvatar(name: c.name, size: 36, admin: kind == .admin)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(c.name)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(EduTheme.ink)
+                                                .lineLimit(1)
+                                            Text(kind == .teacher ? (c.subjects.isEmpty ? "Professeur" : c.subjects.joined(separator: ", ")) : "Administration")
+                                                .font(.caption)
+                                                .foregroundStyle(EduTheme.muted)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(EduTheme.subtle)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .background(cardBackground)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Helpers
+
+    private func open(_ id: String, _ name: String, _ line: String?) {
+        openChat = ChatTarget(id: id, name: name, line: line)
+        picking = false
+        search = ""
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    private func load() async {
+        guard let uid = auth.userId else { return }
+        if inbox.isEmpty && sent.isEmpty { loading = true }
+        do {
+            let api = EduAPI()
+            async let inboxTask = api.fetchInbox(userId: uid, announcementsOnly: false, limit: 500)
+            async let sentTask = api.fetchSentPersonalMessages(userId: uid)
+            let (i, s) = try await (inboxTask, sentTask)
+            if Task.isCancelled { return }
+            inbox = i
+            sent = s
+            error = nil
+        } catch {
+            if Task.isCancelled || error.isCancellation { return }
+            self.error = error.localizedDescription
+        }
+        loading = false
+    }
+
+    private func loadContacts() async {
+        guard let uid = auth.userId, let schoolId = auth.schoolId else { contactsLoading = false; return }
+        do {
+            let list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId)
+            if Task.isCancelled { return }
+            contacts = list
+        } catch {}
+        contactsLoading = false
+    }
+}
+
+/// Square initials avatar (web: teal tone for teachers, slate for the administration).
+struct SquareAvatar: View {
+    let name: String
+    var size: CGFloat = 44
+    var admin = false
+
+    var body: some View {
+        Text(MessageConversationBuilder.initials(name))
+            .font(.system(size: size * 0.34, weight: .bold))
+            .foregroundStyle(admin ? Color(red: 51 / 255, green: 65 / 255, blue: 85 / 255) : EduTheme.tealDark)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(admin ? Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255) : Color(red: 204 / 255, green: 251 / 255, blue: 241 / 255))
+            )
+            .accessibilityHidden(true)
     }
 }
