@@ -2074,82 +2074,363 @@ struct GradeEntryView: View {
     }
 }
 
+/// Read-only lesson log of one class (student and parent view), like the web « Cahier de textes »:
+/// the last 45 days, newest first, grouped by day, filterable by subject.
 struct CahierFeedView: View {
     var classId: String? = nil
     var studentId: String? = nil
     var title: String = "Cahier de textes"
+    /// Parent view: the child's first name, shown in the title.
+    var childName: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
-    @State private var entries: [CahierEntry] = []
+    @State private var entries: [CahierFeedItem] = []
     @State private var className: String?
+    @State private var subject: String? = nil
     @State private var loading = true
     @State private var error: String?
+
+    // guided tour (shares targets with ChildGate's child switcher when there is one)
+    @State private var tour = TabTour(key: "cahier-de-textes")
+    @State private var ownCoach = CoachMarkRegistry()
+    @Environment(CoachMarkRegistry.self) private var outerCoach: CoachMarkRegistry?
+    private var coach: CoachMarkRegistry { outerCoach ?? ownCoach }
+
+    static let windowDays = 45
+    private static let amber = Color(red: 217 / 255, green: 119 / 255, blue: 6 / 255)
+    private static let amberText = Color(red: 146 / 255, green: 64 / 255, blue: 14 / 255)
+    private static let amberBg = Color(red: 255 / 255, green: 251 / 255, blue: 235 / 255)
+
+    private var pageTitle: String { childName.map { "Cahier de textes \(ParentHomeView.de($0))" } ?? title }
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "child.switcher", icon: "arrow.left.arrow.right",
+                title: "Changer d’enfant",
+                message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
+                requiresAction: true,
+                doneMessage: "Voilà ! La page affiche maintenant le cahier de textes de cet enfant."
+            ),
+            CoachMarkStep(
+                id: "cahier.subjects", icon: "line.3.horizontal.decrease.circle",
+                title: "Filtrer par matière",
+                message: "Touchez une matière pour ne voir que ses cours et ses devoirs."
+            ),
+            CoachMarkStep(
+                id: "cahier.day", icon: "calendar",
+                title: "Jour par jour",
+                message: "Chaque jour, ce que les professeurs ont fait en classe, du plus récent au plus ancien (\(Self.windowDays) derniers jours)."
+            ),
+            CoachMarkStep(
+                id: "cahier.homework", icon: "checklist",
+                title: "Travail à faire",
+                message: "Les devoirs donnés en classe, avec la date pour laquelle ils sont à rendre."
+            ),
+            CoachMarkStep(
+                id: "cahier.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    private var subjects: [(id: String, name: String)] {
+        var seen: [String: String] = [:]
+        for e in entries { seen[e.subjectId] = e.subject }
+        return seen.map { (id: $0.key, name: $0.value) }
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
+
+    private var days: [(day: String, items: [CahierFeedItem])] {
+        var order: [String] = []
+        var groups: [String: [CahierFeedItem]] = [:]
+        for e in entries where subject == nil || e.subjectId == subject {
+            if groups[e.entryDate] == nil { order.append(e.entryDate) }
+            groups[e.entryDate, default: []].append(e)
+        }
+        return order.map { (day: $0, items: groups[$0] ?? []) }
+    }
+
+    private var firstHomeworkId: String? {
+        days.lazy.flatMap(\.items).first { !($0.homework ?? "").isEmpty }?.id
+    }
 
     var body: some View {
         PremiumScreenChrome {
             Group {
-                if loading { LoadingBlock() }
-                else if let error { Text(error).foregroundStyle(EduTheme.fasoRed).padding() }
-                else if entries.isEmpty {
-                    PremiumEmpty(title: "Cahier vide", systemImage: "book", message: "Rien dans le cahier pour le moment.")
+                if loading && entries.isEmpty {
+                    LoadingBlock()
+                } else if let error {
+                    Text(error).foregroundStyle(EduTheme.fasoRed).padding()
                 } else {
-                    List(entries) { entry in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(entry.matieres?.name ?? "Cours")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(EduTheme.ink)
-                                Spacer()
-                                Text(entry.entryDate)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(EduTheme.navy)
-                            }
-                            if let content = entry.content, !content.isEmpty {
-                                Text(content)
-                                    .font(.subheadline)
-                                    .foregroundStyle(EduTheme.ink.opacity(0.9))
-                            }
-                            if let homework = entry.homework, !homework.isEmpty {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("À faire")
-                                        .font(.caption2.weight(.bold))
-                                        .foregroundStyle(EduTheme.muted)
-                                    Text(homework)
-                                        .font(.subheadline)
-                                        .foregroundStyle(EduTheme.ink)
-                                    if let due = entry.homeworkDue, !due.isEmpty {
-                                        Text("Pour le \(due)")
-                                            .font(.caption)
-                                            .foregroundStyle(EduTheme.muted)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                header
+                                if entries.isEmpty {
+                                    emptyCard
+                                } else {
+                                    if subjects.count > 1 {
+                                        subjectChips.coachMarkTarget("cahier.subjects")
+                                    }
+                                    ForEach(Array(days.enumerated()), id: \.element.day) { index, group in
+                                        if index == 0 {
+                                            dayCard(group.day, group.items).coachMarkTarget("cahier.day")
+                                        } else {
+                                            dayCard(group.day, group.items)
+                                        }
                                     }
                                 }
-                                .padding(10)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
-                            if let teacher = entry.teacher?.fullName, !teacher.isEmpty {
-                                Text(teacher)
-                                    .font(.caption)
-                                    .foregroundStyle(EduTheme.muted)
-                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
-                        .padding(.vertical, 6)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.white)
-                                .padding(.vertical, 3)
-                        )
+                        .refreshable { await load() }
+                        .tabTour(tour, registry: coach, scroller: proxy)
                     }
-                    .premiumListStyle()
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
             }
         }
-        .premiumTitle(className.map { "Cahier · \($0)" } ?? title)
-        .task { await load() }
-        .refreshable { await load() }
+        .environment(coach)
+        .premiumTitle(childName == nil ? (className.map { "Cahier · \($0)" } ?? title) : "Cahier de textes")
+        .task(id: studentId) {
+            className = nil
+            subject = nil
+            await load()
+        }
+        .onChange(of: studentId) { _, _ in
+            guard tour.showing, tour.steps.indices.contains(tour.index),
+                  tour.steps[tour.index].requiresAction else { return }
+            tour.steps[tour.index].doneMessage = "Voilà ! La page affiche maintenant le cahier de textes \(childName.map { ParentHomeView.de($0) } ?? "de cet enfant"). Le bouton plein, en haut, montre toujours l’enfant affiché."
+            tour.actionDone = true
+        }
     }
 
+    // MARK: - Pieces
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(pageTitle)
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(-0.3)
+                    .foregroundStyle(EduTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text((className.map { "Classe \($0) · " } ?? "") + "cours et travail à faire")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            Spacer(minLength: 0)
+            TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                .coachMarkTarget("cahier.help")
+        }
+    }
+
+    private var subjectChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("Toutes les matières", selected: subject == nil) { subject = nil }
+                ForEach(subjects, id: \.id) { s in
+                    chip(s.name, selected: subject == s.id) { subject = s.id }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
+    private func chip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { action() }
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(selected ? .white : EduTheme.ink)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(selected ? EduTheme.teal : .white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .stroke(selected ? EduTheme.teal : EduTheme.borderStrong, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dayCard(_ day: String, _ items: [CahierFeedItem]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(Self.longDate(day))
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                if let tag = Self.relativeTag(day) {
+                    Text(tag)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(EduTheme.teal)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(EduTheme.teal.opacity(0.1), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                }
+                Spacer()
+                Text("\(items.count) cours")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EduTheme.muted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            ForEach(items) { e in
+                Divider()
+                entryRow(e)
+            }
+        }
+        .background(cardBackground)
+    }
+
+    private func entryRow(_ e: CahierFeedItem) -> some View {
+        let swatch = SubjectPalette.swatch(for: e.subject)
+        return HStack(alignment: .top, spacing: 10) {
+            Rectangle()
+                .fill(swatch.border)
+                .frame(width: 4)
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(e.subject)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                    if let teacher = e.teacher, !teacher.isEmpty {
+                        Label(teacher, systemImage: "person.fill")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                if let content = e.content, !content.isEmpty {
+                    Text(content)
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.ink.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let homework = e.homework, !homework.isEmpty {
+                    if e.id == firstHomeworkId {
+                        homeworkBox(homework, due: e.dueDate).coachMarkTarget("cahier.homework")
+                    } else {
+                        homeworkBox(homework, due: e.dueDate)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func homeworkBox(_ homework: String, due: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text("À FAIRE")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Self.amber, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                if let due, !due.isEmpty {
+                    Text("pour \(Self.dueLabel(due))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Self.amberText)
+                }
+            }
+            Text(homework)
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Self.amberBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(Self.amber.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+
+    private var emptyCard: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "book.closed")
+                .font(.title2)
+                .foregroundStyle(EduTheme.teal)
+            Text("Cahier vide")
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+            Text("Les professeurs n’ont rien écrit dans le cahier de textes ces \(Self.windowDays) derniers jours.")
+                .font(.caption)
+                .foregroundStyle(EduTheme.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 16)
+        .background(cardBackground)
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    // MARK: - Dates
+
+    private static func parse(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: String(s.prefix(10)))
+    }
+
+    static func longDate(_ s: String) -> String {
+        guard let d = parse(s) else { return s }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        let out = f.string(from: d)
+        return out.prefix(1).uppercased() + out.dropFirst()
+    }
+
+    private static func relativeTag(_ s: String) -> String? {
+        guard let d = parse(s) else { return nil }
+        let cal = Calendar.current
+        if cal.isDateInToday(d) { return "AUJOURD’HUI" }
+        if cal.isDateInYesterday(d) { return "HIER" }
+        return nil
+    }
+
+    private static func dueLabel(_ s: String) -> String {
+        guard let d = parse(s) else { return "le \(s)" }
+        let cal = Calendar.current
+        if cal.isDateInToday(d) { return "aujourd’hui" }
+        if cal.isDateInTomorrow(d) { return "demain" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        return "le \(f.string(from: d))"
+    }
+
+    // MARK: - Data
+
     private func load() async {
-        loading = entries.isEmpty
+        if entries.isEmpty { loading = true }
         do {
             let api = EduAPI()
             var resolved = classId
@@ -2157,21 +2438,82 @@ struct CahierFeedView: View {
                 let sid = studentId ?? auth.userId
                 if let sid, let enrollment = try await api.activeEnrollment(studentId: sid) {
                     resolved = enrollment.classId
+                    if Task.isCancelled { return }
                     className = enrollment.className
                 }
             }
             guard let resolved else {
+                if Task.isCancelled { return }
                 entries = []
                 error = nil
                 loading = false
                 return
             }
-            entries = try await api.fetchCahier(classId: resolved)
+            let rows = try await api.fetchCahierFeed(classId: resolved, days: Self.windowDays)
+            if Task.isCancelled { return }
+            entries = rows
             error = nil
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             self.error = error.localizedDescription
         }
         loading = false
+    }
+}
+
+/// One lesson of the class log, as returned by the `ef_cahier_feed` RPC (same as the web).
+nonisolated struct CahierFeedItem: Decodable, Identifiable, Hashable {
+    let id: String
+    let entryDate: String
+    let dueDate: String?
+    let subject: String
+    let subjectId: String
+    let teacher: String?
+    let content: String?
+    let homework: String?
+}
+
+extension EduAPI {
+    /// Class lesson log of the last `days` days, newest first (web: `fetchCahierFeed`).
+    /// Falls back to the plain table when the RPC is unavailable.
+    func fetchCahierFeed(classId: String, days: Int, limit: Int = 150) async throws -> [CahierFeedItem] {
+        let from = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let fromString = f.string(from: from)
+
+        struct Params: Encodable {
+            let p_class: String
+            let p_from: String
+            let p_limit: Int
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: Keys.self)
+                try c.encode(p_class, forKey: .p_class)
+                try c.encode(p_from, forKey: .p_from)
+                try c.encodeNil(forKey: .p_to)
+                try c.encode(p_limit, forKey: .p_limit)
+            }
+            enum Keys: String, CodingKey { case p_class, p_from, p_to, p_limit }
+        }
+        do {
+            let rows: [CahierFeedItem] = try await call("ef_cahier_feed", params: Params(p_class: classId, p_from: fromString, p_limit: limit))
+            return rows
+        } catch {
+            if Task.isCancelled || error.isCancellation { throw error }
+            let rows = try await fetchCahier(classId: classId)
+            return rows
+                .filter { $0.entryDate >= fromString }
+                .map { r in
+                    CahierFeedItem(
+                        id: r.id, entryDate: r.entryDate, dueDate: r.homeworkDue,
+                        subject: r.matieres?.name ?? "Cours",
+                        subjectId: r.matieres?.id ?? r.matieres?.name ?? "cours",
+                        teacher: r.teacher?.fullName, content: r.content, homework: r.homework
+                    )
+                }
+        }
     }
 }
 

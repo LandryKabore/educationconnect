@@ -701,7 +701,7 @@ struct ParentHomeView: View {
                 title: "Devoirs \(Self.de(firstName(child))) pour demain",
                 subtitle: "Cahier de textes",
                 actionTitle: "Voir le cahier de textes",
-                destination: { CahierFeedView(studentId: child.id) }
+                destination: { CahierFeedView(studentId: child.id, childName: firstName(child)) }
             ) {
                 if items.isEmpty {
                     panelEmpty("Rien à faire pour demain.")
@@ -1455,7 +1455,7 @@ struct ChildDetailView: View {
                     NavigationLink("Emploi du temps") {
                         TimetableView(mode: .student, studentIdOverride: child.id, childName: child.firstName ?? child.fullName)
                     }
-                    NavigationLink("Cahier de textes") { CahierFeedView(studentId: child.id) }
+                    NavigationLink("Cahier de textes") { CahierFeedView(studentId: child.id, childName: child.firstName ?? child.fullName) }
                 }
             }
             .scrollContentBackground(.hidden)

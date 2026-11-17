@@ -565,7 +565,7 @@ struct ScreenHost: View {
         case .childTimetable:
             ChildGate(title: "Emploi du temps", keepsContentOnSwitch: true) { TimetableView(mode: .student, studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childCahier:
-            ChildGate(title: "Cahier de textes") { CahierFeedView(studentId: $0.id) }
+            ChildGate(title: "Cahier de textes", keepsContentOnSwitch: true) { CahierFeedView(studentId: $0.id, childName: $0.firstName ?? $0.fullName) }
         }
     }
 }
