@@ -8,6 +8,8 @@ enum EmploiDuTempsPdf {
         var studentName: String?
         var extraLine: String?
         var slots: [TimetableSlot]
+        /// Teacher timetable: each lesson shows its class (like the web) instead of the teacher.
+        var classInsteadOfTeacher = false
     }
 
     private static let days: [(day: Int, label: String)] = [
@@ -144,7 +146,7 @@ enum EmploiDuTempsPdf {
                 drawText(timeLabel, at: CGPoint(x: rect.minX + 3, y: textY), font: tiny, color: PdfColors.muted, maxWidth: w - 6)
                 textY += 9
             }
-            if let teacher = slot.teacherName, textY + 8 < rect.maxY {
+            if let teacher = input.classInsteadOfTeacher ? slot.classes?.name : slot.teacherName, textY + 8 < rect.maxY {
                 drawText(teacher, at: CGPoint(x: rect.minX + 3, y: textY), font: tiny, color: PdfColors.muted, maxWidth: w - 6)
                 textY += 9
             }

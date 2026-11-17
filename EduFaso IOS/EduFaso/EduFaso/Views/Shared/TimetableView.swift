@@ -16,6 +16,10 @@ struct TimetableView: View {
     private var coach: CoachMarkRegistry { outerCoach ?? ownCoach }
 
     private var tourSteps: [CoachMarkStep] {
+        allTourSteps.filter { $0.id != "edt.stats" || isTeacherMode }
+    }
+
+    private var allTourSteps: [CoachMarkStep] {
         [
             CoachMarkStep(
                 id: "child.switcher", icon: "arrow.left.arrow.right",
@@ -23,6 +27,11 @@ struct TimetableView: View {
                 message: "Vous avez plusieurs enfants. Essayez maintenant : touchez le prénom d’un autre enfant dans la barre en haut.",
                 requiresAction: true,
                 doneMessage: "Voilà ! La page affiche maintenant l’emploi du temps de cet enfant."
+            ),
+            CoachMarkStep(
+                id: "edt.stats", icon: "chart.bar.fill",
+                title: "Votre semaine",
+                message: "Le nombre de cours et d’heures par semaine, vos classes, et vos cours d’aujourd’hui."
             ),
             CoachMarkStep(
                 id: "edt.scope", icon: "calendar",
@@ -42,7 +51,7 @@ struct TimetableView: View {
             CoachMarkStep(
                 id: "edt.timeline", icon: "list.bullet",
                 title: "La journée heure par heure",
-                message: (isStudent ? "Chaque cours avec son heure, ton professeur et la salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés. Pendant les compositions, tes épreuves remplacent les cours." : "Chaque cours avec son heure, son professeur et sa salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés, les récréations et la pause déjeuner sont nommées.")
+                message: (isStudent ? "Chaque cours avec son heure, ton professeur et la salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés. Pendant les compositions, tes épreuves remplacent les cours." : (isTeacherMode ? "Chaque cours avec son heure, sa classe et sa matière, coloré par classe. Touchez un cours pour l’ouvrir : appel, cahier de textes, exercices. Pendant les compositions d’une classe, ses épreuves remplacent ses cours." : "Chaque cours avec son heure, son professeur et sa salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés, les récréations et la pause déjeuner sont nommées."))
             ),
             CoachMarkStep(
                 id: "edt.pdf", icon: "arrow.down.doc.fill",
@@ -265,7 +274,7 @@ struct TimetableView: View {
         defer { exporting = false }
 
         let schoolName = auth.schools.first?.name ?? "École"
-        let resolvedClass = className ?? "Classe"
+        let resolvedClass = isTeacherMode ? "Mes cours" : (className ?? "Classe")
         let studentName: String? = {
             switch mode {
             case .student:
@@ -289,7 +298,8 @@ struct TimetableView: View {
                 className: resolvedClass,
                 studentName: studentName,
                 extraLine: extra,
-                slots: slots
+                slots: slots,
+                classInsteadOfTeacher: isTeacherMode
             )
         )
         let safe = resolvedClass
@@ -677,7 +687,22 @@ struct TimetableView: View {
             Group {
                 switch block.kind {
                 case .course(let slot):
-                    courseRow(slot, isLive: liveCourse, isNext: nextSlot(at: date)?.id == slot.id && !liveCourse)
+                    if isTeacherMode && !CompositionSchedule.isComposition(slot) {
+                        NavigationLink {
+                            TeacherLessonView(slot: slot, date: selectedDayISO)
+                        } label: {
+                            HStack(spacing: 6) {
+                                courseRow(slot, isLive: liveCourse, isNext: nextSlot(at: date)?.id == slot.id && !liveCourse)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(EduTheme.subtle)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        courseRow(slot, isLive: liveCourse, isNext: nextSlot(at: date)?.id == slot.id && !liveCourse)
+                    }
                 case .pause(let start, let end):
                     pauseRow(start: start, end: end, isLive: livePause)
                 }
@@ -691,7 +716,7 @@ struct TimetableView: View {
     }
 
     private func courseRow(_ slot: TimetableSlot, isLive: Bool, isNext: Bool) -> some View {
-        let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
+        let swatch = SubjectPalette.swatch(for: colorKey(slot))
         return HStack(alignment: .top, spacing: 10) {
             Rectangle()
                 .fill(isLive ? EduTheme.fasoGreen : swatch.border)
@@ -700,7 +725,7 @@ struct TimetableView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
-                    Text(slot.matieres?.name ?? "Cours")
+                    Text(rowTitle(slot))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(EduTheme.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -734,8 +759,10 @@ struct TimetableView: View {
                         Label("Épreuve · \(blockStart(slot))–\(clock(minutes(slot.endTime)))", systemImage: "pencil.and.list.clipboard")
                     }
                     if isTeacherMode {
-                        if let cls = slot.classes?.name, !cls.isEmpty {
-                            Label(cls, systemImage: "person.3.fill")
+                        if CompositionSchedule.isComposition(slot) {
+                            if let cls = slot.classes?.name, !cls.isEmpty { Label(cls, systemImage: "person.3.fill") }
+                        } else {
+                            Label(slot.matieres?.name ?? "Cours", systemImage: "book.closed")
                         }
                     } else if let teacher = slot.teacherName {
                         Label(teacher, systemImage: "person.fill")
@@ -940,14 +967,14 @@ struct TimetableView: View {
     }
 
     private func weekCourseRow(_ slot: TimetableSlot, isLive: Bool, isNext: Bool) -> some View {
-        let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
+        let swatch = SubjectPalette.swatch(for: colorKey(slot))
         return HStack(spacing: 10) {
             Capsule()
                 .fill(isLive ? EduTheme.fasoGreen : swatch.border)
                 .frame(width: 4, height: 28)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(slot.matieres?.name ?? "Cours")
+                    Text(rowTitle(slot))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(EduTheme.ink)
                     if CompositionSchedule.isComposition(slot) && !isLive {
@@ -967,7 +994,7 @@ struct TimetableView: View {
                 }
                 Text([
                     "\(blockStart(slot))–\(clock(minutes(slot.endTime)))",
-                    isTeacherMode ? slot.classes?.name : slot.teacherName,
+                    isTeacherMode ? (CompositionSchedule.isComposition(slot) ? slot.classes?.name : slot.matieres?.name) : slot.teacherName,
                     isTeacherMode ? nil : formatRoom(slot.room),
                 ].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
@@ -979,6 +1006,56 @@ struct TimetableView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(isLive ? EduTheme.fasoGreen.opacity(0.08) : Color.clear)
+    }
+
+    /// Teachers: colour and name lessons by class (a teacher usually teaches one subject, so the
+    /// class is what changes); papers of a composition keep their subject.
+    private func colorKey(_ slot: TimetableSlot) -> String? {
+        isTeacherMode && !CompositionSchedule.isComposition(slot) ? slot.classes?.name : slot.matieres?.name
+    }
+
+    private func rowTitle(_ slot: TimetableSlot) -> String {
+        if isTeacherMode && !CompositionSchedule.isComposition(slot) { return slot.classes?.name ?? "Classe" }
+        return slot.matieres?.name ?? "Cours"
+    }
+
+    /// yyyy-MM-dd of the day shown.
+    private var selectedDayISO: String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.firstWeekday = 2
+        let monday = cal.dateInterval(of: .weekOfYear, for: referenceDate)?.start ?? referenceDate
+        return EduDates.day(cal.date(byAdding: .day, value: selectedDay - 1, to: monday) ?? referenceDate)
+    }
+
+    /// Same figures as the web banner: lessons and hours a week, classes, lessons today.
+    private var teacherStats: some View {
+        let weekly = slots.filter { !CompositionSchedule.isComposition($0) }
+        let minutesTotal = weekly.reduce(0) { $0 + max(0, minutes($1.endTime) - minutes($1.startTime)) }
+        let hours = Double(minutesTotal) / 60
+        let hoursText = hours.rounded() == hours ? "\(Int(hours)) h" : String(format: "%.1f h", hours).replacingOccurrences(of: ".", with: ",")
+        let classCount = Set(weekly.compactMap(\.classSectionId)).count
+        let todayCount = weekly.filter { $0.dayOfWeek == todayWeekday }.count
+        return HStack(spacing: 8) {
+            statTile("Cours", "\(weekly.count)", "par semaine")
+            statTile("Heures", hoursText, "par semaine")
+            statTile("Classes", "\(classCount)", todayCount > 0 ? "\(todayCount) cours aujourd’hui" : "pas de cours aujourd’hui")
+        }
+    }
+
+    private func statTile(_ label: String, _ value: String, _ hint: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold)).tracking(0.6)
+                .foregroundStyle(EduTheme.muted)
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(EduTheme.ink)
+            Text(hint)
+                .font(.caption2).foregroundStyle(EduTheme.muted).lineLimit(1).minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(cardBackground)
     }
 
     private var cardBackground: some View {
@@ -1001,7 +1078,9 @@ struct TimetableView: View {
                         .tracking(-0.3)
                         .foregroundStyle(EduTheme.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(({ if case .student = mode, let c = className { return "Classe \(c) · " } else { return "" } }()) + "du lundi au samedi · mis à jour en direct")
+                    Text(isTeacherMode
+                         ? "Vos cours du lundi au samedi, mis à jour en direct. Touchez un cours pour l’ouvrir."
+                         : ({ if case .student = mode, let c = className { return "Classe \(c) · " } else { return "" } }()) + "du lundi au samedi · mis à jour en direct")
                         .font(.subheadline)
                         .foregroundStyle(EduTheme.muted)
                 }
@@ -1009,6 +1088,7 @@ struct TimetableView: View {
                 TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
                     .coachMarkTarget("edt.help")
             }
+            if isTeacherMode { teacherStats.coachMarkTarget("edt.stats") }
             Button {
                 Task { await exportPdf() }
             } label: {
