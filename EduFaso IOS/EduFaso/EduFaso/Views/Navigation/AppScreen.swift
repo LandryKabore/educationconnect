@@ -104,7 +104,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .teacherEvaluations: return "Examens & évaluations"
         case .cahier: return "Cahier de textes"
         case .grades: return "Mes notes"
-        case .exercises: return "Interrogations"
+        case .exercises: return "Exercices de maison"
         case .exams: return "Examens"
         case .compositions: return "Compositions"
         case .attendance: return "Mes présences"
@@ -203,12 +203,9 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
     case .student:
         return [
             AppNavSection(id: "main", title: nil, screens: [.dashboard]),
-            AppNavSection(id: "scolarite", title: "Scolarité", screens: [
-                .grades, .bulletin, .attendance, .timetable, .myTeachers,
-            ]),
-            AppNavSection(id: "travaux", title: "Travaux & cahier", screens: [
-                .cahier, .exercises, .exams, .compositions,
-            ]),
+            AppNavSection(id: "travail", title: "Travail", screens: [.cahier, .exercises, .compositions]),
+            AppNavSection(id: "resultats", title: "Résultats", screens: [.grades, .bulletin, .attendance]),
+            AppNavSection(id: "classe", title: "Ma classe", screens: [.timetable, .myTeachers]),
             AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
             account,
         ]

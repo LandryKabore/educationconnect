@@ -539,7 +539,7 @@ struct ScreenHost: View {
         case .grades:
             StudentGradesView()
         case .exercises:
-            EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
+            ExercisesBoardView()
         case .exams:
             ExamsBoardView()
         case .compositions:
