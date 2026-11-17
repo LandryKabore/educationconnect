@@ -72,8 +72,8 @@ struct MessagesView: View {
     }
 
     var body: some View {
-        if !announcementsOnly && auth.primaryRole == .parent {
-            ParentMessagesView()
+        if auth.primaryRole == .parent {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else {
             staffBody
         }
@@ -2715,5 +2715,397 @@ struct SquareAvatar: View {
                     .fill(admin ? Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255) : Color(red: 204 / 255, green: 251 / 255, blue: 241 / 255))
             )
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Parent announcements (like the web « Annonces » of the parent portal)
+
+struct ParentAnnouncementsView: View {
+    @EnvironmentObject private var auth: AuthViewModel
+
+    @State private var inbox: [MessageRow] = []
+    @State private var search = ""
+    @State private var unreadOnly = false
+    @State private var loading = true
+    @State private var error: String?
+
+    @State private var tour = TabTour(key: "annonces-parent")
+    @State private var coach = CoachMarkRegistry()
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "ann.search", icon: "magnifyingglass",
+                title: "Rechercher",
+                message: "Retrouvez une annonce par un mot de son titre, de son texte ou par son auteur."
+            ),
+            CoachMarkStep(
+                id: "ann.filter", icon: "line.3.horizontal.decrease.circle",
+                title: "Toutes ou non lues",
+                message: "Affichez seulement les annonces que vous n’avez pas encore lues."
+            ),
+            CoachMarkStep(
+                id: "ann.list", icon: "megaphone.fill",
+                title: "Les annonces",
+                message: "Les informations de l’établissement et des professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touchez pour la lire et y répondre."
+            ),
+            CoachMarkStep(
+                id: "ann.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touchez ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    private var announcements: [MessageRow] { inbox.filter { $0.isAnnouncement == true } }
+    private var unreadCount: Int { announcements.filter { $0.readAt == nil }.count }
+
+    private var shown: [MessageRow] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return announcements.filter { a in
+            if unreadOnly && a.readAt != nil { return false }
+            guard !q.isEmpty else { return true }
+            return [a.subject, a.body, a.sender?.fullName].contains { ($0 ?? "").localizedStandardContains(q) }
+        }
+    }
+
+    static func senderName(_ a: MessageRow) -> String {
+        let n = a.sender?.fullName ?? ""
+        return n.isEmpty ? "L’établissement" : n
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            Group {
+                if loading && inbox.isEmpty {
+                    LoadingBlock()
+                } else if let error {
+                    VStack(spacing: 12) {
+                        Text("Impossible de charger les annonces")
+                            .font(.headline)
+                            .foregroundStyle(EduTheme.ink)
+                        Text(error).font(.footnote).foregroundStyle(EduTheme.muted).multilineTextAlignment(.center)
+                        Button("Réessayer") { Task { await load() } }
+                            .buttonStyle(.borderedProminent)
+                            .tint(EduTheme.teal)
+                    }
+                    .padding(24)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 14) {
+                                header
+                                searchField.coachMarkTarget("ann.search")
+                                filterBar.coachMarkTarget("ann.filter")
+                                list
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .refreshable { await load() }
+                        .tabTour(tour, registry: coach, scroller: proxy)
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
+                }
+            }
+        }
+        .environment(coach)
+        .premiumTitle("Annonces")
+        .task { await load() }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Annonces")
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(-0.3)
+                    .foregroundStyle(EduTheme.ink)
+                Text(unreadCount > 0
+                     ? "\(unreadCount) nouvelle\(unreadCount > 1 ? "s" : "") annonce\(unreadCount > 1 ? "s" : "")"
+                     : "Informations officielles de l’établissement")
+                    .font(.subheadline.weight(unreadCount > 0 ? .semibold : .regular))
+                    .foregroundStyle(unreadCount > 0 ? EduTheme.teal : EduTheme.muted)
+            }
+            Spacer(minLength: 0)
+            TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                .coachMarkTarget("ann.help")
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(EduTheme.muted)
+            TextField("Rechercher…", text: $search)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(EduTheme.subtle)
+                }
+                .accessibilityLabel("Effacer la recherche")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 42)
+        .background(cardBackground)
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: 0) {
+            segment("Toutes (\(announcements.count))", selected: !unreadOnly) { unreadOnly = false }
+            segment("Non lues (\(unreadCount))", selected: unreadOnly) { unreadOnly = true }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .fill(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255))
+        )
+    }
+
+    private func segment(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { action() }
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(selected ? .white : EduTheme.muted)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(selected ? EduTheme.teal : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        if announcements.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "megaphone")
+                    .font(.title2)
+                    .foregroundStyle(EduTheme.teal)
+                Text("Aucune annonce")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text("Les informations de l’établissement et des professeurs arrivent ici.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+            .padding(.horizontal, 16)
+            .background(cardBackground)
+            .coachMarkTarget("ann.list")
+        } else if shown.isEmpty {
+            Text(unreadOnly && search.isEmpty ? "Tout est lu." : "Aucun résultat.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+                .coachMarkTarget("ann.list")
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, a in
+                    if index > 0 { Divider() }
+                    NavigationLink {
+                        ParentAnnouncementDetail(announcement: a) { markRead(a) }
+                    } label: {
+                        row(a)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .background(cardBackground)
+            .coachMarkTarget("ann.list")
+        }
+    }
+
+    private func row(_ a: MessageRow) -> some View {
+        let unread = a.readAt == nil
+        return HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(unread ? EduTheme.teal : Color.clear)
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(Self.senderName(a))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(EduTheme.muted)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let created = a.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption2.weight(unread ? .bold : .regular))
+                            .foregroundStyle(unread ? EduTheme.teal : EduTheme.subtle)
+                    }
+                }
+                Text(a.subject?.isEmpty == false ? a.subject! : "(Sans objet)")
+                    .font(.subheadline.weight(unread ? .bold : .semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                if let body = a.body, !body.isEmpty {
+                    Text(body)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EduTheme.subtle)
+                .padding(.top, 14)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(unread ? EduTheme.brand50 : Color.white)
+        .overlay(alignment: .leading) {
+            if unread { Rectangle().fill(EduTheme.teal).frame(width: 3) }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    private func markRead(_ a: MessageRow) {
+        guard a.readAt == nil, let uid = auth.userId else { return }
+        Task {
+            do {
+                try await EduAPI().markMessagesRead(ids: [a.id], recipientId: uid)
+                let stamp = ISO8601DateFormatter().string(from: Date())
+                if let i = inbox.firstIndex(where: { $0.id == a.id }) { inbox[i] = inbox[i].withReadAt(stamp) }
+            } catch {}
+        }
+    }
+
+    private func load() async {
+        guard let uid = auth.userId else { return }
+        if inbox.isEmpty { loading = true }
+        do {
+            let rows = try await EduAPI().fetchInbox(userId: uid, announcementsOnly: true, limit: 500)
+            if Task.isCancelled { return }
+            inbox = rows
+            error = nil
+        } catch {
+            if Task.isCancelled || error.isCancellation { return }
+            self.error = error.localizedDescription
+        }
+        loading = false
+    }
+}
+
+/// One announcement, read in full (web: right-hand reader). Opening it marks it read.
+struct ParentAnnouncementDetail: View {
+    let announcement: MessageRow
+    var onOpen: () -> Void
+
+    private var sender: String { ParentAnnouncementsView.senderName(announcement) }
+
+    private static func longDate(_ iso: String) -> String {
+        let parsers: [ISO8601DateFormatter] = {
+            let a = ISO8601DateFormatter(); a.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let b = ISO8601DateFormatter(); b.formatOptions = [.withInternetDateTime]
+            return [a, b]
+        }()
+        guard let d = parsers.lazy.compactMap({ $0.date(from: iso) }).first else { return iso }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM yyyy 'à' HH:mm"
+        let s = f.string(from: d)
+        return s.prefix(1).uppercased() + s.dropFirst()
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("ANNONCE OFFICIELLE", systemImage: "megaphone.fill")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(EduTheme.tealDark)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+
+                    Text(announcement.subject?.isEmpty == false ? announcement.subject! : "(Sans objet)")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(EduTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 12) {
+                        SquareAvatar(name: sender, size: 40, admin: true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sender)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EduTheme.ink)
+                            if let created = announcement.createdAt {
+                                Text(Self.longDate(created))
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    Text(announcement.body ?? "")
+                        .font(.body)
+                        .foregroundStyle(EduTheme.ink.opacity(0.9))
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Divider()
+
+                    if announcement.allowReplies != false, let senderId = announcement.senderId {
+                        NavigationLink {
+                            ConversationChatView(otherId: senderId, otherName: sender, onChanged: {})
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "bubble.left.fill")
+                                Text("Répondre à \(sender.split(separator: " ").first.map(String.init) ?? sender)")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Cette annonce n’accepte pas de réponse.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(.white)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+                        )
+                )
+                .padding(16)
+            }
+        }
+        .premiumTitle("Annonce")
+        .onAppear(perform: onOpen)
     }
 }
