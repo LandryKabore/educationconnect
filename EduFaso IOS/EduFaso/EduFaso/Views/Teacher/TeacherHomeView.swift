@@ -735,7 +735,7 @@ struct TeacherHomeView: View {
                 .buttonStyle(.plain)
             NavigationLink { TeacherClassesView() } label: { shortcut("Mes classes", icon: "person.2", badge: 0) }
                 .buttonStyle(.plain)
-            NavigationLink { TeacherCahierView() } label: { shortcut("Cahier de textes", icon: "book", badge: 0) }
+            NavigationLink { TeacherExercisesView() } label: { shortcut("Exercices de maison", icon: "book.closed", badge: 0) }
                 .buttonStyle(.plain)
         }
     }

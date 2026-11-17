@@ -553,6 +553,8 @@ struct ScreenHost: View {
             TimetableView(mode: auth.primaryRole == .teacher ? .teacher : .student)
         case .teacherCahier:
             TeacherCahierView()
+        case .teacherExercises:
+            TeacherExercisesView()
         case .teacherEvaluations:
             EvaluationsBrowser(teacherId: auth.userId, allowEntry: true, title: "Examens & évaluations")
         case .cahier:

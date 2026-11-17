@@ -42,6 +42,7 @@ enum AppScreen: String, Identifiable, Hashable {
     case teacherAttendance
     case timetable
     case teacherCahier
+    case teacherExercises
     case teacherEvaluations
 
     case cahier
@@ -103,6 +104,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .teacherAttendance: return "Présences"
         case .timetable: return "Mon emploi du temps"
         case .teacherCahier: return "Cahier de textes"
+        case .teacherExercises: return "Exercices de maison"
         case .teacherEvaluations: return "Examens & évaluations"
         case .cahier: return "Cahier de textes"
         case .grades: return "Mes notes"
@@ -145,6 +147,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .schoolCompositions, .compositions, .childCompositions: return "text.book.closed"
         case .teacherEntry: return "pencil.line"
         case .teacherTodo: return "checklist.unchecked"
+        case .teacherExercises: return "book.closed"
         case .parents: return "figure.and.child.holdinghands"
         case .signalements: return "exclamationmark.bubble"
         }
@@ -199,7 +202,7 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
         return [
             AppNavSection(id: "main", title: nil, screens: [.dashboard, .teacherTodo]),
             AppNavSection(id: "ens", title: "Enseignement", screens: [
-                .teacherClasses, .teacherStudents, .teacherCahier, .teacherEvaluations,
+                .teacherClasses, .teacherStudents, .teacherExercises, .teacherEvaluations,
             ]),
             AppNavSection(id: "planning", title: "Planning", screens: [.timetable, .teacherAttendance]),
             AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
