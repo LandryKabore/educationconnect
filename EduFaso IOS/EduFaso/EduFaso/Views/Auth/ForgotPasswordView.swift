@@ -208,7 +208,7 @@ struct VerifyDocumentView: View {
                 average: String(format: "%.2f", avg)
             )
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
     }
 }

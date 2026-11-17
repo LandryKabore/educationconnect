@@ -275,7 +275,7 @@ struct TeacherAttendanceView: View {
             message = nil
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
     }
 
@@ -298,7 +298,7 @@ struct TeacherAttendanceView: View {
             )
             message = "Appel enregistré."
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
     }
 }

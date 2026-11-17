@@ -5,6 +5,9 @@ struct RoleShellView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var selection: AppScreen = .dashboard
     @State private var menuOpen = false
+    /// Set as soon as a drag is clearly a sideways menu/profile swipe, so the card under the
+    /// finger does not also count it as a tap when the finger lifts.
+    @State private var swipeLocked = false
     @State private var showProfile = false
     @State private var contentID = UUID()
     /// NavigationLink pushes (Présences, etc.) keep selection on dashboard — track real stack depth.
@@ -86,7 +89,7 @@ struct RoleShellView: View {
                         NavigationDepthObserver(depth: $navigationDepth)
                     }
             }
-            .disabled(menuOpen)
+            .disabled(menuOpen || swipeLocked)
             // Only at root: swipe right → menu, swipe left → profile.
             // On pushed pages we leave the left edge alone so interactive pop works.
             // Never disable hit-testing mid-drag — that froze ScrollView with a white gap.
@@ -125,7 +128,20 @@ struct RoleShellView: View {
 
     private var portalSwipeGesture: some Gesture {
         DragGesture(minimumDistance: 28, coordinateSpace: .global)
+            .onChanged { value in
+                guard !swipeLocked, !menuOpen, !showProfile else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > abs(dy) * 2, abs(dx) > 44 else { return }
+                guard dx > 0 ? canSwipeToMenu : canSwipeToProfile else { return }
+                guard !HorizontalScrollProbe.startsOnHorizontalScroller(value.startLocation) else { return }
+                swipeLocked = true
+            }
             .onEnded { value in
+                if swipeLocked {
+                    // Unlock after the lift, once the card has missed its tap.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { swipeLocked = false }
+                }
                 guard !menuOpen, !showProfile else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height

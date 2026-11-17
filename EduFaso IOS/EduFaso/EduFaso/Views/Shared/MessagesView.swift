@@ -612,7 +612,7 @@ struct MessagesView: View {
                 sent = try await sentTask
             }
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -1917,7 +1917,7 @@ struct ComposeMessageSheet: View {
                 }
             }
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loadingContacts = false
     }
@@ -1972,7 +1972,7 @@ struct ComposeMessageSheet: View {
             }
             onSent()
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         sending = false
     }

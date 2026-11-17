@@ -141,7 +141,7 @@ struct ChildGate<Content: View>: View {
             }
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -1426,7 +1426,7 @@ struct EvaluationsBrowser: View {
             }
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
         ready = true
@@ -1650,7 +1650,7 @@ struct CreateEvaluationSheet: View {
             onCreated()
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
     }
 }
@@ -2020,7 +2020,7 @@ struct GradeEntryView: View {
             error = nil
             message = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -2064,7 +2064,7 @@ struct GradeEntryView: View {
             error = nil
             await load()
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
             message = nil
         }
     }
@@ -3679,7 +3679,7 @@ struct ClassHubView: View {
             }
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -3942,7 +3942,7 @@ struct PeopleListView: View {
             total = page.total
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -3950,462 +3950,6 @@ struct PeopleListView: View {
 
 
 // MARK: - Teacher
-
-struct TeacherClassesView: View {
-    private enum Filter: String, CaseIterable, Identifiable {
-        case all, watch
-        var id: String { rawValue }
-    }
-
-    private enum SortMode: String {
-        case name, average
-    }
-
-    @EnvironmentObject private var auth: AuthViewModel
-    @State private var classes: [TeacherClassCardModel] = []
-    @State private var filter: Filter = .all
-    @State private var sortMode: SortMode = .name
-    @State private var loading = true
-    @State private var error: String?
-
-    private var totalStudents: Int { classes.reduce(0) { $0 + $1.studentCount } }
-    private var totalSubjects: Int {
-        Set(classes.flatMap { $0.subjects.map(\.subjectId) }).count
-    }
-
-    private var watchCount: Int {
-        classes.filter(\.needsWatch).count
-    }
-
-    private var visibleClasses: [TeacherClassCardModel] {
-        let base: [TeacherClassCardModel]
-        switch filter {
-        case .all: base = classes
-        case .watch: base = classes.filter(\.needsWatch)
-        }
-        switch sortMode {
-        case .name:
-            return base.sorted {
-                $0.className.localizedCaseInsensitiveCompare($1.className) == .orderedAscending
-            }
-        case .average:
-            return base.sorted {
-                ($0.primaryAverage ?? -1) > ($1.primaryAverage ?? -1)
-            }
-        }
-    }
-
-    var body: some View {
-        PremiumScreenChrome {
-            Group {
-                if loading {
-                    LoadingBlock()
-                } else if let error {
-                    Text(error).foregroundStyle(EduTheme.fasoRed).padding()
-                } else if classes.isEmpty {
-                    PremiumEmpty(
-                        title: "Aucune classe",
-                        systemImage: "rectangle.3.group",
-                        message: "Aucune classe ne t’est affectée."
-                    )
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            headerBlock
-                            statsStrip
-                            filterRow
-                            LazyVStack(spacing: 12) {
-                                ForEach(visibleClasses) { item in
-                                    TeacherClassCard(model: item)
-                                }
-                            }
-                        }
-                        .padding(16)
-                        .padding(.bottom, 24)
-                    }
-                    .refreshable { await load() }
-                }
-            }
-        }
-        .premiumTitle("Mes classes")
-        .task { await load() }
-        .refreshable { await load() }
-    }
-
-    private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Mes classes")
-                .font(.title2.weight(.bold))
-                .foregroundStyle(EduTheme.ink)
-            Text("Classes où tu enseignes — moyenne de classe par matière")
-                .font(.subheadline)
-                .foregroundStyle(EduTheme.muted)
-        }
-    }
-
-    private var statsStrip: some View {
-        HStack(spacing: 0) {
-            statCell("\(classes.count)", "Classes")
-            Rectangle().fill(Color.black.opacity(0.08)).frame(width: 1, height: 36)
-            statCell("\(totalStudents)", "Élèves")
-            Rectangle().fill(Color.black.opacity(0.08)).frame(width: 1, height: 36)
-            statCell("\(totalSubjects)", totalSubjects == 1 ? "Matière" : "Matières")
-        }
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.white)
-                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        )
-    }
-
-    private func statCell(_ value: String, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.title3.weight(.bold).monospacedDigit())
-                .foregroundStyle(EduTheme.ink)
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(EduTheme.muted)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var filterRow: some View {
-        HStack(spacing: 8) {
-            filterPill("Toutes (\(classes.count))", selected: filter == .all) {
-                filter = .all
-            }
-            filterPill("À surveiller (\(watchCount))", selected: filter == .watch, systemImage: "exclamationmark.circle") {
-                filter = .watch
-            }
-            Spacer(minLength: 0)
-            Button {
-                sortMode = sortMode == .name ? .average : .name
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.ink)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(.white))
-                    .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 1))
-            }
-            .accessibilityLabel(sortMode == .name ? "Trier par moyenne" : "Trier par nom")
-        }
-    }
-
-    private func filterPill(_ title: String, selected: Bool, systemImage: String? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.caption2.weight(.bold))
-                }
-                Text(title)
-                    .font(.caption.weight(.bold))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .foregroundStyle(selected ? .white : EduTheme.ink)
-            .background(
-                Capsule().fill(selected ? EduTheme.navy : Color.white)
-            )
-            .overlay(
-                Capsule().stroke(selected ? Color.clear : Color.black.opacity(0.08), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func load() async {
-        guard let tid = auth.userId else { return }
-        loading = classes.isEmpty
-        do {
-            let api = EduAPI()
-            let rows = try await api.fetchTeachingAssignments(teacherId: tid)
-
-            var grouped: [String: TeacherClassCardModel] = [:]
-            for row in rows {
-                let classId = row.classSectionId
-                let subjectId = row.subjectId ?? row.matieres?.id ?? row.id
-                let subjectName = row.matieres?.name ?? "Matière"
-                var entry = grouped[classId] ?? TeacherClassCardModel(
-                    classId: classId,
-                    className: row.classes?.name ?? "Classe",
-                    gradeLevel: row.classes?.gradeLevel,
-                    studentCount: 0,
-                    subjects: []
-                )
-                if !entry.subjects.contains(where: { $0.subjectId == subjectId }) {
-                    entry.subjects.append(
-                        TeacherClassSubjectAvg(
-                            subjectId: subjectId,
-                            subjectName: subjectName,
-                            averageOn20: nil,
-                            gradeCount: 0
-                        )
-                    )
-                }
-                grouped[classId] = entry
-            }
-
-            let classIds = Array(grouped.keys)
-            let stats = try await api.fetchTeacherClassStats(classIds: classIds)
-            let avgMap = Dictionary(
-                uniqueKeysWithValues: stats.averages.map { ("\($0.classId)|\($0.subjectId)", $0) }
-            )
-
-            classes = grouped.values.map { model in
-                var next = model
-                next.studentCount = stats.counts[model.classId] ?? 0
-                next.subjects = model.subjects
-                    .map { subject in
-                        let key = "\(model.classId)|\(subject.subjectId)"
-                        if let a = avgMap[key] {
-                            return TeacherClassSubjectAvg(
-                                subjectId: subject.subjectId,
-                                subjectName: subject.subjectName,
-                                averageOn20: a.avg,
-                                gradeCount: a.n
-                            )
-                        }
-                        return subject
-                    }
-                    .sorted {
-                        $0.subjectName.localizedCaseInsensitiveCompare($1.subjectName) == .orderedAscending
-                    }
-                return next
-            }
-            .sorted {
-                $0.className.localizedCaseInsensitiveCompare($1.className) == .orderedAscending
-            }
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
-        loading = false
-    }
-}
-
-// MARK: - Teacher class cards
-
-private struct TeacherClassSubjectAvg: Identifiable, Hashable {
-    var id: String { subjectId }
-    let subjectId: String
-    let subjectName: String
-    let averageOn20: Double?
-    let gradeCount: Int
-}
-
-private struct TeacherClassCardModel: Identifiable, Hashable {
-    var id: String { classId }
-    let classId: String
-    let className: String
-    let gradeLevel: String?
-    var studentCount: Int
-    var subjects: [TeacherClassSubjectAvg]
-
-    var primaryAverage: Double? {
-        let values = subjects.compactMap(\.averageOn20)
-        guard !values.isEmpty else { return nil }
-        return values.min()
-    }
-
-    var needsWatch: Bool {
-        subjects.contains { subject in
-            guard let avg = subject.averageOn20, subject.gradeCount > 0 else { return false }
-            return avg < 10
-        }
-    }
-
-    var status: TeacherClassLevelStatus {
-        guard let avg = primaryAverage else { return .none }
-        if avg >= 12 { return .good }
-        if avg >= 10 { return .ok }
-        return .watch
-    }
-}
-
-private enum TeacherClassLevelStatus {
-    case good, ok, watch, none
-
-    var label: String {
-        switch self {
-        case .good: return "Bon niveau"
-        case .ok: return "Moyen"
-        case .watch: return "À surveiller"
-        case .none: return "Pas encore de notes"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .good: return EduTheme.fasoGreen
-        case .ok: return Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
-        case .watch: return EduTheme.fasoRed
-        case .none: return EduTheme.muted
-        }
-    }
-}
-
-private struct TeacherClassCard: View {
-    let model: TeacherClassCardModel
-    @EnvironmentObject private var auth: AuthViewModel
-    private var status: TeacherClassLevelStatus { model.status }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            NavigationLink {
-                ClassHubView(classId: model.classId, className: model.className)
-            } label: {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(model.className)
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(EduTheme.ink)
-                            Text(metaLine)
-                                .font(.caption)
-                                .foregroundStyle(EduTheme.muted)
-                        }
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(EduTheme.muted)
-                            .padding(.top, 6)
-                    }
-
-                    ForEach(model.subjects) { subject in
-                        subjectBlock(subject)
-                    }
-                }
-                .padding(16)
-            }
-            .buttonStyle(.plain)
-
-            HStack(spacing: 8) {
-                NavigationLink {
-                    TeacherAttendanceView(initialClassId: model.classId)
-                } label: {
-                    Label("Faire l’appel", systemImage: "checklist")
-                        .font(.subheadline.weight(.bold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(.white)
-                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink {
-                    EvaluationsBrowser(
-                        classId: model.classId,
-                        teacherId: auth.userId,
-                        allowEntry: true,
-                        recordedBy: auth.userId,
-                        title: "Notes"
-                    )
-                } label: {
-                    Label("Notes", systemImage: "pencil.and.list.clipboard")
-                        .font(.subheadline.weight(.bold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(EduTheme.navy)
-                        .background(EduTheme.navy.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.white)
-                .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(status.color.opacity(status == .none ? 0.15 : 0.55), lineWidth: 1.5)
-        )
-    }
-
-    private var metaLine: String {
-        var parts = ["\(model.studentCount) élève\(model.studentCount == 1 ? "" : "s")"]
-        if let grade = model.gradeLevel, !grade.isEmpty {
-            parts.append(grade)
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func subjectBlock(_ subject: TeacherClassSubjectAvg) -> some View {
-        let avg = subject.averageOn20
-        let subjectStatus = TeacherClassCardModel(
-            classId: model.classId,
-            className: model.className,
-            gradeLevel: model.gradeLevel,
-            studentCount: model.studentCount,
-            subjects: [subject]
-        ).status
-        let progress = avg.map { min(1, max(0, $0 / 20)) } ?? 0
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(subject.subjectName)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.navy)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(EduTheme.navy.opacity(0.08))
-                    )
-                Spacer(minLength: 8)
-                if let avg {
-                    Text("\(Self.formatAvg(avg)) / 20")
-                        .font(.title3.weight(.bold).monospacedDigit())
-                        .foregroundStyle(subjectStatus.color)
-                } else {
-                    Text("— / 20")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(EduTheme.muted)
-                }
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
-                    Capsule()
-                        .fill(subjectStatus.color)
-                        .frame(width: geo.size.width * progress)
-                }
-            }
-            .frame(height: 7)
-
-            HStack {
-                Text(subjectStatus.label)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(subjectStatus.color)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(subjectStatus.color.opacity(0.12), in: Capsule())
-                Spacer()
-                Text(subject.gradeCount > 0
-                     ? "\(subject.gradeCount) note\(subject.gradeCount == 1 ? "" : "s")"
-                     : "Aucune note")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(EduTheme.muted)
-            }
-        }
-    }
-
-    private static func formatAvg(_ value: Double) -> String {
-        let nf = NumberFormatter()
-        nf.locale = Locale(identifier: "fr_FR")
-        nf.minimumFractionDigits = 2
-        nf.maximumFractionDigits = 2
-        return nf.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
-    }
-}
 
 struct TeacherStudentsView: View {
     private struct ClassSection: Identifiable {
@@ -4422,6 +3966,9 @@ struct TeacherStudentsView: View {
     @State private var error: String?
     @State private var search = ""
     @State private var selectedClassId: String? = nil
+    /// Opened from « Mes classes »: start on that class.
+    var initialClassId: String? = nil
+    @State private var appliedInitial = false
 
     private var filteredSections: [ClassSection] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4640,12 +4187,16 @@ struct TeacherStudentsView: View {
             }
             sections = order.compactMap { byClass[$0] }
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            if !appliedInitial {
+                appliedInitial = true
+                if let initialClassId { selectedClassId = initialClassId }
+            }
             if let selectedClassId, !sections.contains(where: { $0.id == selectedClassId }) {
                 self.selectedClassId = nil
             }
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -4707,7 +4258,7 @@ struct PresenceLogView: View {
             rows = try await EduAPI().fetchPresenceLog(classIds: classIds, day: day)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            if !error.isCancellation { self.error = error.localizedDescription }
         }
         loading = false
     }
@@ -5048,7 +4599,7 @@ struct TeacherCahierView: View {
             message = "Cahier enregistré."
             await load()
         } catch {
-            message = error.localizedDescription
+            if !error.isCancellation { message = error.localizedDescription }
         }
     }
 }
@@ -5304,7 +4855,7 @@ struct SchoolSettingsView: View {
             if let uid = auth.userId { await auth.loadUserData(userId: uid) }
             message = "Profil de l’école mis à jour."
         } catch {
-            message = error.localizedDescription
+            if !error.isCancellation { message = error.localizedDescription }
         }
     }
 }
@@ -5369,7 +4920,7 @@ struct YearsView: View {
             label = ""; start = ""; end = ""
             message = "Année créée."
             await reload()
-        } catch { message = error.localizedDescription }
+        } catch { if !error.isCancellation { message = error.localizedDescription } }
     }
 
     private func makeCurrent(_ year: YearRow) async {
@@ -5377,7 +4928,7 @@ struct YearsView: View {
         do {
             try await EduAPI().makeYearCurrent(schoolId: schoolId, yearId: year.id)
             await reload()
-        } catch { message = error.localizedDescription }
+        } catch { if !error.isCancellation { message = error.localizedDescription } }
     }
 }
 
@@ -5418,7 +4969,7 @@ struct PeriodsView: View {
     private func load() async {
         guard let schoolId = auth.schoolId else { return }
         do { rows = try await EduAPI().fetchPeriods(schoolId: schoolId); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -5469,7 +5020,7 @@ struct SubjectsView: View {
             name = ""
             message = "Matière ajoutée."
             await reload()
-        } catch { message = error.localizedDescription }
+        } catch { if !error.isCancellation { message = error.localizedDescription } }
     }
 }
 
@@ -5540,7 +5091,7 @@ struct ClassesAdminView: View {
             name = ""; level = ""
             message = "Classe créée."
             await reload()
-        } catch { message = error.localizedDescription }
+        } catch { if !error.isCancellation { message = error.localizedDescription } }
     }
 }
 
@@ -5595,7 +5146,7 @@ struct ProgrammeView: View {
     private func load() async {
         guard let schoolId = auth.schoolId else { return }
         do { rows = try await EduAPI().fetchProgramme(schoolId: schoolId); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -5746,7 +5297,7 @@ struct SessionsView: View {
     private func load() async {
         guard let schoolId = auth.schoolId else { return }
         do { rows = try await EduAPI().fetchSessions(schoolId: schoolId); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -5849,7 +5400,7 @@ struct SchoolCahierView: View {
             let ids = try await EduAPI().fetchClasses(schoolId: schoolId).map(\.id)
             entries = try await EduAPI().fetchCahierForClasses(ids)
             error = nil
-        } catch { self.error = error.localizedDescription }
+        } catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -5914,7 +5465,7 @@ struct StatisticsView: View {
     private func load() async {
         guard let schoolId = auth.schoolId else { loading = false; return }
         do { stats = try await EduAPI().schoolStatistics(schoolId: schoolId); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
         loading = false
     }
 }
@@ -5960,7 +5511,7 @@ struct RolePeopleView: View {
                 rows = try await EduAPI().fetchRolePeople(role: role, schoolId: nil)
             }
             error = nil
-        } catch { self.error = error.localizedDescription }
+        } catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -5999,7 +5550,7 @@ struct SignalsView: View {
 
     private func load() async {
         do { rows = try await EduAPI().fetchSignals(schoolId: schoolId); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -6101,7 +5652,7 @@ struct SchoolsListView: View {
     private func load() async {
         loading = schools.isEmpty
         do { schools = try await EduAPI().fetchSchools(); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
         loading = false
     }
 }
@@ -6144,7 +5695,7 @@ struct SchoolDetailView: View {
             try await EduAPI().setSchoolActive(id: schoolId, active: active)
             school = try? await EduAPI().fetchSchool(id: schoolId)
             message = active ? "École activée." : "École désactivée."
-        } catch { message = error.localizedDescription }
+        } catch { if !error.isCancellation { message = error.localizedDescription } }
     }
 }
 
@@ -6187,7 +5738,7 @@ struct AdminUsersView: View {
 
     private func load() async {
         do { rows = try await EduAPI().fetchAllRolePeople(); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -6225,7 +5776,7 @@ struct InvitesView: View {
 
     private func load() async {
         do { rows = try await EduAPI().fetchInvites(); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 
@@ -6329,7 +5880,7 @@ struct PlatformSettingsView: View {
         .premiumTitle("Paramètres")
         .task {
             do { row = try await EduAPI().fetchPlatformSettings() }
-            catch { self.error = error.localizedDescription }
+            catch { if !error.isCancellation { self.error = error.localizedDescription } }
         }
     }
 }
@@ -6363,7 +5914,7 @@ struct AuditView: View {
 
     private func load() async {
         do { rows = try await EduAPI().fetchAudit(); error = nil }
-        catch { self.error = error.localizedDescription }
+        catch { if !error.isCancellation { self.error = error.localizedDescription } }
     }
 }
 

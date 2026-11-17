@@ -814,6 +814,8 @@ extension Error {
         if let url = self as? URLError, url.code == .cancelled { return true }
         let ns = self as NSError
         if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        if ns.domain.contains("CancellationError") { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error, underlying.isCancellation { return true }
         return String(describing: self).contains("CancellationError")
     }
 }
