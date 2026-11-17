@@ -27,12 +27,12 @@ struct TimetableView: View {
             CoachMarkStep(
                 id: "edt.scope", icon: "calendar",
                 title: "Jour ou semaine",
-                message: "Voyez la journée heure par heure, ou toute la semaine d’un coup."
+                message: (isStudent ? "Vois ta journée heure par heure, ou toute la semaine d’un coup." : "Voyez la journée heure par heure, ou toute la semaine d’un coup.")
             ),
             CoachMarkStep(
                 id: "edt.days", icon: "calendar.day.timeline.left",
                 title: "Choisir un jour",
-                message: "Touchez un jour, ou glissez la journée vers la gauche ou la droite. Les points montrent combien de cours il y a."
+                message: (isStudent ? "Touche un jour, ou glisse la journée vers la gauche ou la droite. Les points montrent combien de cours il y a." : "Touchez un jour, ou glissez la journée vers la gauche ou la droite. Les points montrent combien de cours il y a.")
             ),
             CoachMarkStep(
                 id: "edt.summary", icon: "clock.fill",
@@ -42,22 +42,25 @@ struct TimetableView: View {
             CoachMarkStep(
                 id: "edt.timeline", icon: "list.bullet",
                 title: "La journée heure par heure",
-                message: "Chaque cours avec son heure, son professeur et sa salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés, les récréations et la pause déjeuner sont nommées."
+                message: (isStudent ? "Chaque cours avec son heure, ton professeur et la salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés. Pendant les compositions, tes épreuves remplacent les cours." : "Chaque cours avec son heure, son professeur et sa salle. Le cours en cours et le prochain sont signalés ; les cours passés sont grisés, les récréations et la pause déjeuner sont nommées.")
             ),
             CoachMarkStep(
                 id: "edt.pdf", icon: "arrow.down.doc.fill",
                 title: "Télécharger",
-                message: "Téléchargez ou partagez l’emploi du temps de la semaine en PDF."
+                message: (isStudent ? "Télécharge ou partage ton emploi du temps de la semaine en PDF." : "Téléchargez ou partagez l’emploi du temps de la semaine en PDF.")
             ),
             CoachMarkStep(
                 id: "edt.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: (isStudent ? "Touche ce bouton à tout moment pour relancer la visite." : "Touchez ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }
 
     @EnvironmentObject private var auth: AuthViewModel
+    /// The student's own screen: the tour speaks to them as "tu".
+    private var isStudent: Bool { auth.primaryRole == .student && childName == nil }
+
     @State private var slots: [TimetableSlot] = []
     /// Composition sessions of the class: on their days the papers replace the lessons.
     @State private var compositions: [StudentCompositionSession] = []

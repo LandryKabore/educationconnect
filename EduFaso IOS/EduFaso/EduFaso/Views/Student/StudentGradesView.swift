@@ -6,6 +6,9 @@ import SwiftUI
 /// like the bulletin.
 struct StudentGradesView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    /// The student's own screen: the tour speaks to them as "tu".
+    private var isStudent: Bool { auth.primaryRole == .student && childName == nil }
+
     var studentIdOverride: String? = nil
     /// Parent view: the child's first name, shown in the titles.
     var childName: String? = nil
@@ -39,12 +42,12 @@ struct StudentGradesView: View {
             CoachMarkStep(
                 id: "notes.stats", icon: "chart.bar.fill",
                 title: "Les moyennes",
-                message: "Moyenne du Trimestre choisi avec sa mention, moyenne de l’année (touchez-la pour le bulletin) et nombre de notes. Elles utilisent les coefficients de la classe, comme le bulletin."
+                message: (isStudent ? "Ta moyenne du Trimestre choisi avec sa mention, ta moyenne de l’année (touche-la pour ton bulletin) et ton nombre de notes. Elles utilisent les coefficients de la classe, comme le bulletin." : "Moyenne du Trimestre choisi avec sa mention, moyenne de l’année (touchez-la pour le bulletin) et nombre de notes. Elles utilisent les coefficients de la classe, comme le bulletin.")
             ),
             CoachMarkStep(
                 id: "notes.latest", icon: "pencil.line",
                 title: "Dernière note",
-                message: "La note la plus récente publiée pour \(who), avec sa matière et sa date."
+                message: (isStudent ? "Ta note la plus récente, avec sa matière et sa date." : "La note la plus récente publiée pour \(who), avec sa matière et sa date.")
             ),
             CoachMarkStep(
                 id: "notes.tabs", icon: "calendar",
@@ -54,12 +57,12 @@ struct StudentGradesView: View {
             CoachMarkStep(
                 id: "notes.subject", icon: "book.fill",
                 title: "Une carte par matière",
-                message: "Coefficient, moyenne de la matière (\(whose)) et chaque note avec sa date, son type et le commentaire de l’enseignant."
+                message: (isStudent ? "Coefficient, ta moyenne dans la matière et chaque note avec sa date, son type et le commentaire de ton professeur." : "Coefficient, moyenne de la matière (\(whose)) et chaque note avec sa date, son type et le commentaire de l’enseignant.")
             ),
             CoachMarkStep(
                 id: "notes.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: (isStudent ? "Touche ce bouton à tout moment pour relancer la visite." : "Touchez ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }

@@ -5,6 +5,9 @@ import SwiftUI
 /// lates by month, per-subject bars and « Écrire à l’école ». Has its own guided tour.
 struct StudentAttendanceView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    /// The student's own screen: the tour speaks to them as "tu".
+    private var isStudent: Bool { auth.primaryRole == .student && childName == nil }
+
     var studentIdOverride: String? = nil
     /// Parent view: the child's first name, shown in the titles.
     var childName: String? = nil
@@ -72,12 +75,12 @@ struct StudentAttendanceView: View {
             CoachMarkStep(
                 id: "presence.summary", icon: "checkmark.seal.fill",
                 title: "Taux de présence",
-                message: "Un retard compte comme présent ; une absence justifiée ne compte pas contre \(who)."
+                message: (isStudent ? "Un retard compte comme présent ; une absence justifiée ne compte pas contre toi." : "Un retard compte comme présent ; une absence justifiée ne compte pas contre \(who).")
             ),
             CoachMarkStep(
                 id: "presence.counters", icon: "line.3.horizontal.decrease.circle",
                 title: "Filtrer d’un geste",
-                message: "Touchez un compteur (absences, retards, justifiées) pour n’afficher que ces cours dans la liste."
+                message: (isStudent ? "Touche un compteur (absences, retards, justifiées) pour n’afficher que ces cours dans la liste." : "Touchez un compteur (absences, retards, justifiées) pour n’afficher que ces cours dans la liste.")
             ),
             CoachMarkStep(
                 id: "presence.calendar", icon: "square.grid.3x3.fill",
@@ -87,17 +90,17 @@ struct StudentAttendanceView: View {
             CoachMarkStep(
                 id: "presence.list", icon: "list.bullet",
                 title: "Absences et retards",
-                message: "Chaque absence ou retard, mois par mois, avec la matière et la note de l’école."
+                message: (isStudent ? "Chacune de tes absences ou chacun de tes retards, mois par mois, avec la matière et la note de l’école." : "Chaque absence ou retard, mois par mois, avec la matière et la note de l’école.")
             ),
             CoachMarkStep(
                 id: "presence.subjects", icon: "chart.bar.fill",
                 title: "Par matière",
-                message: "Depuis le début de l’année : le taux de présence de chaque matière."
+                message: (isStudent ? "Depuis le début de l’année : ton taux de présence dans chaque matière." : "Depuis le début de l’année : le taux de présence de chaque matière.")
             ),
             CoachMarkStep(
                 id: "presence.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: (isStudent ? "Touche ce bouton à tout moment pour relancer la visite." : "Touchez ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }

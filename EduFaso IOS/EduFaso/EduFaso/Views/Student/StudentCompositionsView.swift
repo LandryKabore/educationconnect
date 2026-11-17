@@ -15,6 +15,9 @@ struct StudentCompositionsView: View {
     }
 
     @EnvironmentObject private var auth: AuthViewModel
+    /// The student's own screen: the tour speaks to them as "tu".
+    private var isStudent: Bool { auth.primaryRole == .student && childName == nil }
+
     var studentIdOverride: String? = nil
     /// Parent view: the child's first name, shown in the titles.
     var childName: String? = nil
@@ -42,7 +45,7 @@ struct StudentCompositionsView: View {
             CoachMarkStep(
                 id: "compo.stats", icon: "chart.bar.fill",
                 title: "En un coup d’œil",
-                message: "Nombre de compositions de l’année, celles à venir et celle en cours."
+                message: (isStudent ? "Tes compositions de l’année : celles à venir et celle en cours." : "Nombre de compositions de l’année, celles à venir et celle en cours.")
             ),
             CoachMarkStep(
                 id: "compo.filters", icon: "line.3.horizontal.decrease.circle",
@@ -57,12 +60,12 @@ struct StudentCompositionsView: View {
             CoachMarkStep(
                 id: "compo.sessions", icon: "list.bullet.rectangle",
                 title: "Toutes les compositions",
-                message: "Chaque composition avec ses dates, son statut et la liste des épreuves. Les notes arrivent dans « Notes » une fois saisies."
+                message: (isStudent ? "Chaque composition avec ses dates, son statut et la liste des épreuves. Tes notes arrivent dans « Mes notes » une fois saisies." : "Chaque composition avec ses dates, son statut et la liste des épreuves. Les notes arrivent dans « Notes » une fois saisies.")
             ),
             CoachMarkStep(
                 id: "compo.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: (isStudent ? "Touche ce bouton à tout moment pour relancer la visite." : "Touchez ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }

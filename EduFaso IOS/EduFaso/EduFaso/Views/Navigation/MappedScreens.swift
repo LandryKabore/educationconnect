@@ -2613,6 +2613,8 @@ struct BulletinBoard: View {
     /// Parent view: the child's first name, shown in the title.
     var childName: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
+    /// The student's own screen: the tour speaks to them as "tu".
+    private var isStudent: Bool { auth.primaryRole == .student && childName == nil }
 
     // guided tour (shares targets with ChildGate's child switcher when there is one)
     @State private var tour = TabTour(key: "bulletin")
@@ -2639,22 +2641,22 @@ struct BulletinBoard: View {
             CoachMarkStep(
                 id: "bulletin.stats", icon: "chart.bar.fill",
                 title: "Moyenne générale",
-                message: "La moyenne de la période, le rang dans la classe, la moyenne de la classe, les absences et les retards."
+                message: (isStudent ? "Ta moyenne de la période, ton rang dans la classe, la moyenne de la classe, tes absences et tes retards." : "La moyenne de la période, le rang dans la classe, la moyenne de la classe, les absences et les retards.")
             ),
             CoachMarkStep(
                 id: "bulletin.subjects", icon: "list.bullet.rectangle",
                 title: "Matières",
-                message: "Chaque matière avec son coefficient, l’enseignant et la moyenne. Touchez une matière pour voir ses notes."
+                message: (isStudent ? "Chaque matière avec son coefficient, ton professeur et ta moyenne. Touche une matière pour voir tes notes." : "Chaque matière avec son coefficient, l’enseignant et la moyenne. Touchez une matière pour voir ses notes.")
             ),
             CoachMarkStep(
                 id: "bulletin.pdf", icon: "arrow.down.doc.fill",
                 title: "Bulletin officiel",
-                message: "Ce bouton télécharge ou partage le bulletin en PDF, avec son code QR de vérification."
+                message: (isStudent ? "Ce bouton télécharge ou partage ton bulletin en PDF, avec son code QR de vérification." : "Ce bouton télécharge ou partage le bulletin en PDF, avec son code QR de vérification.")
             ),
             CoachMarkStep(
                 id: "bulletin.help", icon: "questionmark.circle.fill",
                 title: "Revoir ce guide",
-                message: "Touchez ce bouton à tout moment pour relancer la visite."
+                message: (isStudent ? "Touche ce bouton à tout moment pour relancer la visite." : "Touchez ce bouton à tout moment pour relancer la visite.")
             ),
         ]
     }
