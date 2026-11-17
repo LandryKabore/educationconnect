@@ -59,6 +59,8 @@ struct TimetableView: View {
 
     @EnvironmentObject private var auth: AuthViewModel
     @State private var slots: [TimetableSlot] = []
+    /// Composition sessions of the class: on their days the papers replace the lessons.
+    @State private var compositions: [StudentCompositionSession] = []
     @State private var className: String?
     @State private var loading = true
     @State private var ready = false
@@ -100,8 +102,26 @@ struct TimetableView: View {
         weekOffset == 0 && selectedDay == todayWeekday && todayWeekday != 7
     }
 
+    /// The viewed week, with composition days showing their papers instead of the lessons.
+    private var weekSlots: [TimetableSlot] {
+        CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: weekOffset)
+    }
+
+    /// The composition session touching the viewed week, if any.
+    private var weekComposition: StudentCompositionSession? {
+        (1...6).lazy.compactMap { day in
+            CompositionSchedule.session(on: CompositionSchedule.isoDate(weekday: day, weekOffset: weekOffset), in: compositions)
+        }.first
+    }
+
+    private var selectedDayIsComposition: Bool {
+        CompositionSchedule.session(on: CompositionSchedule.isoDate(weekday: selectedDay, weekOffset: weekOffset), in: compositions) != nil
+    }
+
+    private var unitLabel: String { selectedDayIsComposition ? "épreuve" : "cours" }
+
     private var daySlots: [TimetableSlot] {
-        slots.filter { $0.dayOfWeek == selectedDay }.sorted { $0.startTime < $1.startTime }
+        weekSlots.filter { $0.dayOfWeek == selectedDay }.sorted { $0.startTime < $1.startTime }
     }
 
     private var timeline: [TimelineBlock] {
@@ -164,6 +184,7 @@ struct TimetableView: View {
                             VStack(alignment: .leading, spacing: 16) {
                                 header
                                 scopePicker.coachMarkTarget("edt.scope")
+                                if let compo = weekComposition { compositionBanner(compo) }
                                 if scope == .day {
                                     dayStrip.coachMarkTarget("edt.days")
                                     daySummaryCard(at: context.date).coachMarkTarget("edt.summary")
@@ -271,7 +292,7 @@ struct TimetableView: View {
         let schoolDays = Set(slots.map(\.dayOfWeek)).filter { (1...6).contains($0) }
         guard !schoolDays.isEmpty else { return (0, today == 7 ? 1 : today) }
         if today != 7 {
-            let lastEnd = slots.filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
+            let lastEnd = CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: 0).filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
             if let lastEnd, nowMin < lastEnd { return (0, today) }
             if let next = (today + 1...6).first(where: { schoolDays.contains($0) }) { return (0, next) }
         }
@@ -282,7 +303,7 @@ struct TimetableView: View {
     private func nextSchoolDayFirst() -> (label: String, slot: TimetableSlot)? {
         let order = Array(selectedDay + 1...max(selectedDay + 1, 6)) + Array(1...6)
         for day in order where day != selectedDay && (1...6).contains(day) {
-            if let first = slots.filter({ $0.dayOfWeek == day }).min(by: { $0.startTime < $1.startTime }) {
+            if let first = weekSlots.filter({ $0.dayOfWeek == day }).min(by: { $0.startTime < $1.startTime }) {
                 let label = (day == selectedDay + 1) ? "Demain" : dayName(day)
                 return (label, first)
             }
@@ -321,7 +342,7 @@ struct TimetableView: View {
             ForEach(WeekCalendar.week(containing: referenceDate)) { day in
                 let selected = selectedDay == day.dayOfWeek
                 let isToday = weekOffset == 0 && day.dayOfWeek == todayIndex
-                let count = slots.filter { $0.dayOfWeek == day.dayOfWeek }.count
+                let count = weekSlots.filter { $0.dayOfWeek == day.dayOfWeek }.count
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedDay = day.dayOfWeek
@@ -419,7 +440,7 @@ struct TimetableView: View {
     }
 
     private var weekSummaryCard: some View {
-        let total = slots.filter { slot in weekDays.contains(where: { $0.dayOfWeek == slot.dayOfWeek }) }.count
+        let total = weekSlots.filter { slot in weekDays.contains(where: { $0.dayOfWeek == slot.dayOfWeek }) }.count
         let selected = weekOptions.first(where: { $0.offset == weekOffset })
         return HStack(spacing: 14) {
             ZStack {
@@ -474,7 +495,7 @@ struct TimetableView: View {
                 }
                 Spacer(minLength: 0)
                 if dayCourseCount > 0 {
-                    Text("\(dayCourseCount) cours")
+                    Text("\(dayCourseCount) \(unitLabel)\(selectedDayIsComposition && dayCourseCount > 1 ? "s" : "")")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(EduTheme.muted)
                 }
@@ -482,12 +503,14 @@ struct TimetableView: View {
 
             if dayCourseCount == 0 {
                 summaryLine(icon: "sun.max.fill", color: EduTheme.teal,
-                            title: isViewingToday ? "Pas de cours aujourd’hui" : "Pas de cours ce jour",
+                            title: selectedDayIsComposition
+                                ? (isViewingToday ? "Pas d’épreuve aujourd’hui" : "Pas d’épreuve ce jour")
+                                : (isViewingToday ? "Pas de cours aujourd’hui" : "Pas de cours ce jour"),
                             detail: nextSchoolDayFirst().map { "\($0.label) : \($0.slot.matieres?.name ?? "Cours") à \(blockStart($0.slot))" })
             } else if !isViewingToday {
                 summaryLine(icon: "calendar", color: EduTheme.teal,
-                            title: "\(dayCourseCount) cours" + (dayWindowLabel.map { " · \($0)" } ?? ""),
-                            detail: first.map { "Premier cours : \($0.matieres?.name ?? "Cours") à \(blockStart($0))" })
+                            title: "\(dayCourseCount) \(unitLabel)\(selectedDayIsComposition && dayCourseCount > 1 ? "s" : "")" + (dayWindowLabel.map { " · \($0)" } ?? ""),
+                            detail: first.map { "\(selectedDayIsComposition ? "Première épreuve" : "Premier cours") : \($0.matieres?.name ?? "Cours") à \(blockStart($0))" })
             } else if let live {
                 let start = minutes(live.startTime), end = minutes(live.endTime)
                 summaryLine(icon: "clock.fill", color: EduTheme.fasoGreen,
@@ -508,7 +531,7 @@ struct TimetableView: View {
                 }
             } else if let upcoming, let first, now < minutes(first.startTime) {
                 summaryLine(icon: "sunrise.fill", color: EduTheme.teal,
-                            title: "Les cours commencent à \(blockStart(first))",
+                            title: "\(selectedDayIsComposition ? "Les épreuves commencent" : "Les cours commencent") à \(blockStart(first))",
                             detail: "\(first.matieres?.name ?? "Cours") · \(Self.inMinutes(minutes(upcoming.startTime) - now))")
             } else if let upcoming {
                 let prevEnd = daySlots.filter { minutes($0.endTime) <= now }.map { minutes($0.endTime) }.max() ?? now
@@ -659,6 +682,14 @@ struct TimetableView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(EduTheme.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                    if CompositionSchedule.isComposition(slot) && !isLive {
+                        Text("COMPOSITION")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(Self.compoText)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Self.compoBg, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    }
                     if isLive {
                         Text("EN COURS")
                             .font(.caption2.weight(.bold))
@@ -677,6 +708,9 @@ struct TimetableView: View {
                 }
 
                 HStack(spacing: 8) {
+                    if CompositionSchedule.isComposition(slot) {
+                        Label("Épreuve · \(blockStart(slot))–\(clock(minutes(slot.endTime)))", systemImage: "pencil.and.list.clipboard")
+                    }
                     if let teacher = slot.teacherName {
                         Label(teacher, systemImage: "person.fill")
                     }
@@ -718,12 +752,58 @@ struct TimetableView: View {
         )
     }
 
+    static let compoText = Color(red: 146 / 255, green: 64 / 255, blue: 14 / 255)
+    static let compoBg = Color(red: 254 / 255, green: 243 / 255, blue: 199 / 255)
+    static let compoEdge = Color(red: 217 / 255, green: 119 / 255, blue: 6 / 255)
+
+    /// Shown while the viewed week has compositions: the lessons are replaced by the papers.
+    private func compositionBanner(_ s: StudentCompositionSession) -> some View {
+        let range = [s.startsOn, s.endsOn].compactMap { $0.map { Self.shortFrDate(String($0.prefix(10))) } }.joined(separator: " au ")
+        let running = s.statusLabel == "En cours"
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "pencil.and.list.clipboard")
+                .font(.headline)
+                .foregroundStyle(Self.compoEdge)
+                .frame(width: 34, height: 34)
+                .background(Self.compoBg, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(running ? "COMPOSITIONS EN COURS" : "SEMAINE DE COMPOSITIONS")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.5)
+                    .foregroundStyle(Self.compoText)
+                Text(s.title?.isEmpty == false ? s.title! : (s.periodLabel ?? "Compositions"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Text((range.isEmpty ? "" : "Du \(range) · ") + "les épreuves remplacent les cours.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(cardBackground)
+        .overlay(alignment: .leading) { Rectangle().fill(Self.compoEdge).frame(width: 4) }
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    private static func shortFrDate(_ iso: String) -> String {
+        let inF = DateFormatter()
+        inF.locale = Locale(identifier: "en_US_POSIX")
+        inF.dateFormat = "yyyy-MM-dd"
+        guard let d = inF.date(from: iso) else { return iso }
+        let out = DateFormatter()
+        out.locale = Locale(identifier: "fr_FR")
+        out.dateFormat = "d MMMM"
+        return out.string(from: d)
+    }
+
     private var emptyDayCard: some View {
         VStack(spacing: 8) {
             Image(systemName: "sun.haze.fill")
                 .font(.title2)
                 .foregroundStyle(EduTheme.teal)
-            Text("Pas de cours ce jour")
+            Text(selectedDayIsComposition ? "Pas d’épreuve ce jour" : "Pas de cours ce jour")
                 .font(.headline)
                 .foregroundStyle(EduTheme.ink)
             Text("Choisis un autre jour ou regarde la semaine.")
@@ -742,7 +822,7 @@ struct TimetableView: View {
     private func weekList(at date: Date) -> some View {
         VStack(spacing: 12) {
             ForEach(weekDays) { day in
-                let dayItems = slots.filter { $0.dayOfWeek == day.dayOfWeek }.sorted { $0.startTime < $1.startTime }
+                let dayItems = weekSlots.filter { $0.dayOfWeek == day.dayOfWeek }.sorted { $0.startTime < $1.startTime }
                 weekDayButton(day, dayItems, at: date).id("week-day-\(day.dayOfWeek)")
             }
         }
@@ -770,7 +850,9 @@ struct TimetableView: View {
                                     .background(EduTheme.fasoGreen, in: Capsule())
                             }
                             Spacer()
-                            Text(dayItems.isEmpty ? "Libre" : "\(dayItems.count) cours")
+                            Text(dayItems.isEmpty ? "Libre" : (dayItems.contains(where: CompositionSchedule.isComposition)
+                                ? "\(dayItems.count) épreuve\(dayItems.count > 1 ? "s" : "")"
+                                : "\(dayItems.count) cours"))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(EduTheme.muted)
                             Image(systemName: "chevron.right")
@@ -823,7 +905,7 @@ struct TimetableView: View {
     private func isSlotNext(_ slot: TimetableSlot, at date: Date) -> Bool {
         guard !isSlotLive(slot, at: date) else { return false }
         let now = minutesNow(date)
-        guard let next = slots
+        guard let next = CompositionSchedule.week(slots: slots, sessions: compositions, weekOffset: 0)
             .filter({ $0.dayOfWeek == todayWeekday })
             .sorted(by: { $0.startTime < $1.startTime })
             .first(where: { minutes($0.startTime) > now })
@@ -842,6 +924,11 @@ struct TimetableView: View {
                     Text(slot.matieres?.name ?? "Cours")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(EduTheme.ink)
+                    if CompositionSchedule.isComposition(slot) && !isLive {
+                        Text("COMPOSITION")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(Self.compoText)
+                    }
                     if isLive {
                         Text("EN COURS")
                             .font(.caption2.weight(.bold))
@@ -930,16 +1017,21 @@ struct TimetableView: View {
                 slots = try await api.fetchTeacherTimetable(teacherId: tid)
             case .classSection(let classId):
                 className = nil
+                async let compoTask = api.fetchCompositionSessions(classSectionId: classId)
                 slots = try await api.fetchTimetable(classSectionId: classId)
+                compositions = (try? await compoTask) ?? []
             case .student:
                 let sid = studentIdOverride ?? auth.userId
                 guard let sid, let enrollment = try await api.activeEnrollment(studentId: sid) else {
                     slots = []; loading = false; ready = true; return
                 }
+                async let compoTask = api.fetchCompositionSessions(classSectionId: enrollment.classId)
                 let fetched = try await api.fetchTimetable(classSectionId: enrollment.classId)
+                let compos = (try? await compoTask) ?? []
                 if Task.isCancelled { return }
                 className = enrollment.className
                 slots = fetched
+                compositions = compos
             }
             if !isRefresh {
                 let start = smartStart()

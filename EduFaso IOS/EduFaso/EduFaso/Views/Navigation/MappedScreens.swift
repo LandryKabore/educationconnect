@@ -2102,8 +2102,11 @@ struct CahierFeedView: View {
 
     private var pageTitle: String { childName.map { "Cahier de textes \(ParentHomeView.de($0))" } ?? title }
 
+    /// Students see only what was done in class: the homework given in a lesson lives in their Exercices de maison tab.
+    private var showsHomework: Bool { auth.primaryRole != .student }
+
     private var tourSteps: [CoachMarkStep] {
-        [
+        let all: [CoachMarkStep] = [
             CoachMarkStep(
                 id: "child.switcher", icon: "arrow.left.arrow.right",
                 title: "Changer d’enfant",
@@ -2114,7 +2117,9 @@ struct CahierFeedView: View {
             CoachMarkStep(
                 id: "cahier.subjects", icon: "line.3.horizontal.decrease.circle",
                 title: "Filtrer par matière",
-                message: "Touchez une matière pour ne voir que ses cours et ses devoirs."
+                message: showsHomework
+                    ? "Touchez une matière pour ne voir que ses cours et ses devoirs."
+                    : "Touche une matière pour ne voir que ses cours."
             ),
             CoachMarkStep(
                 id: "cahier.day", icon: "calendar",
@@ -2132,6 +2137,7 @@ struct CahierFeedView: View {
                 message: "Touchez ce bouton à tout moment pour relancer la visite."
             ),
         ]
+        return showsHomework ? all : all.filter { $0.id != "cahier.homework" }
     }
 
     private var subjects: [(id: String, name: String)] {
@@ -2144,7 +2150,8 @@ struct CahierFeedView: View {
     private var days: [(day: String, items: [CahierFeedItem])] {
         var order: [String] = []
         var groups: [String: [CahierFeedItem]] = [:]
-        for e in entries where subject == nil || e.subjectId == subject {
+        for e in entries where (subject == nil || e.subjectId == subject)
+            && (showsHomework || !(e.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
             if groups[e.entryDate] == nil { order.append(e.entryDate) }
             groups[e.entryDate, default: []].append(e)
         }
@@ -2152,7 +2159,8 @@ struct CahierFeedView: View {
     }
 
     private var firstHomeworkId: String? {
-        days.lazy.flatMap(\.items).first { !($0.homework ?? "").isEmpty }?.id
+        guard showsHomework else { return nil }
+        return days.lazy.flatMap(\.items).first { !($0.homework ?? "").isEmpty }?.id
     }
 
     var body: some View {
@@ -2313,7 +2321,7 @@ struct CahierFeedView: View {
                         .foregroundStyle(EduTheme.ink.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let homework = e.homework, !homework.isEmpty {
+                if showsHomework, let homework = e.homework, !homework.isEmpty {
                     if e.id == firstHomeworkId {
                         homeworkBox(homework, due: e.dueDate).coachMarkTarget("cahier.homework")
                     } else {

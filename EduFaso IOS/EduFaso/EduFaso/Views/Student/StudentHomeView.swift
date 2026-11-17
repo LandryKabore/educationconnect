@@ -1,301 +1,1089 @@
 import SwiftUI
 
+/// Student « Accueil », like the web StudentHome: teal banner with three key figures and the next class,
+/// homework for tomorrow, bulletin averages, latest grades, today's classes, homework, exams,
+/// compositions, announcements, messages and quick links.
 struct StudentHomeView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var className: String?
     @State private var classId: String?
-    @State private var average: Double?
     @State private var annual: AnnualAverageResult?
-    @State private var gradeCount = 0
     @State private var recentGrades: [GradeRow] = []
     @State private var attendanceRate: Int?
     @State private var absencesCount = 0
-    @State private var lateCount = 0
-    @State private var pendingQuizzes: [EvaluationRow] = []
+    @State private var pendingHomework: [HomeworkItem] = []
     @State private var upcomingExams: [EvaluationRow] = []
     @State private var upcomingCompositions: [StudentCompositionSession] = []
-    @State private var todaySlots: [TimetableSlot] = []
+    /// Every composition session of the class (the running one swaps the timetable for its papers).
+    @State private var compositions: [StudentCompositionSession] = []
+    @State private var weekSlots: [TimetableSlot] = []
+    @State private var latestMessages: [MessageRow] = []
+    @State private var latestAnnouncements: [MessageRow] = []
     @State private var unreadMessages = 0
     @State private var unreadAnnouncements = 0
     @State private var ready = false
     @State private var loadFailed = false
 
-    private static let sky = Color(red: 2 / 255, green: 132 / 255, blue: 199 / 255)
+    @State private var tour = TabTour(key: "accueil-eleve")
+    @State private var coach = CoachMarkRegistry()
+
+    private static let brand800 = Color(red: 17 / 255, green: 94 / 255, blue: 89 / 255)
+    private static let brand600 = Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)
+    private static let brand50 = Color(red: 240 / 255, green: 253 / 255, blue: 250 / 255)
     private static let softFill = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
+    private static let amber = Color(red: 217 / 255, green: 119 / 255, blue: 6 / 255)
+    private static let emerald = Color(red: 5 / 255, green: 150 / 255, blue: 105 / 255)
+
+    struct HomeworkItem: Identifiable, Hashable {
+        let id: String
+        let title: String
+        let subject: String?
+        let due: String?
+    }
 
     // MARK: - Derived
 
-    private var today: String { EduDates.day() }
-
     private var firstName: String {
-        if let first = auth.profile?.firstName.trimmingCharacters(in: .whitespaces), !first.isEmpty {
-            return first
-        }
+        if let first = auth.profile?.firstName.trimmingCharacters(in: .whitespaces), !first.isEmpty { return first }
         return auth.profile?.fullName.split(separator: " ").first.map(String.init) ?? ""
     }
 
-    private var currentAverage: Double? { annual?.annualAverage ?? average }
+    private var toPrepare: Int { pendingHomework.count + upcomingExams.count + upcomingCompositions.count }
 
-    private struct WorkItem: Identifiable {
-        enum Kind { case quiz, exam, composition }
-        let id: String
-        let kind: Kind
-        let title: String
-        let subject: String?
-        let day: String?
-    }
+    /// Session running today, or starting within a week: shown first on the Accueil.
+    private var activeComposition: StudentCompositionSession? { CompositionSchedule.current(in: compositions) }
 
-    /// Interrogations, examens and compositions merged and sorted by date.
-    private var workItems: [WorkItem] {
-        let quizzes = pendingQuizzes.map {
-            WorkItem(
-                id: "iq-\($0.id)",
-                kind: .quiz,
-                title: ($0.title?.isEmpty == false) ? $0.title! : ($0.matieres?.name ?? "Interrogation"),
-                subject: $0.matieres?.name,
-                day: eventDay($0)
-            )
-        }
-        let exams = upcomingExams.map {
-            WorkItem(
-                id: "dv-\($0.id)",
-                kind: .exam,
-                title: ($0.title?.isEmpty == false) ? $0.title! : ($0.matieres?.name ?? "Examen"),
-                subject: $0.matieres?.name,
-                day: eventDay($0)
-            )
-        }
-        let compositions = upcomingCompositions.map {
-            WorkItem(
-                id: "co-\($0.id)",
-                kind: .composition,
-                title: ($0.title?.isEmpty == false) ? $0.title! : "Composition",
-                subject: $0.periodLabel,
-                day: $0.startsOn.map { String($0.prefix(10)) }
-            )
-        }
-        return (quizzes + exams + compositions)
-            .sorted { ($0.day ?? "9999") < ($1.day ?? "9999") }
+    private var tourSteps: [CoachMarkStep] {
+        let compoStep = CoachMarkStep(
+            id: "home.compo", icon: "pencil.and.list.clipboard",
+            title: "Compositions",
+            message: "Pendant les compositions, tes épreuves du jour s’affichent ici avec l’heure. Ton emploi du temps montre les épreuves à la place des cours."
+        )
+        let steps: [CoachMarkStep] = [
+            CoachMarkStep(
+                id: "home.stats", icon: "chart.bar.fill",
+                title: "Tes chiffres clés",
+                message: "Ta moyenne de l’année, ton taux de présence et ce qu’il te reste à préparer. Touche un chiffre pour voir le détail."
+            ),
+            CoachMarkStep(
+                id: "home.next", icon: "clock.fill",
+                title: "Maintenant",
+                message: "Le cours en cours et le temps qui reste, ou ton prochain cours."
+            ),
+            CoachMarkStep(
+                id: "home.tomorrow", icon: "list.clipboard.fill",
+                title: "Devoirs pour demain",
+                message: "Tes exercices de maison à rendre demain, puis ceux des jours suivants. Le bouton ouvre tous tes exercices."
+            ),
+            CoachMarkStep(
+                id: "home.bulletin", icon: "doc.text.fill",
+                title: "Bulletin",
+                message: "Ta moyenne de chaque trimestre et de l’année."
+            ),
+            CoachMarkStep(
+                id: "home.today", icon: "calendar",
+                title: "Aujourd’hui",
+                message: "Tes cours du jour : ceux qui sont finis sont cochés, le cours en cours est en vert."
+            ),
+            CoachMarkStep(
+                id: "home.work", icon: "checklist",
+                title: "À préparer",
+                message: "Les examens confirmés et les compositions qui arrivent."
+            ),
+            CoachMarkStep(
+                id: "home.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touche ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+        guard activeComposition != nil else { return steps }
+        var withCompo = steps
+        withCompo.insert(compoStep, at: min(2, withCompo.count))
+        return withCompo
     }
 
     // MARK: - Body
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                if ready {
-                    TimelineView(.everyMinute) { context in
-                        VStack(alignment: .leading, spacing: 24) {
-                            hero(now: context.date)
-                            if unreadMessages > 0 || unreadAnnouncements > 0 { inboxPills }
-                            if loadFailed { errorBanner }
-                            nowCard(now: context.date)
-                            if todaySlots.count > 1 { dayTimeline(now: context.date) }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if ready {
+                        TimelineView(.everyMinute) { context in
+                            banner(now: context.date)
                         }
+                        if loadFailed { errorBanner }
+                        if let compo = activeComposition {
+                            TimelineView(.everyMinute) { context in
+                                compositionCard(compo, now: context.date)
+                            }
+                            .coachMarkTarget("home.compo")
+                        }
+                        tomorrowPanel.coachMarkTarget("home.tomorrow")
+                        bulletinPanel.coachMarkTarget("home.bulletin")
+                        gradesPanel
+                        TimelineView(.everyMinute) { context in
+                            todayPanel(now: context.date)
+                        }
+                        .coachMarkTarget("home.today")
+                        examsPanel.coachMarkTarget("home.work")
+                        compositionsPanel
+                        announcementsPanel
+                        messagesPanel
+                        quickLinks
+                    } else {
+                        loadingSkeleton
                     }
-
-                    workSection
-                    resultsSection
-                    quickActions
-                } else {
-                    loadingSkeleton
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .refreshable { await load() }
+            .tabTour(tour, registry: coach, scroller: proxy)
         }
-        .refreshable { await load() }
-        .background(EduTheme.loginBackground.ignoresSafeArea())
+        .environment(coach)
+        .background(EduTheme.page.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.light)
         .task { await load() }
+        .onChange(of: ready) { _, isReady in
+            if isReady { tour.autoStartOnce({ tourSteps }, registry: coach) }
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && ready {
-                Task { await load() }
-            }
+            if phase == .active && ready { Task { await load() } }
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Banner
 
-    private func hero(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let remaining = todaySlots.filter { Self.minutes($0.endTime) > nowMin }.count
-
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(Self.todayCaption(now))
-                        .font(.caption.weight(.bold))
-                        .tracking(0.8)
-                        .textCase(.uppercase)
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text("\(TimeGreeting.current(at: now)), \(firstName.isEmpty ? "…" : firstName)")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                    Label(
-                        className.map { "Classe · \($0)" } ?? (auth.schools.first?.name ?? "Espace élève"),
-                        systemImage: "graduationcap.fill"
-                    )
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
+    private func banner(now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(Self.todayCaption(now))
+                            .font(.caption.weight(.semibold))
+                            .tracking(1.4)
+                            .textCase(.uppercase)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text("\(TimeGreeting.current(at: now))\(firstName.isEmpty ? "" : ", \(firstName)") 👋")
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-0.4)
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                        Label(className ?? "Sans classe", systemImage: "graduationcap.fill")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Spacer(minLength: 0)
+                    TourHelpButton(onDark: true) { tour.start(tourSteps, registry: coach) }
+                        .coachMarkTarget("home.help")
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "backpack.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .accessibilityHidden(true)
+
+                if unreadMessages > 0 || unreadAnnouncements > 0 {
+                    HStack(spacing: 8) {
+                        if unreadMessages > 0 {
+                            NavigationLink { MessagesView() } label: {
+                                bannerPill(
+                                    "\(unreadMessages) message\(unreadMessages > 1 ? "s" : "") non lu\(unreadMessages > 1 ? "s" : "")",
+                                    icon: "message.fill", yellow: false
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if unreadAnnouncements > 0 {
+                            NavigationLink { MessagesView(announcementsOnly: true) } label: {
+                                bannerPill(
+                                    "\(unreadAnnouncements) annonce\(unreadAnnouncements > 1 ? "s" : "")",
+                                    icon: "bell.fill", yellow: true
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    NavigationLink { BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin") } label: {
+                        bannerStat(
+                            label: "Moyenne",
+                            value: annual?.annualAverage.map { Self.format($0, digits: 1) } ?? "—",
+                            hint: annual?.annualAverage != nil
+                                ? Self.passDecision(annual) + (annual?.complete == false ? " · provisoire" : "")
+                                : "Pas de notes"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { StudentAttendanceView() } label: {
+                        bannerStat(
+                            label: "Présence",
+                            value: attendanceRate.map { "\($0)%" } ?? "—",
+                            hint: attendanceRate != nil ? "\(absencesCount) absence\(absencesCount > 1 ? "s" : "")" : "Aucune saisie"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    NavigationLink { ExercisesBoardView() } label: {
+                        bannerStat(label: "À préparer", value: "\(toPrepare)", hint: toPrepare > 0 ? "à venir" : "Rien à rendre")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .coachMarkTarget("home.stats")
+
+                nextClassCard(now: now).coachMarkTarget("home.next")
             }
-            .accessibilityElement(children: .combine)
+            .padding(20)
 
-            HStack(spacing: 10) {
-                NavigationLink {
-                    BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin")
-                } label: {
-                    heroStat(
-                        value: currentAverage.map { Self.format($0, digits: 1) } ?? "—",
-                        label: "Moyenne",
-                        systemImage: "chart.bar.fill"
-                    )
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink { StudentAttendanceView() } label: {
-                    heroStat(
-                        value: attendanceRate.map { "\($0)%" } ?? "—",
-                        label: "Présence",
-                        systemImage: "checkmark.seal.fill"
-                    )
-                }
-                .buttonStyle(.plain)
-
-                heroStat(
-                    value: todaySlots.isEmpty ? "0" : "\(remaining)",
-                    label: todaySlots.isEmpty ? "Cours aujourd’hui" : "Cours restants",
-                    systemImage: "clock.fill"
-                )
+            HStack(spacing: 0) {
+                EduTheme.fasoRed
+                EduTheme.fasoYellow
+                EduTheme.fasoGreen
             }
+            .frame(height: 4)
+            .accessibilityHidden(true)
         }
-        .padding(20)
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             ZStack {
-                LinearGradient(
-                    colors: [EduTheme.navyDark, EduTheme.navy, EduTheme.teal],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Circle()
-                    .fill(.white.opacity(0.07))
-                    .frame(width: 220, height: 220)
-                    .offset(x: 140, y: -90)
-                Circle()
-                    .fill(.white.opacity(0.05))
-                    .frame(width: 140, height: 140)
-                    .offset(x: -150, y: 90)
+                LinearGradient(colors: [Self.brand800, EduTheme.teal, Self.brand600], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Circle().fill(.white.opacity(0.06)).frame(width: 260, height: 260).offset(x: 150, y: -120)
+                Circle().fill(.white.opacity(0.04)).frame(width: 220, height: 220).offset(x: -40, y: 200)
             }
         }
-        .overlay(alignment: .bottom) { fasoStripe }
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .shadow(color: EduTheme.navy.opacity(0.28), radius: 18, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: Self.brand800.opacity(0.25), radius: 14, y: 8)
     }
 
-    private var fasoStripe: some View {
-        HStack(spacing: 0) {
-            EduTheme.fasoRed
-            EduTheme.fasoYellow
-            EduTheme.fasoGreen
-        }
-        .frame(height: 4)
-        .accessibilityHidden(true)
+    private func bannerPill(_ text: String, icon: String, yellow: Bool) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                (yellow ? EduTheme.fasoYellow.opacity(0.25) : Color.white.opacity(0.15)),
+                in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(yellow ? EduTheme.fasoYellow.opacity(0.4) : .white.opacity(0.2), lineWidth: 1)
+            )
     }
 
-    private func heroStat(value: String, label: String, systemImage: String) -> some View {
+    private func bannerStat(label: String, value: String, hint: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white.opacity(0.8))
-                .accessibilityHidden(true)
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
             Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.title2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.white)
-                .minimumScaleFactor(0.7)
                 .lineLimit(1)
-                .contentTransition(.numericText())
-            Text(label)
-                .font(.caption2.weight(.semibold))
+                .minimumScaleFactor(0.7)
+            Text(hint)
+                .font(.caption2)
                 .foregroundStyle(.white.opacity(0.8))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
+        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(.white.opacity(0.15), lineWidth: 1))
     }
 
-    // MARK: - Inbox
+    // MARK: Next class (web NextClassCard)
 
-    private var inboxPills: some View {
-        HStack(spacing: 10) {
-            if unreadMessages > 0 {
-                NavigationLink { MessagesView() } label: {
-                    Label(
-                        "\(unreadMessages) message\(unreadMessages > 1 ? "s" : "") non lu\(unreadMessages > 1 ? "s" : "")",
-                        systemImage: "envelope.fill"
-                    )
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 40)
-                    .background(EduTheme.navy, in: Capsule())
-                    .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
+    private struct Focus {
+        let slot: TimetableSlot
+        let current: Bool
+        let dayLabel: String
+        let laterDay: Bool
+    }
+
+    private func scheduleFocus(now: Date) -> Focus? {
+        guard !weekSlots.isEmpty else { return nil }
+        let nowMin = Self.minutes(of: now)
+        let todayDow = EduDates.weekday(now)
+        let todayList = weekSlots.filter { $0.dayOfWeek == todayDow }.sorted { $0.startTime < $1.startTime }
+        if let current = todayList.first(where: { Self.minutes($0.startTime) <= nowMin && nowMin < Self.minutes($0.endTime) }) {
+            return Focus(slot: current, current: true, dayLabel: Self.weekdayName(todayDow), laterDay: false)
+        }
+        if let next = todayList.first(where: { Self.minutes($0.startTime) > nowMin }) {
+            return Focus(slot: next, current: false, dayLabel: Self.weekdayName(todayDow), laterDay: false)
+        }
+        for offset in 1...7 {
+            let day = ((todayDow - 1 + offset) % 7) + 1
+            if let first = weekSlots.filter({ $0.dayOfWeek == day }).min(by: { $0.startTime < $1.startTime }) {
+                return Focus(slot: first, current: false, dayLabel: Self.weekdayName(day), laterDay: true)
             }
-            if unreadAnnouncements > 0 {
-                NavigationLink { MessagesView(announcementsOnly: true) } label: {
-                    Label(
-                        "\(unreadAnnouncements) annonce\(unreadAnnouncements > 1 ? "s" : "")",
-                        systemImage: "megaphone.fill"
-                    )
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 40)
-                    .background(EduTheme.fasoYellow.opacity(0.18), in: Capsule())
-                    .overlay(Capsule().stroke(EduTheme.fasoYellow.opacity(0.5), lineWidth: 1))
-                    .foregroundStyle(EduTheme.ink)
+        }
+        return nil
+    }
+
+    private func nextClassCard(now: Date) -> some View {
+        let focus = scheduleFocus(now: now)
+        let nowMin = Self.minutes(of: now)
+        return NavigationLink { TimetableView(mode: .student) } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                if let focus {
+                    HStack {
+                        Text(focus.current ? "MAINTENANT" : (CompositionSchedule.isComposition(focus.slot) ? "PROCHAINE ÉPREUVE" : "PROCHAIN COURS") + (focus.laterDay ? " · \(focus.dayLabel.uppercased())" : ""))
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        if focus.current {
+                            Text("EN COURS")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Self.emerald, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                        }
+                    }
+                    Text(focus.slot.matieres?.name ?? "Cours")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text([Self.timeRange(focus.slot), Self.formatRoom(focus.slot.room)].compactMap { $0 }.joined(separator: " · "))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                    if focus.current {
+                        let start = Self.minutes(focus.slot.startTime), end = Self.minutes(focus.slot.endTime)
+                        let fraction = end > start ? Double(nowMin - start) / Double(end - start) : 0
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(.white.opacity(0.2))
+                                Rectangle().fill(.white).frame(width: geo.size.width * min(max(fraction, 0), 1))
+                            }
+                        }
+                        .frame(height: 5)
+                        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                        Text("Il reste \(Self.duration(end - nowMin))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    } else if !focus.laterDay {
+                        Text("Dans \(Self.duration(Self.minutes(focus.slot.startTime) - nowMin))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                } else {
+                    Text("MAINTENANT")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text("Pas de cours prévu cette semaine")
+                        .font(.headline)
+                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(.white.opacity(0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Panels
+
+    /// Homework due tomorrow, then later: everything from Exercices de maison
+    /// (exercises created by teachers + the "exercice de maison" written in a lesson).
+    @ViewBuilder private var tomorrowPanel: some View {
+        let tomorrow = Self.dayOffset(1)
+        let forTomorrow = pendingHomework.filter { $0.due == tomorrow }
+        let later = pendingHomework.filter { $0.due != tomorrow }
+        panel(
+            icon: "list.clipboard",
+            title: "Mes devoirs pour demain",
+            subtitle: "Exercices de maison",
+            actionTitle: "Voir les exercices",
+            destination: { ExercisesBoardView() }
+        ) {
+            if pendingHomework.isEmpty {
+                panelEmpty("Aucun exercice à rendre pour le moment.")
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    if forTomorrow.isEmpty {
+                        Text("Rien à rendre pour demain.")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    } else {
+                        homeworkSection("Pour demain", forTomorrow, tone: Self.amber)
+                    }
+                    if !later.isEmpty { homeworkSection("Plus tard", Array(later.prefix(3)), tone: EduTheme.muted) }
+                }
+            }
         }
     }
 
-    // MARK: - Loading & error
+    private func homeworkSection(_ title: String, _ items: [HomeworkItem], tone: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                Text("\(items.count)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tone)
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(tone.opacity(0.12), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            }
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.subject ?? "Matière")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                    Text(item.title)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                        .lineLimit(2)
+                    if let due = item.due, due != Self.dayOffset(1) {
+                        Text("Pour le \(Self.longDate(due))")
+                            .font(.caption2)
+                            .foregroundStyle(EduTheme.subtle)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+        }
+    }
+
+    private var bulletinPanel: some View {
+        let trimesters = annual?.trimesters ?? []
+        let labels = ["Trimestre 1", "Trimestre 2", "Trimestre 3"]
+        return panel(
+            icon: "doc.text",
+            title: "Bulletin · moyennes",
+            subtitle: "Trimestres et moyenne annuelle",
+            actionTitle: "Voir mon bulletin",
+            destination: { BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin") }
+        ) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(0..<3, id: \.self) { i in
+                    let value = trimesters.first { $0.periodLabel == labels[i] }?.generalAverage
+                        ?? (trimesters.indices.contains(i) ? trimesters[i].generalAverage : nil)
+                    averageTile(labels[i], value: value, footer: "/ 20", highlight: false)
+                }
+                averageTile(
+                    "Année",
+                    value: annual?.annualAverage,
+                    footer: annual?.annualAverage != nil ? Self.passDecision(annual) : "/ 20",
+                    highlight: true
+                )
+            }
+        }
+    }
+
+    private func averageTile(_ label: String, value: Double?, footer: String, highlight: Bool) -> some View {
+        VStack(spacing: 2) {
+            Text(label.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(0.5)
+                .foregroundStyle(highlight ? EduTheme.teal : EduTheme.muted)
+            Text(value.map { Self.format($0, digits: 1) } ?? "—")
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(Self.averageColor(value))
+            Text(footer)
+                .font(.caption2)
+                .foregroundStyle(highlight ? EduTheme.teal.opacity(0.8) : EduTheme.subtle)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(highlight ? Self.brand50 : Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .stroke(highlight ? EduTheme.teal.opacity(0.2) : .clear, lineWidth: 1)
+        )
+    }
+
+    private var gradesPanel: some View {
+        panel(
+            icon: "chart.line.uptrend.xyaxis",
+            title: "Dernières notes",
+            subtitle: "Tes résultats les plus récents",
+            actionTitle: "Voir toutes les notes",
+            destination: { StudentGradesView() }
+        ) {
+            if recentGrades.isEmpty {
+                panelEmpty("Aucune note disponible pour le moment.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(recentGrades.prefix(4)) { g in
+                        let v = Self.scoreOn20(g)
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(g.matieres?.name ?? "Matière")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .lineLimit(1)
+                                Text(g.periodLabel ?? "")
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            Spacer(minLength: 8)
+                            if g.isAbsent == true {
+                                Text("Absent").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.muted)
+                            } else {
+                                (Text(v.map { Self.format($0, digits: 1) } ?? "—")
+                                    .font(.title3.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(Self.gradeColor(v))
+                                 + Text(" / 20").font(.caption.weight(.medium)).foregroundStyle(EduTheme.subtle))
+                            }
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private func todayPanel(now: Date) -> some View {
+        let todayDow = EduDates.weekday(now)
+        let todaySlots = weekSlots.filter { $0.dayOfWeek == todayDow }.sorted { $0.startTime < $1.startTime }
+        let focus = scheduleFocus(now: now)
+        let nowMin = Self.minutes(of: now)
+        let subtitle: String = {
+            if focus?.current == true { return "Cours en cours mis en avant" }
+            if let focus, focus.laterDay { return "Pas de cours aujourd’hui · prochain : \(focus.dayLabel)" }
+            if focus != nil { return "Prochain cours mis en avant" }
+            return "Tes cours du jour"
+        }()
+        return panel(
+            icon: "calendar",
+            title: "Aujourd’hui · \(Self.weekdayName(todayDow))",
+            subtitle: subtitle,
+            actionTitle: "Emploi du temps",
+            destination: { TimetableView(mode: .student) }
+        ) {
+            if todaySlots.isEmpty && focus == nil {
+                panelEmpty("Pas de cours prévu cette semaine.")
+            } else if todaySlots.isEmpty, let focus {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Aucun cours aujourd’hui — voici le prochain.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(EduTheme.muted)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(focus.slot.matieres?.name ?? "Cours")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EduTheme.ink)
+                            Text("\(focus.dayLabel) · \(Self.timeRange(focus.slot))")
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                        }
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(todaySlots.enumerated()), id: \.element.id) { index, s in
+                        let start = Self.minutes(s.startTime), end = Self.minutes(s.endTime)
+                        let done = end <= nowMin
+                        let current = start <= nowMin && nowMin < end
+                        let last = index == todaySlots.count - 1
+                        HStack(alignment: .top, spacing: 14) {
+                            ZStack(alignment: .top) {
+                                if !last {
+                                    Rectangle()
+                                        .fill(done ? Self.emerald.opacity(0.3) : EduTheme.border)
+                                        .frame(width: 2)
+                                        .padding(.top, 24)
+                                }
+                                ZStack {
+                                    if done {
+                                        Circle().fill(Self.emerald.opacity(0.15))
+                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Self.emerald)
+                                    } else if current {
+                                        Circle().fill(Self.emerald)
+                                        Circle().fill(.white).frame(width: 8, height: 8)
+                                    } else {
+                                        Circle().fill(.white)
+                                        Circle().stroke(EduTheme.borderStrong, lineWidth: 2)
+                                    }
+                                }
+                                .frame(width: 24, height: 24)
+                            }
+                            .frame(width: 24)
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(s.matieres?.name ?? "Cours")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(done ? EduTheme.subtle : EduTheme.ink)
+                                            .lineLimit(1)
+                                        if current {
+                                            Text("EN COURS")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                                .background(Self.emerald, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                                        }
+                                    }
+                                    if let room = Self.formatRoom(s.room) {
+                                        Text(room).font(.caption).foregroundStyle(done ? EduTheme.subtle : EduTheme.muted)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Text(Self.timeRange(s))
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(done ? EduTheme.subtle : EduTheme.ink.opacity(0.75))
+                            }
+                            .padding(.bottom, last ? 0 : 18)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    private var examsPanel: some View {
+        panel(
+            icon: "doc.text.magnifyingglass",
+            title: "Prochains examens",
+            subtitle: "Confirmés par l’administration",
+            actionTitle: "Voir les examens",
+            destination: { ExamsBoardView() }
+        ) {
+            if upcomingExams.isEmpty {
+                panelEmpty("Aucun examen confirmé pour le moment.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(upcomingExams) { e in
+                        let time = [e.startTime, e.endTime].compactMap { $0.map { String($0.prefix(5)) } }.joined(separator: "–")
+                        workRow(
+                            title: e.title?.isEmpty == false ? e.title! : (e.matieres?.name ?? "Examen"),
+                            subject: e.matieres?.name,
+                            day: (e.evalDate ?? e.dueDate).map { String($0.prefix(10)) },
+                            detail: time.isEmpty ? nil : time
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Composition (main widget while it runs)
+
+    private static let compoText = Color(red: 146 / 255, green: 64 / 255, blue: 14 / 255)
+    private static let compoBg = Color(red: 254 / 255, green: 243 / 255, blue: 199 / 255)
+
+    private func compositionCard(_ s: StudentCompositionSession, now: Date) -> some View {
+        let today = EduDates.day(now)
+        let nowMin = Self.minutes(of: now)
+        let running = CompositionSchedule.session(on: today, in: [s]) != nil
+        let start = String((s.startsOn ?? "").prefix(10))
+        let daysLeft = Self.daysBetween(today, start)
+        let dated = s.papers.filter { $0.evalDate != nil }
+            .sorted { (($0.evalDate ?? "") + ($0.startTime ?? "")) < (($1.evalDate ?? "") + ($1.startTime ?? "")) }
+        let todays = dated.filter { String(($0.evalDate ?? "").prefix(10)) == today }
+        let later = dated.filter { String(($0.evalDate ?? "").prefix(10)) > today }
+        let range = [s.startsOn, s.endsOn].compactMap { $0.map { Self.shortDate(String($0.prefix(10))) } }.joined(separator: " – ")
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "pencil.and.list.clipboard")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Self.amber)
+                    .frame(width: 34, height: 34)
+                    .background(Self.compoBg, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(running ? "COMPOSITIONS EN COURS" : (daysLeft <= 1 ? "COMPOSITIONS DEMAIN" : "COMPOSITIONS DANS \(daysLeft) JOURS"))
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.5)
+                        .foregroundStyle(Self.compoText)
+                    Text(s.title?.isEmpty == false ? s.title! : (s.periodLabel ?? "Compositions"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                    if !range.isEmpty {
+                        Text("\(range) · \(s.papers.count) épreuve\(s.papers.count > 1 ? "s" : "")")
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            if running {
+                Text("AUJOURD’HUI")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.5)
+                    .foregroundStyle(EduTheme.muted)
+                if todays.isEmpty {
+                    Text("Pas d’épreuve aujourd’hui. Révise les prochaines.")
+                        .font(.subheadline)
+                        .foregroundStyle(EduTheme.muted)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(todays.enumerated()), id: \.element.id) { i, p in
+                            if i > 0 { Divider() }
+                            paperRow(p, nowMin: nowMin, isToday: true)
+                        }
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.border, lineWidth: 1))
+                }
+            }
+
+            let coming = running ? Array(later.prefix(3)) : Array(dated.prefix(4))
+            if !coming.isEmpty {
+                Text(running ? "PROCHAINES ÉPREUVES" : "PREMIÈRES ÉPREUVES")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.5)
+                    .foregroundStyle(EduTheme.muted)
+                VStack(spacing: 0) {
+                    ForEach(Array(coming.enumerated()), id: \.element.id) { i, p in
+                        if i > 0 { Divider() }
+                        paperRow(p, nowMin: nowMin, isToday: false)
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.border, lineWidth: 1))
+            }
+
+            NavigationLink { StudentCompositionsView() } label: {
+                Text("Voir le programme complet")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .modifier(HomeCardStyle())
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Self.amber).frame(width: 4)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    private func paperRow(_ p: CompositionPaper, nowMin: Int, isToday: Bool) -> some View {
+        let startText = String((p.startTime ?? "").prefix(5))
+        let endText = String((p.endTime ?? "").prefix(5))
+        let start = p.startTime.map { Self.minutes($0) } ?? 0
+        let end = p.endTime.map { Self.minutes($0) } ?? 0
+        let live = isToday && start <= nowMin && nowMin < end
+        let done = isToday && end > 0 && nowMin >= end
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(startText.isEmpty ? "—" : startText)
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(done ? EduTheme.subtle : EduTheme.ink)
+                if !endText.isEmpty {
+                    Text(endText)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(EduTheme.subtle)
+                }
+            }
+            .frame(width: 48, alignment: .leading)
+            Rectangle()
+                .fill(live ? Self.emerald : (done ? EduTheme.border : SubjectPalette.swatch(for: p.matieres?.name).border))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.matieres?.name ?? "Épreuve")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(done ? EduTheme.muted : EduTheme.ink)
+                    .strikethrough(done, color: EduTheme.subtle)
+                if !isToday, let d = p.evalDate {
+                    Text(Self.longDate(String(d.prefix(10))))
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                } else if live {
+                    Text("Il reste \(Self.durationText(end - nowMin))")
+                        .font(.caption)
+                        .foregroundStyle(Self.emerald)
+                } else if !done && start > nowMin {
+                    Text("Dans \(Self.durationText(start - nowMin))")
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+            Spacer(minLength: 0)
+            if live {
+                Text("EN COURS")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Self.emerald, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+            } else if done {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(EduTheme.subtle)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(live ? Self.emerald.opacity(0.07) : Color.clear)
+    }
+
+    private static func durationText(_ m: Int) -> String {
+        if m < 60 { return "\(m) min" }
+        let h = m / 60, r = m % 60
+        return r == 0 ? "\(h) h" : "\(h) h \(String(format: "%02d", r))"
+    }
+
+    private static func daysBetween(_ fromIso: String, _ toIso: String) -> Int {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let a = f.date(from: fromIso), let b = f.date(from: toIso) else { return 0 }
+        return Calendar.current.dateComponents([.day], from: a, to: b).day ?? 0
+    }
+
+    private var compositionsPanel: some View {
+        panel(
+            icon: "graduationcap",
+            title: "Compositions",
+            subtitle: "Programme planifié par l’école",
+            actionTitle: "Voir le programme",
+            destination: { StudentCompositionsView() }
+        ) {
+            if upcomingCompositions.isEmpty {
+                panelEmpty("Aucune composition programmée pour le moment.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(upcomingCompositions) { c in
+                        let range = [c.startsOn, c.endsOn].compactMap { $0.map { Self.shortDate(String($0.prefix(10))) } }.joined(separator: " – ")
+                        workRow(
+                            title: c.title?.isEmpty == false ? c.title! : "Composition",
+                            subject: [c.periodLabel, c.papers.isEmpty ? nil : "\(c.papers.count) épreuve\(c.papers.count > 1 ? "s" : "")"].compactMap { $0 }.joined(separator: " · "),
+                            day: c.startsOn.map { String($0.prefix(10)) },
+                            detail: range.isEmpty ? nil : range
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func workRow(title: String, subject: String?, day: String?, detail: String?) -> some View {
+        HStack(spacing: 12) {
+            VStack(spacing: 0) {
+                Text(day.map { Self.dayNumber($0) } ?? "—")
+                    .font(.headline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(EduTheme.teal)
+                Text(day.map { Self.monthAbbr($0) } ?? "")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(EduTheme.teal.opacity(0.8))
+            }
+            .frame(width: 42, height: 42)
+            .background(Self.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                Text([subject, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            if let day, let rel = Self.relativeDay(day) {
+                Text(rel.text)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(rel.urgent ? Self.amber : EduTheme.muted)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background((rel.urgent ? Self.amber : EduTheme.muted).opacity(0.12), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            }
+        }
+        .padding(10)
+        .background(Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+
+    private var announcementsPanel: some View {
+        panel(
+            icon: "bell",
+            title: "Annonces de l’école",
+            subtitle: "Infos officielles de l’administration",
+            actionTitle: "Voir les annonces",
+            destination: { MessagesView(announcementsOnly: true) }
+        ) {
+            if latestAnnouncements.isEmpty {
+                panelEmpty("Aucune annonce pour le moment.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(latestAnnouncements) { m in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(m.subject?.trimmingCharacters(in: .whitespaces).isEmpty == false ? m.subject! : "Annonce")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .lineLimit(1)
+                                if m.readAt == nil { Circle().fill(EduTheme.teal).frame(width: 7, height: 7) }
+                                Spacer(minLength: 8)
+                                Text(Self.relative(m.createdAt))
+                                    .font(.caption2)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            Text(Self.snippet(m.body, 110))
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private var messagesPanel: some View {
+        panel(
+            icon: "message",
+            title: "Messages récents",
+            subtitle: "Échanges avec tes professeurs et l’école",
+            actionTitle: "Voir tous les messages",
+            destination: { MessagesView() }
+        ) {
+            if latestMessages.isEmpty {
+                panelEmpty("Aucun message pour le moment.")
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(latestMessages) { m in
+                        let unread = m.readAt == nil
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(m.sender?.fullName ?? "Expéditeur")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EduTheme.ink)
+                                    .lineLimit(1)
+                                if unread { Circle().fill(EduTheme.teal).frame(width: 7, height: 7) }
+                                Spacer(minLength: 8)
+                                Text(Self.relative(m.createdAt))
+                                    .font(.caption2)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            Text(Self.snippet(m.body, 70))
+                                .font(.caption)
+                                .foregroundStyle(EduTheme.muted)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(unread ? Self.brand50 : Self.softFill, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                .stroke(unread ? EduTheme.teal.opacity(0.2) : .clear, lineWidth: 1)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var quickLinks: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("ACCÈS RAPIDE")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(EduTheme.muted)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                quickLink("Mes notes", icon: "book") { StudentGradesView() }
+                quickLink("Exercices", icon: "square.and.pencil") { ExercisesBoardView() }
+                quickLink("Examens", icon: "list.clipboard") { ExamsBoardView() }
+                quickLink("Compositions", icon: "graduationcap") { StudentCompositionsView() }
+                quickLink("Présences", icon: "calendar.badge.checkmark") { StudentAttendanceView() }
+                quickLink("Mes profs", icon: "person.2") { MyTeachersView() }
+                quickLink("Mon bulletin", icon: "doc.text") { BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin") }
+                quickLink("Emploi du temps", icon: "calendar") { TimetableView(mode: .student) }
+            }
+        }
+        .padding(14)
+        .modifier(HomeCardStyle())
+    }
+
+    private func quickLink<Destination: View>(_ title: String, icon: String, @ViewBuilder destination: () -> Destination) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.teal)
+                    .frame(width: 18)
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Building blocks
+
+    private func panel<Destination: View, Content: View>(
+        icon: String,
+        title: String,
+        subtitle: String,
+        actionTitle: String,
+        @ViewBuilder destination: @escaping () -> Destination,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.teal)
+                    .frame(width: 34, height: 34)
+                    .background(Self.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+            content()
+            NavigationLink(destination: destination) {
+                Text(actionTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .modifier(HomeCardStyle())
+    }
+
+    private func panelEmpty(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(EduTheme.muted)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 14)
+    }
 
     private var loadingSkeleton: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(EduTheme.navy.opacity(0.15))
-                .frame(maxWidth: .infinity, minHeight: 190)
+        VStack(alignment: .leading, spacing: 16) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(EduTheme.teal.opacity(0.2))
+                .frame(maxWidth: .infinity, minHeight: 300)
             ForEach(0..<3, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(.white)
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .frame(maxWidth: .infinity, minHeight: 140)
             }
         }
         .redacted(reason: .placeholder)
@@ -305,9 +1093,7 @@ struct StudentHomeView: View {
 
     private var errorBanner: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.orange)
-                .accessibilityHidden(true)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Self.amber)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Certaines données n’ont pas pu être chargées.")
                     .font(.subheadline.weight(.semibold))
@@ -315,737 +1101,102 @@ struct StudentHomeView: View {
                 Text("Vérifie ta connexion puis réessaie.")
                     .font(.footnote)
                     .foregroundStyle(EduTheme.muted)
-                Button("Réessayer") {
-                    Task { await load() }
-                }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(EduTheme.teal)
-                .frame(minHeight: 44, alignment: .leading)
+                Button("Réessayer") { Task { await load() } }
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(EduTheme.teal)
             }
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Now card
-
-    @ViewBuilder
-    private func nowCard(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let current = todaySlots.first {
-            Self.minutes($0.startTime) <= nowMin && nowMin < Self.minutes($0.endTime)
-        }
-        let upcoming = todaySlots.first { Self.minutes($0.startTime) > nowMin }
-
-        if let slot = current ?? upcoming {
-            let isCurrent = current != nil
-            let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
-            let start = Self.minutes(slot.startTime)
-            let end = Self.minutes(slot.endTime)
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 8) {
-                    statusCapsule(live: isCurrent)
-                    Spacer(minLength: 0)
-                    Text(timeRange(slot))
-                        .font(.subheadline.weight(.bold).monospacedDigit())
-                        .foregroundStyle(EduTheme.ink)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(slot.matieres?.name ?? "Cours")
-                        .font(.title.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 14) {
-                        if let teacher = slot.teacherName, !teacher.isEmpty {
-                            Label(teacher, systemImage: "person.fill")
-                                .lineLimit(1)
-                        }
-                        if let room = formatRoom(slot.room) {
-                            Label(room, systemImage: "mappin.and.ellipse")
-                        }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink.opacity(0.72))
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-
-                if isCurrent {
-                    let progress = min(1, max(0, Double(nowMin - start) / Double(max(end - start, 1))))
-                    VStack(alignment: .leading, spacing: 8) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(EduTheme.ink.opacity(0.08))
-                                Capsule()
-                                    .fill(swatch.border)
-                                    .frame(width: max(10, geo.size.width * progress))
-                            }
-                        }
-                        .frame(height: 8)
-                        HStack {
-                            Text("Il reste \(Self.duration(end - nowMin))")
-                                .font(.footnote.weight(.bold))
-                                .foregroundStyle(EduTheme.ink)
-                            Spacer()
-                            Text("\(Int(progress * 100)) %")
-                                .font(.footnote.weight(.semibold).monospacedDigit())
-                                .foregroundStyle(EduTheme.muted)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Il reste \(Self.duration(end - nowMin)) sur ce cours")
-                } else {
-                    Label("Commence dans \(Self.duration(start - nowMin))", systemImage: "hourglass")
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(EduTheme.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(swatch.fill.opacity(0.6), in: Capsule())
-                }
-
-                HStack(spacing: 10) {
-                    NavigationLink { CahierFeedView() } label: {
-                        Label("Cahier de textes", systemImage: "book.fill")
-                            .font(.body.weight(.bold))
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(
-                                LinearGradient(
-                                    colors: [EduTheme.teal, EduTheme.tealDark],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            )
-                            .foregroundStyle(.white)
-                            .shadow(color: EduTheme.teal.opacity(0.3), radius: 8, y: 4)
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink { TimetableView(mode: .student) } label: {
-                        Image(systemName: "calendar")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(EduTheme.navy)
-                            .frame(width: 56, height: 52)
-                            .background(EduTheme.navy.opacity(0.08), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Emploi du temps")
-                }
-            }
-            .padding(18)
-            .padding(.leading, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack(alignment: .leading) {
-                    Color.white
-                    LinearGradient(
-                        colors: [swatch.fill.opacity(0.55), .white.opacity(0)],
-                        startPoint: .topTrailing,
-                        endPoint: .bottomLeading
-                    )
-                    swatch.border.frame(width: 6)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(swatch.border.opacity(0.25), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 14, y: 6)
-        } else {
-            emptyNowCard
-        }
-    }
-
-    private func statusCapsule(live: Bool) -> some View {
-        let tint = live ? EduTheme.fasoRed : EduTheme.teal
-        return HStack(spacing: 6) {
-            if live {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 7))
-                    .symbolEffect(.pulse, options: .repeating)
-            } else {
-                Image(systemName: "clock.fill")
-                    .font(.caption2.weight(.bold))
-            }
-            Text(live ? "En cours" : "Prochain cours")
-                .font(.caption.weight(.heavy))
-                .tracking(0.6)
-                .textCase(.uppercase)
-        }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(tint.opacity(0.12), in: Capsule())
-        .accessibilityHidden(true)
-    }
-
-    private var emptyNowCard: some View {
-        let weekday = EduDates.weekday()
-        let icon = weekday == 7 ? "sun.max.fill" : (todaySlots.isEmpty ? "cup.and.saucer.fill" : "checkmark.seal.fill")
-        let title = weekday == 7
-            ? "Bon dimanche"
-            : (todaySlots.isEmpty ? "Pas de cours aujourd’hui" : "Journée terminée")
-        let message: String = {
-            if weekday == 7 { return "Pas de cours le dimanche. Pense à préparer ta semaine." }
-            if todaySlots.isEmpty { return "Aucun cours n’est planifié pour aujourd’hui." }
-            return "Plus de cours pour aujourd’hui. Pense à tes examens !"
-        }()
-
-        return HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(EduTheme.teal)
-                .frame(width: 48, height: 48)
-                .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(EduTheme.ink)
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(EduTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                NavigationLink { TimetableView(mode: .student) } label: {
-                    Label("Voir l’emploi du temps", systemImage: "arrow.right")
-                        .labelStyle(TrailingIconLabelStyle())
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minHeight: 44, alignment: .leading)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(HomeCardStyle())
-    }
-
-    // MARK: - Day timeline
-
-    private func dayTimeline(now: Date) -> some View {
-        let nowMin = Self.minutes(of: now)
-        let done = todaySlots.filter { slotStatus($0, nowMin: nowMin) == .done }.count
-
-        return VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(
-                title: "Ma journée",
-                subtitle: "\(done) sur \(todaySlots.count) cours terminés"
-            ) {
-                NavigationLink { TimetableView(mode: .student) } label: {
-                    Text("Semaine")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-
-            VStack(spacing: 0) {
-                ForEach(Array(todaySlots.enumerated()), id: \.element.id) { index, slot in
-                    NavigationLink { TimetableView(mode: .student) } label: {
-                        timelineRow(
-                            slot: slot,
-                            status: slotStatus(slot, nowMin: nowMin),
-                            isFirst: index == 0,
-                            isLast: index == todaySlots.count - 1
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(16)
-        .modifier(HomeCardStyle())
-    }
-
-    private func timelineRow(slot: TimetableSlot, status: StudentSlotStatus, isFirst: Bool, isLast: Bool) -> some View {
-        let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
-        let isDone = status == .done
-        let isLive = status == .current
-
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(String(slot.startTime.prefix(5)))
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(isDone ? EduTheme.muted : EduTheme.ink)
-                Text(String(slot.endTime.prefix(5)))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(EduTheme.muted)
-            }
-            .frame(width: 42, alignment: .trailing)
-
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(isFirst ? .clear : EduTheme.ink.opacity(0.1))
-                    .frame(width: 2)
-                timelineDot(status: status, color: swatch.border)
-                Rectangle()
-                    .fill(isLast ? .clear : EduTheme.ink.opacity(0.1))
-                    .frame(width: 2)
-            }
-            .frame(width: 20)
-
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(slot.matieres?.name ?? "Cours")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isDone ? EduTheme.muted : EduTheme.ink)
-                        .strikethrough(isDone, color: EduTheme.muted.opacity(0.6))
-                        .lineLimit(1)
-                    Text([slot.teacherName, formatRoom(slot.room)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                if isLive {
-                    Text("Maintenant")
-                        .font(.caption2.weight(.heavy))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(EduTheme.fasoRed, in: Capsule())
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isLive ? swatch.fill.opacity(0.7) : Self.softFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isLive ? swatch.border.opacity(0.5) : .clear, lineWidth: 1.5)
-            )
-            .padding(.vertical, 4)
-            .opacity(isDone ? 0.75 : 1)
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    private func timelineDot(status: StudentSlotStatus, color: Color) -> some View {
-        ZStack {
-            switch status {
-            case .done:
-                Circle().fill(EduTheme.fasoGreen)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .heavy))
-                    .foregroundStyle(.white)
-            case .current:
-                Circle().fill(EduTheme.fasoRed.opacity(0.2)).frame(width: 20, height: 20)
-                Circle().fill(EduTheme.fasoRed).frame(width: 10, height: 10)
-            case .upcoming:
-                Circle().fill(.white)
-                Circle().stroke(color, lineWidth: 2.5)
-            }
-        }
-        .frame(width: status == .current ? 20 : 16, height: status == .current ? 20 : 16)
-        .accessibilityHidden(true)
-    }
-
-    private func slotStatus(_ slot: TimetableSlot, nowMin: Int) -> StudentSlotStatus {
-        if Self.minutes(slot.endTime) <= nowMin { return .done }
-        if Self.minutes(slot.startTime) <= nowMin { return .current }
-        return .upcoming
-    }
-
-    // MARK: - À préparer
-
-    private var workSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(
-                title: "À préparer",
-                subtitle: workItems.isEmpty ? "Interrogations, examens et compositions" : "\(workItems.count) à venir"
-            ) {
-                NavigationLink {
-                    EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
-                } label: {
-                    Text("Tout voir")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-
-            if workItems.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(EduTheme.fasoGreen)
-                        .accessibilityHidden(true)
-                    Text("Rien à rendre pour le moment.")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(EduTheme.ink)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(workItems.prefix(5)) { item in
-                        NavigationLink {
-                            switch item.kind {
-                            case .quiz:
-                                EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
-                            case .exam:
-                                EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
-                            case .composition:
-                                StudentCompositionsView()
-                            }
-                        } label: {
-                            workRow(item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .modifier(HomeCardStyle())
-    }
-
-    private func workRow(_ item: WorkItem) -> some View {
-        let badge: (title: String, color: Color) = {
-            switch item.kind {
-            case .quiz: return ("Interro", Self.sky)
-            case .exam: return ("Examen", EduTheme.navy)
-            case .composition: return ("Compo", EduTheme.teal)
-            }
-        }()
-
-        return HStack(spacing: 12) {
-            dateBlock(item.day, color: badge.color)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(badge.title)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(badge.color)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(badge.color.opacity(0.12), in: Capsule())
-                Text(item.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                if let subject = item.subject, !subject.isEmpty, subject != item.title {
-                    Text(subject)
-                        .font(.caption)
-                        .foregroundStyle(EduTheme.muted)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 6) {
-                if let day = item.day, let relative = relativeDay(day) {
-                    Text(relative.text)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(relative.urgent ? EduTheme.fasoRed : EduTheme.muted)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.muted.opacity(0.6))
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Self.softFill))
-        .accessibilityElement(children: .combine)
-    }
-
-    private func dateBlock(_ iso: String?, color: Color) -> some View {
-        let parts = iso?.split(separator: "-") ?? []
-        let dayNum = parts.count == 3 ? String(Int(parts[2]) ?? 0) : "—"
-        let month: String = {
-            guard parts.count == 3, let m = Int(parts[1]), (1...12).contains(m) else { return "" }
-            return Self.monthAbbr[m - 1]
-        }()
-        return VStack(spacing: 0) {
-            Text(month)
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(0.5)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
-                .background(color)
-            Text(dayNum)
-                .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(EduTheme.ink)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.white)
-        }
-        .frame(width: 46, height: 50)
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(color.opacity(0.3), lineWidth: 1)
-        )
-        .accessibilityHidden(true)
-    }
-
-    // MARK: - Résultats
-
-    private var resultsSection: some View {
-        let trimesters = annual?.trimesters ?? []
-
-        return VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(
-                title: "Mes résultats",
-                subtitle: gradeCount == 0 ? "Aucune note publiée" : "\(gradeCount) note\(gradeCount > 1 ? "s" : "") publiée\(gradeCount > 1 ? "s" : "")"
-            ) {
-                NavigationLink {
-                    BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin")
-                } label: {
-                    Text("Bulletin")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(EduTheme.teal)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
-
-            HStack(spacing: 8) {
-                ForEach(0..<3, id: \.self) { i in
-                    averageChip(
-                        label: "T\(i + 1)",
-                        value: i < trimesters.count ? trimesters[i].generalAverage : nil,
-                        footer: "/ 20",
-                        highlight: false
-                    )
-                }
-                averageChip(
-                    label: "ANNÉE",
-                    value: currentAverage,
-                    footer: passLabel,
-                    highlight: true
-                )
-            }
-
-            if recentGrades.isEmpty {
-                HomePanelEmpty(message: "Les notes publiées apparaîtront ici.")
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(recentGrades.prefix(4)) { grade in
-                        NavigationLink { StudentGradesView() } label: {
-                            gradeRow(grade)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .modifier(HomeCardStyle())
-    }
-
-    private var passLabel: String {
-        if let passed = annual?.passed { return passed ? "Admis" : "Ajourné" }
-        if let avg = currentAverage { return avg >= 10 ? "Admis" : "Ajourné" }
-        return "/ 20"
-    }
-
-    private func averageChip(label: String, value: Double?, footer: String, highlight: Bool) -> some View {
-        let tone = Self.tone(value)
-        return VStack(spacing: 4) {
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .tracking(0.4)
-                .foregroundStyle(highlight ? EduTheme.teal : EduTheme.muted)
-            Text(value.map { Self.format($0, digits: 1) } ?? "—")
-                .font(.title3.weight(.bold).monospacedDigit())
-                .foregroundStyle(value == nil ? EduTheme.muted : tone)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-            Text(footer)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(highlight && value != nil ? tone : EduTheme.muted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(highlight ? EduTheme.brand50 : Self.softFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(highlight ? EduTheme.teal.opacity(0.2) : Color.clear, lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func gradeRow(_ grade: GradeRow) -> some View {
-        let on20 = scoreOn20(grade)
-        let swatch = SubjectPalette.swatch(for: grade.matieres?.name)
-        let tint = grade.isAbsent == true ? Color.orange : Self.tone(on20)
-
-        return HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(swatch.border)
-                .frame(width: 4, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(grade.matieres?.name ?? "Matière")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EduTheme.ink)
-                    .lineLimit(1)
-                Text([grade.evaluations?.title, grade.periodLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(EduTheme.muted)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if grade.isAbsent == true {
-                Text("Absent")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(tint.opacity(0.12), in: Capsule())
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(on20.map { Self.format($0, digits: 1) } ?? "—")
-                        .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(tint)
-                    Text("/20")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(EduTheme.muted)
-                }
-            }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Self.softFill))
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Quick actions
-
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Accès rapide", subtitle: nil) { EmptyView() }
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                actionLink("Mes notes", systemImage: "chart.bar.fill", color: EduTheme.navy) { StudentGradesView() }
-                actionLink("Interrogations", systemImage: "questionmark.circle.fill", color: Self.sky) {
-                    EvaluationsBrowser(studentId: auth.userId, type: "interrogation", title: "Interrogations")
-                }
-                actionLink("Examens", systemImage: "doc.text.fill", color: Self.sky) {
-                    EvaluationsBrowser(studentId: auth.userId, type: "examen", confirmedOnly: true, title: "Examens")
-                }
-                actionLink("Compositions", systemImage: "doc.on.doc.fill", color: EduTheme.teal) { StudentCompositionsView() }
-                actionLink("Présences", systemImage: "checkmark.circle.fill", color: EduTheme.fasoGreen) { StudentAttendanceView() }
-                actionLink("Bulletin", systemImage: "chart.bar.doc.horizontal.fill", color: Color.orange) {
-                    BulletinBoard(studentId: auth.userId ?? "", title: "Mon bulletin")
-                }
-                actionLink("Emploi du temps", systemImage: "calendar", color: EduTheme.navy) { TimetableView(mode: .student) }
-                actionLink("Mes profs", systemImage: "person.2.fill", color: EduTheme.teal) { MyTeachersView() }
-                actionLink("Messages", systemImage: "envelope.fill", color: EduTheme.fasoGreen, badge: unreadMessages) { MessagesView() }
-            }
-        }
-    }
-
-    private func actionLink<Destination: View>(
-        _ title: String,
-        systemImage: String,
-        color: Color,
-        badge: Int = 0,
-        @ViewBuilder destination: () -> Destination
-    ) -> some View {
-        NavigationLink(destination: destination) {
-            VStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(
-                        LinearGradient(
-                            colors: [color.opacity(0.85), color],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    )
-                    .shadow(color: color.opacity(0.3), radius: 6, y: 3)
-                    .overlay(alignment: .topTrailing) {
-                        if badge > 0 {
-                            Text(badge > 99 ? "99+" : "\(badge)")
-                                .font(.caption2.weight(.heavy).monospacedDigit())
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .frame(minWidth: 20, minHeight: 20)
-                                .background(EduTheme.fasoRed, in: Capsule())
-                                .overlay(Capsule().stroke(.white, lineWidth: 2))
-                                .offset(x: 8, y: -8)
-                        }
-                    }
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EduTheme.ink)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity, minHeight: 104)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 4)
-            .modifier(HomeCardStyle(cornerRadius: 18))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(badge > 0 ? "\(title), \(badge) non lus" : title)
-            .accessibilityAddTraits(.isButton)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Section header
-
-    private func sectionHeader<Trailing: View>(
-        title: String,
-        subtitle: String?,
-        @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(EduTheme.ink)
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(EduTheme.muted)
-                }
-            }
-            Spacer()
-            trailing()
-        }
+        .background(Self.amber.opacity(0.08), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(Self.amber.opacity(0.35), lineWidth: 1))
     }
 
     // MARK: - Helpers
 
-    private static let monthAbbr = ["JANV", "FÉVR", "MARS", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEPT", "OCT", "NOV", "DÉC"]
-
-    private static func todayCaption(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "EEEE d MMMM"
-        return formatter.string(from: date)
+    private static func passDecision(_ a: AnnualAverageResult?) -> String {
+        guard let a, a.annualAverage != nil, let passed = a.passed else { return "—" }
+        if a.complete != true { return passed ? "En cours (≥ 10)" : "En cours (< 10)" }
+        return passed ? "Admis" : "Ajourné"
     }
 
-    private static func tone(_ value: Double?) -> Color {
-        guard let value else { return EduTheme.muted }
-        if value >= 12 { return EduTheme.fasoGreen }
-        if value >= 10 { return sky }
-        return EduTheme.fasoRed
+    private static let weekdays = [1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi", 7: "Dimanche"]
+    private static func weekdayName(_ dow: Int) -> String { weekdays[dow] ?? "Aujourd’hui" }
+
+    private static func todayCaption(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        return f.string(from: date)
+    }
+
+    private static func parseDay(_ iso: String) -> Date? {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: String(iso.prefix(10)))
+    }
+
+    private static func dayOffset(_ days: Int) -> String {
+        EduDates.day(Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date())
+    }
+
+    private static func longDate(_ iso: String) -> String {
+        guard let d = parseDay(iso) else { return iso }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM"
+        return f.string(from: d)
+    }
+
+    private static func shortDate(_ iso: String) -> String {
+        guard let d = parseDay(iso) else { return iso }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "d MMM"
+        return f.string(from: d)
+    }
+
+    private static func dayNumber(_ iso: String) -> String {
+        guard let d = parseDay(iso) else { return "—" }
+        return "\(Calendar.current.component(.day, from: d))"
+    }
+
+    private static let months = ["JANV", "FÉVR", "MARS", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEPT", "OCT", "NOV", "DÉC"]
+    private static func monthAbbr(_ iso: String) -> String {
+        guard let d = parseDay(iso) else { return "" }
+        return months[Calendar.current.component(.month, from: d) - 1]
+    }
+
+    private static func relativeDay(_ iso: String) -> (text: String, urgent: Bool)? {
+        guard let date = parseDay(iso), let today = parseDay(EduDates.day()) else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: today, to: date).day ?? 0
+        switch days {
+        case ..<0: return ("En cours", false)
+        case 0: return ("Aujourd’hui", true)
+        case 1: return ("Demain", true)
+        default: return ("Dans \(days) j", days <= 3)
+        }
+    }
+
+    private static func relative(_ iso: String?) -> String {
+        guard let iso else { return "" }
+        let parsers: [ISO8601DateFormatter] = {
+            let a = ISO8601DateFormatter(); a.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let b = ISO8601DateFormatter(); b.formatOptions = [.withInternetDateTime]
+            return [a, b]
+        }()
+        guard let d = parsers.lazy.compactMap({ $0.date(from: iso) }).first else { return "" }
+        let r = RelativeDateTimeFormatter()
+        r.locale = Locale(identifier: "fr_FR")
+        r.unitsStyle = .short
+        return r.localizedString(for: d, relativeTo: Date())
+    }
+
+    private static func snippet(_ text: String?, _ max: Int) -> String {
+        let t = (text ?? "").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
+        return t.count > max ? String(t.prefix(max)) + "…" : t
     }
 
     private static func format(_ value: Double, digits: Int) -> String {
@@ -1056,42 +1207,31 @@ struct StudentHomeView: View {
         return nf.string(from: NSNumber(value: value)) ?? String(format: "%.\(digits)f", value)
     }
 
-    private func scoreOn20(_ grade: GradeRow) -> Double? {
+    private static func scoreOn20(_ grade: GradeRow) -> Double? {
         if grade.isAbsent == true { return nil }
         guard let score = grade.score, let max = grade.maxScore, max > 0 else { return nil }
-        return (score / max) * 20
+        return score / max * 20
     }
 
-    private func timeRange(_ slot: TimetableSlot) -> String {
+    /// Same gentle rule as the parent portal: only under 6/20 is flagged (amber).
+    private static func gradeColor(_ v: Double?) -> Color {
+        guard let v else { return EduTheme.subtle }
+        return v < 6 ? amber : EduTheme.teal
+    }
+
+    private static func averageColor(_ v: Double?) -> Color {
+        guard let v else { return EduTheme.subtle }
+        return v >= 10 ? EduTheme.teal : amber
+    }
+
+    private static func timeRange(_ slot: TimetableSlot) -> String {
         "\(String(slot.startTime.prefix(5)))–\(String(slot.endTime.prefix(5)))"
     }
 
-    private func formatRoom(_ room: String?) -> String? {
-        guard let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
-        if trimmed.lowercased().hasPrefix("salle") { return trimmed }
-        if trimmed.first?.isNumber == true { return "Salle \(trimmed)" }
-        return trimmed
-    }
-
-    private func eventDay(_ row: EvaluationRow) -> String? {
-        let raw = row.evalDate ?? row.dueDate
-        guard let raw, !raw.isEmpty else { return nil }
-        return String(raw.prefix(10))
-    }
-
-    private func relativeDay(_ iso: String) -> (text: String, urgent: Bool)? {
-        let df = DateFormatter()
-        df.calendar = Calendar(identifier: .gregorian)
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyy-MM-dd"
-        guard let date = df.date(from: iso), let todayDate = df.date(from: today) else { return nil }
-        let days = Calendar.current.dateComponents([.day], from: todayDate, to: date).day ?? 0
-        switch days {
-        case ..<0: return ("En cours", false)
-        case 0: return ("Aujourd’hui", true)
-        case 1: return ("Demain", true)
-        default: return ("Dans \(days) j", days <= 3)
-        }
+    private static func formatRoom(_ room: String?) -> String? {
+        guard let t = room?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        if t.lowercased().hasPrefix("salle") { return t }
+        return "Salle \(t)"
     }
 
     private static func minutes(_ hhmm: String) -> Int {
@@ -1129,62 +1269,71 @@ struct StudentHomeView: View {
                 className = enrollment.className
             }
 
-            async let gradesTask = api.fetchGrades(studentId: sid, limit: 120)
+            async let gradesTask = api.fetchGrades(studentId: sid, limit: 300)
             async let attendanceCountsTask = api.fetchAttendanceCounts(studentId: sid)
             async let inboxTask = api.fetchInbox(userId: sid, kind: .all, limit: 80)
 
             let grades = try await gradesTask
-            recentGrades = Array(grades.prefix(8))
-            gradeCount = grades.count
+            if Task.isCancelled { return }
+            recentGrades = Array(grades.prefix(4))
+            let gradedEvalIds = Set(grades.compactMap(\.evaluationId))
 
             if let classId {
-                annual = await api.fetchAnnualAverage(studentId: sid, classSectionId: classId)
-                average = annual?.annualAverage
-                let efDay = EduDates.weekday()
+                async let annualTask = api.fetchAnnualAverage(studentId: sid, classSectionId: classId)
                 async let slotsTask = api.fetchTimetable(classSectionId: classId)
                 async let examsTask = api.fetchEvaluations(classId: classId, type: "examen", confirmedOnly: true)
-                async let quizzesTask = api.fetchEvaluations(classId: classId, type: "interrogation")
+                async let devoirsTask = api.fetchEvaluations(classId: classId, type: "devoir")
                 async let compositionsTask = api.fetchCompositionSessions(classSectionId: classId)
+                async let cahierTask = api.fetchCahier(classId: classId)
 
-                let slots = try await slotsTask
-                todaySlots = slots.filter { $0.dayOfWeek == efDay }.sorted { $0.startTime < $1.startTime }
+                annual = await annualTask
+                let allCompositions = (try? await compositionsTask) ?? []
+                compositions = allCompositions
+                weekSlots = CompositionSchedule.week(slots: (try? await slotsTask) ?? [], sessions: allCompositions, weekOffset: 0)
 
-                let exams = (try? await examsTask) ?? []
-                upcomingExams = exams
-                    .filter { ($0.evalDate ?? $0.dueDate).map { $0 >= today } ?? true }
-                    .prefix(5)
-                    .map { $0 }
+                func day(_ e: EvaluationRow) -> String? { (e.evalDate ?? e.dueDate).map { String($0.prefix(10)) } }
 
-                let quizzes = (try? await quizzesTask) ?? []
-                pendingQuizzes = quizzes
-                    .filter { ($0.evalDate ?? $0.dueDate).map { $0 >= today } ?? true }
-                    .prefix(5)
-                    .map { $0 }
+                upcomingExams = Array(((try? await examsTask) ?? [])
+                    .filter { !gradedEvalIds.contains($0.id) && (day($0).map { $0 >= today } ?? true) }
+                    .sorted { (day($0) ?? "9999") < (day($1) ?? "9999") }
+                    .prefix(4))
 
-                let compositions = (try? await compositionsTask) ?? []
-                upcomingCompositions = compositions
+                let cahier = (try? await cahierTask) ?? []
+                let devoirs = ((try? await devoirsTask) ?? [])
+                    .filter { !gradedEvalIds.contains($0.id) && (day($0).map { $0 >= today } ?? true) }
+                    .map { HomeworkItem(id: "dv-\($0.id)", title: $0.title?.isEmpty == false ? $0.title! : ($0.matieres?.name ?? "Exercice"), subject: $0.matieres?.name, due: day($0)) }
+                let lessonHomework = cahier
+                    .filter { ($0.homework?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) }
+                    .filter { ($0.homeworkDue.map { String($0.prefix(10)) } ?? "9999") >= today }
+                    .map { HomeworkItem(id: "ch-\($0.id)", title: $0.homework ?? "", subject: $0.matieres?.name, due: $0.homeworkDue.map { String($0.prefix(10)) }) }
+                pendingHomework = (devoirs + lessonHomework).sorted { ($0.due ?? "9999") < ($1.due ?? "9999") }
+
+
+                upcomingCompositions = Array(allCompositions
                     .filter { ($0.endsOn ?? "") >= today }
-                    .prefix(3)
-                    .map { $0 }
+                    .sorted { ($0.startsOn ?? "") < ($1.startsOn ?? "") }
+                    .prefix(4))
             } else {
                 annual = nil
-                average = nil
-                todaySlots = []
+                weekSlots = []
                 upcomingExams = []
-                pendingQuizzes = []
+                pendingHomework = []
                 upcomingCompositions = []
+                compositions = []
             }
 
             if let counts = try? await attendanceCountsTask {
                 absencesCount = counts.absent ?? 0
-                lateCount = counts.late ?? 0
                 attendanceRate = counts.ratePercent
             }
 
             let inbox = try await inboxTask
-            unreadMessages = inbox.filter { $0.readAt == nil && ($0.isAnnouncement != true) }.count
-            unreadAnnouncements = inbox.filter { $0.readAt == nil && ($0.isAnnouncement == true) }.count
+            latestMessages = Array(inbox.filter { $0.isAnnouncement != true }.prefix(3))
+            latestAnnouncements = Array(inbox.filter { $0.isAnnouncement == true }.prefix(3))
+            unreadMessages = inbox.filter { $0.readAt == nil && $0.isAnnouncement != true }.count
+            unreadAnnouncements = inbox.filter { $0.readAt == nil && $0.isAnnouncement == true }.count
         } catch {
+            if Task.isCancelled || error.isCancellation { return }
             failed = true
         }
         loadFailed = failed
@@ -1192,5 +1341,3 @@ struct StudentHomeView: View {
         auth.markPortalReady()
     }
 }
-
-private enum StudentSlotStatus { case done, current, upcoming }
