@@ -2137,7 +2137,38 @@ struct CahierFeedView: View {
                 message: "Touchez ce bouton à tout moment pour relancer la visite."
             ),
         ]
-        return showsHomework ? all : all.filter { $0.id != "cahier.homework" }
+        if showsHomework { return all }
+        // Student: "tu", no child switcher, homework lives in Exercices de maison.
+        return [
+            CoachMarkStep(
+                id: "cahier.subjects", icon: "line.3.horizontal.decrease.circle",
+                title: "Filtrer par matière",
+                message: "Touche une matière pour ne voir que ses cours. Le chiffre indique combien de cours ont été notés."
+            ),
+            CoachMarkStep(
+                id: "cahier.exercises", icon: "list.clipboard",
+                title: "Le travail à faire",
+                message: "Les exercices donnés par tes professeurs sont dans Exercices de maison. Touche le bouton pour y aller."
+            ),
+            CoachMarkStep(
+                id: "cahier.day", icon: "calendar",
+                title: "Jour par jour",
+                message: "Chaque jour, ce que tes professeurs ont fait en classe, du plus récent au plus ancien (\(Self.windowDays) derniers jours). Pratique pour rattraper un cours manqué."
+            ),
+            CoachMarkStep(
+                id: "cahier.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touche ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    /// Lessons per subject (respecting the student "class content only" rule), for the chip counts.
+    private func lessonCount(_ subjectId: String) -> Int {
+        entries.filter { e in
+            e.subjectId == subjectId
+                && (showsHomework || !(e.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }.count
     }
 
     private var subjects: [(id: String, name: String)] {
@@ -2180,6 +2211,17 @@ struct CahierFeedView: View {
                                 } else {
                                     if subjects.count > 1 {
                                         subjectChips.coachMarkTarget("cahier.subjects")
+                                    }
+                                    if !showsHomework {
+                                        exercisesPointer.coachMarkTarget("cahier.exercises")
+                                    }
+                                    if days.isEmpty {
+                                        Text("Rien pour ce filtre.")
+                                            .font(.subheadline)
+                                            .foregroundStyle(EduTheme.muted)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 24)
+                                            .background(cardBackground)
                                     }
                                     ForEach(Array(days.enumerated()), id: \.element.day) { index, group in
                                         if index == 0 {
@@ -2225,7 +2267,9 @@ struct CahierFeedView: View {
                     .tracking(-0.3)
                     .foregroundStyle(EduTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Text((className.map { "Classe \($0) · " } ?? "") + "cours et travail à faire")
+                Text((className.map { "Classe \($0) · " } ?? "") + (showsHomework
+                    ? "cours et travail à faire"
+                    : "ce qui a été fait en classe, sur les \(Self.windowDays) derniers jours"))
                     .font(.subheadline)
                     .foregroundStyle(EduTheme.muted)
             }
@@ -2240,7 +2284,10 @@ struct CahierFeedView: View {
             HStack(spacing: 8) {
                 chip("Toutes les matières", selected: subject == nil) { subject = nil }
                 ForEach(subjects, id: \.id) { s in
-                    chip(s.name, selected: subject == s.id) { subject = s.id }
+                    let n = lessonCount(s.id)
+                    if n > 0 {
+                        chip("\(s.name)  \(n)", selected: subject == s.id) { subject = subject == s.id ? nil : s.id }
+                    }
                 }
             }
             .padding(.vertical, 1)
@@ -2316,6 +2363,10 @@ struct CahierFeedView: View {
                     }
                 }
                 if let content = e.content, !content.isEmpty {
+                    Text("FAIT EN CLASSE")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.5)
+                        .foregroundStyle(EduTheme.subtle)
                     Text(content)
                         .font(.subheadline)
                         .foregroundStyle(EduTheme.ink.opacity(0.85))
@@ -2368,6 +2419,37 @@ struct CahierFeedView: View {
         )
     }
 
+    /// Student: the homework is in Exercices de maison, not here.
+    private var exercisesPointer: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "list.clipboard")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(EduTheme.teal)
+                .frame(width: 34, height: 34)
+                .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Le travail à faire")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                Text("Il est dans Exercices de maison.")
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+            }
+            Spacer(minLength: 8)
+            NavigationLink { ExercisesBoardView() } label: {
+                Text("Ouvrir")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 36)
+                    .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(cardBackground)
+    }
+
     private var emptyCard: some View {
         VStack(spacing: 8) {
             Image(systemName: "book.closed")
@@ -2376,7 +2458,7 @@ struct CahierFeedView: View {
             Text("Cahier vide")
                 .font(.headline)
                 .foregroundStyle(EduTheme.ink)
-            Text("Les professeurs n’ont rien écrit dans le cahier de textes ces \(Self.windowDays) derniers jours.")
+            Text("\(showsHomework ? "Les professeurs n’ont" : "Tes professeurs n’ont") rien écrit dans le cahier de textes ces \(Self.windowDays) derniers jours.")
                 .font(.caption)
                 .foregroundStyle(EduTheme.muted)
                 .multilineTextAlignment(.center)
