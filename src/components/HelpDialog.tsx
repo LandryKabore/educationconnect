@@ -23,7 +23,7 @@ const TIPS: Record<AppRole, { q: string; a: string }[]> = {
     { q: "Je ne vois pas mon enfant.", a: "Le lien parent–enfant est créé par l’école. Contactez l’administration, ou signalez-le ci-dessous." },
   ],
   teacher: [
-    { q: "Comment saisir des notes ?", a: "Menu « Devoirs & évaluations », choisissez la classe et la matière, créez l’évaluation puis « Noter »." },
+    { q: "Comment saisir des notes ?", a: "Menu « Évaluations & notes », choisissez la classe et la matière, créez l’évaluation puis « Noter »." },
     { q: "Je ne peux plus modifier une note.", a: "La période est probablement clôturée. Demandez à l’administration de la rouvrir." },
     { q: "Qui a changé une note ?", a: "Sur la page de l’évaluation, le bouton « Historique » montre chaque modification." },
   ],

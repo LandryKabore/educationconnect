@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Notes from "@/pages/enseignant/Notes";
 
 /**
- * /classes/:id/notes — teachers manage their evaluations on « Devoirs & évaluations »
+ * /classes/:id/notes — teachers manage their evaluations on « Évaluations & notes »
  * (popup to create / edit), so they are sent there on the same class and trimester.
  * School admins (and admins entering grades for a teacher) keep the class grades page.
  */

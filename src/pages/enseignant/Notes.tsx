@@ -622,11 +622,11 @@ export default function Notes() {
               ? "/devoirs"
               : `/classes/${id}`
         }
-        label={isProxy ? "Retour à la saisie enseignant" : fromDevoirs ? "Retour aux devoirs & évaluations" : "Retour à la classe"}
+        label={isProxy ? "Retour à la saisie enseignant" : fromDevoirs ? "Retour aux évaluations & notes" : "Retour à la classe"}
       />
 
       <PageBanner
-        title="Devoirs & évaluations"
+        title="Évaluations & notes"
         subtitle={
           isProxy && proxyName
             ? `Saisie pour ${proxyName}`

@@ -232,7 +232,7 @@ export default function MesDevoirsProf() {
     <div>
       {openedFromLink ? <BackLink to="/mes-classes" label="Mes classes" /> : null}
       <PageBanner
-        title="Devoirs & évaluations"
+        title="Évaluations & notes"
         subtitle="Interrogations, exercices de maison et examens de vos classes, avec les notes à saisir."
         stats={[
           { label: "Évaluations", value: String(totals.evals), hint: "dans vos classes" },

@@ -230,16 +230,16 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
       label: "Enseignement",
       items: [
         { to: "/mes-classes", label: "Mes classes", icon: <Users className="h-4 w-4" /> },
-        { to: "/mes-eleves", label: "Élèves", icon: <GraduationCap className="h-4 w-4" /> },
+        { to: "/mes-eleves", label: "Mes élèves", icon: <GraduationCap className="h-4 w-4" /> },
         { to: "/exercices-maison", label: "Exercices de maison", icon: <BookOpenCheck className="h-4 w-4" /> },
-        { to: "/devoirs", label: "Examens & évaluations", icon: <ClipboardList className="h-4 w-4" /> },
+        { to: "/devoirs", label: "Évaluations & notes", icon: <ClipboardList className="h-4 w-4" /> },
       ],
     },
     {
       label: "Planning",
       items: [
-        { to: "/mon-emploi-du-temps", label: "Mon emploi du temps", icon: <CalendarDays className="h-4 w-4" /> },
-        { to: "/presences", label: "Présences", icon: <CheckCircle2 className="h-4 w-4" /> },
+        { to: "/mon-emploi-du-temps", label: "Emploi du temps", icon: <CalendarDays className="h-4 w-4" /> },
+        { to: "/presences", label: "Appel", icon: <CheckCircle2 className="h-4 w-4" /> },
       ],
     },
     {

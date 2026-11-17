@@ -220,7 +220,7 @@ export default function SaisieEnseignant() {
                       className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800 hover:border-brand-300 hover:text-brand-800 dark:border-[var(--border)] dark:bg-[var(--surface-2)] dark:text-slate-100"
                     >
                       <ClipboardList className="h-4 w-4" />
-                      Devoirs & évaluations
+                      Évaluations & notes
                     </Link>
                   </div>
                 </Card>

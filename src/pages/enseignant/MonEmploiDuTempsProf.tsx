@@ -129,7 +129,7 @@ export default function MonEmploiDuTempsProf() {
   return (
     <div>
       <PageBanner
-        title="Mon emploi du temps"
+        title="Emploi du temps"
         subtitle="Vos cours du lundi au samedi, mis à jour en direct. Touchez un cours pour l’ouvrir."
         actions={
           <button

@@ -194,7 +194,7 @@ export default function MesPresencesProf() {
   return (
     <div>
       <PageBanner
-        title="Présences"
+        title="Appel"
         subtitle={`${isToday ? "Aujourd’hui, " : ""}${dayLabel(date).toLowerCase()} — un appel par cours de votre emploi du temps.`}
         stats={[
           { label: "Cours", value: String(lessons.length), hint: isToday ? "aujourd’hui" : "ce jour-là" },

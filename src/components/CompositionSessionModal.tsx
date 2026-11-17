@@ -315,7 +315,7 @@ export function CompositionSessionModal({
           Session de 2–3 jours : toutes les matières du programme sont
           listées. Cochez celles à inclure, puis renseignez date et horaire
           pour chaque épreuve. Les enseignants noteront ensuite dans
-          Devoirs & évaluations.
+          Évaluations & notes.
         </p>
 
         {classes && classes.length > 0 && onClassIdChange ? (
