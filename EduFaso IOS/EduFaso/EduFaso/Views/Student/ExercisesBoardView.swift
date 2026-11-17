@@ -84,6 +84,41 @@ struct ExercisesBoardView: View {
     }
 
     private var tourSteps: [CoachMarkStep] {
+        childName == nil ? studentTourSteps : parentTourSteps
+    }
+
+    /// Student: "tu", no child switcher.
+    private var studentTourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "ex.stats", icon: "chart.bar.fill",
+                title: "En un coup d’œil",
+                message: "Tes exercices à faire, ceux qui sont notés et ceux dont la date est passée."
+            ),
+            CoachMarkStep(
+                id: "ex.next", icon: "calendar.badge.clock",
+                title: "Prochain exercice",
+                message: "Le prochain travail à préparer, avec le nombre de jours qu’il te reste."
+            ),
+            CoachMarkStep(
+                id: "ex.tabs", icon: "line.3.horizontal.decrease.circle",
+                title: "Trier tes exercices",
+                message: "À faire, date passée ou notés. Touche une matière, en dessous, pour ne garder qu’elle."
+            ),
+            CoachMarkStep(
+                id: "ex.timeline", icon: "list.bullet",
+                title: "Jour par jour",
+                message: "Tes exercices rangés par date à rendre. « Donné en cours » : ton professeur l’a noté dans le cahier de textes. Touche « Voir tout » pour lire la consigne entière."
+            ),
+            CoachMarkStep(
+                id: "ex.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: "Touche ce bouton à tout moment pour relancer la visite."
+            ),
+        ]
+    }
+
+    private var parentTourSteps: [CoachMarkStep] {
         [
             CoachMarkStep(
                 id: "child.switcher", icon: "arrow.left.arrow.right",
@@ -133,7 +168,7 @@ struct ExercisesBoardView: View {
                             VStack(alignment: .leading, spacing: 20) {
                                 banner
                                 if notEnrolled {
-                                    emptyCard("Cet élève n’est pas encore inscrit dans une classe.")
+                                    emptyCard(childName == nil ? "Tu n’es pas encore inscrit dans une classe." : "Cet élève n’est pas encore inscrit dans une classe.")
                                 } else if items.isEmpty {
                                     emptyCard("Aucun exercice de maison pour le moment.")
                                 } else {
