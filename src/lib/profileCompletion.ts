@@ -93,5 +93,4 @@ export function getProfileFieldsToPrompt(
 export const GENDER_OPTIONS = [
   { value: "M", label: "Masculin" },
   { value: "F", label: "Féminin" },
-  { value: "other", label: "Autre" },
 ] as const;
