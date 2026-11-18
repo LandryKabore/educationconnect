@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, format, startOfWeek } from "date-fns";
-import { CalendarClock, ChevronRight, Download, MapPin } from "lucide-react";
+import { CalendarClock, ChevronRight, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
@@ -14,12 +14,15 @@ import type { TimetableSlot } from "@/lib/types";
 import { cn, personName } from "@/lib/utils";
 import { todayDow, useNow, useWeekLayout } from "@/lib/weekGrid";
 import { lessonPath } from "@/hooks/useTeacherLessons";
+import { compositionOn, useTeacherCompositions } from "@/hooks/useTeacherCompositions";
 import { EmptyState } from "@/components/ui";
 import { PageBanner } from "@/components/PageBanner";
 
 type SlotRow = TimetableSlot & {
   matieres: { name: string } | null;
   classes: { name: string } | null;
+  /** a paper of the class's compositions, shown instead of its lessons */
+  composition?: boolean;
 };
 
 const DAYS = [
@@ -33,12 +36,6 @@ const DAYS = [
 const HOUR_PX = 72;
 const hhmm = (t: string) => t.slice(0, 5);
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
-
-function roomLabel(room: string | null) {
-  const r = room?.trim();
-  if (!r) return null;
-  return /^salle/i.test(r) ? r : `Salle ${r}`;
-}
 
 /** Date of a weekday in the week shown (next week on Sundays). */
 function dateOfDay(now: Date, dow: number) {
@@ -86,11 +83,45 @@ export default function MonEmploiDuTempsProf() {
     },
   });
 
-  const { byDay, bounds } = useWeekLayout(slots);
-  const focus = useMemo(() => computeScheduleFocus(slots, now), [slots, now]);
+  // on a class's composition days its lessons give way to its papers
+  const composQ = useTeacherCompositions(slots.map((s) => s.class_section_id), slots.length > 0);
+  const weekSlots = useMemo((): SlotRow[] => {
+    const byClass = composQ.data;
+    if (!byClass || Object.keys(byClass).length === 0) return slots;
+    const names = new Map(slots.map((s) => [s.class_section_id, s.classes] as const));
+    const out: SlotRow[] = [];
+    for (const d of DAYS) {
+      const date = dateOfDay(now, d.n);
+      out.push(...slots.filter((s) => s.day_of_week === d.n && !compositionOn(s.class_section_id, date, byClass)));
+      for (const [classId, sessions] of Object.entries(byClass)) {
+        const session = sessions.find((x) => date >= x.starts_on && date <= x.ends_on);
+        if (!session) continue;
+        for (const p of session.papers) {
+          if (p.eval_date?.slice(0, 10) !== date || !p.start_time || !p.end_time) continue;
+          out.push({
+            ...(slots.find((s) => s.class_section_id === classId) as SlotRow),
+            id: `${p.id}-${classId}`,
+            day_of_week: d.n,
+            start_time: p.start_time,
+            end_time: p.end_time,
+            room: null,
+            class_section_id: classId,
+            matieres: { name: p.subjectName },
+            classes: names.get(classId) ?? null,
+            composition: true,
+          });
+        }
+      }
+    }
+    return out;
+  }, [slots, composQ.data, now]);
+  const lessonSlots = useMemo(() => weekSlots.filter((s) => !s.composition), [weekSlots]);
+
+  const { byDay, bounds } = useWeekLayout(weekSlots);
+  const focus = useMemo(() => computeScheduleFocus(lessonSlots, now), [lessonSlots, now]);
   const weeklyMinutes = slots.reduce((n, s) => n + timeToMinutes(s.end_time) - timeToMinutes(s.start_time), 0);
   const classCount = new Set(slots.map((s) => s.class_section_id)).size;
-  const todayCount = byDay.get(today)?.length ?? 0;
+  const todayCount = lessonSlots.filter((s) => s.day_of_week === today).length;
 
   const handleDownload = () => {
     if (slots.length === 0) {
@@ -109,6 +140,7 @@ export default function MonEmploiDuTempsProf() {
           start_time: s.start_time,
           end_time: s.end_time,
           subjectName: s.matieres?.name ?? "Matière",
+          colorKey: s.classes?.name ?? null,
           teacherName: s.classes?.name ?? null,
           room: s.room,
         })),
@@ -173,7 +205,6 @@ export default function MonEmploiDuTempsProf() {
               <p className="mt-2 truncate text-xl font-bold">{focus.slot.classes?.name ?? "Classe"}</p>
               <p className="text-sm text-slate-500">
                 {focus.slot.matieres?.name ?? "Cours"} · {hhmm(focus.slot.start_time)} – {hhmm(focus.slot.end_time)}
-                {roomLabel(focus.slot.room) ? ` · ${roomLabel(focus.slot.room)}` : ""}
               </p>
               <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 dark:text-brand-300">
                 Ouvrir le cours <ChevronRight className="h-4 w-4" />
@@ -326,8 +357,24 @@ function LessonPill({
   past: boolean;
 }) {
   const swatch = subjectSwatch(slot.classes?.name);
-  const room = roomLabel(slot.room);
   const time = `${hhmm(slot.start_time)} – ${hhmm(slot.end_time)}`;
+  if (slot.composition) {
+    return (
+      <div
+        className={cn(
+          "absolute right-1 left-1 z-[3] overflow-hidden rounded-md border-2 border-amber-500 bg-amber-50 px-1.5 py-1 shadow-sm dark:bg-amber-500/10",
+          past && "opacity-55",
+          live && "z-10 ring-2 ring-emerald-500 ring-offset-1",
+        )}
+        style={{ top: top + 2, height: Math.max(height - 4, 24) }}
+        title={[slot.classes?.name, "Composition", slot.matieres?.name, time].filter(Boolean).join(" · ")}
+      >
+        <p className="edt-slot-title truncate text-xs font-bold leading-snug text-slate-900">{slot.classes?.name ?? "Classe"}</p>
+        <p className="edt-slot-body truncate text-[10px] font-medium leading-tight text-slate-700 tabular-nums">{time}</p>
+        <p className="edt-slot-body truncate text-[10px] font-bold uppercase leading-tight text-amber-800">Composition · {slot.matieres?.name ?? "Épreuve"}</p>
+      </div>
+    );
+  }
   return (
     <Link
       to={to}
@@ -338,19 +385,13 @@ function LessonPill({
         live && "z-10 ring-2 ring-emerald-500 ring-offset-1",
       )}
       style={{ top: top + 2, height: Math.max(height - 4, 24) }}
-      title={[slot.classes?.name, slot.matieres?.name, time, room].filter(Boolean).join(" · ")}
+      title={[slot.classes?.name, slot.matieres?.name, time].filter(Boolean).join(" · ")}
     >
       <p className="edt-slot-title truncate text-xs font-bold leading-snug text-slate-900">
         {slot.classes?.name ?? "Classe"}
       </p>
       <p className="edt-slot-body truncate text-[10px] font-medium leading-tight text-slate-700 tabular-nums">{time}</p>
       <p className="edt-slot-body truncate text-[10px] leading-tight text-slate-700">{slot.matieres?.name ?? "Cours"}</p>
-      {room ? (
-        <p className="edt-slot-muted flex items-center gap-0.5 truncate text-[10px] leading-tight text-slate-600">
-          <MapPin className="h-2.5 w-2.5 shrink-0" />
-          {room}
-        </p>
-      ) : null}
     </Link>
   );
 }

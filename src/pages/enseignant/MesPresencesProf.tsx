@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNow } from "@/lib/weekGrid";
 import { iso, lessonHours, useTeacherLessons, useTeacherSlots, type JobState } from "@/hooks/useTeacherLessons";
 import { timeToMinutes } from "@/lib/timetableConflicts";
+import { compositionOn } from "@/hooks/useTeacherCompositions";
 import { PageBanner } from "@/components/PageBanner";
 import { EmptyState } from "@/components/ui";
 
@@ -82,7 +83,7 @@ export default function MesPresencesProf() {
 
   const slotsQ = useTeacherSlots();
   const slots = useMemo(() => slotsQ.data ?? [], [slotsQ.data]);
-  const { lateLessons } = useTeacherLessons(now);
+  const { lateLessons, compositions } = useTeacherLessons(now);
 
   // every class the teacher teaches (also those not in the timetable)
   const { data: classes = [] } = useQuery({
@@ -110,8 +111,11 @@ export default function MesPresencesProf() {
   const daySlots = useMemo(() => {
     const dow = new Date(`${date}T12:00:00`).getDay();
     if (dow === 0) return [];
-    return slots.filter((s) => s.day_of_week === dow).sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [slots, date]);
+    // a class sitting its compositions that day has papers, not lessons
+    return slots
+      .filter((s) => s.day_of_week === dow && !compositionOn(s.class_section_id, date, compositions))
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [slots, date, compositions]);
 
   const classIds = [...new Set(daySlots.map((s) => s.class_section_id))].sort();
   const subjectIds = [...new Set(daySlots.map((s) => s.subject_id))].sort();
@@ -183,10 +187,10 @@ export default function MesPresencesProf() {
   const nextLessonDay = useMemo(() => {
     for (let i = 1; i <= 7; i++) {
       const d = addDays(new Date(`${date}T12:00:00`), i);
-      if (d.getDay() !== 0 && slots.some((s) => s.day_of_week === d.getDay())) return iso(d);
+      if (d.getDay() !== 0 && slots.some((s) => s.day_of_week === d.getDay() && !compositionOn(s.class_section_id, iso(d), compositions))) return iso(d);
     }
     return null;
-  }, [slots, date]);
+  }, [slots, date, compositions]);
 
   const isToday = date === today;
   const loading = slotsQ.isLoading || dayQ.isLoading;
@@ -246,7 +250,7 @@ export default function MesPresencesProf() {
               <h2 className="flex items-center gap-2 border-b border-amber-200 px-4 py-3 text-sm font-bold text-amber-900 dark:border-amber-500/30 dark:text-amber-200">
                 <AlertTriangle className="h-4 w-4" />
                 {lateRollCalls.length} appel{lateRollCalls.length > 1 ? "s" : ""} en retard
-                <span className="font-normal text-amber-800/80 dark:text-amber-200/70">· 7 derniers jours</span>
+                <span className="font-normal text-amber-800/80 dark:text-amber-200/70">· jours précédents</span>
               </h2>
               <ul className="divide-y divide-amber-200/70 dark:divide-amber-500/20">
                 {lateRollCalls.slice(0, 6).map((l) => (
@@ -270,7 +274,7 @@ export default function MesPresencesProf() {
                   to="/a-faire"
                   className="block border-t border-amber-200 px-4 py-2.5 text-center text-sm font-semibold text-amber-900 hover:bg-amber-100/60 dark:border-amber-500/30 dark:text-amber-200 dark:hover:bg-amber-500/10"
                 >
-                  Voir les {lateRollCalls.length} appels dans « À faire »
+                  Voir tous les appels dans « À faire »
                 </Link>
               ) : null}
             </section>

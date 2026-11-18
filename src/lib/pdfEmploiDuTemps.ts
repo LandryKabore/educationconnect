@@ -14,6 +14,8 @@ export type EdtPdfSlot = {
   start_time: string;
   end_time: string;
   subjectName: string;
+  /** Colour of the box (defaults to the subject); teachers colour by class. */
+  colorKey?: string | null;
   teacherName?: string | null;
   room?: string | null;
 };
@@ -226,7 +228,7 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     const height = Math.max(5.5, scale.minuteToY(end) - scale.minuteToY(start) - 0.6);
     const x = gridLeft + timeColW + dayIdx * dayColW + padX;
     const w = dayColW - padX * 2;
-    const palette = subjectSwatch(slot.subjectName);
+    const palette = subjectSwatch(slot.colorKey ?? slot.subjectName);
 
     doc.setFillColor(palette.fill[0], palette.fill[1], palette.fill[2]);
     doc.setDrawColor(palette.border[0], palette.border[1], palette.border[2]);

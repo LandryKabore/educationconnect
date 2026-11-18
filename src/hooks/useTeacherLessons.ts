@@ -4,6 +4,7 @@ import { addDays, format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { timeToMinutes } from "@/lib/timetableConflicts";
+import { compositionOn, useTeacherCompositions } from "@/hooks/useTeacherCompositions";
 
 /**
  * The teacher's day is made of LESSONS: one timetable slot (class + subject + hours) on one date.
@@ -12,6 +13,7 @@ import { timeToMinutes } from "@/lib/timetableConflicts";
  *   2. the cahier de textes (an entry for that slot and date)
  * A lesson is complete when both are done. Jobs not done once the lesson is over are LATE;
  * late jobs are kept for the last LATE_DAYS days so the teacher can catch up.
+ * On a class's composition days its lessons are suspended: they are not listed at all.
  */
 
 export const LATE_DAYS = 7;
@@ -116,6 +118,8 @@ export function useTeacherLessons(now: Date, enabled = true) {
   const today = iso(now);
   const from = iso(addDays(now, -LATE_DAYS));
   const classIds = [...new Set(slots.map((s) => s.class_section_id))].sort();
+  const composQ = useTeacherCompositions(classIds, enabled && slotsQ.isSuccess);
+  const compositions = composQ.data;
 
   const statusQ = useQuery({
     queryKey: ["teacher-lessons", user?.id, from, today, classIds.join(",")],
@@ -179,6 +183,7 @@ export function useTeacherLessons(now: Date, enabled = true) {
       if (dow === 0) continue;
       const date = iso(d);
       for (const s of slots.filter((x) => x.day_of_week === dow)) {
+        if (compositionOn(s.class_section_id, date, compositions)) continue;
         const timing: LessonTiming =
           date < today
             ? "over"
@@ -221,7 +226,7 @@ export function useTeacherLessons(now: Date, enabled = true) {
       }
     }
     return out;
-  }, [statusQ.data, slots, now, today]);
+  }, [statusQ.data, slots, now, today, compositions]);
 
   const todayLessons = lessons.filter((l) => l.date === today).sort((a, b) => a.start.localeCompare(b.start));
   const lateLessons = lessons
@@ -235,17 +240,19 @@ export function useTeacherLessons(now: Date, enabled = true) {
       const d = addDays(now, i);
       const dow = dayNumber(d);
       if (dow === 0) continue;
-      const daySlots = slots.filter((s) => s.day_of_week === dow).sort((a, b) => a.start_time.localeCompare(b.start_time));
-      if (daySlots.length) return { date: iso(d), first: daySlots[0]!, count: daySlots.length };
+      const date = iso(d);
+      const daySlots = slots.filter((s) => s.day_of_week === dow && !compositionOn(s.class_section_id, date, compositions)).sort((a, b) => a.start_time.localeCompare(b.start_time));
+      if (daySlots.length) return { date, first: daySlots[0]!, count: daySlots.length };
     }
     return null;
-  }, [slots, now]);
+  }, [slots, now, compositions]);
 
   return {
     isLoading: slotsQ.isLoading || statusQ.isLoading,
     isError: slotsQ.isError || statusQ.isError,
     hasTimetable: slots.length > 0,
     slots,
+    compositions,
     lessons,
     todayLessons,
     lateLessons,

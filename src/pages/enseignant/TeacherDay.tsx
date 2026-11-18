@@ -15,7 +15,8 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { lessonHours, lessonPath, type JobState, type Lesson } from "@/hooks/useTeacherLessons";
+import { iso, lessonHours, lessonPath, type JobState, type Lesson, type TeacherSlot } from "@/hooks/useTeacherLessons";
+import { currentCompositions, type TeacherCompositionSession } from "@/hooks/useTeacherCompositions";
 import { useTeacherTodo } from "@/hooks/useTeacherTodo";
 import { getTimeGreeting } from "@/lib/greeting";
 import { timeToMinutes } from "@/lib/timetableConflicts";
@@ -39,7 +40,8 @@ export default function TeacherDay() {
   const { profile } = useAuth();
   const now = useNow(60_000);
   const todo = useTeacherTodo(now);
-  const { todayLessons, nextDay, hasTimetable, isLoading } = todo.lessons;
+  const { todayLessons, nextDay, hasTimetable, isLoading, slots, compositions } = todo.lessons;
+  const compos = currentCompositions(compositions, iso(now));
   const name = personName(profile?.first_name, profile?.last_name);
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
@@ -109,6 +111,8 @@ export default function TeacherDay() {
           <span className="flex-1 bg-faso-green" />
         </div>
       </section>
+
+      {compos.length > 0 ? <CompositionsCard sessions={compos} slots={slots} now={now} /> : null}
 
       <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
         {/* ── Today's lessons ── */}
@@ -237,6 +241,87 @@ export default function TeacherDay() {
 }
 
 /* ---------------------------------------------------------------------- */
+
+const shortDate = (d: string) => format(new Date(`${d}T12:00:00`), "d MMMM", { locale: fr });
+const shortDay = (d: string) => capitalize(format(new Date(`${d}T12:00:00`), "EEE d", { locale: fr }));
+
+/**
+ * Classes sitting (or about to sit) their compositions: their lessons are suspended and the papers
+ * take their place. Shown per class, with the papers of the day (or the first ones to come).
+ */
+function CompositionsCard({ sessions, slots, now }: { sessions: TeacherCompositionSession[]; slots: TeacherSlot[]; now: Date }) {
+  const today = iso(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const mySubjects = new Set(slots.map((s) => s.matieres?.name).filter(Boolean));
+  return (
+    <Card className="border-l-4 border-l-amber-600 p-5">
+      <div className="space-y-5 divide-y divide-slate-100 dark:divide-[var(--border)]">
+        {sessions.map((s, i) => {
+          const running = s.starts_on <= today;
+          const className = slots.find((x) => x.class_section_id === s.classId)?.classes?.name ?? "Classe";
+          const papers = s.papers
+            .filter((p) => (running ? p.eval_date?.slice(0, 10) === today : true))
+            .sort((a, b) => `${a.eval_date ?? ""}${a.start_time ?? ""}`.localeCompare(`${b.eval_date ?? ""}${b.start_time ?? ""}`));
+          const shown = running ? papers : papers.slice(0, 3);
+          return (
+            <div key={s.id} className={cn(i > 0 && "pt-5")}>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                {running ? "Compositions en cours" : "Compositions à venir"} · {className}
+              </p>
+              <p className="mt-0.5 font-bold text-slate-900 dark:text-slate-50">{s.title || s.period_label || "Compositions"}</p>
+              <p className="text-sm text-slate-500">
+                {running
+                  ? `Vos cours en ${className} sont suspendus jusqu’au ${shortDate(s.ends_on)}.`
+                  : `À partir du ${shortDate(s.starts_on)} : vos cours en ${className} seront suspendus.`}
+              </p>
+              {running && shown.length === 0 ? <p className="mt-2 text-sm text-slate-500">Pas d’épreuve aujourd’hui.</p> : null}
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {shown.map((p) => {
+                  const start = p.start_time ? timeToMinutes(p.start_time) : 0;
+                  const end = p.end_time ? timeToMinutes(p.end_time) : 0;
+                  const isToday = p.eval_date?.slice(0, 10) === today;
+                  const live = isToday && nowMin >= start && nowMin < end;
+                  const done = isToday && nowMin >= end;
+                  const mine = mySubjects.has(p.subjectName);
+                  return (
+                    <li
+                      key={p.id}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2",
+                        live ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-amber-50/70 dark:bg-amber-500/10",
+                      )}
+                    >
+                      <span className={cn("w-12 shrink-0 text-xs font-bold tabular-nums", live ? "text-emerald-700" : "text-slate-900 dark:text-slate-100")}>
+                        {running ? p.start_time?.slice(0, 5) : p.eval_date ? shortDay(p.eval_date) : ""}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={cn("block truncate text-sm", mine ? "font-bold" : "font-semibold", done ? "text-slate-400 line-through" : "text-slate-900 dark:text-slate-100")}>
+                          {p.subjectName}
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          {p.start_time?.slice(0, 5)} – {p.end_time?.slice(0, 5)}
+                          {mine ? " · votre matière" : ""}
+                        </span>
+                      </span>
+                      {live ? <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">EN COURS</span> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      <Link
+        to="/mon-emploi-du-temps"
+        className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-700 px-3 text-sm font-semibold text-white transition hover:bg-brand-800"
+      >
+        Voir l’emploi du temps
+        <ArrowRight className="h-4 w-4" />
+      </Link>
+    </Card>
+  );
+}
 
 function BannerTile({ label, value, hint, to }: { label: string; value: string; hint: string; to?: string }) {
   const body = (

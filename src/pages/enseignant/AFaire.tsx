@@ -10,6 +10,7 @@ import { useNow } from "@/lib/weekGrid";
 import { PageBanner } from "@/components/PageBanner";
 import { Card } from "@/components/ui";
 
+const iso = (d: Date) => format(d, "yyyy-MM-dd");
 const shortDay = (d: string) => format(new Date(`${d}T12:00:00`), "EEE d MMM", { locale: fr });
 
 /** Teacher task inbox: everything still to do, each with a button to the right screen. */
@@ -39,15 +40,11 @@ export default function AFaire() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <Group icon={ClipboardCheck} title="Appels à faire" hint="Cours commencés ou terminés sans appel validé" count={t.lateAppels.length} empty="Tous les appels sont faits.">
-            {t.lateAppels.map((l) => (
-              <LessonItem key={l.key} lesson={l} cta="Faire l’appel" tab="appel" />
-            ))}
+            <ByDay lessons={t.lateAppels} today={iso(now)} cta="Faire l’appel" tab="appel" />
           </Group>
 
           <Group icon={BookOpenCheck} title="Cahiers de textes à remplir" hint="Cours terminés sans cahier de textes" count={t.lateCahiers.length} empty="Tous les cahiers sont remplis.">
-            {t.lateCahiers.map((l) => (
-              <LessonItem key={l.key} lesson={l} cta="Remplir" tab="cahier" />
-            ))}
+            <ByDay lessons={t.lateCahiers} today={iso(now)} cta="Remplir" tab="cahier" />
           </Group>
 
           <Group icon={NotebookPen} title="Notes à saisir" hint="Interrogations et examens passés sans toutes les notes" count={t.ungraded.length} empty="Toutes les notes sont saisies.">
@@ -142,6 +139,31 @@ function Group({
         <ul className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto dark:divide-[var(--border)]">{children}</ul>
       )}
     </Card>
+  );
+}
+
+/** « Aujourd’hui » first, then « Jours précédents » (only the groups that have lessons). */
+function ByDay({ lessons, today, cta, tab }: { lessons: Lesson[]; today: string; cta: string; tab: "appel" | "cahier" }) {
+  const groups = [
+    { title: "Aujourd’hui", items: lessons.filter((l) => l.date === today) },
+    { title: "Jours précédents", items: lessons.filter((l) => l.date < today) },
+  ].filter((g) => g.items.length > 0);
+  return (
+    <>
+      {groups.map((g) => (
+        <li key={g.title}>
+          <p className="flex items-center justify-between bg-slate-50 px-5 py-1.5 text-xs font-bold text-slate-700 dark:bg-[var(--surface-2)] dark:text-slate-200">
+            {g.title}
+            <span className="font-semibold tabular-nums text-slate-500">{g.items.length}</span>
+          </p>
+          <ul className="divide-y divide-slate-100 dark:divide-[var(--border)]">
+            {g.items.map((l) => (
+              <LessonItem key={l.key} lesson={l} cta={cta} tab={tab} />
+            ))}
+          </ul>
+        </li>
+      ))}
+    </>
   );
 }
 
