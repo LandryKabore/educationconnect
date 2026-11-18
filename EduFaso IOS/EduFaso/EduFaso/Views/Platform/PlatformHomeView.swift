@@ -269,7 +269,7 @@ struct PlatformHomeView: View {
     private func destination(_ a: Attention, @ViewBuilder label: () -> some View) -> some View {
         switch a.target {
         case .screen(let s): Button { open(s) } label: { label() }.buttonStyle(.plain)
-        case .school(let id): NavigationLink { SchoolDetailView(schoolId: id) } label: { label() }.buttonStyle(.plain)
+        case .school(let id): NavigationLink { PlatformSchoolDetailView(schoolId: id) } label: { label() }.buttonStyle(.plain)
         }
     }
 
@@ -299,7 +299,7 @@ struct PlatformHomeView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(recent) { s in
-                        NavigationLink { SchoolDetailView(schoolId: s.id) } label: {
+                        NavigationLink { PlatformSchoolDetailView(schoolId: s.id) } label: {
                             row(title: s.name,
                                 subtitle: [SchoolSettingsView.types.first { $0.0 == s.school_type }?.1, s.city,
                                            s.created_at.map { "créée \(Self.relative($0))" }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),

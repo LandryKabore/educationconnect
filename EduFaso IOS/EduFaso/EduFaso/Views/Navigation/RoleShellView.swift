@@ -488,7 +488,7 @@ struct ScreenHost: View {
         case .announcements:
             MessagesView(announcementsOnly: true)
         case .adminSchools:
-            SchoolsListView()
+            PlatformSchoolsView()
         case .adminUsers:
             AdminUsersView()
         case .adminInvites:
