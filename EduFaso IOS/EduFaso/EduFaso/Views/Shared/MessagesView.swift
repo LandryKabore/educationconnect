@@ -76,6 +76,8 @@ struct MessagesView: View {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else if auth.primaryRole == .student {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
+        } else if auth.primaryRole == .teacher && !announcementsOnly {
+            ParentMessagesView()
         } else {
             staffBody
         }
@@ -1304,8 +1306,13 @@ struct ComposeMessageSheet: View {
                 } else if !announcementsOnly {
                     activeField = .to
                     focused = .to
-                    let hasTeachers = contacts.contains { $0.normalizedRole == "teacher" }
-                    roleFilter = hasTeachers ? "teacher" : nil
+                    if auth.primaryRole == .teacher {
+                        // a teacher writes mostly to students
+                        roleFilter = contacts.contains { $0.normalizedRole == "student" } ? "student" : nil
+                    } else {
+                        let hasTeachers = contacts.contains { $0.normalizedRole == "teacher" }
+                        roleFilter = hasTeachers ? "teacher" : nil
+                    }
                 }
             }
         }
@@ -2196,16 +2203,22 @@ struct WriteToSchoolButton: View {
 
 /// Someone the parent can write to: a teacher of one of their children, or the school administration.
 struct ParentContact: Identifiable, Hashable {
-    enum Kind { case teacher, admin }
+    enum Kind { case teacher, admin, student, parent }
     let id: String
     let name: String
     let kind: Kind
     var subjects: [String]
+    /// students: their class
+    var className: String? = nil
+    /// parents: their children among the teacher's students (« Awa Ouédraogo (6A) »)
+    var parentOf: [String] = []
 
     var line: String {
         switch kind {
         case .admin: return "Administration"
         case .teacher: return subjects.isEmpty ? "Professeur" : "Professeur · \(subjects.joined(separator: ", "))"
+        case .student: return className.map { "Élève · \($0)" } ?? "Élève"
+        case .parent: return parentOf.isEmpty ? "Parent" : "Parent de \(parentOf.joined(separator: ", "))"
         }
     }
 }
@@ -2272,6 +2285,18 @@ extension EduAPI {
 }
 
 extension EduAPI {
+    struct ParentLink: Decodable { let parent_id: String; let student_id: String }
+
+    func fetchParentLinks(parentIds: [String]) async throws -> [ParentLink] {
+        try await client.from("liens_parent_eleve")
+            .select("parent_id, student_id")
+            .in("parent_id", values: parentIds)
+            .execute()
+            .value
+    }
+}
+
+extension EduAPI {
     /// Ids of the school's active administrators (their messages and announcements show as « Administration »).
     func fetchSchoolAdminIds(schoolId: String) async throws -> Set<String> {
         struct Row: Decodable { let user_id: String? }
@@ -2301,12 +2326,16 @@ struct ParentMessagesView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var openChat: ChatTarget?
+    @State private var kindFilter: ParentContact.Kind?
+    @State private var composeGroup = false
 
     @State private var tour = TabTour(key: "messages-parent")
     @State private var coach = CoachMarkRegistry()
 
     /// Parents get "vous", students "tu" (same page as the web, `formal`).
     private var formal: Bool { auth.primaryRole != .student }
+    /// Teachers write to their students, the students' parents and the administration.
+    private var isTeacher: Bool { auth.primaryRole == .teacher }
     private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
 
     private var tourSteps: [CoachMarkStep] {
@@ -2314,12 +2343,16 @@ struct ParentMessagesView: View {
             CoachMarkStep(
                 id: "msg.write", icon: "square.and.pencil",
                 title: "Écrire",
-                message: t("Écrivez à un professeur de vos enfants ou à l’administration de l’école.", "Écris à un de tes professeurs ou à l’administration de l’école.")
+                message: isTeacher
+                    ? "Écrivez à un de vos élèves, à ses parents ou à l’administration. « Écrire à plusieurs » envoie le même message à plusieurs personnes."
+                    : t("Écrivez à un professeur de vos enfants ou à l’administration de l’école.", "Écris à un de tes professeurs ou à l’administration de l’école.")
             ),
             CoachMarkStep(
                 id: "msg.search", icon: "magnifyingglass",
                 title: "Rechercher",
-                message: t("Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière.", "Retrouve une discussion par nom ou par mot. Pendant « Écrire », cherche un professeur par son nom ou sa matière.")
+                message: isTeacher
+                    ? "Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un élève ou un parent par son nom ou sa classe."
+                    : t("Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière.", "Retrouve une discussion par nom ou par mot. Pendant « Écrire », cherche un professeur par son nom ou sa matière.")
             ),
             CoachMarkStep(
                 id: "msg.list", icon: "bubble.left.and.bubble.right.fill",
@@ -2368,7 +2401,8 @@ struct ParentMessagesView: View {
         let firstAdmin = contacts.first { $0.kind == .admin }?.id
         return contacts.filter { c in
             (c.kind != .admin || c.id == firstAdmin)
-                && (matches(c.name, c.line) || c.subjects.contains { matches($0) })
+                && (kindFilter == nil || c.kind == kindFilter)
+                && (matches(c.name, c.line, c.className) || c.subjects.contains { matches($0) })
         }
     }
 
@@ -2426,6 +2460,13 @@ struct ParentMessagesView: View {
             await load()
             await loadContacts()
         }
+        .sheet(isPresented: $composeGroup) {
+            ComposeMessageSheet(onSent: {
+                composeGroup = false
+                Task { await load() }
+            })
+            .environmentObject(auth)
+        }
     }
 
     // MARK: Header
@@ -2482,7 +2523,7 @@ struct ParentMessagesView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(EduTheme.muted)
-            TextField(picking ? "Nom ou matière…" : "Rechercher…", text: $search)
+            TextField(picking ? (isTeacher ? "Nom ou classe…" : "Nom ou matière…") : "Rechercher…", text: $search)
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
             if !search.isEmpty {
@@ -2509,7 +2550,9 @@ struct ParentMessagesView: View {
                 Text("Aucune discussion")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text(t("Touchez « Écrire » pour contacter un professeur de vos enfants.", "Touche « Écrire » pour contacter un de tes professeurs."))
+                Text(isTeacher
+                     ? "Touchez « Écrire » pour contacter un élève, ses parents ou l’administration."
+                     : t("Touchez « Écrire » pour contacter un professeur de vos enfants.", "Touche « Écrire » pour contacter un de tes professeurs."))
                     .font(.caption)
                     .foregroundStyle(EduTheme.muted)
                     .multilineTextAlignment(.center)
@@ -2637,6 +2680,7 @@ struct ParentMessagesView: View {
         if contactsLoading {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
         } else if shownContacts.isEmpty {
+            if isTeacher { teacherPickerTools }
             Text("Aucun contact trouvé.")
                 .font(.subheadline)
                 .foregroundStyle(EduTheme.muted)
@@ -2644,11 +2688,12 @@ struct ParentMessagesView: View {
                 .padding(.vertical, 24)
                 .background(cardBackground)
         } else {
-            ForEach([ParentContact.Kind.teacher, .admin], id: \.self) { kind in
+            if isTeacher { teacherPickerTools }
+            ForEach(isTeacher ? [ParentContact.Kind.student, .parent, .admin, .teacher] : [ParentContact.Kind.teacher, .admin], id: \.self) { kind in
                 let group = shownContacts.filter { $0.kind == kind }
                 if !group.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(kind == .teacher ? t("PROFESSEURS DE MES ENFANTS", "MES PROFESSEURS") : "ADMINISTRATION")
+                        Text(groupTitle(kind))
                             .font(.caption.weight(.bold))
                             .tracking(0.6)
                             .foregroundStyle(EduTheme.muted)
@@ -2663,7 +2708,7 @@ struct ParentMessagesView: View {
                                                 .font(.subheadline.weight(.semibold))
                                                 .foregroundStyle(EduTheme.ink)
                                                 .lineLimit(1)
-                                            Text(kind == .teacher ? (c.subjects.isEmpty ? "Professeur" : c.subjects.joined(separator: ", ")) : "Administration")
+                                            Text(kind == .teacher ? (c.subjects.isEmpty ? "Professeur" : c.subjects.joined(separator: ", ")) : (kind == .admin ? "Administration" : c.line))
                                                 .font(.caption)
                                                 .foregroundStyle(EduTheme.muted)
                                                 .lineLimit(1)
@@ -2689,10 +2734,82 @@ struct ParentMessagesView: View {
 
     // MARK: Helpers
 
+    /// « Parent de … »: each parent's children among the teacher's students.
+    private static func withChildren(_ list: [ParentContact]) async -> [ParentContact] {
+        let parentIds = list.filter { $0.kind == .parent }.map(\.id)
+        guard !parentIds.isEmpty,
+              let links = try? await EduAPI().fetchParentLinks(parentIds: parentIds) else { return list }
+        let students = Dictionary(list.filter { $0.kind == .student }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var children: [String: [String]] = [:]
+        for l in links {
+            guard let child = students[l.student_id] else { continue }
+            children[l.parent_id, default: []].append(child.className.map { "\(child.name) (\($0))" } ?? child.name)
+        }
+        return list.map { c in
+            guard c.kind == .parent, let kids = children[c.id] else { return c }
+            var next = c
+            next.parentOf = kids.sorted()
+            return next
+        }
+    }
+
+    private func groupTitle(_ kind: ParentContact.Kind) -> String {
+        switch kind {
+        case .teacher: return isTeacher ? "ENSEIGNANTS" : t("PROFESSEURS DE MES ENFANTS", "MES PROFESSEURS")
+        case .admin: return "ADMINISTRATION"
+        case .student: return "ÉLÈVES"
+        case .parent: return "PARENTS"
+        }
+    }
+
+    /// Teachers: filter by role (with counts) and « Écrire à plusieurs » (several recipients, replies on or off).
+    private var teacherPickerTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    let hasAdmin = contacts.contains { $0.kind == .admin }
+                    kindChip(nil, "Tous", contacts.filter { $0.kind != .admin }.count + (hasAdmin ? 1 : 0))
+                    kindChip(.student, "Élèves", contacts.filter { $0.kind == .student }.count)
+                    kindChip(.parent, "Parents", contacts.filter { $0.kind == .parent }.count)
+                    if hasAdmin { kindChip(.admin, "Administration", 1) }
+                }
+            }
+            Button { composeGroup = true } label: {
+                Label("Écrire à plusieurs", systemImage: "person.2.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .foregroundStyle(EduTheme.teal)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.teal, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func kindChip(_ kind: ParentContact.Kind?, _ label: String, _ count: Int) -> some View {
+        let on = kindFilter == kind
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { kindFilter = kind }
+        } label: {
+            HStack(spacing: 5) {
+                Text(label).font(.caption.weight(.semibold))
+                Text("\(count)").font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(on ? .white.opacity(0.85) : EduTheme.muted)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .foregroundStyle(on ? .white : EduTheme.ink)
+            .background(on ? EduTheme.teal : .white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(on ? .clear : EduTheme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func open(_ id: String, _ name: String, _ line: String?) {
         openChat = ChatTarget(id: id, name: name, line: line)
         picking = false
         search = ""
+        kindFilter = nil
     }
 
     private var cardBackground: some View {
@@ -2727,7 +2844,27 @@ struct ParentMessagesView: View {
     private func loadContacts() async {
         guard let uid = auth.userId, let schoolId = auth.schoolId else { contactsLoading = false; return }
         do {
-            let list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId, asStudent: !formal)
+            var list: [ParentContact]
+            if isTeacher {
+                list = try await EduAPI().fetchMessagingContacts(schoolId: schoolId, role: .teacher, userId: uid)
+                    .filter { $0.id != uid }
+                    .map { c in
+                        let kind: ParentContact.Kind = switch c.normalizedRole {
+                        case "student": .student
+                        case "parent": .parent
+                        case "school_admin": .admin
+                        default: .teacher
+                        }
+                        return ParentContact(id: c.id, name: kind == .admin ? "Administration" : (c.fullName.isEmpty ? "Contact" : c.fullName),
+                                             kind: kind, subjects: [], className: c.className)
+                    }
+                    .sorted { a, b in
+                        a.name.localizedCompare(b.name) == .orderedAscending
+                    }
+                list = await Self.withChildren(list)
+            } else {
+                list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId, asStudent: !formal)
+            }
             if Task.isCancelled { return }
             contacts = list
         } catch {}
