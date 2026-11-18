@@ -115,7 +115,7 @@ struct SchoolHomeView: View {
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(.white)
                             .lineLimit(2)
-                        Text([auth.profile?.fullName, "Administrateur"].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") + " 👋")
+                        Text("Administration 👋")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white.opacity(0.85))
                     }

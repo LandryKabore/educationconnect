@@ -4842,65 +4842,6 @@ struct SchoolTimetableMenu: View {
     }
 }
 
-struct SchoolAttendanceView: View {
-    @EnvironmentObject private var auth: AuthViewModel
-    @State private var summary: AttendanceSummary?
-    @State private var classIds: [String] = []
-    @State private var ready = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if let summary {
-                HStack(spacing: 8) {
-                    dayStat("Présents", summary.present ?? 0, EduTheme.teal)
-                    dayStat("Absents", summary.absent ?? 0, EduTheme.fasoRed)
-                    dayStat("Retards", summary.late ?? 0, Color.orange)
-                    dayStat("Excusés", summary.excused ?? 0, EduTheme.navy)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.white)
-                .overlay(alignment: .bottom) { Divider() }
-            }
-            if ready {
-                PresenceLogView(classIds: classIds, day: EduDates.day(), title: "Présences")
-            } else {
-                LoadingBlock()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(EduTheme.loginBackground)
-            }
-        }
-        .background(EduTheme.loginBackground.ignoresSafeArea())
-        .preferredColorScheme(.light)
-        .task { await load() }
-    }
-
-    private func dayStat(_ title: String, _ value: Int, _ color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text("\(value)")
-                .font(.title3.weight(.bold).monospacedDigit())
-                .foregroundStyle(color)
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(EduTheme.muted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
-        )
-    }
-
-    private func load() async {
-        guard let schoolId = auth.schoolId else { return }
-        let api = EduAPI()
-        summary = try? await api.attendanceDay(schoolId: schoolId, day: EduDates.day())
-        classIds = ((try? await api.fetchClasses(schoolId: schoolId)) ?? []).map(\.id)
-        ready = true
-    }
-}
-
 struct SchoolEvalMenu: View {
     var type: String
     var title: String
