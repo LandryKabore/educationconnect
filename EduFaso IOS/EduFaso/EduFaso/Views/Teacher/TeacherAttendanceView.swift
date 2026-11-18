@@ -5,6 +5,8 @@ struct TeacherAttendanceView: View {
     var initialSubjectId: String? = nil
     /// yyyy-MM-dd of the lesson to call (defaults to today).
     var initialDate: String? = nil
+    /// « Saisie enseignant »: the school enters the roll call for this teacher's classes.
+    var teacherIdOverride: String? = nil
     @EnvironmentObject private var auth: AuthViewModel
     @State private var assignments: [TeachingAssignment] = []
     @State private var selected: TeachingAssignment?
@@ -243,7 +245,7 @@ struct TeacherAttendanceView: View {
     }
 
     private func loadAssignments() async {
-        guard let tid = auth.userId else { return }
+        guard let tid = teacherIdOverride ?? auth.userId else { return }
         do {
             assignments = try await EduAPI().fetchTeachingAssignments(teacherId: tid)
             guard selected == nil else { return }
