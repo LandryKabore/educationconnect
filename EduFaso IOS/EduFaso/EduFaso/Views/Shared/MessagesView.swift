@@ -76,8 +76,8 @@ struct MessagesView: View {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else if auth.primaryRole == .student {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
-        } else if auth.primaryRole == .teacher && !announcementsOnly {
-            ParentMessagesView()
+        } else if auth.primaryRole == .teacher {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else {
             staffBody
         }
@@ -2284,6 +2284,29 @@ extension EduAPI {
     }
 }
 
+/// One announcement I sent, with how many people received it (web `ef_sent_announcements`).
+struct SentAnnouncement: Decodable {
+    let row: MessageRow
+    let recipientCount: Int
+
+    private enum K: String, CodingKey { case recipientCount }
+
+    init(from decoder: Decoder) throws {
+        row = try MessageRow(from: decoder)
+        let c = try decoder.container(keyedBy: K.self)
+        if let n = try? c.decode(Int.self, forKey: .recipientCount) { recipientCount = n }
+        else if let s = try? c.decode(String.self, forKey: .recipientCount), let n = Int(s) { recipientCount = n }
+        else { recipientCount = 1 }
+    }
+}
+
+extension EduAPI {
+    func fetchSentAnnouncements(limit: Int = 100) async throws -> [SentAnnouncement] {
+        struct Params: Encodable { let p_limit: Int }
+        return try await call("ef_sent_announcements", params: Params(p_limit: limit))
+    }
+}
+
 extension EduAPI {
     struct ParentLink: Decodable { let parent_id: String; let student_id: String }
 
@@ -2900,16 +2923,39 @@ struct ParentAnnouncementsView: View {
     private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
 
     @State private var inbox: [MessageRow] = []
+    @State private var sent: [SentAnnouncement] = []
     @State private var search = ""
     @State private var unreadOnly = false
+    @State private var sentOnly = false
+    @State private var composing = false
     @State private var loading = true
     @State private var error: String?
+
+    /// Teachers also send announcements (web: « Nouvelle », sent ones in the list).
+    private var isTeacher: Bool { auth.primaryRole == .teacher }
+
+    /// One line of the list: received, or sent by me (once per announcement, with its recipients).
+    struct Item: Identifiable {
+        let row: MessageRow
+        let sentByMe: Bool
+        let recipientCount: Int
+        var id: String { (sentByMe ? "out-" : "in-") + row.id }
+    }
 
     @State private var tour = TabTour(key: "annonces-parent")
     @State private var coach = CoachMarkRegistry()
 
     private var tourSteps: [CoachMarkStep] {
+        allTourSteps.filter { $0.id != "ann.new" || isTeacher }
+    }
+
+    private var allTourSteps: [CoachMarkStep] {
         [
+            CoachMarkStep(
+                id: "ann.new", icon: "megaphone.fill",
+                title: "Nouvelle annonce",
+                message: "Envoyez une annonce à vos élèves, à leurs parents ou à l’administration. Vous choisissez qui la reçoit et si l’on peut vous répondre."
+            ),
             CoachMarkStep(
                 id: "ann.search", icon: "magnifyingglass",
                 title: "Rechercher",
@@ -2936,10 +2982,18 @@ struct ParentAnnouncementsView: View {
     private var announcements: [MessageRow] { inbox.filter { $0.isAnnouncement == true } }
     private var unreadCount: Int { announcements.filter { $0.readAt == nil }.count }
 
-    private var shown: [MessageRow] {
+    private var items: [Item] {
+        let received = announcements.map { Item(row: $0, sentByMe: false, recipientCount: 1) }
+        let mine = sent.map { Item(row: $0.row, sentByMe: true, recipientCount: $0.recipientCount) }
+        return (received + mine).sorted { ($0.row.createdAt ?? "") > ($1.row.createdAt ?? "") }
+    }
+
+    private var shown: [Item] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return announcements.filter { a in
-            if unreadOnly && a.readAt != nil { return false }
+        return items.filter { item in
+            let a = item.row
+            if unreadOnly && (item.sentByMe || a.readAt != nil) { return false }
+            if sentOnly && !item.sentByMe { return false }
             guard !q.isEmpty else { return true }
             return [a.subject, a.body, a.sender?.fullName].contains { ($0 ?? "").localizedStandardContains(q) }
         }
@@ -2992,9 +3046,33 @@ struct ParentAnnouncementsView: View {
         .environment(coach)
         .premiumTitle("Annonces")
         .task { await load() }
+        .sheet(isPresented: $composing) {
+            ComposeMessageSheet(announcementsOnly: true, onSent: {
+                composing = false
+                Task { await load() }
+            })
+            .environmentObject(auth)
+        }
     }
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerTitle
+            if isTeacher {
+                Button { composing = true } label: {
+                    Label("Nouvelle annonce", systemImage: "megaphone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .coachMarkTarget("ann.new")
+            }
+        }
+    }
+
+    private var headerTitle: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Annonces")
@@ -3033,8 +3111,11 @@ struct ParentAnnouncementsView: View {
 
     private var filterBar: some View {
         HStack(spacing: 0) {
-            segment("Toutes (\(announcements.count))", selected: !unreadOnly) { unreadOnly = false }
-            segment("Non lues (\(unreadCount))", selected: unreadOnly) { unreadOnly = true }
+            segment("Toutes (\(items.count))", selected: !unreadOnly && !sentOnly) { unreadOnly = false; sentOnly = false }
+            segment("Non lues (\(unreadCount))", selected: unreadOnly) { unreadOnly = true; sentOnly = false }
+            if isTeacher {
+                segment("Envoyées (\(sent.count))", selected: sentOnly) { sentOnly = true; unreadOnly = false }
+            }
         }
         .padding(2)
         .background(
@@ -3049,6 +3130,9 @@ struct ParentAnnouncementsView: View {
         } label: {
             Text(label)
                 .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 4)
                 .foregroundStyle(selected ? .white : EduTheme.muted)
                 .frame(maxWidth: .infinity, minHeight: 34)
                 .background(
@@ -3061,7 +3145,7 @@ struct ParentAnnouncementsView: View {
 
     @ViewBuilder
     private var list: some View {
-        if announcements.isEmpty {
+        if items.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "megaphone")
                     .font(.title2)
@@ -3089,12 +3173,15 @@ struct ParentAnnouncementsView: View {
                 .coachMarkTarget("ann.list")
         } else {
             VStack(spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, a in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                     if index > 0 { Divider() }
                     NavigationLink {
-                        ParentAnnouncementDetail(announcement: a, adminIds: adminIds) { markRead(a) }
+                        ParentAnnouncementDetail(announcement: item.row, adminIds: adminIds,
+                                                 sentByMe: item.sentByMe, recipientCount: item.recipientCount) {
+                            if !item.sentByMe { markRead(item.row) }
+                        }
                     } label: {
-                        row(a)
+                        row(item)
                     }
                     .buttonStyle(.plain)
                 }
@@ -3105,8 +3192,9 @@ struct ParentAnnouncementsView: View {
         }
     }
 
-    private func row(_ a: MessageRow) -> some View {
-        let unread = a.readAt == nil
+    private func row(_ item: Item) -> some View {
+        let a = item.row
+        let unread = !item.sentByMe && a.readAt == nil
         return HStack(alignment: .top, spacing: 10) {
             Circle()
                 .fill(unread ? EduTheme.teal : Color.clear)
@@ -3114,9 +3202,11 @@ struct ParentAnnouncementsView: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(Self.senderName(a, adminIds: adminIds))
+                    Text(item.sentByMe
+                         ? "Vous · \(item.recipientCount) destinataire\(item.recipientCount > 1 ? "s" : "")"
+                         : Self.senderName(a, adminIds: adminIds))
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(EduTheme.muted)
+                        .foregroundStyle(item.sentByMe ? EduTheme.teal : EduTheme.muted)
                         .lineLimit(1)
                     Spacer(minLength: 6)
                     if let created = a.createdAt {
@@ -3182,11 +3272,14 @@ struct ParentAnnouncementsView: View {
                 guard let schoolId else { return [] }
                 return (try? await api.fetchSchoolAdminIds(schoolId: schoolId)) ?? []
             }()
+            async let mine: [SentAnnouncement] = isTeacher ? ((try? await api.fetchSentAnnouncements()) ?? []) : []
             let rows = try await api.fetchInbox(userId: uid, announcementsOnly: true, limit: 500)
             let ids = await admins
+            let sentRows = await mine
             if Task.isCancelled { return }
             adminIds = ids
             inbox = rows
+            sent = sentRows
             error = nil
         } catch {
             if Task.isCancelled || error.isCancellation { return }
@@ -3200,9 +3293,16 @@ struct ParentAnnouncementsView: View {
 struct ParentAnnouncementDetail: View {
     let announcement: MessageRow
     var adminIds: Set<String> = []
+    /// An announcement I sent (teachers): « Vous · envoyée à N destinataires », no reply button.
+    var sentByMe = false
+    var recipientCount = 1
     var onOpen: () -> Void
 
-    private var sender: String { ParentAnnouncementsView.senderName(announcement, adminIds: adminIds) }
+    private var sender: String {
+        sentByMe
+            ? "Vous · envoyée à \(recipientCount) destinataire\(recipientCount > 1 ? "s" : "")"
+            : ParentAnnouncementsView.senderName(announcement, adminIds: adminIds)
+    }
 
     private static func longDate(_ iso: String) -> String {
         let parsers: [ISO8601DateFormatter] = {
@@ -3222,7 +3322,7 @@ struct ParentAnnouncementDetail: View {
         PremiumScreenChrome {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Label("ANNONCE OFFICIELLE", systemImage: "megaphone.fill")
+                    Label(sentByMe ? "ANNONCE ENVOYÉE" : "ANNONCE OFFICIELLE", systemImage: "megaphone.fill")
                         .font(.caption2.weight(.bold))
                         .tracking(0.6)
                         .foregroundStyle(EduTheme.tealDark)
@@ -3237,7 +3337,7 @@ struct ParentAnnouncementDetail: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 12) {
-                        SquareAvatar(name: sender, size: 40, admin: true)
+                        SquareAvatar(name: sentByMe ? "Vous" : sender, size: 40, admin: !sentByMe)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(sender)
                                 .font(.subheadline.weight(.semibold))
@@ -3261,7 +3361,11 @@ struct ParentAnnouncementDetail: View {
 
                     Divider()
 
-                    if announcement.allowReplies != false, let senderId = announcement.senderId {
+                    if sentByMe {
+                        Text(announcement.allowReplies == false ? "Les destinataires ne peuvent pas répondre." : "Les destinataires peuvent vous répondre.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                    } else if announcement.allowReplies != false, let senderId = announcement.senderId {
                         NavigationLink {
                             ConversationChatView(otherId: senderId, otherName: sender, onChanged: {})
                         } label: {
