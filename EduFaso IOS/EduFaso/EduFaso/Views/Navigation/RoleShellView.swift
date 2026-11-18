@@ -500,9 +500,9 @@ struct ScreenHost: View {
         case .adminSettings:
             PlatformSettingsScreen()
         case .adminAudit:
-            AuditView()
+            PlatformAuditView()
         case .adminSuperAdmins:
-            RolePeopleView(role: "super_admin", title: "Super admins", schoolScoped: false)
+            PlatformSuperAdminsView()
         case .schoolConfig:
             SchoolConfigView(open: open)
         case .schoolSettings:
