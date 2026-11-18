@@ -494,7 +494,7 @@ struct ScreenHost: View {
         case .adminInvites:
             PlatformInvitesView()
         case .adminReports:
-            AdminReportsView()
+            PlatformReportsView(open: open)
         case .adminBilling:
             BillingView()
         case .adminSettings:
