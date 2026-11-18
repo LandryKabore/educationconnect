@@ -4966,47 +4966,6 @@ struct BulletinsMenu: View {
     }
 }
 
-struct SchoolCahierView: View {
-    @EnvironmentObject private var auth: AuthViewModel
-    @State private var entries: [CahierEntry] = []
-    @State private var error: String?
-
-    var body: some View {
-        PremiumScreenChrome {
-                Group {
-            if let error { Text(error).foregroundStyle(EduTheme.fasoRed).padding() }
-            else if entries.isEmpty { PremiumEmpty(title: "Aucune saisie récente") }
-            else {
-                List(entries) { entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(entry.classes?.name ?? "Classe") · \(entry.matieres?.name ?? "")")
-                            .font(.headline)
-                        Text(entry.entryDate).font(.caption).foregroundStyle(EduTheme.teal)
-                        if let content = entry.content, !content.isEmpty { Text(content).font(.subheadline) }
-                        if let homework = entry.homework, !homework.isEmpty {
-                            Text("À faire : \(homework)").font(.footnote).foregroundStyle(EduTheme.muted)
-                        }
-                    }
-                }
-                    .premiumListStyle()
-            }
-        }
-        }
-        .premiumTitle("Cahier de textes")
-        .task { await load() }
-        .refreshable { await load() }
-    }
-
-    private func load() async {
-        guard let schoolId = auth.schoolId else { return }
-        do {
-            let ids = try await EduAPI().fetchClasses(schoolId: schoolId).map(\.id)
-            entries = try await EduAPI().fetchCahierForClasses(ids)
-            error = nil
-        } catch { if !error.isCancellation { self.error = error.localizedDescription } }
-    }
-}
-
 struct StatisticsView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @State private var stats: SchoolStatistics?
