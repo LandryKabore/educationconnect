@@ -76,7 +76,7 @@ struct MessagesView: View {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else if auth.primaryRole == .student {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
-        } else if auth.primaryRole == .teacher {
+        } else if auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin {
             if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
         } else {
             staffBody
@@ -2358,7 +2358,8 @@ struct ParentMessagesView: View {
     /// Parents get "vous", students "tu" (same page as the web, `formal`).
     private var formal: Bool { auth.primaryRole != .student }
     /// Teachers write to their students, the students' parents and the administration.
-    private var isTeacher: Bool { auth.primaryRole == .teacher }
+    private var isTeacher: Bool { auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin }
+    private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
     private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
 
     private var tourSteps: [CoachMarkStep] {
@@ -2366,7 +2367,9 @@ struct ParentMessagesView: View {
             CoachMarkStep(
                 id: "msg.write", icon: "square.and.pencil",
                 title: "Écrire",
-                message: isTeacher
+                message: isAdmin
+                    ? "Écrivez à un élève, un parent ou un enseignant de l’école. « Écrire à plusieurs » envoie le même message à plusieurs personnes."
+                    : isTeacher
                     ? "Écrivez à un de vos élèves, à ses parents ou à l’administration. « Écrire à plusieurs » envoie le même message à plusieurs personnes."
                     : t("Écrivez à un professeur de vos enfants ou à l’administration de l’école.", "Écris à un de tes professeurs ou à l’administration de l’école.")
             ),
@@ -2573,7 +2576,9 @@ struct ParentMessagesView: View {
                 Text("Aucune discussion")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text(isTeacher
+                Text(isAdmin
+                     ? "Touchez « Écrire » pour contacter un élève, un parent ou un enseignant."
+                     : isTeacher
                      ? "Touchez « Écrire » pour contacter un élève, ses parents ou l’administration."
                      : t("Touchez « Écrire » pour contacter un professeur de vos enfants.", "Touche « Écrire » pour contacter un de tes professeurs."))
                     .font(.caption)
@@ -2794,6 +2799,7 @@ struct ParentMessagesView: View {
                     kindChip(nil, "Tous", contacts.filter { $0.kind != .admin }.count + (hasAdmin ? 1 : 0))
                     kindChip(.student, "Élèves", contacts.filter { $0.kind == .student }.count)
                     kindChip(.parent, "Parents", contacts.filter { $0.kind == .parent }.count)
+                    if contacts.contains(where: { $0.kind == .teacher }) { kindChip(.teacher, "Enseignants", contacts.filter { $0.kind == .teacher }.count) }
                     if hasAdmin { kindChip(.admin, "Administration", 1) }
                 }
             }
@@ -2869,7 +2875,7 @@ struct ParentMessagesView: View {
         do {
             var list: [ParentContact]
             if isTeacher {
-                list = try await EduAPI().fetchMessagingContacts(schoolId: schoolId, role: .teacher, userId: uid)
+                list = try await EduAPI().fetchMessagingContacts(schoolId: schoolId, role: auth.primaryRole ?? .teacher, userId: uid)
                     .filter { $0.id != uid }
                     .map { c in
                         let kind: ParentContact.Kind = switch c.normalizedRole {
@@ -2932,7 +2938,8 @@ struct ParentAnnouncementsView: View {
     @State private var error: String?
 
     /// Teachers also send announcements (web: « Nouvelle », sent ones in the list).
-    private var isTeacher: Bool { auth.primaryRole == .teacher }
+    private var isTeacher: Bool { auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin }
+    private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
 
     /// One line of the list: received, or sent by me (once per announcement, with its recipients).
     struct Item: Identifiable {
@@ -2954,7 +2961,9 @@ struct ParentAnnouncementsView: View {
             CoachMarkStep(
                 id: "ann.new", icon: "megaphone.fill",
                 title: "Nouvelle annonce",
-                message: "Envoyez une annonce à vos élèves, à leurs parents ou à l’administration. Vous choisissez qui la reçoit et si l’on peut vous répondre."
+                message: isAdmin
+                    ? "Envoyez une annonce à toute l’école : vous choisissez les rôles qui la reçoivent (élèves, parents, enseignants) et si l’on peut vous répondre."
+                    : "Envoyez une annonce à vos élèves, à leurs parents ou à l’administration. Vous choisissez qui la reçoit et si l’on peut vous répondre."
             ),
             CoachMarkStep(
                 id: "ann.search", icon: "magnifyingglass",
