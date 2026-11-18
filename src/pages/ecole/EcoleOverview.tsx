@@ -64,7 +64,7 @@ type StudentPreview = {
 };
 
 export default function EcoleOverview() {
-  const { schoolId, schools, user, profile } = useAuth();
+  const { schoolId, schools, user } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
   const { data: unreadInbox = EMPTY_UNREAD_INBOX } = useUnreadMessagesCount();
   const { data: sansClasse = 0 } = useStudentsWithoutClassCount();
