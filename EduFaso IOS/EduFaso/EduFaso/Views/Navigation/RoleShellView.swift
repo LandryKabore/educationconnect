@@ -532,7 +532,7 @@ struct ScreenHost: View {
         case .schoolCahier:
             SchoolCahierView()
         case .statistics:
-            StatisticsView()
+            SchoolStatisticsView()
         case .teachers:
             RolePeopleView(role: "teacher", title: "Enseignants")
         case .students:
