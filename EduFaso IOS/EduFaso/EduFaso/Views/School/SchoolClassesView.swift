@@ -97,13 +97,7 @@ struct SchoolClassesView: View {
         .sheet(isPresented: $custom) {
             CustomClassSheet(yearId: yearId, existing: yearClasses) { Task { await load() } }.environmentObject(auth)
         }
-        .alert(removing.map { "Retirer « \($0.name) » ?" } ?? "", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; removing = nil }
-            Button("Retirer la classe", role: .destructive) { if let c = removing { Task { await remove(c) } } }
-        } message: {
-            Text("La classe sera retirée de l’année. Saisissez votre mot de passe administrateur pour confirmer.")
-        }
+        .passwordConfirm(item: $removing, password: $password, title: { "Retirer « \($0.name) » ?" }, message: "La classe sera retirée de l’année. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Retirer la classe") { c in await remove(c) }
     }
 
     private var banner: some View {
@@ -273,8 +267,7 @@ private struct CustomClassSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Classe personnalisée", primary: saving ? "Création…" : "Créer", primaryDisabled: saving || name.trimmingCharacters(in: .whitespaces).isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Nom de la classe (ex. 6ème D)", text: $name)
                     TextField("Niveau (facultatif, ex. 6ème)", text: $grade)
@@ -282,16 +275,7 @@ private struct CustomClassSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Classe personnalisée")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Création…" : "Créer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

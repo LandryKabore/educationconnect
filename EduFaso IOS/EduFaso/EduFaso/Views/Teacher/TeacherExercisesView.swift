@@ -531,8 +531,7 @@ private struct LessonHomeworkSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Modifier l’exercice", primary: saving ? "Enregistrement…" : "Enregistrer", primaryDisabled: saving, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     Text("\(item.subjectName) · donné en cours le \(TeacherExercisesView.dayLabel(item.given))")
                         .font(.subheadline).foregroundStyle(EduTheme.muted)
@@ -551,17 +550,7 @@ private struct LessonHomeworkSheet: View {
                     Section { Text(error).foregroundStyle(EduTheme.fasoRed) }
                 }
             }
-            .navigationTitle("Modifier l’exercice")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(saving)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .onAppear {

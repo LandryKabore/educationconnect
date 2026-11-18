@@ -64,13 +64,7 @@ struct SchoolYearsView: View {
         .sheet(item: $editing) { d in
             YearFormSheet(draft: d, isFirst: years.isEmpty) { Task { await load() } }.environmentObject(auth)
         }
-        .alert(deleting.map { "Supprimer « \($0.label) » ?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; deleting = nil }
-            Button("Supprimer l’année", role: .destructive) { if let y = deleting { Task { await delete(y) } } }
-        } message: {
-            Text("Cette année scolaire sera supprimée. Saisissez votre mot de passe administrateur pour confirmer.")
-        }
+        .passwordConfirm(item: $deleting, password: $password, title: { "Supprimer « \($0.label) » ?" }, message: "Cette année scolaire sera supprimée. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Supprimer l’année") { y in await delete(y) }
     }
 
     private var banner: some View {
@@ -207,8 +201,7 @@ private struct YearFormSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: draft.yearId == nil ? "Nouvelle année scolaire" : "Modifier l’année scolaire", primary: saving ? "Enregistrement…" : "Enregistrer", primaryDisabled: saving || draft.label.trimmingCharacters(in: .whitespaces).isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Libellé (ex. 2026-2027)", text: $draft.label)
                     DatePicker("Début", selection: $draft.start, displayedComponents: .date)
@@ -217,16 +210,7 @@ private struct YearFormSheet: View {
                 .environment(\.locale, Locale(identifier: "fr_FR"))
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle(draft.yearId == nil ? "Nouvelle année scolaire" : "Modifier l’année scolaire")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || draft.label.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

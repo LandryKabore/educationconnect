@@ -128,14 +128,7 @@ struct SchoolTeachersView: View {
         .sheet(item: $assigning) { t in
             AssignSheet(teacher: t) { Task { await loadAssignments() } }.environmentObject(auth)
         }
-        .alert(removing.map { "Retirer \($0.matieres?.name ?? "cette matière") en \($0.classes?.name ?? "classe") ?" } ?? "",
-               isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; removing = nil }
-            Button("Retirer", role: .destructive) { if let a = removing { Task { await remove(a) } } }
-        } message: {
-            Text("L’enseignant ne verra plus cette classe pour cette matière. Saisissez votre mot de passe administrateur pour confirmer.")
-        }
+        .passwordConfirm(item: $removing, password: $password, title: { "Retirer \($0.matieres?.name ?? "cette matière") en \($0.classes?.name ?? "classe") ?" }, message: "L’enseignant ne verra plus cette classe pour cette matière. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Retirer") { a in await remove(a) }
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             if let copy = notice?.copy { Button("Copier") { UIPasteboard.general.string = copy } }
             Button("OK", role: .cancel) {}
@@ -365,8 +358,7 @@ private struct NewTeacherSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Nouvel enseignant", primary: saving ? "Création…" : "Créer", primaryDisabled: saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Prénom", text: $first).textContentType(.givenName)
                     TextField("Nom", text: $last).textContentType(.familyName)
@@ -375,16 +367,7 @@ private struct NewTeacherSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Nouvel enseignant")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Création…" : "Créer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }
@@ -431,8 +414,7 @@ private struct AssignSheet: View {
     private var chosen: Int { picked.values.reduce(0) { $0 + $1.count } }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Affecter \(teacher.name)", primary: saving ? "Enregistrement…" : "Affecter (\(chosen))", primaryDisabled: saving || chosen == 0, busy: saving, onPrimary: { Task { await save() } }) {
                 Section { Text("Choisissez une ou plusieurs classes, puis les matières qu’il y enseigne.").font(.caption).foregroundStyle(EduTheme.muted) }
                 ForEach(classes) { c in
                     Section {
@@ -465,16 +447,7 @@ private struct AssignSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Affecter \(teacher.name)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Affecter (\(chosen))") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || chosen == 0)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .task {

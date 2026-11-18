@@ -155,13 +155,7 @@ struct SchoolExamsView: View {
             }
             .environmentObject(auth)
         }
-        .alert(deleting.map { "Supprimer « \($0.title ?? "cet examen") » ?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; deleting = nil }
-            Button("Supprimer l’examen", role: .destructive) { if let e = deleting { Task { await delete(e) } } }
-        } message: {
-            Text("Cet examen et les notes associées seront définitivement retirés. Saisissez votre mot de passe administrateur pour confirmer.")
-        }
+        .passwordConfirm(item: $deleting, password: $password, title: { "Supprimer « \($0.title ?? "cet examen") » ?" }, message: "Cet examen et les notes associées seront définitivement retirés. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Supprimer l’examen") { e in await delete(e) }
     }
 
     private var emptyText: String {
@@ -386,8 +380,7 @@ private struct ExamFormSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Créer un examen", primary: saving ? "Enregistrement…" : "Créer", primaryDisabled: saving, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     Picker("Classe", selection: $classId) { ForEach(classes) { Text($0.name).tag($0.id) } }
                         .onChange(of: classId) { _, _ in teacherId = ""; subjectId = "" }
@@ -419,15 +412,7 @@ private struct ExamFormSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Créer un examen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Créer") { Task { await save() } }.fontWeight(.semibold).disabled(saving)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .task {

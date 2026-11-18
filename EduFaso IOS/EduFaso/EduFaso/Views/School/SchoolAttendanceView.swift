@@ -434,8 +434,7 @@ private struct JustifySheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: dialog.kind == .justify ? "Justifier les absences" : "Retirer la justification", primary: busy ? "Enregistrement…" : (dialog.kind == .justify ? "Justifier" : "Retirer"), primaryDisabled: busy || ids.isEmpty, busy: busy, onPrimary: { Task { await apply() } }) {
                 Section {
                     Text(dialog.kind == .justify
                          ? "\(ids.count) absence\(ids.count > 1 ? "s" : "") à justifier."
@@ -455,16 +454,7 @@ private struct JustifySheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle(dialog.kind == .justify ? "Justifier les absences" : "Retirer la justification")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(busy) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(busy ? "Enregistrement…" : (dialog.kind == .justify ? "Justifier" : "Retirer")) { Task { await apply() } }
-                        .fontWeight(.semibold).disabled(busy || ids.isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

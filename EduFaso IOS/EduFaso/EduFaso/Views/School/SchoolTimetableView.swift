@@ -632,6 +632,8 @@ struct SchoolTimetableView: View {
 
 // MARK: - Editor
 
+private struct RemoveTarget: Identifiable { let id = "remove" }
+
 private struct SlotEditorSheet: View {
     @State var draft: SchoolTimetableView.Draft
     let parent: SchoolTimetableView.Model
@@ -653,8 +655,7 @@ private struct SlotEditorSheet: View {
     private var badRange: Bool { T.minutes(draft.end) <= T.minutes(draft.start) }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: draft.slotId == nil ? "Nouveau créneau" : "Modifier le créneau", primary: saving ? "Enregistrement…" : "Enregistrer", primaryDisabled: saving || draft.classId.isEmpty || draft.subjectId.isEmpty || draft.teacherId.isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     Picker("Classe", selection: $draft.classId) {
                         Text("Choisir…").tag("")
@@ -712,24 +713,14 @@ private struct SlotEditorSheet: View {
                     }
                 }
             }
-            .navigationTitle(draft.slotId == nil ? "Nouveau créneau" : "Modifier le créneau")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(saving || draft.classId.isEmpty || draft.subjectId.isEmpty || draft.teacherId.isEmpty)
-                }
-            }
-            .alert("Retirer ce créneau ?", isPresented: $confirmingRemove) {
-                SecureField("Mot de passe", text: $password)
-                Button("Annuler", role: .cancel) { password = "" }
-                Button("Retirer le créneau", role: .destructive) { Task { await remove() } }
-            } message: {
-                Text("Ce créneau sera retiré de l’emploi du temps. Saisissez votre mot de passe administrateur pour confirmer.")
-            }
-        }
+            
+            
+            
+            .passwordConfirm(item: Binding(get: { confirmingRemove ? RemoveTarget() : nil }, set: { if $0 == nil { confirmingRemove = false } }),
+                             password: $password, title: { _ in "Retirer ce créneau ?" },
+                             message: "Ce créneau sera retiré de l’emploi du temps. Saisissez votre mot de passe administrateur pour confirmer.",
+                             confirm: "Retirer le créneau") { _ in await remove() }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

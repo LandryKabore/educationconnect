@@ -45,8 +45,7 @@ struct EvaluationFormSheet: View {
     private var plainHomework: Bool { editing == nil && type == "devoir" && !graded }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: editing == nil ? (type == "devoir" ? "Nouvel exercice" : "Nouvelle évaluation") : "Modifier l’évaluation", primary: saving ? "Enregistrement…" : "Enregistrer", primaryDisabled: saving, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     Text("Classe ").foregroundStyle(EduTheme.muted) + Text(className).bold()
                     if editing == nil {
@@ -107,17 +106,7 @@ struct EvaluationFormSheet: View {
                     Section { Text(error).foregroundStyle(EduTheme.fasoRed) }
                 }
             }
-            .navigationTitle(editing == nil ? (type == "devoir" ? "Nouvel exercice" : "Nouvelle évaluation") : "Modifier l’évaluation")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }
-                        .fontWeight(.semibold)
-                        .disabled(saving)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .onAppear(perform: fill)

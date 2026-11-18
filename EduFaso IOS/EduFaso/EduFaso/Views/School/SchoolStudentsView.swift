@@ -338,8 +338,7 @@ private struct NewStudentSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Nouvel élève", primary: saving ? "Création…" : "Créer", primaryDisabled: saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty || classId.isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Prénom", text: $first).textContentType(.givenName)
                     TextField("Nom", text: $last).textContentType(.familyName)
@@ -365,16 +364,7 @@ private struct NewStudentSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Nouvel élève")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Création…" : "Créer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty || classId.isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .onAppear { classId = initialClassId }

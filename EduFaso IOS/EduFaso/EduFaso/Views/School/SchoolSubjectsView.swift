@@ -135,13 +135,7 @@ struct SchoolSubjectsView: View {
         .sheet(item: $editing) { d in
             SubjectFormSheet(draft: d, existing: subjects) { Task { await load() } }.environmentObject(auth)
         }
-        .alert(deleting.map { "Supprimer « \($0.name) » ?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; deleting = nil }
-            Button("Supprimer la matière", role: .destructive) { if let s = deleting { Task { await delete(s) } } }
-        } message: {
-            Text(deleteHint.isEmpty ? "Saisissez votre mot de passe administrateur pour confirmer." : deleteHint)
-        }
+        .passwordConfirm(item: $deleting, password: $password, title: { "Supprimer « \($0.name) » ?" }, message: deleteHint.isEmpty ? "Saisissez votre mot de passe administrateur pour confirmer." : deleteHint, confirm: "Supprimer la matière") { s in await delete(s) }
     }
 
     private var banner: some View {
@@ -364,24 +358,14 @@ private struct SubjectFormSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: draft.subjectId == nil ? "Matière personnalisée" : "Modifier la matière", primary: saving ? "Enregistrement…" : "Enregistrer", primaryDisabled: saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Nom de la matière", text: $draft.name)
                     TextField("Code (facultatif, ex. SVT)", text: $draft.code).textInputAutocapitalization(.characters)
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle(draft.subjectId == nil ? "Matière personnalisée" : "Modifier la matière")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Enregistrer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

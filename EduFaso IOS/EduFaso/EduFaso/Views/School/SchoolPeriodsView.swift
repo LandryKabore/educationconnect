@@ -233,8 +233,7 @@ private struct PeriodActionSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: action.kind == .close ? "Clôturer le \(action.label) ?" : (action.kind == .reopen ? "Rouvrir le \(action.label) ?" : "Dates — \(action.label)"), primary: saving ? "…" : (action.kind == .close ? "Clôturer" : (action.kind == .reopen ? "Rouvrir" : "Enregistrer")), primaryDisabled: saving, busy: saving, onPrimary: { Task { await submit() } }) {
                 switch action.kind {
                 case .close:
                     Section {
@@ -267,15 +266,7 @@ private struct PeriodActionSheet: View {
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
             .navigationTitle(action.kind == .close ? "Clôturer le \(action.label) ?" : (action.kind == .reopen ? "Rouvrir le \(action.label) ?" : "Dates — \(action.label)"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "…" : (action.kind == .close ? "Clôturer" : (action.kind == .reopen ? "Rouvrir" : "Enregistrer"))) { Task { await submit() } }
-                        .fontWeight(.semibold).disabled(saving)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .task {

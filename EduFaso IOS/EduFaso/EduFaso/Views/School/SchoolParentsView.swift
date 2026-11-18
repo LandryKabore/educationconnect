@@ -225,8 +225,7 @@ private struct NewParentSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Nouveau parent", primary: saving ? "Création…" : "Créer", primaryDisabled: saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     TextField("Prénom", text: $first).textContentType(.givenName)
                     TextField("Nom", text: $last).textContentType(.familyName)
@@ -255,15 +254,9 @@ private struct NewParentSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Nouveau parent")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Création…" : "Créer") { Task { await save() } }.fontWeight(.semibold)
-                        .disabled(saving || first.trimmingCharacters(in: .whitespaces).isEmpty || last.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
+            
+            
+            
             .onChange(of: studentQuery) { _, q in
                 Task {
                     let t = q.trimmingCharacters(in: .whitespaces)
@@ -271,7 +264,7 @@ private struct NewParentSheet: View {
                     studentResults = (try? await EduAPI().fetchStudentsPage(schoolId: sid, classId: "", search: t, offset: 0).rows) ?? []
                 }
             }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
     }

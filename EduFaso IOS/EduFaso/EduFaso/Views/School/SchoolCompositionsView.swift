@@ -125,13 +125,7 @@ struct SchoolCompositionsView: View {
             CompositionFormSheet(classes: classes, initialClassId: classId.isEmpty ? classes.first?.id ?? "" : classId) { Task { await load() } }
                 .environmentObject(auth)
         }
-        .alert(deleting.map { "Supprimer « \($0.title) » ?" } ?? "", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            SecureField("Mot de passe", text: $password)
-            Button("Annuler", role: .cancel) { password = ""; deleting = nil }
-            Button("Supprimer la composition", role: .destructive) { if let s = deleting { Task { await delete(s) } } }
-        } message: {
-            Text("Cette composition et toutes ses épreuves seront définitivement retirées. Saisissez votre mot de passe administrateur pour confirmer.")
-        }
+        .passwordConfirm(item: $deleting, password: $password, title: { "Supprimer « \($0.title) » ?" }, message: "Cette composition et toutes ses épreuves seront définitivement retirées. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Supprimer la composition") { s in await delete(s) }
     }
 
     private var banner: some View {
@@ -288,8 +282,7 @@ private struct CompositionFormSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: "Nouvelle composition", primary: saving ? "Enregistrement…" : "Créer", primaryDisabled: saving, busy: saving, onPrimary: { Task { await save() } }) {
                 Section {
                     Text("Session de 2–3 jours : toutes les matières du programme sont listées. Cochez celles à inclure, puis renseignez date et horaire pour chaque épreuve. Les enseignants noteront ensuite dans Évaluations & notes.")
                         .font(.caption).foregroundStyle(EduTheme.muted)
@@ -335,15 +328,7 @@ private struct CompositionFormSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle("Nouvelle composition")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Enregistrement…" : "Créer") { Task { await save() } }.fontWeight(.semibold).disabled(saving)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .task {

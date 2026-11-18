@@ -271,8 +271,7 @@ private struct ApplyTemplateSheet: View {
     private var shownClasses: [ClassRow] { template.id == "custom" || showAll || suggested.isEmpty ? classes : suggested }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        EduFormSheet(title: template.label, primary: saving ? "…" : "Appliquer (\(picked.count) × \(classIds.count))", primaryDisabled: saving || picked.isEmpty || classIds.isEmpty, busy: saving, onPrimary: { Task { await apply() } }) {
                 if !missing.isEmpty && template.id != "custom" {
                     Section {
                         Text("Absentes du catalogue de l’école : " + missing.map(\.name).joined(separator: ", ") + ". Ajoutez-les dans « Matières » si vous les enseignez.")
@@ -325,16 +324,7 @@ private struct ApplyTemplateSheet: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(EduTheme.fasoRed) } }
             }
-            .navigationTitle(template.label)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "…" : "Appliquer (\(picked.count) × \(classIds.count))") { Task { await apply() } }
-                        .fontWeight(.semibold).disabled(saving || picked.isEmpty || classIds.isEmpty)
-                }
-            }
-        }
+
         .tint(EduTheme.teal)
         .preferredColorScheme(.light)
         .onAppear {
