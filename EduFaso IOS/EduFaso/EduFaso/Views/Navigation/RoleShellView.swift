@@ -508,7 +508,7 @@ struct ScreenHost: View {
         case .schoolSettings:
             SchoolSettingsView()
         case .years:
-            YearsView()
+            SchoolYearsView()
         case .periods:
             PeriodsView()
         case .subjects:
