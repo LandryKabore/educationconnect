@@ -340,9 +340,13 @@ struct MessageContact: Codable, Identifiable, Hashable {
         case dateOfBirth = "date_of_birth"
     }
 
+    /// The administration is shown as « Administration », never by the administrator's name.
     var fullName: String {
-        "\(firstName ?? "") \(lastName ?? "")".trimmingCharacters(in: .whitespaces)
+        if normalizedRole == "school_admin" { return "Administration" }
+        return "\(firstName ?? "") \(lastName ?? "")".trimmingCharacters(in: .whitespaces)
     }
+
+    var isAdmin: Bool { normalizedRole == "school_admin" }
 
     /// Canonical role used for filters / sorting (RPC may use FR aliases).
     var normalizedRole: String {
@@ -361,7 +365,7 @@ struct MessageContact: Codable, Identifiable, Hashable {
         case "student": return "Élève"
         case "parent": return "Parent"
         case "teacher": return "Professeur"
-        case "school_admin": return "Administrateur"
+        case "school_admin": return "École"
         default: return role ?? ""
         }
     }

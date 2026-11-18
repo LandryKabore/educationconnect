@@ -1160,7 +1160,7 @@ struct ComposeMessageSheet: View {
                     || $0.roleLabel.localizedCaseInsensitiveContains(q)
             }
         }
-        return base.sorted { lhs, rhs in
+        return Self.collapsingAdmins(base).sorted { lhs, rhs in
             let lr = roleRank(lhs.normalizedRole)
             let rr = roleRank(rhs.normalizedRole)
             if lr != rr { return lr < rr }
@@ -1833,7 +1833,7 @@ struct ComposeMessageSheet: View {
             alignment: .leading,
             spacing: 6
         ) {
-            ForEach(items) { contact in
+            ForEach(Self.collapsingAdmins(items)) { contact in
                 HStack(spacing: 6) {
                     ContactAvatar(name: contact.fullName, size: 22)
                     Text(contact.fullName.isEmpty ? "Sans nom" : contact.fullName)
@@ -1842,7 +1842,9 @@ struct ComposeMessageSheet: View {
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     Button {
-                        withAnimation(.snappy(duration: 0.2)) { onRemove(contact) }
+                        withAnimation(.snappy(duration: 0.2)) {
+                            if contact.isAdmin { items.filter(\.isAdmin).forEach(onRemove) } else { onRemove(contact) }
+                        }
                     } label: {
                         Image(systemName: "xmark")
                             .font(.caption2.weight(.bold))
@@ -1862,7 +1864,25 @@ struct ComposeMessageSheet: View {
         }
     }
 
+    /// Every administrator is one recipient « Administration » (one chip, one row).
+    static func collapsingAdmins(_ items: [MessageContact]) -> [MessageContact] {
+        var seenAdmin = false
+        return items.filter { c in
+            guard c.isAdmin else { return true }
+            defer { seenAdmin = true }
+            return !seenAdmin
+        }
+    }
+
     private func addContact(_ contact: MessageContact) {
+        if contact.isAdmin {
+            let admins = contacts.filter(\.isAdmin)
+            if admins.count > 1 { admins.forEach { addSingleContact($0) }; return }
+        }
+        addSingleContact(contact)
+    }
+
+    private func addSingleContact(_ contact: MessageContact) {
         let intoCc = showCc && !isStudent && activeField == .cc
         if intoCc {
             if !selectedCc.contains(where: { $0.id == contact.id }) {
