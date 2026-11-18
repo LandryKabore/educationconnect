@@ -534,7 +534,7 @@ struct ScreenHost: View {
         case .statistics:
             SchoolStatisticsView()
         case .teachers:
-            RolePeopleView(role: "teacher", title: "Enseignants")
+            SchoolTeachersView()
         case .students:
             PeopleListView(kind: .students)
         case .parents:
