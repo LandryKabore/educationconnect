@@ -564,7 +564,7 @@ function StudentMessages({ formal }: { formal: boolean }) {
                         )}
                       >
                         {c.lastMessage.direction === "out" ? (formal ? "Vous : " : "Toi : ") : ""}
-                        {c.lastMessage.body}
+                        {c.lastMessage.is_cc ? "Cc · " : ""}{c.lastMessage.body}
                       </span>
                       {unread ? (
                         <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-brand-700 px-1.5 text-[11px] font-bold text-white">
@@ -669,14 +669,24 @@ function StudentMessages({ formal }: { formal: boolean }) {
                                   : "bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-[var(--surface)] dark:text-slate-100 dark:ring-[var(--border)]",
                               )}
                             >
-                              <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                              {m.is_cc ? (
+                          <p
+                            className={cn(
+                              "mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold",
+                              mine ? "bg-white/15 text-white" : "bg-brand-50 text-brand-700",
+                            )}
+                          >
+                            {mine ? "Envoyé en copie (Cc)" : "Vous êtes en copie (Cc)"}
+                          </p>
+                        ) : null}
+                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
                               <div
                                 className={cn(
                                   "mt-1 flex items-center justify-end gap-1 text-[10px]",
                                   mine ? "text-white/70" : "text-slate-400",
                                 )}
                               >
-                                {m.is_cc ? <span className="rounded bg-black/10 px-1 font-semibold">Cc</span> : null}
+                                
                                 <span>{formatDateSafe(m.created_at, "HH:mm")}</span>
                                 {mine ? (
                                   m.read_at ? (
