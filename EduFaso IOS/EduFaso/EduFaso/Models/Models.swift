@@ -308,6 +308,8 @@ struct MessageRow: Codable, Identifiable, Hashable {
     let recipientId: String?
     let schoolId: String?
     let threadId: String?
+    /// Received in copy (Cc), like Gmail.
+    var isCc: Bool? = nil
     let sender: PersonName?
     let recipient: PersonName?
 
@@ -321,6 +323,7 @@ struct MessageRow: Codable, Identifiable, Hashable {
         case recipientId = "recipient_id"
         case schoolId = "school_id"
         case threadId = "thread_id"
+        case isCc = "is_cc"
     }
 }
 

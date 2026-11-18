@@ -238,7 +238,7 @@ actor EduAPI {
             .from("messages")
             .select("""
                 id, subject, body, created_at, read_at, is_announcement, allow_replies,
-                sender_id, recipient_id, school_id, thread_id,
+                sender_id, recipient_id, school_id, thread_id, is_cc,
                 sender:sender_id(first_name, last_name)
                 """)
             .eq("recipient_id", value: userId)
@@ -279,7 +279,7 @@ actor EduAPI {
             .from("messages")
             .select("""
                 id, subject, body, created_at, read_at, is_announcement, allow_replies,
-                sender_id, recipient_id, school_id, thread_id,
+                sender_id, recipient_id, school_id, thread_id, is_cc,
                 recipient:recipient_id(first_name, last_name)
                 """)
             .eq("sender_id", value: userId)

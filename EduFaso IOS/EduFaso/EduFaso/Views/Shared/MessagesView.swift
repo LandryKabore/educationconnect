@@ -901,6 +901,13 @@ struct ConversationChatView: View {
         return HStack {
             if mine { Spacer(minLength: 48) }
             VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
+                if msg.isCc {
+                    Label(mine ? "Envoyé en copie (Cc)" : "Vous êtes en copie (Cc)", systemImage: "person.2")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(EduTheme.teal)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
                 if let subject = msg.subject, !subject.isEmpty {
                     Text(subject)
                         .font(.caption2.weight(.semibold))
@@ -1997,13 +2004,15 @@ private struct ChatBubbleMessage: Identifiable, Hashable {
     let createdAt: String?
     let readAt: String?
     let allowReplies: Bool?
+    var isCc = false
 
     var preview: String {
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cc = isCc ? "Cc · " : ""
         if let subject, !subject.isEmpty {
-            return "\(subject) — \(text)"
+            return "\(cc)\(subject) — \(text)"
         }
-        return text
+        return cc + text
     }
 }
 
@@ -2035,7 +2044,8 @@ private enum MessageConversationBuilder {
                     body: row.body ?? "",
                     createdAt: row.createdAt,
                     readAt: row.readAt,
-                    allowReplies: row.allowReplies
+                    allowReplies: row.allowReplies,
+                    isCc: row.isCc ?? false
                 )
             )
             map[otherId] = entry
@@ -2054,7 +2064,8 @@ private enum MessageConversationBuilder {
                     body: row.body ?? "",
                     createdAt: row.createdAt,
                     readAt: row.readAt,
-                    allowReplies: row.allowReplies
+                    allowReplies: row.allowReplies,
+                    isCc: row.isCc ?? false
                 )
             )
             map[otherId] = entry
