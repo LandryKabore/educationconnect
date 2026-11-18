@@ -69,11 +69,14 @@ struct TeacherTodoView: View {
 
             group(icon: "checklist", title: "Appels à faire", hint: "Cours commencés ou terminés sans appel validé",
                   count: appels.count, empty: "Tous les appels sont faits.") {
-                ForEach(appels) { l in
-                    item(title: "\(l.subjectName) · \(l.className)",
-                         meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
-                         cta: "Faire l’appel") {
-                        TeacherAttendanceView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+                ForEach(Self.byDay(appels, now: now), id: \.title) { group in
+                    dayHeader(group.title, group.items.count)
+                    ForEach(group.items) { l in
+                        item(title: "\(l.subjectName) · \(l.className)",
+                             meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
+                             cta: "Faire l’appel") {
+                            TeacherAttendanceView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+                        }
                     }
                 }
             }
@@ -81,11 +84,14 @@ struct TeacherTodoView: View {
 
             group(icon: "book", title: "Cahiers de textes à remplir", hint: "Cours terminés sans cahier de textes",
                   count: cahiers.count, empty: "Tous les cahiers sont remplis.") {
-                ForEach(cahiers) { l in
-                    item(title: "\(l.subjectName) · \(l.className)",
-                         meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
-                         cta: "Remplir") {
-                        TeacherCahierView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+                ForEach(Self.byDay(cahiers, now: now), id: \.title) { group in
+                    dayHeader(group.title, group.items.count)
+                    ForEach(group.items) { l in
+                        item(title: "\(l.subjectName) · \(l.className)",
+                             meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
+                             cta: "Remplir") {
+                            TeacherCahierView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
+                        }
                     }
                 }
             }
@@ -139,6 +145,25 @@ struct TeacherTodoView: View {
     }
 
     // MARK: - Pieces
+
+    /// « Aujourd’hui » first, then « Jours précédents » (only the groups that have lessons).
+    static func byDay(_ lessons: [TeacherLessons.Lesson], now: Date) -> [(title: String, items: [TeacherLessons.Lesson])] {
+        let today = EduDates.day(now)
+        let todays = lessons.filter { $0.date == today }
+        let before = lessons.filter { $0.date < today }
+        return [("Aujourd’hui", todays), ("Jours précédents", before)].filter { !$0.1.isEmpty }
+    }
+
+    private func dayHeader(_ title: String, _ count: Int) -> some View {
+        HStack {
+            Text(title).font(.footnote.weight(.bold)).foregroundStyle(EduTheme.ink)
+            Spacer()
+            Text("\(count)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(EduTheme.muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+        .background(H.slate100.opacity(0.8))
+    }
 
     private func banner(total: Int, appels: Int, cahiers: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {

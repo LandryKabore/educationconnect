@@ -548,7 +548,7 @@ struct ScreenHost: View {
         case .teacherStudents:
             TeacherStudentsView()
         case .teacherAttendance:
-            TeacherAttendanceOverview()
+            TeacherAppelView()
         case .timetable:
             TimetableView(mode: auth.primaryRole == .teacher ? .teacher : .student)
         case .teacherCahier:

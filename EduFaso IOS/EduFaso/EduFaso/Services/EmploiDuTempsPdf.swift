@@ -127,7 +127,7 @@ enum EmploiDuTempsPdf {
             let w = dayColW - 6
             let rect = CGRect(x: x, y: top, width: w, height: height)
 
-            let swatch = SubjectPalette.swatch(for: slot.matieres?.name)
+            let swatch = SubjectPalette.swatch(for: input.classInsteadOfTeacher ? slot.classes?.name : slot.matieres?.name)
             let fill = PdfColors.uiColor(from: swatch.fill)
             let border = PdfColors.uiColor(from: swatch.border)
             fill.setFill()
