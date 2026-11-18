@@ -518,7 +518,7 @@ struct ScreenHost: View {
         case .programmes:
             ProgrammeView()
         case .schoolTimetable:
-            SchoolTimetableMenu()
+            SchoolTimetableView()
         case .schoolAttendance:
             SchoolAttendanceView()
         case .schoolHomework:
