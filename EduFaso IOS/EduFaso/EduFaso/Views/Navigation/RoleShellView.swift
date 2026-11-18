@@ -522,7 +522,7 @@ struct ScreenHost: View {
         case .schoolAttendance:
             SchoolAttendanceView()
         case .schoolHomework:
-            SchoolEvalMenu(type: "examen", title: "Examens")
+            SchoolExamsView()
         case .schoolCompositions:
             SessionsView()
         case .teacherEntry:
