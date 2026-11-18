@@ -496,7 +496,7 @@ struct ScreenHost: View {
         case .adminReports:
             PlatformReportsView(open: open)
         case .adminBilling:
-            BillingView()
+            PlatformBillingView()
         case .adminSettings:
             PlatformSettingsView()
         case .adminAudit:
