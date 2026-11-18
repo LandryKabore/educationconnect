@@ -490,7 +490,7 @@ struct ScreenHost: View {
         case .adminSchools:
             PlatformSchoolsView()
         case .adminUsers:
-            AdminUsersView()
+            PlatformUsersView()
         case .adminInvites:
             InvitesView()
         case .adminReports:
