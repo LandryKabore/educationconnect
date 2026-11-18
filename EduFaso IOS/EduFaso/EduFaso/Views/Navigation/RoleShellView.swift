@@ -478,7 +478,7 @@ struct ScreenHost: View {
             case .teacher: TeacherHomeView()
             case .parent: ParentHomeView(title: "Accueil")
             case .schoolAdmin: SchoolHomeView(open: open)
-            case .superAdmin: PlatformPortalView(open: open)
+            case .superAdmin: PlatformHomeView(open: open)
             case .none: ProfileView()
             }
         case .profile:
