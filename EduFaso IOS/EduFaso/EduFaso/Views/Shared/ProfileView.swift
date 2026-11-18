@@ -36,7 +36,9 @@ struct ProfileView: View {
     private var isStudent: Bool { auth.primaryRole == .student }
     /// Teachers get the parents' page too (web: same Profil page, « Enseignant », Sexe required).
     private var isTeacher: Bool { auth.primaryRole == .teacher }
-    private var usesNewProfile: Bool { isParent || isStudent || isTeacher }
+    /// School admins too (web: same page; shown as « Administration », never by name).
+    private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
+    private var usesNewProfile: Bool { isParent || isStudent || isTeacher || isAdmin }
     private func t(_ vous: String, _ tu: String) -> String { isStudent ? tu : vous }
 
     var body: some View {
@@ -533,13 +535,13 @@ private extension ProfileView {
                         .font(.caption2.weight(.bold))
                         .tracking(1.2)
                         .foregroundStyle(heroOnDark ? .white.opacity(0.7) : EduTheme.muted)
-                    Text(auth.profile?.fullName.isEmpty == false ? auth.profile!.fullName : "—")
+                    Text(isAdmin ? "Administration" : (auth.profile?.fullName.isEmpty == false ? auth.profile!.fullName : "—"))
                         .font(.system(size: 24, weight: .bold))
                         .tracking(-0.3)
                         .foregroundStyle(heroOnDark ? .white : EduTheme.ink)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
-                    Text((isStudent ? ["Élève", className.map { "Classe \($0)" }, schoolName] : [isTeacher ? "Enseignant" : "Parent", schoolName]).compactMap { $0 }.joined(separator: " · "))
+                    Text((isStudent ? ["Élève", className.map { "Classe \($0)" }, schoolName] : [isAdmin ? "Administrateur" : (isTeacher ? "Enseignant" : "Parent"), schoolName]).compactMap { $0 }.joined(separator: " · "))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(heroOnDark ? .white.opacity(0.85) : EduTheme.muted)
                         .lineLimit(1)
