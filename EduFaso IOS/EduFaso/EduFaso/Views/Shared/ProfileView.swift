@@ -34,7 +34,9 @@ struct ProfileView: View {
     private var isParent: Bool { auth.primaryRole == .parent }
     /// Students get the same page as parents, in "tu", with their class and date of birth (web `formal`).
     private var isStudent: Bool { auth.primaryRole == .student }
-    private var usesNewProfile: Bool { isParent || isStudent }
+    /// Teachers get the parents' page too (web: same Profil page, « Enseignant », Sexe required).
+    private var isTeacher: Bool { auth.primaryRole == .teacher }
+    private var usesNewProfile: Bool { isParent || isStudent || isTeacher }
     private func t(_ vous: String, _ tu: String) -> String { isStudent ? tu : vous }
 
     var body: some View {
@@ -505,7 +507,7 @@ private extension ProfileView {
     // MARK: Hero
 
     /// Students: plain white header (no teal block); parents keep the teal banner.
-    var heroOnDark: Bool { !isStudent }
+    var heroOnDark: Bool { isParent }
 
     var parentHero: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -537,7 +539,7 @@ private extension ProfileView {
                         .foregroundStyle(heroOnDark ? .white : EduTheme.ink)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
-                    Text((isStudent ? ["Élève", className.map { "Classe \($0)" }, schoolName] : ["Parent", schoolName]).compactMap { $0 }.joined(separator: " · "))
+                    Text((isStudent ? ["Élève", className.map { "Classe \($0)" }, schoolName] : [isTeacher ? "Enseignant" : "Parent", schoolName]).compactMap { $0 }.joined(separator: " · "))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(heroOnDark ? .white.opacity(0.85) : EduTheme.muted)
                         .lineLimit(1)
@@ -647,7 +649,7 @@ private extension ProfileView {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                (Text("Sexe").foregroundStyle(EduTheme.ink) + (isStudent ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
+                (Text("Sexe").foregroundStyle(EduTheme.ink) + (isStudent || isTeacher ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
                     .font(.subheadline.weight(.semibold))
                 HStack(spacing: 0) {
                     ForEach([("M", "Masculin"), ("F", "Féminin")], id: \.0) { value, label in
@@ -797,6 +799,7 @@ private extension ProfileView {
         )
         var required = [("Prénom", trimmed.firstName), ("Nom", trimmed.lastName)]
         if isStudent { required += [("Date de naissance", trimmed.dateOfBirth), ("Sexe", trimmed.gender)] }
+        if isTeacher { required.append(("Sexe", trimmed.gender)) }
         required.append(("Téléphone", trimmed.phone))
         for (label, value) in required where value.isEmpty {
             formError = "Le champ « \(label) » est obligatoire."
@@ -824,7 +827,7 @@ private extension ProfileView {
                 Text("Photo de profil")
                     .font(.headline)
                     .foregroundStyle(EduTheme.ink)
-                Text("Visible par l’école et les professeurs.")
+                Text(isTeacher ? "Visible par vos élèves, leurs parents et l’école." : (isStudent ? "Visible par tes professeurs et l’école." : "Visible par l’école et les professeurs."))
                     .font(.subheadline)
                     .foregroundStyle(EduTheme.muted)
             }
