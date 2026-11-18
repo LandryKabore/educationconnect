@@ -19,19 +19,27 @@ struct EduFormSheet<Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            // A grouped list (not a Form): its rows stay square, drawn as white cards inset from the edges.
+            List {
                 Section {
                     banner
-                        .listRowInsets(EdgeInsets())
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 Group { content }
-                    .listRowBackground(Rectangle().fill(.white))
+                    .listRowBackground(
+                        Rectangle().fill(.white)
+                            .overlay(alignment: .bottom) { Rectangle().fill(EduTheme.border).frame(height: 0.5).padding(.horizontal, 16) }
+                            .padding(.horizontal, 16)
+                    )
+                    .listRowInsets(EdgeInsets(top: 10, leading: 32, bottom: 10, trailing: 32))
+                    .listRowSeparator(.hidden)
             }
+            .listStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(EduTheme.page.ignoresSafeArea())
-            .listSectionSpacing(12)
-            .environment(\.defaultMinListRowHeight, 44)
+            .environment(\.defaultMinListRowHeight, 46)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
