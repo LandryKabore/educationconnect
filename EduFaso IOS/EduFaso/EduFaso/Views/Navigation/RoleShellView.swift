@@ -528,7 +528,7 @@ struct ScreenHost: View {
         case .teacherEntry:
             SchoolTeacherEntryView()
         case .bulletins:
-            BulletinsMenu()
+            SchoolBulletinsView()
         case .schoolCahier:
             SchoolCahierView()
         case .statistics:
