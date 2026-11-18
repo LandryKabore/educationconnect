@@ -27,7 +27,15 @@ type MessageContact = {
   role: ContactRole;
   class_name: string | null;
   date_of_birth: string | null;
+  /** teachers: a parent's children among their students (« Awa Ouédraogo (6A) ») */
+  parent_of?: string[];
 };
+
+/** « Parent de Awa Ouédraogo (6A) » for teachers, otherwise the role and the class. */
+function contactRoleLine(c: MessageContact) {
+  if (c.role === "parent" && c.parent_of?.length) return `Parent de ${c.parent_of.join(", ")}`;
+  return [ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name].filter(Boolean).join(" · ");
+}
 
 type InboxMessage = MessageRow & {
   sender: { first_name: string; last_name: string } | null;
@@ -283,7 +291,21 @@ export default function Messages({
       // Admins and teachers: the whole list in one SQL call (a single JSON value, so the
       // 1,000-row API limit does not cut it - the old code lost contacts past 1,000).
       if (role === "school_admin" || role === "super_admin" || role === "teacher") {
-        return (await fetchMessageContacts(schoolId!, role)) as MessageContact[];
+        const list = (await fetchMessageContacts(schoolId!, role)) as MessageContact[];
+        if (role !== "teacher") return list;
+        // teachers: say whose parent each parent is (their children among the teacher's students)
+        const parentIds = list.filter((c) => c.role === "parent").map((c) => c.id);
+        if (parentIds.length === 0) return list;
+        const { data: links } = await supabase.from("liens_parent_eleve").select("parent_id, student_id").in("parent_id", parentIds);
+        const students = new Map(list.filter((c) => c.role === "student").map((c) => [c.id, c] as const));
+        const kids = new Map<string, string[]>();
+        for (const l of (links ?? []) as { parent_id: string; student_id: string }[]) {
+          const s = students.get(l.student_id);
+          if (!s) continue;
+          const label = `${fullName(s.first_name, s.last_name)}${s.class_name ? ` (${s.class_name})` : ""}`;
+          kids.set(l.parent_id, [...(kids.get(l.parent_id) ?? []), label]);
+        }
+        return list.map((c) => (kids.has(c.id) ? { ...c, parent_of: kids.get(c.id)!.sort((a, b) => a.localeCompare(b, "fr")) } : c));
       }
 
       const map = new Map<string, MessageContact>();
@@ -467,6 +489,7 @@ export default function Messages({
           c.class_name,
           formatContactDob(c.date_of_birth),
           ROLE_LABELS[c.role as AppRole],
+          c.parent_of?.join(" "),
         ),
     );
   }, [filteredContacts, contactSearch, pickerExclude]);
@@ -1034,7 +1057,7 @@ export default function Messages({
   const contactLine = (id: string | null) => {
     const c = id ? contactById.get(id) : undefined;
     if (!c) return "";
-    return [ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name].filter(Boolean).join(" · ");
+    return contactRoleLine(c);
   };
   const totalUnread = conversations.reduce((n, c) => n + c.unreadCount, 0);
   const unreadAnnouncements = announcementInbox.filter((m) => !m.read_at).length;
@@ -1209,9 +1232,11 @@ export default function Messages({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{name}</span>
                         <span className="block truncate text-xs text-slate-500">
-                          {[ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name, c.role === "student" ? formatContactDob(c.date_of_birth) : null]
-                            .filter(Boolean)
-                            .join(" · ")}
+                          {c.role === "parent" && c.parent_of?.length
+                            ? contactRoleLine(c)
+                            : [ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name, c.role === "student" ? formatContactDob(c.date_of_birth) : null]
+                                .filter(Boolean)
+                                .join(" · ")}
                         </span>
                       </span>
                     </button>
