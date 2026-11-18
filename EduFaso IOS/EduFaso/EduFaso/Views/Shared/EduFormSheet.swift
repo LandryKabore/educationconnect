@@ -52,29 +52,7 @@ struct EduFormSheet<Content: View>: View {
         .preferredColorScheme(.light)
     }
 
-    private var banner: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            HStack(spacing: 0) { EduTheme.fasoRed; EduTheme.fasoYellow; EduTheme.fasoGreen }
-                .frame(height: 4)
-                .accessibilityHidden(true)
-        }
-        .background(LinearGradient(colors: [H.brand800, EduTheme.teal, H.brand600], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
-    }
+    private var banner: some View { EduSheetBanner(title: title, subtitle: subtitle) }
 
     private var footer: some View {
         Button(action: onPrimary) {
@@ -148,5 +126,36 @@ extension View {
     func passwordConfirm<Item: Identifiable>(item: Binding<Item?>, password: Binding<String>, title: @escaping (Item) -> String,
                                             message: String, confirm: String, action: @escaping (Item) async -> Void) -> some View {
         modifier(PasswordConfirmModifier(item: item, password: password, title: title, message: message, confirm: confirm, action: action))
+    }
+}
+
+/// The teal banner at the top of every modal (title, optional subtitle, Faso stripe).
+struct EduSheetBanner: View {
+    let title: String
+    var subtitle: String? = nil
+    private typealias H = TeacherHomeView
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            HStack(spacing: 0) { EduTheme.fasoRed; EduTheme.fasoYellow; EduTheme.fasoGreen }
+                .frame(height: 4)
+                .accessibilityHidden(true)
+        }
+        .background(LinearGradient(colors: [H.brand800, EduTheme.teal, H.brand600], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
     }
 }

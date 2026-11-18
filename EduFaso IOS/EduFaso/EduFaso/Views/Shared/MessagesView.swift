@@ -1191,6 +1191,10 @@ struct ComposeMessageSheet: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 14) {
+                        EduSheetBanner(
+                            title: announcementsOnly ? "Nouvelle annonce" : "Nouveau message",
+                            subtitle: announcementsOnly ? "Choisissez qui la reçoit, puis rédigez l’annonce." : "Choisissez les destinataires, puis rédigez le message."
+                        )
                         if announcementsOnly {
                             announceHeader
                         } else {
@@ -1216,7 +1220,7 @@ struct ComposeMessageSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                 }
-                .background(EduTheme.loginBackground.ignoresSafeArea())
+                .background(EduTheme.page.ignoresSafeArea())
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: focused) { _, new in
                     if new == .subject || new == .body {
@@ -1229,26 +1233,7 @@ struct ComposeMessageSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(EduTheme.ink)
-                            .frame(width: 34, height: 34)
-                            .background(Circle().fill(.white))
-                    }
-                    .accessibilityLabel("Fermer")
-                }
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Image(systemName: announcementsOnly ? "megaphone.fill" : "square.and.pencil")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(announcementsOnly ? EduTheme.fasoYellow : EduTheme.teal)
-                            .accessibilityHidden(true)
-                        Text(announcementsOnly ? "Nouvelle annonce" : "Nouveau message")
-                            .font(.headline)
-                    }
+                    Button("Annuler") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -1341,17 +1326,10 @@ struct ComposeMessageSheet: View {
                     Text(sending ? "Envoi…" : (announcementsOnly ? "Publier l’annonce" : "Envoyer"))
                 }
                 .font(.body.weight(.bold))
-                .frame(maxWidth: .infinity, minHeight: 54)
+                .frame(maxWidth: .infinity, minHeight: 48)
                 .foregroundStyle(.white)
-                .background(
-                    LinearGradient(
-                        colors: canSend ? [EduTheme.teal, EduTheme.tealDark] : [EduTheme.muted.opacity(0.35), EduTheme.muted.opacity(0.35)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
-                .shadow(color: canSend ? EduTheme.teal.opacity(0.3) : .clear, radius: 10, y: 5)
+                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                .opacity(canSend ? 1 : 0.5)
             }
             .disabled(!canSend)
             .accessibilityLabel(announcementsOnly ? "Publier l’annonce" : "Envoyer le message")
@@ -1384,9 +1362,9 @@ struct ComposeMessageSheet: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .stroke(Color.orange.opacity(0.35), lineWidth: 1)
         )
     }
@@ -1415,9 +1393,9 @@ struct ComposeMessageSheet: View {
     private func fieldTag(_ text: String) -> some View {
         Text(text)
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(EduTheme.navy)
+            .foregroundStyle(EduTheme.teal)
             .frame(width: 38, height: 32)
-            .background(EduTheme.navy.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(EduTheme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
             .accessibilityHidden(true)
     }
 
@@ -1480,10 +1458,10 @@ struct ComposeMessageSheet: View {
                     Label("Cc", systemImage: showCc ? "minus" : "plus")
                         .labelStyle(.titleAndIcon)
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(showCc ? .white : EduTheme.navy)
+                        .foregroundStyle(showCc ? .white : EduTheme.teal)
                         .padding(.horizontal, 12)
                         .frame(minHeight: 32)
-                        .background(Capsule().fill(showCc ? EduTheme.navy : EduTheme.navy.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(showCc ? EduTheme.teal : EduTheme.teal.opacity(0.08)))
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -1615,7 +1593,7 @@ struct ComposeMessageSheet: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 116)
                             .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                                     .fill(on ? AnyShapeStyle(LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)))
                             )
                             .overlay(alignment: .topTrailing) {
@@ -1627,7 +1605,7 @@ struct ComposeMessageSheet: View {
                                 }
                             }
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                                     .stroke(on ? .clear : Color.black.opacity(0.06), lineWidth: 1)
                             )
                         }
@@ -1692,8 +1670,8 @@ struct ComposeMessageSheet: View {
                                 .foregroundStyle(on ? .white : EduTheme.ink)
                                 .padding(.horizontal, 12)
                                 .frame(minHeight: 34)
-                                .background(Capsule().fill(on ? EduTheme.navy : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)))
-                                .overlay(Capsule().stroke(on ? .clear : Color.black.opacity(0.07), lineWidth: 1))
+                                .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(on ? EduTheme.teal : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)))
+                                .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(on ? .clear : Color.black.opacity(0.07), lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(on ? .isSelected : [])
@@ -1764,7 +1742,7 @@ struct ComposeMessageSheet: View {
                         .foregroundStyle(tint)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(tint.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(tint.opacity(0.12)))
                     if let className = contact.className, !className.isEmpty {
                         Text(className)
                             .font(.caption)
@@ -1804,7 +1782,7 @@ struct ComposeMessageSheet: View {
 
     private func roleAccent(_ role: String) -> Color {
         switch role {
-        case "teacher": return EduTheme.navy
+        case "teacher": return EduTheme.teal
         case "school_admin": return EduTheme.teal
         case "parent": return Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255)
         case "student": return EduTheme.fasoGreen
@@ -1829,7 +1807,7 @@ struct ComposeMessageSheet: View {
                 .foregroundStyle(noReplies ? Color.orange : EduTheme.teal)
                 .frame(width: 40, height: 40)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                         .fill(noReplies ? Color.orange.opacity(0.12) : EduTheme.brand50)
                 )
                 .accessibilityHidden(true)
@@ -1878,8 +1856,8 @@ struct ComposeMessageSheet: View {
                 .padding(.leading, 4)
                 .padding(.trailing, 2)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(EduTheme.brand50))
-                .overlay(Capsule().stroke(EduTheme.teal.opacity(0.2), lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(EduTheme.brand50))
+                .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.teal.opacity(0.2), lineWidth: 1))
             }
         }
     }
@@ -2158,12 +2136,12 @@ private extension MessageRow {
 private extension View {
     func composeCard() -> some View {
         background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .fill(.white)
                 .shadow(color: .black.opacity(0.045), radius: 10, y: 3)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                 .stroke(Color.black.opacity(0.04), lineWidth: 1)
         )
     }

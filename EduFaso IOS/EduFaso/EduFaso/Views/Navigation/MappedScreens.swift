@@ -624,6 +624,7 @@ struct EvaluationsBrowser: View {
         .sheet(isPresented: $showCreate) {
             CreateEvaluationSheet(
                 preselectedClassId: classId,
+                teacherId: teacherId,
                 lockedType: type == "interrogation" ? type : nil
             ) {
                 showCreate = false
@@ -1436,6 +1437,8 @@ struct EvaluationsBrowser: View {
 /// Teachers create interrogations (graded). Exercices de maison go in the cahier, not here.
 struct CreateEvaluationSheet: View {
     var preselectedClassId: String? = nil
+    /// When the school enters on behalf of a teacher (« Saisie enseignant »).
+    var teacherId: String? = nil
     var lockedType: String? = nil
     var onCreated: () -> Void
 
@@ -1476,140 +1479,61 @@ struct CreateEvaluationSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if loading {
-                        ProgressView().tint(EduTheme.navy).frame(maxWidth: .infinity, minHeight: 120)
-                    } else if filteredAssignments.isEmpty {
-                        Text("Aucune classe assignée pour créer une évaluation.")
-                            .font(.subheadline)
-                            .foregroundStyle(EduTheme.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 24)
-                    } else {
-                        fieldBlock("Classe et matière") {
-                            Picker("Classe et matière", selection: $selected) {
-                                Text("Choisir").tag(Optional<TeachingAssignment>.none)
-                                ForEach(filteredAssignments) { item in
-                                    Text("\(item.classes?.name ?? "Classe") — \(item.matieres?.name ?? "")")
-                                        .tag(Optional(item))
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .tint(EduTheme.navy)
+        EduFormSheet(
+            title: "Nouvelle interrogation",
+            subtitle: "Les exercices de maison se mettent dans le cahier de textes.",
+            primary: saving ? "Création…" : "Créer l’interrogation",
+            primaryDisabled: !canSave,
+            busy: saving,
+            onPrimary: { Task { await save() } }
+        ) {
+            if loading {
+                ProgressView().tint(EduTheme.teal).frame(maxWidth: .infinity, minHeight: 80)
+            } else if filteredAssignments.isEmpty {
+                Text("Aucune classe affectée pour créer une évaluation.")
+                    .font(.subheadline).foregroundStyle(EduTheme.muted)
+            } else {
+                Section("Classe et matière") {
+                    Picker("Classe et matière", selection: $selected) {
+                        Text("Choisir").tag(Optional<TeachingAssignment>.none)
+                        ForEach(filteredAssignments) { item in
+                            Text("\(item.classes?.name ?? "Classe") — \(item.matieres?.name ?? "")").tag(Optional(item))
                         }
-
-                        Text("Interrogation")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(EduTheme.ink)
-                        Text("Les exercices de maison se mettent dans le cahier de textes.")
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-
-                        fieldBlock("Titre") {
-                            TextField("Ex. Interro chap. 2", text: $title)
-                        }
-
-                        fieldBlock("Description (optionnel)") {
-                            TextField("Consignes, chapitre…", text: $description, axis: .vertical)
-                                .lineLimit(2...5)
-                        }
-
-                        fieldBlock("Période") {
-                            Picker("Période", selection: $period) {
-                                ForEach(periods, id: \.self) { Text($0).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        HStack(spacing: 12) {
-                            fieldBlock("Note max") {
-                                TextField("20", text: $maxScoreText)
-                                    .keyboardType(.decimalPad)
-                            }
-                            DatePicker("Date", selection: $evalDate, displayedComponents: .date)
-                                .tint(EduTheme.navy)
-                                .labelsHidden()
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                                .padding(.top, 22)
-                        }
-
-                        Toggle(isOn: $includeTime) {
-                            Text("Horaires")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(EduTheme.ink)
-                        }
-                        .tint(EduTheme.navy)
-
-                        if includeTime {
-                            HStack(spacing: 12) {
-                                DatePicker("Début", selection: $startTime, displayedComponents: .hourAndMinute)
-                                    .tint(EduTheme.navy)
-                                DatePicker("Fin", selection: $endTime, displayedComponents: .hourAndMinute)
-                                    .tint(EduTheme.navy)
-                            }
-                        }
-
-                        if let error {
-                            Text(error)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(EduTheme.fasoRed)
-                        }
-
-                        Button {
-                            Task { await save() }
-                        } label: {
-                            HStack {
-                                if saving { ProgressView().tint(.white) }
-                                Text("Créer l'évaluation").fontWeight(.bold)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .foregroundStyle(.white)
-                            .background(canSave ? EduTheme.navy : EduTheme.muted.opacity(0.35), in: Capsule())
-                        }
-                        .disabled(!canSave)
-                        .padding(.top, 4)
                     }
                 }
-                .padding(20)
-            }
-            .background(EduTheme.loginBackground.ignoresSafeArea())
-            .navigationTitle("Nouvelle évaluation")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                Section("Interrogation") {
+                    TextField("Titre (ex. Interro chap. 2)", text: $title)
+                    TextField("Consignes, chapitre… (optionnel)", text: $description, axis: .vertical).lineLimit(2...5)
+                    Picker("Période", selection: $period) {
+                        ForEach(periods, id: \.self) { Text($0).tag($0) }
+                    }
+                    HStack {
+                        Text("Note max")
+                        Spacer()
+                        TextField("20", text: $maxScoreText).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 80)
+                    }
+                    DatePicker("Date", selection: $evalDate, displayedComponents: .date)
+                        .environment(\.locale, Locale(identifier: "fr_FR"))
+                }
+                Section("Horaires") {
+                    Toggle("Préciser les horaires", isOn: $includeTime).tint(EduTheme.teal)
+                    if includeTime {
+                        DatePicker("Début", selection: $startTime, displayedComponents: .hourAndMinute)
+                        DatePicker("Fin", selection: $endTime, displayedComponents: .hourAndMinute)
+                    }
+                }
+                if let error {
+                    Text(error).font(.footnote.weight(.semibold)).foregroundStyle(EduTheme.fasoRed)
                 }
             }
-            .task { await load() }
         }
-        .preferredColorScheme(.light)
-        .tint(EduTheme.navy)
-    }
-
-    private func fieldBlock<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(EduTheme.muted)
-            content()
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(EduTheme.fieldBorder.opacity(0.7), lineWidth: 1)
-                )
-        }
+        .task { await load() }
     }
 
     private func load() async {
         loading = true
         defer { loading = false }
-        guard let tid = auth.userId else { return }
+        guard let tid = (teacherId ?? auth.userId) else { return }
         let rows = (try? await EduAPI().fetchTeachingAssignments(teacherId: tid)) ?? []
         assignments = rows
         let options = filteredAssignments
@@ -1623,7 +1547,7 @@ struct CreateEvaluationSheet: View {
     }
 
     private func save() async {
-        guard let selected, let subjectId = selected.subjectId, let tid = auth.userId else { return }
+        guard let selected, let subjectId = selected.subjectId, let tid = (teacherId ?? auth.userId) else { return }
         let maxScore = Double(maxScoreText.replacingOccurrences(of: ",", with: ".")) ?? 20
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
