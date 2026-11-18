@@ -540,7 +540,7 @@ struct ScreenHost: View {
         case .parents:
             SchoolParentsView()
         case .signalements:
-            SignalsView(schoolId: auth.primaryRole == .superAdmin ? nil : auth.schoolId)
+            SchoolSignalsView()
         case .teacherTodo:
             TeacherTodoView()
         case .teacherClasses:
