@@ -129,8 +129,13 @@ function formatContactDob(iso: string | null | undefined) {
   return formatted || null;
 }
 
+/** The administration is shown as « Administration », never by the administrator's name. */
+function contactName(c: Pick<MessageContact, "first_name" | "last_name" | "role">) {
+  return c.role === "school_admin" ? "Administration" : fullName(c.first_name, c.last_name);
+}
+
 function contactDisplayName(c: MessageContact) {
-  const name = fullName(c.first_name, c.last_name);
+  const name = contactName(c);
   const parts: string[] = [];
   if (c.role === "student" && c.class_name) parts.push(c.class_name);
   parts.push(name);
@@ -544,18 +549,20 @@ export default function Messages({
 
   const conversations = useMemo((): Conversation[] => {
     const map = new Map<string, ChatMessage[]>();
+    const adminIds = new Set(contacts.filter((c) => c.role === "school_admin").map((c) => c.id));
 
     for (const m of directInbox) {
-      const otherName = fullName(m.sender?.first_name, m.sender?.last_name);
+      const otherName = adminIds.has(m.sender_id)
+        ? "Administration"
+        : fullName(m.sender?.first_name, m.sender?.last_name);
       const list = map.get(m.sender_id) ?? [];
       list.push({ ...m, direction: "in", otherId: m.sender_id, otherName });
       map.set(m.sender_id, list);
     }
     for (const m of directSent) {
-      const otherName = fullName(
-        m.recipient?.first_name,
-        m.recipient?.last_name,
-      );
+      const otherName = adminIds.has(m.recipient_id)
+        ? "Administration"
+        : fullName(m.recipient?.first_name, m.recipient?.last_name);
       const list = map.get(m.recipient_id) ?? [];
       list.push({
         ...m,
@@ -590,7 +597,7 @@ export default function Messages({
         new Date(b.lastMessage.created_at).getTime() -
         new Date(a.lastMessage.created_at).getTime(),
     );
-  }, [directInbox, directSent]);
+  }, [directInbox, directSent, contacts]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) =>
@@ -612,7 +619,7 @@ export default function Messages({
     if (selectedConversation) return selectedConversation.otherName;
     if (!selectedOtherId) return "";
     const c = contacts.find((x) => x.id === selectedOtherId);
-    return c ? fullName(c.first_name, c.last_name) : "Conversation";
+    return c ? contactName(c) : "Conversation";
   }, [selectedConversation, selectedOtherId, contacts]);
 
   const announceRoleOptions = useMemo(() => {
@@ -1210,7 +1217,7 @@ export default function Messages({
               ) : (
                 searchedContacts.map((c) => {
                   const picked = effectivePickerTarget === "to" ? recipientIds.includes(c.id) : ccIds.includes(c.id);
-                  const name = fullName(c.first_name, c.last_name);
+                  const name = contactName(c);
                   return (
                     <button
                       key={c.id}

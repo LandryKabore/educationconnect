@@ -844,7 +844,7 @@ export function AppShell() {
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]">
             <div className="mb-3">
               <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                {(role === "school_admin" ? "Administration" : personName(profile?.first_name, profile?.last_name)) || (
+                {personName(profile?.first_name, profile?.last_name) || (
                   <span className="inline-block h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                 )}
               </p>
