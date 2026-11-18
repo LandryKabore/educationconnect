@@ -2086,7 +2086,7 @@ private enum MessageConversationBuilder {
     }
 }
 
-private enum MessageDateFormatting {
+enum MessageDateFormatting {
     static func listTime(_ iso: String) -> String {
         guard let date = parse(iso) else { return String(iso.prefix(10)) }
         if Calendar.current.isDateInToday(date) {
