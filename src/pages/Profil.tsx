@@ -202,7 +202,7 @@ export default function Profil() {
               ) : null}
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">Mon profil</p>
-                <h1 className="mt-1.5 truncate text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "—"}</h1>
+                <h1 className="mt-1.5 truncate text-3xl font-bold tracking-tight lg:text-[2rem]">{isAdmin ? "Administration" : name || "—"}</h1>
                 <p className="mt-1.5 truncate text-sm font-medium text-white/85">
                   {[isParent ? "Parent" : isTeacher ? "Enseignant" : isAdmin ? "Administrateur" : "Élève", className ? `Classe ${className}` : null, schoolName].filter(Boolean).join(" · ")}
                 </p>

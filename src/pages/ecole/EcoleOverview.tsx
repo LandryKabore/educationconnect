@@ -76,7 +76,6 @@ export default function EcoleOverview() {
     queryFn: () => fetchDeparturesSummary(schoolId!),
   });
   const departed = departures?.total ?? 0;
-  const name = personName(profile?.first_name, profile?.last_name);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["ecole-home", "v3", schoolId, user?.id],
@@ -336,7 +335,7 @@ export default function EcoleOverview() {
                 </p>
                 <h1 className="mt-2 line-clamp-2 text-3xl font-bold leading-tight tracking-tight lg:text-[2rem]">{school?.name ?? "Mon école"}</h1>
                 <p className="mt-2 text-sm font-medium text-white/85">
-                  {[name, "Administrateur"].filter(Boolean).join(" · ")}
+                  Administration
                   <span className="animate-greeting-wave ml-1.5" aria-hidden>👋</span>
                 </p>
               </div>
