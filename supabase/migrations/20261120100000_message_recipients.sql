@@ -1,5 +1,5 @@
 -- « À … · Cc … » on a message, like Gmail: who else received the same message.
--- Proposal prepared 20 Nov 2026. NOT applied to any live database.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 20 Nov 2026.
 --
 -- A message sent to several people is stored as one row per recipient, sharing a thread_id
 -- (is_cc marks the copies). Row-level security lets each person read only their own row, so
