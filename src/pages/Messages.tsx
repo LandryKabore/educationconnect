@@ -6,6 +6,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ArrowLeft, Check, CheckCheck, Loader2, Megaphone, MessageSquare, MessagesSquare, PenSquare, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { useMessageRecipients, RecipientsLineText } from "@/hooks/useMessageRecipients";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
@@ -1095,6 +1096,11 @@ export default function Messages({
   const selectedAnn = announcementItems.find((a) => a.key === selectedAnnKey) ?? null;
   const composing = tab === "compose" || tab === "announce";
 
+  const recipientsByThread = useMessageRecipients(
+    (selectedConversation?.messages ?? []).map((m) => m.thread_id),
+    user?.id,
+  );
+
   // chat messages grouped by day, for the separators
   const chatDays: { key: string; label: string; items: ChatMessage[] }[] = [];
   for (const m of selectedConversation?.messages ?? []) {
@@ -1494,6 +1500,9 @@ export default function Messages({
                 return (
                   <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start", !grouped && "pt-2")}>
                     <div className={cn("flex max-w-[75%] flex-col", mine ? "items-end" : "items-start")}>
+                      {m.thread_id && recipientsByThread.get(m.thread_id) ? (
+                        <RecipientsLineText line={recipientsByThread.get(m.thread_id)!} mine={mine} />
+                      ) : null}
                       {m.subject ? (
                         <span className="mb-1 max-w-full truncate px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
                           {m.subject}
