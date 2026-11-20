@@ -11,6 +11,7 @@ struct EduFormSheet<Content: View>: View {
     /// While saving: the buttons are disabled and a spinner shows.
     var busy: Bool = false
     var destructive: Bool = false
+    var cancelTitle: String = "Annuler"
     let onPrimary: () -> Void
     @ViewBuilder var content: Content
 
@@ -43,7 +44,7 @@ struct EduFormSheet<Content: View>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }.disabled(busy)
+                    Button(cancelTitle) { dismiss() }.disabled(busy)
                 }
             }
             .safeAreaInset(edge: .bottom) { footer }
@@ -157,5 +158,42 @@ struct EduSheetBanner: View {
         }
         .background(LinearGradient(colors: [H.brand800, EduTheme.teal, H.brand600], startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+    }
+}
+
+/// A message in the app's modal style (replaces the system alerts): title, text, and an
+/// optional « Copier » for credentials or links.
+struct EduNotice: Identifiable, Equatable {
+    let title: String
+    let message: String
+    var copy: String? = nil
+    var id: String { title + "\u{1}" + message }
+}
+
+extension View {
+    func eduNotice(_ notice: Binding<EduNotice?>) -> some View {
+        sheet(item: notice) { n in
+            EduFormSheet(title: n.title, primary: n.copy == nil ? "OK" : "Copier", cancelTitle: "Fermer", onPrimary: {
+                if let c = n.copy { UIPasteboard.general.string = c }
+                notice.wrappedValue = nil
+            }) {
+                Text(n.message).font(.subheadline).foregroundStyle(EduTheme.ink).textSelection(.enabled)
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    /// A confirmation in the app's modal style (replaces the system alerts and action sheets).
+    func eduConfirm(isPresented: Binding<Bool>, title: String, message: String? = nil, confirm: String,
+                    destructive: Bool = true, action: @escaping () -> Void) -> some View {
+        sheet(isPresented: isPresented) {
+            EduFormSheet(title: title, primary: confirm, destructive: destructive, onPrimary: {
+                action() // reads the item before the binding clears it
+                isPresented.wrappedValue = false
+            }) {
+                if let message { Text(message).font(.subheadline).foregroundStyle(EduTheme.ink) }
+            }
+            .presentationDetents([.medium])
+        }
     }
 }

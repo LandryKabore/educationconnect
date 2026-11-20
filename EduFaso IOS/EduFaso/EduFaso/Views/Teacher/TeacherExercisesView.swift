@@ -152,15 +152,10 @@ struct TeacherExercisesView: View {
                                         title: h.title, description: h.details, maxScore: h.maxScore ?? 20, date: h.due)) { _, _ in Task { await load() } }
             }
         }
-        .confirmationDialog(
-            removing?.source == .lesson ? "Retirer ce travail du cahier de textes ?" : "Supprimer « \(removing?.title ?? "") » ?",
-            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button(removing?.source == .lesson ? "Retirer" : "Supprimer", role: .destructive) {
-                if let h = removing { Task { await remove(h) } }
-            }
-            Button("Annuler", role: .cancel) {}
+        .eduConfirm(isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                    title: removing?.source == .lesson ? "Retirer ce travail du cahier de textes ?" : "Supprimer « \(removing?.title ?? "") » ?",
+                    confirm: removing?.source == .lesson ? "Retirer" : "Supprimer") {
+            if let h = removing { Task { await remove(h) } }
         }
     }
 

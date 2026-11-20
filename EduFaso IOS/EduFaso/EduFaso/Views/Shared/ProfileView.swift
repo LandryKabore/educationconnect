@@ -81,14 +81,8 @@ struct ProfileView: View {
         }
         .environment(coach)
         .premiumTitle("Profil")
-        .alert("Supprimer la photo ?", isPresented: $confirmRemove) {
-            Button("Annuler", role: .cancel) {}
-            Button("Supprimer", role: .destructive) {
-                Task { await removePhoto() }
-            }
-        } message: {
-            Text("Votre photo de profil sera retirée.")
-        }
+        .eduConfirm(isPresented: $confirmRemove, title: "Supprimer la photo ?", message: "Votre photo de profil sera retirée.",
+                    confirm: "Supprimer") { Task { await removePhoto() } }
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
             Task { await handlePick(item) }

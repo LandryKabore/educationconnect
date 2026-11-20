@@ -247,14 +247,8 @@ struct TimetableView: View {
         }
         .environment(coach)
         .premiumTitle(titleText)
-        .alert("Export impossible", isPresented: Binding(
-            get: { exportError != nil },
-            set: { if !$0 { exportError = nil } }
-        )) {
-            Button("OK", role: .cancel) { exportError = nil }
-        } message: {
-            Text(exportError ?? "")
-        }
+        .eduNotice(Binding(get: { exportError.map { EduNotice(title: "Export impossible", message: $0) } },
+                           set: { if $0 == nil { exportError = nil } }))
         .task(id: studentIdOverride) { await load(isRefresh: ready) }
         .onChange(of: studentIdOverride) { _, _ in
             guard tour.showing, tour.steps.indices.contains(tour.index),

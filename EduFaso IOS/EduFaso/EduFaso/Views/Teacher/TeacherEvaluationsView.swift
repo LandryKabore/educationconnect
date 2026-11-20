@@ -144,12 +144,9 @@ struct TeacherEvaluationsView: View {
                 }
             }
         }
-        .confirmationDialog(removeTitle, isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                            titleVisibility: .visible) {
-            Button("Supprimer", role: .destructive) {
-                if let e = removing { Task { await remove(e) } }
-            }
-            Button("Annuler", role: .cancel) {}
+        .eduConfirm(isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                    title: removeTitle, confirm: "Supprimer") {
+            if let e = removing { Task { await remove(e) } }
         }
     }
 

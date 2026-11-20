@@ -2689,14 +2689,8 @@ struct BulletinBoard: View {
                 .coachMarkTarget("bulletin.pdf")
             }
         }
-        .alert("Export impossible", isPresented: Binding(
-            get: { exportError != nil },
-            set: { if !$0 { exportError = nil } }
-        )) {
-            Button("OK", role: .cancel) { exportError = nil }
-        } message: {
-            Text(exportError ?? "")
-        }
+        .eduNotice(Binding(get: { exportError.map { EduNotice(title: "Export impossible", message: $0) } },
+                           set: { if $0 == nil { exportError = nil } }))
         .task(id: studentId) {
             // another child: forget the previous one's class and name, keep the screen in place
             classId = nil

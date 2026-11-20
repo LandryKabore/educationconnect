@@ -16,7 +16,7 @@ struct SchoolParentsView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var creating = false
     @State private var busyId: String?
-    @State private var notice: (title: String, message: String, copy: String?)?
+    @State private var notice: EduNotice?
 
     @State private var tour = TabTour(key: "parents-ecole")
     @State private var coach = CoachMarkRegistry()
@@ -78,15 +78,13 @@ struct SchoolParentsView: View {
             NewParentSheet { res in
                 Task {
                     await load(reset: true)
-                    if let res { notice = ("Compte créé", "Identifiant : \(res.0)\nMot de passe temporaire : \(res.1)", "\(res.0)\n\(res.1)") }
+                    try? await Task.sleep(for: .milliseconds(450))
+                    if let res { notice = EduNotice(title: "Compte créé", message: "Identifiant : \(res.0)\nMot de passe temporaire : \(res.1)", copy: "\(res.0)\n\(res.1)") }
                 }
             }
             .environmentObject(auth)
         }
-        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            if let copy = notice?.copy { Button("Copier") { UIPasteboard.general.string = copy } }
-            Button("OK", role: .cancel) {}
-        } message: { Text(notice?.message ?? "") }
+        .eduNotice($notice)
     }
 
     private var banner: some View {
@@ -193,11 +191,11 @@ struct SchoolParentsView: View {
             let res = try await EduAPI().manageCredential(action: reset ? "reset_password" : "recovery_link", userId: p.id, schoolId: sid)
             if let e = res.error { error = e; return }
             if reset, let pw = res.tempPassword {
-                notice = ("Nouveau mot de passe temporaire", "\(res.username ?? "")\n\(pw)", "\(res.username ?? "")\n\(pw)")
+                notice = EduNotice(title: "Nouveau mot de passe temporaire", message: "\(res.username ?? "")\n\(pw)", copy: "\(res.username ?? "")\n\(pw)")
                 await load(reset: true)
             } else if let link = res.recoveryLink {
                 UIPasteboard.general.string = link
-                notice = ("Lien de réinitialisation copié", "Envoyez-le au parent.", link)
+                notice = EduNotice(title: "Lien de réinitialisation copié", message: "Envoyez-le au parent.", copy: link)
             }
         } catch {
             self.error = error.localizedDescription

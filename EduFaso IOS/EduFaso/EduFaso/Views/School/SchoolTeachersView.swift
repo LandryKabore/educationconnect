@@ -23,7 +23,8 @@ struct SchoolTeachersView: View {
     @State private var assigning: Teacher?
     @State private var removing: Assignment?
     @State private var password = ""
-    @State private var notice: Notice?
+    @State private var notice: EduNotice?
+    @State private var pendingAssign: Teacher?
     @State private var busyId: String?
 
     @State private var tour = TabTour(key: "enseignants-ecole")
@@ -51,7 +52,6 @@ struct SchoolTeachersView: View {
         let matieres: NamedEntity?
     }
 
-    struct Notice: Identifiable { let id = UUID(); let title: String; let message: String; let copy: String? }
 
     private func credential(_ t: Teacher) -> Credential {
         credentials[t.id] ?? Credential(username: t.email.map { $0.replacingOccurrences(of: "@edufaso.local", with: "") } ?? "—", tempPassword: nil, used: false)
@@ -116,10 +116,11 @@ struct SchoolTeachersView: View {
             NewTeacherSheet { created in
                 Task {
                     await load(reset: true)
+                    try? await Task.sleep(for: .milliseconds(450))
                     if let c = created {
-                        notice = Notice(title: "Compte créé", message: "Identifiant : \(c.username)\nMot de passe temporaire : \(c.tempPassword)\n\nDonnez-les à l’enseignant ; il choisira son mot de passe à la première connexion.",
+                        notice = EduNotice(title: "Compte créé", message: "Identifiant : \(c.username)\nMot de passe temporaire : \(c.tempPassword)\n\nDonnez-les à l’enseignant ; il choisira son mot de passe à la première connexion.",
                                         copy: "\(c.username)\n\(c.tempPassword)")
-                        if let t = rows.first(where: { $0.id == c.userId }) { assigning = t }
+                        pendingAssign = rows.first(where: { $0.id == c.userId })
                     }
                 }
             }
@@ -129,11 +130,13 @@ struct SchoolTeachersView: View {
             AssignSheet(teacher: t) { Task { await loadAssignments() } }.environmentObject(auth)
         }
         .passwordConfirm(item: $removing, password: $password, title: { "Retirer \($0.matieres?.name ?? "cette matière") en \($0.classes?.name ?? "classe") ?" }, message: "L’enseignant ne verra plus cette classe pour cette matière. Saisissez votre mot de passe administrateur pour confirmer.", confirm: "Retirer") { a in await remove(a) }
-        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            if let copy = notice?.copy { Button("Copier") { UIPasteboard.general.string = copy } }
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(notice?.message ?? "")
+        .eduNotice($notice)
+        .onChange(of: notice) { _, n in
+            // the assignment sheet opens once the « Compte créé » message is closed
+            if n == nil, let t = pendingAssign {
+                pendingAssign = nil
+                Task { try? await Task.sleep(for: .milliseconds(450)); assigning = t }
+            }
         }
     }
 
@@ -332,11 +335,11 @@ struct SchoolTeachersView: View {
             let res = try await EduAPI().manageCredential(action: reset ? "reset_password" : "recovery_link", userId: t.id, schoolId: sid)
             if let e = res.error { throw NSError(domain: "edufaso", code: 1, userInfo: [NSLocalizedDescriptionKey: e]) }
             if reset, let pw = res.tempPassword {
-                notice = Notice(title: "Nouveau mot de passe temporaire", message: "\(res.username ?? "")\n\(pw)", copy: "\(res.username ?? "")\n\(pw)")
+                notice = EduNotice(title: "Nouveau mot de passe temporaire", message: "\(res.username ?? "")\n\(pw)", copy: "\(res.username ?? "")\n\(pw)")
                 await loadCredentials()
             } else if let link = res.recoveryLink {
                 UIPasteboard.general.string = link
-                notice = Notice(title: "Lien de réinitialisation copié", message: "Envoyez-le à l’enseignant.", copy: link)
+                notice = EduNotice(title: "Lien de réinitialisation copié", message: "Envoyez-le à l’enseignant.", copy: link)
             }
         } catch {
             self.error = error.localizedDescription

@@ -22,7 +22,7 @@ struct SchoolStudentsView: View {
     @State private var selected: Set<String> = []
     @State private var bulkClassId = ""
     @State private var creating = false
-    @State private var notice: (title: String, message: String, copy: String?)?
+    @State private var notice: EduNotice?
 
     @State private var tour = TabTour(key: "eleves-ecole")
     @State private var coach = CoachMarkRegistry()
@@ -93,17 +93,15 @@ struct SchoolStudentsView: View {
             NewStudentSheet(classes: classes, initialClassId: classes.contains { $0.id == classFilter } ? classFilter : "") { res in
                 Task {
                     await load(reset: true)
+                    try? await Task.sleep(for: .milliseconds(450))
                     if let res {
-                        notice = ("Compte créé", "Identifiant : \(res.username)\nMot de passe temporaire : \(res.tempPassword)", "\(res.username)\n\(res.tempPassword)")
+                        notice = EduNotice(title: "Compte créé", message: "Identifiant : \(res.username)\nMot de passe temporaire : \(res.tempPassword)", copy: "\(res.username)\n\(res.tempPassword)")
                     }
                 }
             }
             .environmentObject(auth)
         }
-        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            if let copy = notice?.copy { Button("Copier") { UIPasteboard.general.string = copy } }
-            Button("OK", role: .cancel) {}
-        } message: { Text(notice?.message ?? "") }
+        .eduNotice($notice)
     }
 
     private var banner: some View {
@@ -304,7 +302,7 @@ struct SchoolStudentsView: View {
         guard let yearId = target.academicYearId else { error = "Cette classe n’a pas d’année scolaire"; return }
         do {
             try await EduAPI().enrolStudents(ids: Array(selected), classId: target.id, yearId: yearId)
-            notice = ("Affectation enregistrée", "\(selected.count) élève\(selected.count > 1 ? "s" : "") affecté\(selected.count > 1 ? "s" : "") en \(target.name).", nil)
+            notice = EduNotice(title: "Affectation enregistrée", message: "\(selected.count) élève\(selected.count > 1 ? "s" : "") affecté\(selected.count > 1 ? "s" : "") en \(target.name).", copy: nil)
             selected = []
             selecting = false
             bulkClassId = ""
