@@ -671,6 +671,8 @@ struct ConversationChatView: View {
     @State private var sendError: String?
     @State private var marking = false
     @State private var loaded: Bool
+    /// « À … · Cc … » per thread (only threads sent to more than one person).
+    @State private var recipients: [String: MessageRecipients.Line] = [:]
     @FocusState private var focused: Bool
 
     init(
@@ -838,6 +840,16 @@ struct ConversationChatView: View {
             await reload()
             await markUnreadRead()
         }
+        .task(id: messages.compactMap(\.threadId).joined()) {
+            await loadRecipients()
+        }
+    }
+
+    private func loadRecipients() async {
+        guard let uid = auth.userId else { return }
+        for t in Set(messages.compactMap(\.threadId)) where recipients[t] == nil {
+            if let line = await MessageRecipients.line(thread: t, me: uid) { recipients[t] = line }
+        }
     }
 
     private var loadingBubbles: some View {
@@ -907,6 +919,11 @@ struct ConversationChatView: View {
                         .foregroundStyle(EduTheme.teal)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                if let t = msg.threadId, let line = recipients[t] {
+                    MessageRecipients.LineView(line: line)
+                        .multilineTextAlignment(mine ? .trailing : .leading)
+                        .padding(.horizontal, 4)
                 }
                 if let subject = msg.subject, !subject.isEmpty {
                     Text(subject)
@@ -2005,6 +2022,7 @@ private struct ChatBubbleMessage: Identifiable, Hashable {
     let readAt: String?
     let allowReplies: Bool?
     var isCc = false
+    var threadId: String? = nil
 
     var preview: String {
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2045,7 +2063,8 @@ private enum MessageConversationBuilder {
                     createdAt: row.createdAt,
                     readAt: row.readAt,
                     allowReplies: row.allowReplies,
-                    isCc: row.isCc ?? false
+                    isCc: row.isCc ?? false,
+                    threadId: row.threadId
                 )
             )
             map[otherId] = entry
@@ -2065,7 +2084,8 @@ private enum MessageConversationBuilder {
                     createdAt: row.createdAt,
                     readAt: row.readAt,
                     allowReplies: row.allowReplies,
-                    isCc: row.isCc ?? false
+                    isCc: row.isCc ?? false,
+                    threadId: row.threadId
                 )
             )
             map[otherId] = entry
@@ -3418,5 +3438,39 @@ struct ParentAnnouncementDetail: View {
         }
         .premiumTitle("Annonce")
         .onAppear(perform: onOpen)
+    }
+}
+
+
+/// « À … · Cc … », like Gmail: who else got a message sent to several people
+/// (database function ef_message_recipients; nothing is shown until it exists).
+enum MessageRecipients {
+    struct Line: Equatable { let to: [String]; let cc: [String] }
+    private struct Row: Decodable { let recipient_id: String; let first_name: String?; let last_name: String?; let is_cc: Bool; let is_admin: Bool }
+    private struct P: Encodable { let p_thread: String }
+
+    static func line(thread: String, me: String) async -> Line? {
+        guard let rows: [Row] = try? await SupabaseManager.client.rpc("ef_message_recipients", params: P(p_thread: thread)).execute().value,
+              rows.count > 1 else { return nil }
+        func names(_ cc: Bool) -> [String] {
+            var out: [String] = []
+            for r in rows where r.is_cc == cc {
+                let n = r.recipient_id == me ? "vous" : (r.is_admin ? "Administration" : "\(r.first_name ?? "") \(r.last_name ?? "")".trimmingCharacters(in: .whitespaces))
+                if !n.isEmpty, !out.contains(n) { out.append(n) }
+            }
+            return out
+        }
+        return Line(to: names(false), cc: names(true))
+    }
+
+    struct LineView: View {
+        let line: Line
+        var body: some View {
+            (Text("À : ").fontWeight(.semibold) + Text(line.to.joined(separator: ", "))
+             + (line.cc.isEmpty ? Text("") : Text("  ·  Cc : ").fontWeight(.semibold) + Text(line.cc.joined(separator: ", "))))
+                .font(.caption2)
+                .foregroundStyle(EduTheme.muted)
+                .lineLimit(3)
+        }
     }
 }
