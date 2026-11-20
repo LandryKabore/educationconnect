@@ -134,6 +134,17 @@ function contactName(c: Pick<MessageContact, "first_name" | "last_name" | "role"
   return c.role === "school_admin" ? "Administration" : fullName(c.first_name, c.last_name);
 }
 
+/** Every administrator is one recipient « Administration » (one chip, one row). */
+function collapseAdmins<T extends { role: string }>(list: T[]): T[] {
+  let seen = false;
+  return list.filter((c) => {
+    if (c.role !== "school_admin") return true;
+    if (seen) return false;
+    seen = true;
+    return true;
+  });
+}
+
 function contactDisplayName(c: MessageContact) {
   const name = contactName(c);
   const parts: string[] = [];
@@ -467,13 +478,18 @@ export default function Messages({
     return contacts.filter((c) => c.role === recipientRole);
   }, [contacts, recipientRole]);
 
+  const adminIds = useMemo(
+    () => contacts.filter((c) => c.role === "school_admin").map((c) => c.id),
+    [contacts],
+  );
+
   const selectedRecipients = useMemo(
-    () => contacts.filter((c) => recipientIds.includes(c.id)),
+    () => collapseAdmins(contacts.filter((c) => recipientIds.includes(c.id))),
     [contacts, recipientIds],
   );
 
   const selectedCc = useMemo(
-    () => contacts.filter((c) => ccIds.includes(c.id)),
+    () => collapseAdmins(contacts.filter((c) => ccIds.includes(c.id))),
     [contacts, ccIds],
   );
 
@@ -484,7 +500,7 @@ export default function Messages({
   }, [role, pickerTarget, ccIds, recipientIds]);
 
   const searchedContacts = useMemo(() => {
-    return filteredContacts.filter(
+    return collapseAdmins(filteredContacts).filter(
       (c) =>
         !pickerExclude.has(c.id) &&
         matchesSearch(
@@ -855,17 +871,22 @@ export default function Messages({
   const effectivePickerTarget =
     role === "student" ? "to" : pickerTarget;
 
+  /** Picking « Administration » picks every administrator of the school. */
+  const groupOf = (id: string) => (adminIds.includes(id) ? adminIds : [id]);
+
   const togglePickerId = (id: string) => {
+    const ids = groupOf(id);
+    const toggle = (prev: string[]) =>
+      prev.includes(id)
+        ? prev.filter((x) => !ids.includes(x))
+        : [...prev, ...ids.filter((x) => !prev.includes(x))];
+    const drop = (prev: string[]) => prev.filter((x) => !ids.includes(x));
     if (effectivePickerTarget === "to") {
-      setRecipientIds((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-      );
-      setCcIds((prev) => prev.filter((x) => x !== id));
+      setRecipientIds(toggle);
+      setCcIds(drop);
     } else {
-      setCcIds((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-      );
-      setRecipientIds((prev) => prev.filter((x) => x !== id));
+      setCcIds(toggle);
+      setRecipientIds(drop);
     }
   };
 
@@ -1154,7 +1175,7 @@ export default function Messages({
                   key={c.id}
                   label={contactDisplayName(c)}
                   tone="brand"
-                  onRemove={() => setRecipientIds((prev) => prev.filter((x) => x !== c.id))}
+                  onRemove={() => setRecipientIds((prev) => prev.filter((x) => !groupOf(c.id).includes(x)))}
                 />
               ))}
               {selectedCc.map((c) => (
@@ -1162,7 +1183,7 @@ export default function Messages({
                   key={c.id}
                   label={`Cc · ${contactDisplayName(c)}`}
                   tone="slate"
-                  onRemove={() => setCcIds((prev) => prev.filter((x) => x !== c.id))}
+                  onRemove={() => setCcIds((prev) => prev.filter((x) => !groupOf(c.id).includes(x)))}
                 />
               ))}
             </div>
