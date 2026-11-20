@@ -14,6 +14,9 @@ final class AuthViewModel: ObservableObject {
     @Published var portalReady = false
     @Published var authError: String?
     @Published var busy = false
+    /// « Mode support », like the web: a super admin opens one school as its administration.
+    @Published private(set) var supportSchool: School?
+    private var realSchools: [School] = []
 
     func markPortalReady() {
         guard !portalReady else { return }
@@ -29,15 +32,36 @@ final class AuthViewModel: ObservableObject {
 
     var userId: String? { session?.user.id.uuidString.lowercased() }
 
-    var primaryRole: AppRole? {
+    /// The account's own role, ignoring « Mode support ».
+    var realRole: AppRole? {
         for role in AppRole.priority {
             if roles.contains(where: { $0.role == role }) { return role }
         }
         return nil
     }
 
+    var inSupport: Bool { realRole == .superAdmin && supportSchool != nil }
+
+    var primaryRole: AppRole? { inSupport ? .schoolAdmin : realRole }
+
     var schoolId: String? {
-        roles.first(where: { $0.schoolId != nil })?.schoolId ?? schools.first?.id
+        if inSupport, let s = supportSchool { return s.id }
+        return roles.first(where: { $0.schoolId != nil })?.schoolId ?? schools.first?.id
+    }
+
+    func enterSupportMode(_ school: School) {
+        guard realRole == .superAdmin else { return }
+        if supportSchool == nil { realSchools = schools }
+        supportSchool = school
+        schools = [school]
+        portalReady = false
+    }
+
+    func exitSupportMode() {
+        guard supportSchool != nil else { return }
+        supportSchool = nil
+        schools = realSchools
+        portalReady = false
     }
 
     var needsPasswordChange: Bool {
@@ -66,6 +90,7 @@ final class AuthViewModel: ObservableObject {
             profile = nil
             roles = []
             schools = []
+            supportSchool = nil
             portalReady = false
         }
         loading = false
@@ -134,6 +159,10 @@ final class AuthViewModel: ObservableObject {
             } else {
                 schools = []
             }
+            if let s = supportSchool {
+                realSchools = schools
+                schools = [s]
+            }
         } catch {
             authError = error.localizedDescription
         }
@@ -169,6 +198,7 @@ final class AuthViewModel: ObservableObject {
             profile = nil
             roles = []
             schools = []
+            supportSchool = nil
             portalReady = false
         } catch {
             authError = error.localizedDescription

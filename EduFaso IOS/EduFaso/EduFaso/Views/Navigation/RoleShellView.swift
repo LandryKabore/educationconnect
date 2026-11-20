@@ -34,6 +34,37 @@ struct RoleShellView: View {
                 padShell
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let s = auth.supportSchool, auth.inSupport { supportBanner(s) }
+        }
+        .onChange(of: auth.supportSchool?.id) { _, _ in
+            selection = .dashboard
+            showProfile = false
+            menuOpen = false
+            contentID = UUID()
+        }
+    }
+
+    /// Like the web: « Mode support — vous consultez l’école comme administrateur ».
+    private func supportBanner(_ s: School) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "headphones").font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Mode support").font(.caption.weight(.bold))
+                Text("Vous consultez « \(s.name) » comme administrateur.").font(.caption2).lineLimit(2)
+            }
+            Spacer(minLength: 6)
+            Button { auth.exitSupportMode() } label: {
+                Text("Quitter").font(.caption.weight(.bold)).foregroundStyle(TeacherHomeView.amber)
+                    .padding(.horizontal, 10).frame(minHeight: 30)
+                    .background(.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Quitter le mode support")
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .background(TeacherHomeView.amber)
     }
 
     private var phoneShell: some View {

@@ -5,6 +5,7 @@ import Supabase
 /// and class, search by name or e-mail, 50 at a time; each account with its roles and schools,
 /// and the support actions (déverrouiller, verrouiller, forcer le changement, réinitialiser).
 struct PlatformUsersView: View {
+    @EnvironmentObject private var auth: AuthViewModel
     @State private var role = "school_admin"
     @State private var schoolId = ""
     @State private var classId = ""
@@ -20,6 +21,8 @@ struct PlatformUsersView: View {
     @State private var tempPassword: TempPassword?
     @State private var notice: String?
     @State private var searchTask: Task<Void, Never>?
+    @State private var supportFor: UserRow.Role?
+    @State private var openingSupport = false
 
     @State private var tour = TabTour(key: "admin-utilisateurs")
     @State private var coach = CoachMarkRegistry()
@@ -49,7 +52,7 @@ struct PlatformUsersView: View {
     }
 
     struct UserRow: Decodable, Identifiable, Hashable {
-        struct Role: Decodable, Hashable { let id: String; let role: String; let school_id: String?; let active: Bool }
+        struct Role: Decodable, Hashable, Identifiable { let id: String; let role: String; let school_id: String?; let active: Bool }
         let id: String
         let first_name: String?
         let last_name: String?
@@ -154,6 +157,15 @@ struct PlatformUsersView: View {
             }
             .presentationDetents([.medium])
         }
+        .sheet(item: $supportFor) { r in
+            EduFormSheet(title: "Ouvrir le mode support ?", subtitle: "Vous verrez l’école comme son administration.",
+                         primary: openingSupport ? "Ouverture…" : "Ouvrir l’école", busy: openingSupport,
+                         onPrimary: { Task { await openSupport(r) } }) {
+                Text("Toutes vos actions seront faites comme administrateur de l’école. Le bandeau en haut de l’écran permet de quitter le mode support.")
+                    .font(.subheadline).foregroundStyle(EduTheme.ink)
+            }
+            .presentationDetents([.medium])
+        }
         .sheet(item: $tempPassword) { t in
             EduFormSheet(title: "Mot de passe temporaire", subtitle: t.name, primary: "Copier",
                          onPrimary: { UIPasteboard.general.string = t.password; tempPassword = nil; notice = "Mot de passe temporaire copié." }) {
@@ -239,6 +251,9 @@ struct PlatformUsersView: View {
                 Text("École\(u.schoolNames.count > 1 ? "s" : "") : \(u.schoolNames.joined(separator: ", "))").font(.caption).foregroundStyle(EduTheme.muted)
             }
             if role == "student" { Text("Classe : \(u.className ?? "Sans classe")").font(.caption).foregroundStyle(EduTheme.muted) }
+            if let adminRole = roles.first(where: { $0.role == "school_admin" && $0.school_id != nil }) {
+                PlatformButton(title: "Mode support", icon: "headphones", outline: true) { supportFor = adminRole }
+            }
             HStack(spacing: 8) {
                 if u.isActive {
                     PlatformButton(title: "Verrouiller", icon: "lock", outline: true, danger: true, busy: rowBusy && busy?.action == "lock") { confirm = Action(user: u, action: "lock") }
@@ -305,6 +320,21 @@ struct PlatformUsersView: View {
         loadingMore = true
         defer { loadingMore = false }
         if let p = try? await page(offset: rows.count) { rows += p.rows; total = p.total }
+    }
+
+    private func openSupport(_ r: UserRow.Role) async {
+        guard let sid = r.school_id else { return }
+        openingSupport = true
+        defer { openingSupport = false }
+        do {
+            guard let school = try await EduAPI().fetchSchool(id: sid) else { throw URLError(.badServerResponse) }
+            supportFor = nil
+            try? await Task.sleep(for: .milliseconds(350))
+            auth.enterSupportMode(school)
+        } catch {
+            supportFor = nil
+            self.error = "Impossible d’ouvrir l’école."
+        }
     }
 
     private struct ActionResponse: Decodable { let success: Bool?; let error: String?; let tempPassword: String? }
