@@ -550,21 +550,47 @@ export default function NotesSaisie() {
 
   return (
     <div>
-      <div className="z-20 mb-4 lg:sticky lg:top-0 lg:-mx-8 lg:-mt-8 lg:mb-6 lg:border-b lg:border-slate-200 lg:bg-[var(--bg)] lg:px-8 lg:pb-4 lg:pt-8 dark:lg:border-[var(--border)]">
-        {backLink}
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
-              {evaluationTypeLabel(openEval.type)} — {openEval.title}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-          </div>
-          <div className="hidden items-center gap-4 lg:flex">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {notedCount}/{total} notés
-            </span>
+      {backLink}
+      {/* teal banner, kept on screen while scrolling through the class on wide screens */}
+      <div className="z-20 mb-6 lg:sticky lg:top-3">
+        <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-5 pb-6 pt-5 text-white shadow-lg shadow-brand-900/25 lg:px-8">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-white/[0.06]" aria-hidden />
+          <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                {evaluationTypeLabel(openEval.type)} · Saisie des notes
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight lg:text-3xl">{openEval.title}</h1>
+              <p className="mt-1 text-sm font-medium text-white/85">{subtitle}</p>
+            </div>
             <div
-              className="h-2 w-56 overflow-hidden rounded-full bg-slate-200"
+              className={cn(
+                "hidden items-center gap-4 lg:flex",
+                "[&_.bg-brand-700]:bg-white [&_.bg-brand-700]:text-brand-800 [&_.bg-brand-700:hover]:bg-brand-50 [&_button]:shadow-sm",
+              )}
+            >
+              <span className="text-sm font-semibold tabular-nums">
+                {notedCount}/{total} notés
+              </span>
+              <div
+                className="h-2 w-56 overflow-hidden rounded-full bg-white/20"
+                role="progressbar"
+                aria-label="Progression de la saisie"
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={notedCount}
+              >
+                <div
+                  className="h-full rounded-full bg-emerald-300 transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              {saveButton("md")}
+            </div>
+          </div>
+          <div className="relative mt-4 lg:hidden">
+            <div
+              className="h-2 overflow-hidden rounded-full bg-white/20"
               role="progressbar"
               aria-label="Progression de la saisie"
               aria-valuemin={0}
@@ -572,42 +598,29 @@ export default function NotesSaisie() {
               aria-valuenow={notedCount}
             >
               <div
-                className="h-full rounded-full bg-emerald-600 transition-all"
+                className="h-full rounded-full bg-emerald-300 transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            {saveButton("md")}
-          </div>
-        </div>
-        <div className="mt-3 lg:hidden">
-          <div
-            className="h-2 overflow-hidden rounded-full bg-slate-200"
-            role="progressbar"
-            aria-label="Progression de la saisie"
-            aria-valuemin={0}
-            aria-valuemax={total}
-            aria-valuenow={notedCount}
-          >
-            <div
-              className="h-full rounded-full bg-emerald-600 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="mt-1.5 flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span>
-              {notedCount}/{total} notés
-            </span>
-            {remaining > 0 ? (
-              <span className="text-amber-700 dark:text-amber-400">
-                {remaining} restant{remaining > 1 ? "s" : ""}
+            <div className="mt-1.5 flex justify-between text-xs font-semibold">
+              <span>
+                {notedCount}/{total} notés
               </span>
-            ) : (
-              <span className="text-emerald-700 dark:text-emerald-400">
-                Terminé
-              </span>
-            )}
+              {remaining > 0 ? (
+                <span className="text-amber-200">
+                  {remaining} restant{remaining > 1 ? "s" : ""}
+                </span>
+              ) : (
+                <span className="text-emerald-200">Terminé</span>
+              )}
+            </div>
           </div>
-        </div>
+          <div className="absolute inset-x-0 bottom-0 flex h-1" aria-hidden>
+            <span className="flex-1 bg-faso-red" />
+            <span className="flex-1 bg-faso-yellow" />
+            <span className="flex-1 bg-faso-green" />
+          </div>
+        </section>
       </div>
 
       {readOnly ? <ReadOnlyBanner module="notes" /> : null}
