@@ -392,12 +392,6 @@ const ACCOUNT_GROUP: NavGroup = {
   items: [{ to: "/profil", label: "Profil", icon: <User className="h-4 w-4" /> }],
 };
 
-const DOWNLOAD_ITEM: NavItem = {
-  to: "/telecharger",
-  label: "Télécharger l'app",
-  icon: <Download className="h-4 w-4" />,
-};
-
 // loaded the first time the admin opens the search (keeps the main bundle small)
 const GlobalSearch = lazy(() =>
   import("@/components/GlobalSearch").then((m) => ({ default: m.GlobalSearch })),
@@ -488,16 +482,6 @@ export function AppShell() {
       }),
     }))
     .filter((g) => g.items.length > 0);
-  const navGroups: NavGroup[] = [
-    ...visibleRoleGroups,
-    {
-      ...ACCOUNT_GROUP,
-      items: [
-        ...ACCOUNT_GROUP.items,
-        ...(isDesktopApp() ? [] : [DOWNLOAD_ITEM]),
-      ],
-    },
-  ];
 
   const handleLogout = async () => {
     await signOut();
@@ -661,210 +645,29 @@ export function AppShell() {
         />
       ) : null}
 
-      {role === "student" || role === "parent" || role === "teacher" || role === "school_admin" ? (
-        <StudentSidebar
-          onSearch={
-            canSearch
-              ? () => {
-                  setOpen(false);
-                  setSearchOpen(true);
-                }
-              : undefined
-          }
-          roleLabel={ROLE_LABELS[role]}
-          onChildPage={openChildPage}
-          groups={[...roleGroups, ACCOUNT_GROUP]}
-          showDownload={!isDesktopApp()}
-          pathname={location.pathname}
-          badgeFor={badgeFor}
-          open={open}
-          onClose={() => setOpen(false)}
-          onLogout={() => void handleLogout()}
-          name={role === "school_admin" ? "Administration" : personName(profile?.first_name, profile?.last_name)}
-          avatarUrl={profile?.avatar_url ?? null}
-          schoolName={schoolName}
-          topOffset={!!supportSchoolId}
-        />
-      ) : (
-      <aside
-          className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 dark:border-[var(--border)] dark:bg-[var(--surface)]",
-            supportSchoolId ? "top-12" : "",
-            open ? "translate-x-0" : "-translate-x-full",
-          )}
-        >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-[var(--border)]">
-            <div className="min-w-0 flex-1">
-              <BrandLogo
-                className="h-14 w-auto max-w-[11rem] rounded-lg"
-                imgClassName="h-14"
-              />
-              {schoolName ? (
-                <p className="mt-1 truncate text-xs text-slate-500">{schoolName}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="shrink-0 rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
-              onClick={() => setOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-  
-          <div className="shrink-0 space-y-2 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
-            <LiveClockWeather />
-            <ThemeToggle className="w-full justify-center" />
-            <HelpLauncher />
-          </div>
-  
-          {canSearch ? (
-            <div className="shrink-0 border-b border-slate-200 px-3 py-3 dark:border-[var(--border)]">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setSearchOpen(true);
-                }}
-                className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-500 hover:border-slate-300 dark:border-[var(--border)] dark:bg-[var(--surface-2)]"
-              >
-                <Search className="h-4 w-4 shrink-0" />
-                <span className="flex-1 truncate">Rechercher…</span>
-                <kbd className="hidden rounded border border-slate-200 px-1.5 text-[10px] font-medium text-slate-400 lg:inline dark:border-[var(--border)]">
-                  Ctrl K
-                </kbd>
-              </button>
-            </div>
-          ) : null}
-  
-          <nav className="min-h-0 flex-1 overflow-y-auto p-3">
-            <div className="space-y-4">
-              {navGroups.map((group, groupIndex) => (
-                <div key={group.label ?? `group-${groupIndex}`}>
-                  {group.label ? (
-                    // a section title, not a link: small teal caps and a rule
-                    <div className="mb-1.5 flex select-none items-center gap-2 px-1" role="presentation">
-                      <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-brand-700/80 dark:text-brand-300/80">
-                        {group.label}
-                      </span>
-                      <span className="h-px flex-1 bg-slate-200 dark:bg-[var(--border)]" />
-                    </div>
-                  ) : null}
-                  <div className={cn("space-y-0.5", group.label && "ml-2 border-l border-slate-200 pl-1.5 dark:border-[var(--border)]")}>
-                  {group.items.map((item) => {
-                    const active = item.childPage
-                      ? new RegExp(`^/enfants/[^/]+/${item.childPage}(/|$)`).test(location.pathname)
-                      : location.pathname === item.to ||
-                      (!item.exact &&
-                        item.to !== "/tableau-de-bord" &&
-                        item.to !== "/ecole" &&
-                        item.to !== "/admin" &&
-                        location.pathname.startsWith(item.to));
-                    const badge = badgeFor(item);
-                    return (
-                      item.childPage ? (
-                      <button
-                        key={item.to}
-                        type="button"
-                        onClick={() => openChildPage(item)}
-                        aria-haspopup={(parentChildren?.length ?? 0) > 1 ? "dialog" : undefined}
-                        className={cn(
-                          "flex w-full text-left items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
-                          active
-                            ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
-                            : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "shrink-0",
-                            active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
-                          )}
-                        >
-                          {item.icon}
-                        </span>
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {badge != null ? (
-                          <span
-                            className={cn(
-                              "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white",
-                              badge.tone === "rose" && "bg-rose-500",
-                              badge.tone === "amber" && "bg-amber-500",
-                              badge.tone === "brand" && "bg-brand-600",
-                            )}
-                            title={badge.title}
-                          >
-                            {badge.count > 99 ? "99+" : badge.count}
-                          </span>
-                        ) : null}
-                      </button>
-                      ) : (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setOpen(false)}
-                        className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
-                          active
-                            ? "bg-brand-50 text-brand-800 dark:bg-brand-950/40 dark:text-brand-200"
-                            : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[var(--surface-2)]",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "shrink-0",
-                            active ? "text-brand-700 dark:text-brand-300" : "text-slate-400",
-                          )}
-                        >
-                          {item.icon}
-                        </span>
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {badge != null ? (
-                          <span
-                            className={cn(
-                              "inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none text-white",
-                              badge.tone === "rose" && "bg-rose-500",
-                              badge.tone === "amber" && "bg-amber-500",
-                              badge.tone === "brand" && "bg-brand-600",
-                            )}
-                            title={badge.title}
-                          >
-                            {badge.count > 99 ? "99+" : badge.count}
-                          </span>
-                        ) : null}
-                      </Link>
-                      )
-                    );
-                  })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </nav>
-  
-          <div className="shrink-0 border-t border-slate-200 bg-white p-4 dark:border-[var(--border)] dark:bg-[var(--surface)]">
-            <div className="mb-3">
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                {personName(profile?.first_name, profile?.last_name) || (
-                  <span className="inline-block h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                )}
-              </p>
-              {role ? (
-                <p className="text-xs text-slate-500">{ROLE_LABELS[role]}</p>
-              ) : null}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => void handleLogout()}
-            >
-              <LogOut className="h-4 w-4" />
-              Déconnexion
-            </Button>
-          </div>
-        </aside>
-      )}
+      <StudentSidebar
+        onSearch={
+          canSearch
+            ? () => {
+                setOpen(false);
+                setSearchOpen(true);
+              }
+            : undefined
+        }
+        roleLabel={role ? ROLE_LABELS[role] : ""}
+        onChildPage={openChildPage}
+        groups={[...visibleRoleGroups, ACCOUNT_GROUP]}
+        showDownload={!isDesktopApp()}
+        pathname={location.pathname}
+        badgeFor={badgeFor}
+        open={open}
+        onClose={() => setOpen(false)}
+        onLogout={() => void handleLogout()}
+        name={role === "school_admin" ? "Administration" : personName(profile?.first_name, profile?.last_name)}
+        avatarUrl={profile?.avatar_url ?? null}
+        schoolName={schoolName}
+        topOffset={!!supportSchoolId}
+      />
 
       <div
         className={cn(
@@ -970,7 +773,7 @@ export function AppShell() {
 
 type SidebarBadge = { count: number; title: string; tone: "amber" | "rose" | "brand" } | null;
 
-/** Student / parent / teacher sidebar: identity card, grouped menu, compact footer. */
+/** The sidebar of every portal: identity card, grouped menu, compact footer. */
 function StudentSidebar({
   onSearch,
   roleLabel,
@@ -1097,6 +900,7 @@ function StudentSidebar({
                     (!item.exact &&
                       item.to !== "/tableau-de-bord" &&
                       item.to !== "/ecole" &&
+                      item.to !== "/admin" &&
                       pathname.startsWith(item.to));
                 const badge = badgeFor(item);
                 const rowCls = cn("w-full text-left",
