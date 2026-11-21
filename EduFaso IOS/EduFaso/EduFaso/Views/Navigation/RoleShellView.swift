@@ -270,84 +270,102 @@ struct SideDrawerView: View {
     @State private var unreadMessages = 0
     @State private var unreadAnnouncements = 0
 
+    /// A super admin belongs to no school: the school shows only in Mode support.
     private var schoolName: String? {
-        auth.schools.first?.name
+        if let s = auth.supportSchool, auth.inSupport { return s.name }
+        if auth.primaryRole == .superAdmin { return nil }
+        return auth.schools.first?.name
     }
+
+    /// School admins appear as « Administration », never by name.
+    private var displayName: String {
+        if auth.primaryRole == .schoolAdmin { return "Administration" }
+        return "\(auth.profile?.firstName ?? "") \(auth.profile?.lastName ?? "")".trimmingCharacters(in: .whitespaces)
+    }
+
+    private var roleLine: String {
+        let role = auth.primaryRole?.label ?? ""
+        guard let schoolName else { return role }
+        return role.isEmpty ? schoolName : "\(role) · \(schoolName)"
+    }
+
+    private static let brand800 = Color(red: 17 / 255, green: 94 / 255, blue: 89 / 255)
+    private static let brand600 = Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255)
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Image("EduFasoLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 48)
-                        .frame(maxWidth: 160, alignment: .leading)
-                    if let schoolName {
-                        Text(schoolName)
-                            .font(.caption)
-                            .foregroundStyle(EduTheme.muted)
-                            .lineLimit(2)
-                    }
-                }
+            HStack(spacing: 12) {
+                Image("EduFasoLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 36)
+                    .frame(maxWidth: 130, alignment: .leading)
                 Spacer(minLength: 8)
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(EduTheme.ink)
                         .frame(width: 36, height: 36)
-                        .background(
-                            Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
+                        .background(EduTheme.sand, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
                 }
                 .accessibilityLabel("Fermer le menu")
             }
             .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            .overlay(alignment: .bottom) { Divider() }
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+
+            identityCard
+                .padding(.horizontal, 12)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
                     ForEach(appNavSections(for: auth.primaryRole)) { section in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 6) {
                             if let title = section.title {
-                                Text(title.uppercased())
-                                    .font(.caption2.weight(.semibold))
-                                    .tracking(0.8)
-                                    .foregroundStyle(EduTheme.muted)
-                                    .padding(.horizontal, 12)
-                                    .padding(.bottom, 2)
+                                // a section title, not a link: small teal caps and a rule
+                                HStack(spacing: 8) {
+                                    Text(title.uppercased())
+                                        .font(.system(size: 10, weight: .heavy))
+                                        .tracking(1.6)
+                                        .foregroundStyle(EduTheme.teal.opacity(0.85))
+                                    Rectangle().fill(EduTheme.border).frame(height: 1)
+                                }
+                                .padding(.horizontal, 4)
+                                .accessibilityAddTraits(.isHeader)
                             }
-
-                            ForEach(section.screens) { screen in
-                                drawerRow(screen)
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(section.screens) { screen in
+                                    drawerRow(screen)
+                                }
                             }
+                            // the section's items hang off a thin line
+                            .padding(.leading, section.title == nil ? 0 : 6)
+                            .overlay(alignment: .leading) {
+                                if section.title != nil { Rectangle().fill(EduTheme.border).frame(width: 1) }
+                            }
+                            .padding(.leading, section.title == nil ? 0 : 8)
                         }
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.top, 14)
+                .padding(.horizontal, 12)
+                .padding(.top, 16)
                 .padding(.bottom, 16)
             }
 
-            VStack(spacing: 0) {
-                Divider()
-                Button {
-                    onClose()
-                    Task { await auth.signOut() }
-                } label: {
-                    Label("Déconnexion", systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(EduTheme.fasoRed)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 14)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+            Button {
+                onClose()
+                Task { await auth.signOut() }
+            } label: {
+                Label("Déconnexion", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.fasoRed)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 14)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .overlay(alignment: .top) { Rectangle().fill(EduTheme.border).frame(height: 1) }
             .background(.white)
         }
         .frame(width: 300)
@@ -356,12 +374,58 @@ struct SideDrawerView: View {
         .safeAreaPadding(.bottom, 8)
         .task { await loadBadges() }
         .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color.black.opacity(0.06))
-                .frame(width: 1)
+            Rectangle().fill(EduTheme.border).frame(width: 1)
         }
         .ignoresSafeArea(edges: .bottom)
         .shadow(color: .black.opacity(0.18), radius: 24, x: 8, y: 0)
+    }
+
+    /// Same teal card as the web sidebar: photo, name, role · school, Faso stripe; opens Profil.
+    private var identityCard: some View {
+        Button { onSelect(.profile) } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    UserAvatarView(
+                        url: auth.primaryRole == .schoolAdmin ? nil : auth.profile?.avatarUrl,
+                        firstName: auth.primaryRole == .schoolAdmin ? "Administration" : auth.profile?.firstName,
+                        lastName: auth.primaryRole == .schoolAdmin ? nil : auth.profile?.lastName,
+                        size: 42,
+                        cornerRadius: EduTheme.radius
+                    )
+                    .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(.white.opacity(0.3), lineWidth: 1))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayName.isEmpty ? "Mon compte" : displayName)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(roleLine)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                HStack(spacing: 0) {
+                    EduTheme.fasoRed; EduTheme.fasoYellow; EduTheme.fasoGreen
+                }
+                .frame(height: 4)
+            }
+            .background(alignment: .topTrailing) {
+                ZStack(alignment: .topTrailing) {
+                    LinearGradient(colors: [Self.brand800, EduTheme.teal, Self.brand600], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Circle().fill(.white.opacity(0.07)).frame(width: 130, height: 130).offset(x: 40, y: -50)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .shadow(color: Self.brand800.opacity(0.25), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Profil : \(displayName), \(roleLine)")
     }
 
     private func drawerRow(_ screen: AppScreen) -> some View {
@@ -370,31 +434,36 @@ struct SideDrawerView: View {
         return Button {
             onSelect(screen)
         } label: {
-            HStack(spacing: 10) {
-                Label(menuTitle(screen, role: auth.primaryRole), systemImage: screen.systemImage)
+            HStack(spacing: 12) {
+                Image(systemName: screen.systemImage)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(active ? EduTheme.tealDark : EduTheme.ink.opacity(0.78))
-                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(active ? EduTheme.teal : EduTheme.subtle)
+                    .frame(width: 22)
+                Text(menuTitle(screen, role: auth.primaryRole))
+                    .font(.subheadline.weight(active ? .bold : .semibold))
+                    .foregroundStyle(active ? EduTheme.tealDark : EduTheme.ink.opacity(0.75))
+                    .lineLimit(1)
                 Spacer(minLength: 0)
                 if let badge, badge > 0 {
                     Text(badge > 99 ? "99+" : "\(badge)")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(EduTheme.fasoRed, in: Capsule())
+                        .frame(minWidth: 20, minHeight: 20)
+                        .padding(.horizontal, 4)
+                        .background(EduTheme.fasoRed, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
                     .fill(active ? EduTheme.brand50 : .clear)
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private func badgeCount(for screen: AppScreen) -> Int? {
