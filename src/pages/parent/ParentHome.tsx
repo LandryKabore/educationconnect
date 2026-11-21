@@ -399,8 +399,8 @@ function HomeworkPanel({
   return (
     <Panel
       icon={ClipboardList}
-      title="Devoirs de la semaine"
-      subtitle="Exercices et devoirs des 7 prochains jours"
+      title="Examens de la semaine"
+      subtitle="Interrogations et examens des 7 prochains jours"
       action={
         <Link to={`/enfants/${childId}/exercices`} className="block">
           <Button variant="secondary" className="min-h-11 w-full">
@@ -412,7 +412,7 @@ function HomeworkPanel({
       {isLoading ? (
         <CardSkeleton />
       ) : isError ? (
-        <PanelEmpty message="Devoirs indisponibles pour le moment." />
+        <PanelEmpty message="Examens indisponibles pour le moment." />
       ) : !classSectionId ? (
         <PanelEmpty message="Cet enfant n’est pas encore inscrit dans une classe." />
       ) : !data || data.length === 0 ? (
@@ -430,7 +430,7 @@ function HomeworkPanel({
                     {[w.subject, w.title].filter(Boolean).join(" · ")}
                   </p>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {w.type === "examen" ? "Devoir" : "Exercice"}
+                    {w.type === "examen" ? "Examen" : "Exercice"}
                     {w.start_time ? ` · ${w.start_time.slice(0, 5)}` : ""}
                   </p>
                 </div>
@@ -603,7 +603,7 @@ function ChildQuickLinks({ childId }: { childId: string }) {
     { to: "bulletin", label: "Bulletin", icon: FileText },
     { to: "presences", label: "Présences", icon: CalendarCheck },
     { to: "emploi-du-temps", label: "Emploi du temps", icon: CalendarDays },
-    { to: "devoirs", label: "Devoirs", icon: ClipboardList },
+    { to: "devoirs", label: "Examens", icon: ClipboardList },
     { to: "exercices", label: "Exercices", icon: NotebookPen },
     { to: "compositions", label: "Compositions", icon: GraduationCap },
   ];

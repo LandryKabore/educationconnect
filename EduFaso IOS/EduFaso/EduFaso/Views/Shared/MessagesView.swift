@@ -1,0 +1,3476 @@
+import SwiftUI
+
+struct MessagesView: View {
+    var announcementsOnly = false
+    @EnvironmentObject private var auth: AuthViewModel
+
+    @State private var inbox: [MessageRow] = []
+    @State private var sent: [MessageRow] = []
+    @State private var search = ""
+    @State private var unreadOnly = false
+    @State private var loading = true
+    @State private var error: String?
+    @State private var showCompose = false
+
+    private var canCompose: Bool {
+        !announcementsOnly || canAnnounce
+    }
+
+    private var canAnnounce: Bool {
+        switch auth.primaryRole {
+        case .schoolAdmin, .teacher, .superAdmin: return true
+        default: return false
+        }
+    }
+
+    private var title: String {
+        announcementsOnly ? "Annonces" : "Messages"
+    }
+
+    private var query: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var conversations: [MessageConversation] {
+        MessageConversationBuilder.build(inbox: inbox, sent: sent, userId: auth.userId)
+    }
+
+    private var unreadConversations: Int {
+        conversations.filter { $0.unreadCount > 0 }.count
+    }
+
+    private var totalUnreadMessages: Int {
+        conversations.reduce(0) { $0 + $1.unreadCount }
+    }
+
+    private var filteredConversations: [MessageConversation] {
+        conversations.filter { convo in
+            if unreadOnly && convo.unreadCount == 0 { return false }
+            guard !query.isEmpty else { return true }
+            return convo.otherName.localizedCaseInsensitiveContains(query)
+                || convo.lastMessage.body.localizedCaseInsensitiveContains(query)
+                || (convo.lastMessage.subject?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    private var announcementRows: [MessageRow] {
+        inbox.filter { $0.isAnnouncement == true }
+    }
+
+    private var unreadAnnouncements: Int {
+        announcementRows.filter { $0.readAt == nil }.count
+    }
+
+    private var filteredAnnouncements: [MessageRow] {
+        announcementRows.filter { row in
+            if unreadOnly && row.readAt != nil { return false }
+            guard !query.isEmpty else { return true }
+            return (row.subject?.localizedCaseInsensitiveContains(query) ?? false)
+                || (row.body?.localizedCaseInsensitiveContains(query) ?? false)
+                || (row.sender?.fullName.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    var body: some View {
+        if auth.primaryRole == .parent {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
+        } else if auth.primaryRole == .student {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
+        } else if auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin {
+            if announcementsOnly { ParentAnnouncementsView() } else { ParentMessagesView() }
+        } else {
+            staffBody
+        }
+    }
+
+    private var staffBody: some View {
+        PremiumScreenChrome {
+            Group {
+                if loading {
+                    LoadingBlock()
+                } else if let error {
+                    errorState(error)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+                            Section {
+                                Group {
+                                    if announcementsOnly {
+                                        announcementsContent
+                                    } else {
+                                        discussionsContent
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            } header: {
+                                stickyHeader
+                            }
+                        }
+                        .padding(.bottom, 32)
+                    }
+                    .refreshable { await load() }
+                }
+            }
+        }
+        .premiumTitle(title)
+        .toolbar {
+            if canCompose {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCompose = true
+                    } label: {
+                        Image(systemName: announcementsOnly ? "megaphone.fill" : "square.and.pencil")
+                    }
+                    .accessibilityLabel(announcementsOnly ? "Envoyer une annonce" : "Nouveau message")
+                }
+            }
+        }
+        .sheet(isPresented: $showCompose) {
+            ComposeMessageSheet(
+                announcementsOnly: announcementsOnly,
+                onSent: {
+                    showCompose = false
+                    Task { await load() }
+                }
+            )
+            .environmentObject(auth)
+        }
+        .task { await load() }
+    }
+
+    // MARK: - Summary
+
+    private var stickyHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            summaryCard
+            searchField
+            filterChips
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background {
+            EduTheme.loginBackground
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.05))
+                        .frame(height: 1)
+                }
+        }
+    }
+
+    private var summaryCard: some View {
+        let unread = announcementsOnly ? unreadAnnouncements : totalUnreadMessages
+        let total = announcementsOnly ? announcementRows.count : conversations.count
+        let noun = announcementsOnly ? "annonce" : "discussion"
+
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(unread > 0 ? "\(unread) non lu\(unread > 1 ? "s" : "")" : "Tout est lu")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                Text("\(total) \(noun)\(total > 1 ? "s" : "")")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .accessibilityElement(children: .combine)
+
+            Spacer(minLength: 0)
+
+            if canCompose {
+                Button {
+                    showCompose = true
+                } label: {
+                    Label(
+                        announcementsOnly ? "Nouvelle annonce" : "Nouveau message",
+                        systemImage: announcementsOnly ? "megaphone.fill" : "square.and.pencil"
+                    )
+                    .font(.subheadline.weight(.bold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+                    .foregroundStyle(EduTheme.navy)
+                    .background(.white, in: Capsule())
+                    .fixedSize()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(announcementsOnly ? "Envoyer une annonce" : "Nouveau message")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                LinearGradient(
+                    colors: announcementsOnly
+                        ? [EduTheme.navyDark, EduTheme.navy]
+                        : [EduTheme.navyDark, EduTheme.navy, EduTheme.teal],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Circle()
+                    .fill(.white.opacity(0.07))
+                    .frame(width: 160, height: 160)
+                    .offset(x: 130, y: -50)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 0) {
+                EduTheme.fasoRed
+                EduTheme.fasoYellow
+                EduTheme.fasoGreen
+            }
+            .frame(height: 3)
+            .accessibilityHidden(true)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: EduTheme.navy.opacity(0.22), radius: 14, y: 8)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(EduTheme.muted)
+                .accessibilityHidden(true)
+            TextField(announcementsOnly ? "Rechercher une annonce…" : "Rechercher une discussion…", text: $search)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+            if !search.isEmpty {
+                Button {
+                    search = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(EduTheme.muted.opacity(0.7))
+                        .frame(width: 32, height: 32)
+                }
+                .accessibilityLabel("Effacer la recherche")
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 46)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.black.opacity(0.05), lineWidth: 1)
+        )
+    }
+
+    private var filterChips: some View {
+        let total = announcementsOnly ? announcementRows.count : conversations.count
+        let unread = announcementsOnly ? unreadAnnouncements : unreadConversations
+        return HStack(spacing: 8) {
+            filterChip(title: "Toutes", count: total, selected: !unreadOnly) { unreadOnly = false }
+            filterChip(title: "Non lues", count: unread, selected: unreadOnly) { unreadOnly = true }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func filterChip(title: String, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2)) { action() }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                Text("\(count)")
+                    .font(.caption2.weight(.heavy).monospacedDigit())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule().fill(selected ? .white.opacity(0.22) : EduTheme.navy.opacity(0.08))
+                    )
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(selected ? .white : EduTheme.ink)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 38)
+            .background(Capsule().fill(selected ? EduTheme.navy : .white))
+            .overlay(Capsule().stroke(selected ? .clear : Color.black.opacity(0.07), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    // MARK: - Discussions (personal)
+
+    @ViewBuilder
+    private var discussionsContent: some View {
+        if conversations.isEmpty {
+            emptyState(
+                systemImage: "bubble.left.and.bubble.right",
+                title: "Aucune discussion",
+                message: "Écrivez à un enseignant, un parent ou l’administration pour démarrer une conversation.",
+                actionTitle: canCompose ? "Nouveau message" : nil
+            )
+        } else if filteredConversations.isEmpty {
+            emptyState(
+                systemImage: unreadOnly ? "checkmark.circle" : "magnifyingglass",
+                title: unreadOnly ? "Tout est lu" : "Aucun résultat",
+                message: unreadOnly
+                    ? "Vous n’avez aucun message en attente."
+                    : "Aucune discussion ne correspond à la recherche.",
+                actionTitle: nil
+            )
+        } else {
+            ForEach(filteredConversations) { convo in
+                NavigationLink {
+                    ConversationChatView(
+                        otherId: convo.otherId,
+                        otherName: convo.otherName,
+                        seedInbox: inbox,
+                        seedSent: sent,
+                        onChanged: { Task { await load() } }
+                    )
+                } label: {
+                    discussionRow(convo)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func discussionRow(_ convo: MessageConversation) -> some View {
+        let unread = convo.unreadCount > 0
+        let last = convo.lastMessage
+        let mine = last.direction == .out
+
+        return HStack(alignment: .center, spacing: 12) {
+            ContactAvatar(name: convo.otherName, size: 52)
+                .overlay(alignment: .topTrailing) {
+                    if unread {
+                        Circle()
+                            .fill(EduTheme.fasoRed)
+                            .frame(width: 14, height: 14)
+                            .overlay(Circle().stroke(.white, lineWidth: 2.5))
+                            .offset(x: 2, y: -2)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(convo.otherName.isEmpty ? "Contact" : convo.otherName)
+                        .font(.body.weight(unread ? .bold : .semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let created = last.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption.weight(unread ? .bold : .medium))
+                            .foregroundStyle(unread ? EduTheme.teal : EduTheme.muted)
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 6) {
+                    if mine {
+                        Image(systemName: last.readAt == nil ? "checkmark" : "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(last.readAt == nil ? EduTheme.muted : EduTheme.teal)
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                    }
+                    Text(mine ? "Vous : \(last.preview)" : last.preview)
+                        .font(.subheadline)
+                        .foregroundStyle(unread ? EduTheme.ink.opacity(0.85) : EduTheme.muted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    if unread {
+                        Text("\(convo.unreadCount)")
+                            .font(.caption2.weight(.heavy).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .padding(.horizontal, convo.unreadCount > 9 ? 4 : 0)
+                            .background(EduTheme.teal, in: Capsule())
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(unread ? EduTheme.brand50 : .white)
+                .shadow(color: .black.opacity(0.045), radius: 10, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(unread ? EduTheme.teal.opacity(0.25) : Color.black.opacity(0.04), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(convo.otherName), \(mine ? "vous : " : "")\(last.preview)"
+                + (unread ? ", \(convo.unreadCount) non lu\(convo.unreadCount > 1 ? "s" : "")" : "")
+        )
+    }
+
+    // MARK: - Announcements
+
+    @ViewBuilder
+    private var announcementsContent: some View {
+        if announcementRows.isEmpty {
+            emptyState(
+                systemImage: "megaphone",
+                title: "Aucune annonce",
+                message: "Les annonces de votre école apparaîtront ici.",
+                actionTitle: canCompose ? "Publier une annonce" : nil
+            )
+        } else if filteredAnnouncements.isEmpty {
+            emptyState(
+                systemImage: unreadOnly ? "checkmark.circle" : "magnifyingglass",
+                title: unreadOnly ? "Tout est lu" : "Aucun résultat",
+                message: unreadOnly
+                    ? "Vous avez lu toutes les annonces."
+                    : "Rien à afficher avec cette recherche.",
+                actionTitle: nil
+            )
+        } else {
+            ForEach(filteredAnnouncements) { msg in
+                NavigationLink {
+                    MessageDetailView(message: msg, announcementsOnly: true) {
+                        Task { await markAnnouncementRead(msg) }
+                    }
+                } label: {
+                    announcementCard(msg)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func announcementCard(_ msg: MessageRow) -> some View {
+        let unread = msg.readAt == nil
+        let sender = msg.sender?.fullName.isEmpty == false ? msg.sender!.fullName : "Établissement"
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "megaphone.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(unread ? .white : EduTheme.fasoYellow)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(unread ? EduTheme.fasoYellow : EduTheme.fasoYellow.opacity(0.14))
+                    )
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(sender)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    if let created = msg.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                Spacer(minLength: 0)
+                if unread {
+                    Text("Nouveau")
+                        .font(.caption2.weight(.heavy))
+                        .textCase(.uppercase)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(EduTheme.fasoRed, in: Capsule())
+                }
+            }
+
+            Text(msg.subject?.isEmpty == false ? msg.subject! : "(Sans objet)")
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            if let body = msg.body, !body.isEmpty {
+                Text(body)
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.ink.opacity(0.7))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+
+            HStack(spacing: 4) {
+                Text("Lire l’annonce")
+                Image(systemName: "arrow.right")
+            }
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(EduTheme.teal)
+            .accessibilityHidden(true)
+        }
+        .padding(16)
+        .padding(.leading, unread ? 4 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .leading) {
+                Color.white
+                if unread {
+                    EduTheme.fasoYellow.frame(width: 5)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(unread ? EduTheme.fasoYellow.opacity(0.35) : Color.black.opacity(0.04), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.045), radius: 10, y: 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Ouvre l’annonce")
+    }
+
+    // MARK: - Shared bits
+
+    private func emptyState(systemImage: String, title: String, message: String, actionTitle: String?) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(EduTheme.teal)
+                .frame(width: 68, height: 68)
+                .background(EduTheme.brand50, in: Circle())
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let actionTitle {
+                Button {
+                    showCompose = true
+                } label: {
+                    Text(actionTitle)
+                        .font(.subheadline.weight(.bold))
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .foregroundStyle(.white)
+                        .background(EduTheme.teal, in: Capsule())
+                }
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.04), radius: 10, y: 3)
+        )
+    }
+
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(Color.orange)
+                .frame(width: 68, height: 68)
+                .background(Color.orange.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+            Text("Impossible de charger les \(announcementsOnly ? "annonces" : "messages")")
+                .font(.headline)
+                .foregroundStyle(EduTheme.ink)
+                .multilineTextAlignment(.center)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(EduTheme.muted)
+                .multilineTextAlignment(.center)
+            Button {
+                Task { await load() }
+            } label: {
+                Text("Réessayer")
+                    .font(.subheadline.weight(.bold))
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
+                    .foregroundStyle(.white)
+                    .background(EduTheme.teal, in: Capsule())
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func load() async {
+        guard let uid = auth.userId else { return }
+        loading = inbox.isEmpty && sent.isEmpty
+        error = nil
+        do {
+            let api = EduAPI()
+            if announcementsOnly {
+                inbox = try await api.fetchInbox(userId: uid, announcementsOnly: true)
+                sent = []
+            } else {
+                async let inboxTask = api.fetchInbox(userId: uid, announcementsOnly: false)
+                async let sentTask = api.fetchSentPersonalMessages(userId: uid)
+                inbox = try await inboxTask
+                sent = try await sentTask
+            }
+        } catch {
+            if !error.isCancellation { self.error = error.localizedDescription }
+        }
+        loading = false
+    }
+
+    private func markAnnouncementRead(_ msg: MessageRow) async {
+        guard msg.readAt == nil else { return }
+        do {
+            try await EduAPI().markMessageRead(id: msg.id)
+            if let idx = inbox.firstIndex(where: { $0.id == msg.id }) {
+                inbox[idx] = inbox[idx].withReadAt(ISO8601DateFormatter().string(from: Date()))
+            }
+        } catch {}
+    }
+}
+
+/// Initials on a stable per-person gradient.
+private struct ContactAvatar: View {
+    let name: String
+    var size: CGFloat = 44
+
+    var body: some View {
+        let swatch = SubjectPalette.swatch(for: name.isEmpty ? "Contact" : name)
+        Text(MessageConversationBuilder.initials(name))
+            .font(.system(size: size * 0.36, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(
+                    colors: [swatch.border.opacity(0.75), swatch.border],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: Circle()
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Conversation chat
+
+struct ConversationChatView: View {
+    let otherId: String
+    let otherName: String
+    /// e.g. « Professeur · Mathématiques » or « Administration », under the name.
+    var subtitle: String? = nil
+    var onChanged: () -> Void
+
+    @EnvironmentObject private var auth: AuthViewModel
+    private var tu: Bool { auth.primaryRole == .student }
+    @State private var inbox: [MessageRow] = []
+    @State private var sent: [MessageRow] = []
+    @State private var draft = ""
+    @State private var sending = false
+    @State private var sendError: String?
+    @State private var marking = false
+    @State private var loaded: Bool
+    /// « À … · Cc … » per thread (only threads sent to more than one person).
+    @State private var recipients: [String: MessageRecipients.Line] = [:]
+    @FocusState private var focused: Bool
+
+    init(
+        otherId: String,
+        otherName: String,
+        subtitle: String? = nil,
+        seedInbox: [MessageRow] = [],
+        seedSent: [MessageRow] = [],
+        onChanged: @escaping () -> Void
+    ) {
+        self.otherId = otherId
+        self.otherName = otherName
+        self.subtitle = subtitle
+        self.onChanged = onChanged
+        _inbox = State(initialValue: seedInbox)
+        _sent = State(initialValue: seedSent)
+        _loaded = State(initialValue: !seedInbox.isEmpty || !seedSent.isEmpty)
+    }
+
+    private var conversation: MessageConversation? {
+        MessageConversationBuilder
+            .build(inbox: inbox, sent: sent, userId: auth.userId)
+            .first { $0.otherId == otherId }
+    }
+
+    private var messages: [ChatBubbleMessage] {
+        conversation?.messages ?? []
+    }
+
+    private var bubbleTeal: Color {
+        Color(red: 13 / 255, green: 148 / 255, blue: 136 / 255) // brand-600
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        if !loaded && messages.isEmpty {
+                            loadingBubbles
+                        } else if messages.isEmpty {
+                            VStack(spacing: 10) {
+                                ContactAvatar(name: otherName, size: 72)
+                                Text(otherName.isEmpty ? "Conversation" : otherName)
+                                    .font(.headline)
+                                    .foregroundStyle(EduTheme.ink)
+                                Text(tu ? "Aucun message. Écris le premier !" : "Aucun message. Écrivez le premier !")
+                                    .font(.subheadline)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 60)
+                        } else {
+                            ForEach(Array(messages.enumerated()), id: \.element.id) { index, msg in
+                                let previous = index > 0 ? messages[index - 1] : nil
+                                if let day = MessageDateFormatting.dayKey(msg.createdAt),
+                                   day != MessageDateFormatting.dayKey(previous?.createdAt) {
+                                    daySeparator(msg.createdAt ?? day)
+                                }
+                                bubble(msg, groupedWithPrevious: previous?.direction == msg.direction)
+                                    .id(msg.id)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 16)
+                }
+                .background(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255))
+                .onChange(of: messages.count) { _, _ in
+                    scrollToEnd(proxy)
+                }
+                .onAppear {
+                    scrollToEnd(proxy)
+                }
+            }
+
+            if let lastIn = messages.last(where: { $0.direction == .inbound }), lastIn.allowReplies == false {
+                Text("Le dernier message de \(otherName.isEmpty ? (tu ? "ton contact" : "votre contact") : otherName) n’attend pas de réponse.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color(red: 120 / 255, green: 53 / 255, blue: 15 / 255))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 255 / 255, green: 251 / 255, blue: 235 / 255))
+                    .overlay(alignment: .top) { Divider() }
+            }
+
+            if let sendError {
+                Text(sendError)
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.fasoRed)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+            }
+
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField(tu ? "Écris un message…" : "Écrivez un message…", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .fill(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                            )
+                    )
+                    .focused($focused)
+
+                Button {
+                    Task { await send() }
+                } label: {
+                    Group {
+                        if sending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.body.weight(.semibold))
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(
+                            draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending
+                                ? EduTheme.muted.opacity(0.45)
+                                : bubbleTeal
+                        )
+                    )
+                }
+                .disabled(sending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Envoyer")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color.white)
+            .overlay(alignment: .top) {
+                Divider()
+            }
+        }
+        .navigationTitle(otherName.isEmpty ? "Conversation" : otherName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    SquareAvatar(name: otherName, size: 30, admin: subtitle == "Administration")
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(otherName.isEmpty ? "Conversation" : otherName)
+                            .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
+                        if let subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(EduTheme.muted)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+        }
+        .task {
+            await reload()
+            await markUnreadRead()
+        }
+        .task(id: messages.compactMap(\.threadId).joined()) {
+            await loadRecipients()
+        }
+    }
+
+    private func loadRecipients() async {
+        guard let uid = auth.userId else { return }
+        for t in Set(messages.compactMap(\.threadId)) where recipients[t] == nil {
+            if let line = await MessageRecipients.line(thread: t, me: uid) { recipients[t] = line }
+        }
+    }
+
+    private var loadingBubbles: some View {
+        let widths: [(mine: Bool, width: CGFloat, height: CGFloat)] = [
+            (false, 210, 44), (false, 150, 44), (true, 230, 60), (false, 180, 44), (true, 140, 44), (true, 200, 44),
+        ]
+        return VStack(spacing: 10) {
+            Capsule()
+                .fill(.white.opacity(0.85))
+                .frame(width: 90, height: 22)
+                .padding(.vertical, 8)
+            ForEach(widths.indices, id: \.self) { i in
+                let item = widths[i]
+                HStack {
+                    if item.mine { Spacer(minLength: 48) }
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(item.mine ? bubbleTeal.opacity(0.25) : .white)
+                        .frame(width: item.width, height: item.height)
+                    if !item.mine { Spacer(minLength: 48) }
+                }
+            }
+        }
+        .phaseAnimator([0.45, 1.0]) { content, phase in
+            content.opacity(phase)
+        } animation: { _ in
+            .easeInOut(duration: 0.8)
+        }
+        .padding(.top, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Chargement de la conversation")
+    }
+
+    private func daySeparator(_ iso: String) -> some View {
+        Text(MessageDateFormatting.dayLabel(iso))
+            .font(.caption.weight(.bold))
+            .foregroundStyle(EduTheme.muted)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                            .stroke(EduTheme.border, lineWidth: 1)
+                    )
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func bubble(_ msg: ChatBubbleMessage, groupedWithPrevious: Bool) -> some View {
+        let mine = msg.direction == .out
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: !mine && groupedWithPrevious ? 2 : 8,
+            bottomLeadingRadius: mine ? 8 : 2,
+            bottomTrailingRadius: mine ? 2 : 8,
+            topTrailingRadius: mine && groupedWithPrevious ? 2 : 8,
+            style: .continuous
+        )
+        return HStack {
+            if mine { Spacer(minLength: 48) }
+            VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
+                if msg.isCc {
+                    Label(mine ? "Envoyé en copie (Cc)" : "Vous êtes en copie (Cc)", systemImage: "person.2")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(EduTheme.teal)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                if let t = msg.threadId, let line = recipients[t] {
+                    MessageRecipients.LineView(line: line)
+                        .multilineTextAlignment(mine ? .trailing : .leading)
+                        .padding(.horizontal, 4)
+                }
+                if let subject = msg.subject, !subject.isEmpty {
+                    Text(subject)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(EduTheme.muted)
+                        .textCase(.uppercase)
+                        .lineLimit(1)
+                        .padding(.horizontal, 4)
+                }
+
+                VStack(alignment: mine ? .trailing : .leading, spacing: 6) {
+                    Text(msg.body)
+                        .font(.subheadline)
+                        .foregroundStyle(mine ? .white : EduTheme.ink)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 4) {
+                        if let created = msg.createdAt {
+                            Text(MessageDateFormatting.bubbleTime(created))
+                                .font(.caption2)
+                                .foregroundStyle(mine ? .white.opacity(0.75) : EduTheme.muted)
+                        }
+                        if mine {
+                            Image(systemName: msg.readAt == nil ? "checkmark" : "checkmark.circle.fill")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(msg.readAt == nil ? .white.opacity(0.75) : Color(red: 125 / 255, green: 211 / 255, blue: 252 / 255))
+                                .accessibilityLabel(msg.readAt == nil ? "Envoyé" : "Vu")
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    if mine {
+                        shape.fill(EduTheme.teal)
+                    } else {
+                        shape
+                            .fill(.white)
+                            .overlay(shape.stroke(EduTheme.border, lineWidth: 1))
+                    }
+                }
+
+            }
+            if !mine { Spacer(minLength: 48) }
+        }
+        .padding(.top, groupedWithPrevious ? 0 : 8)
+    }
+
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        guard let last = messages.last?.id else { return }
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(last, anchor: .bottom)
+            }
+        }
+    }
+
+    private func reload() async {
+        guard let uid = auth.userId else { return }
+        do {
+            let api = EduAPI()
+            async let inboxTask = api.fetchInbox(userId: uid, announcementsOnly: false)
+            async let sentTask = api.fetchSentPersonalMessages(userId: uid)
+            inbox = try await inboxTask
+            sent = try await sentTask
+        } catch {
+            sendError = error.localizedDescription
+        }
+        loaded = true
+    }
+
+    private func markUnreadRead() async {
+        guard let uid = auth.userId, !marking else { return }
+        let unreadIds = messages.filter { $0.direction == .inbound && $0.readAt == nil }.map(\.id)
+        guard !unreadIds.isEmpty else { return }
+        marking = true
+        defer { marking = false }
+        do {
+            try await EduAPI().markMessagesRead(ids: unreadIds, recipientId: uid)
+            let stamp = ISO8601DateFormatter().string(from: Date())
+            inbox = inbox.map { row in
+                unreadIds.contains(row.id) ? row.withReadAt(stamp) : row
+            }
+            onChanged()
+        } catch {}
+    }
+
+    private func send() async {
+        guard
+            let uid = auth.userId,
+            let schoolId = auth.schoolId
+        else {
+            sendError = "Session invalide."
+            return
+        }
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        sending = true
+        sendError = nil
+        do {
+            try await EduAPI().sendChatMessage(
+                schoolId: schoolId,
+                senderId: uid,
+                recipientId: otherId,
+                body: text
+            )
+            draft = ""
+            focused = false
+            await reload()
+            onChanged()
+        } catch {
+            sendError = error.localizedDescription
+        }
+        sending = false
+    }
+}
+
+// MARK: - Announcement detail (legacy single-message view)
+
+struct MessageDetailView: View {
+    let message: MessageRow
+    var announcementsOnly = false
+    var onAppearAction: () -> Void
+
+    var body: some View {
+        PremiumScreenChrome {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "megaphone.fill")
+                            .foregroundStyle(EduTheme.fasoYellow)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                EduTheme.fasoYellow.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(message.sender?.fullName.isEmpty == false ? message.sender!.fullName : "Établissement")
+                                .font(.subheadline.weight(.semibold))
+                            if let created = message.createdAt {
+                                Text(MessageDateFormatting.listTime(created))
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    Text(message.subject ?? "(Sans objet)")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(EduTheme.ink)
+
+                    Text(message.body ?? "")
+                        .font(.body)
+                        .foregroundStyle(EduTheme.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(.white)
+                        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+                )
+                .padding(16)
+            }
+        }
+        .premiumTitle("Annonce")
+        .onAppear(perform: onAppearAction)
+    }
+}
+
+// MARK: - Compose
+
+struct ComposeMessageSheet: View {
+    var announcementsOnly = false
+    /// Opens with every contact of this role as recipient (e.g. "school_admin" for « Écrire à l’école »).
+    var presetRole: String? = nil
+    var presetSubject: String? = nil
+    var presetBody: String? = nil
+    var onSent: () -> Void
+
+    @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var contacts: [MessageContact] = []
+    @State private var selectedTo: [MessageContact] = []
+    @State private var selectedCc: [MessageContact] = []
+    @State private var showCc = false
+    @State private var activeField: ActiveField = .to
+    @State private var search = ""
+    @State private var roleFilter: String? = "teacher"
+    @State private var subject = ""
+    @State private var bodyText = ""
+    @State private var announceRoles: Set<String> = ["student"]
+    @State private var noReplies = false
+    @State private var loadingContacts = true
+    @State private var sending = false
+    @State private var error: String?
+    @FocusState private var focused: FocusTarget?
+
+    private enum ActiveField { case to, cc }
+    private enum FocusTarget: Hashable { case to, cc, subject, body }
+
+    private var canControlReplies: Bool {
+        switch auth.primaryRole {
+        case .schoolAdmin, .teacher, .superAdmin: return true
+        default: return false
+        }
+    }
+
+    private var isStudent: Bool { auth.primaryRole == .student }
+
+    private var pickingRecipients: Bool {
+        // Hide the list once the user moves to Objet / message (same after À or Cc pick).
+        if focused == .subject || focused == .body { return false }
+        return focused == .to || focused == .cc || !search.isEmpty || selectedTo.isEmpty
+    }
+
+    private var announceRoleOptions: [(id: String, label: String)] {
+        let present = Set(contacts.map(\.normalizedRole))
+        return [
+            ("student", "Élèves"),
+            ("parent", "Parents"),
+            ("teacher", "Professeurs"),
+        ].filter { present.contains($0.0) }
+    }
+
+    private var announceRecipientIds: [String] {
+        contacts.filter { announceRoles.contains($0.normalizedRole) }.map(\.id)
+    }
+
+    private var excludedIds: Set<String> {
+        Set(selectedTo.map(\.id) + selectedCc.map(\.id))
+    }
+
+    private var roleFilterOptions: [(id: String?, label: String)] {
+        let present = Set(contacts.map(\.normalizedRole))
+        var options: [(id: String?, label: String)] = [(nil, "Tous")]
+        if present.contains("teacher") { options.append(("teacher", "Profs")) }
+        if present.contains("parent") { options.append(("parent", "Parents")) }
+        if present.contains("student") { options.append(("student", "Élèves")) }
+        if present.contains("school_admin") { options.append(("school_admin", "Admin")) }
+        return options
+    }
+
+    private var suggestions: [MessageContact] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        var base = contacts.filter { !excludedIds.contains($0.id) }
+        if let roleFilter {
+            base = base.filter { $0.normalizedRole == roleFilter }
+        }
+        if !q.isEmpty {
+            base = base.filter {
+                $0.fullName.localizedCaseInsensitiveContains(q)
+                    || ($0.className?.localizedCaseInsensitiveContains(q) ?? false)
+                    || $0.roleLabel.localizedCaseInsensitiveContains(q)
+            }
+        }
+        return Self.collapsingAdmins(base).sorted { lhs, rhs in
+            let lr = roleRank(lhs.normalizedRole)
+            let rr = roleRank(rhs.normalizedRole)
+            if lr != rr { return lr < rr }
+            return lhs.fullName.localizedCaseInsensitiveCompare(rhs.fullName) == .orderedAscending
+        }
+    }
+
+    private func roleRank(_ role: String) -> Int {
+        switch role {
+        case "teacher": return 0
+        case "school_admin": return 1
+        case "parent": return 2
+        case "student": return 3
+        default: return 4
+        }
+    }
+
+    private var canSend: Bool {
+        !sending
+            && !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (announcementsOnly ? !announceRecipientIds.isEmpty : !selectedTo.isEmpty)
+    }
+
+    private var hairline: Color { Color.black.opacity(0.07) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 14) {
+                        EduSheetBanner(
+                            title: announcementsOnly ? "Nouvelle annonce" : "Nouveau message",
+                            subtitle: announcementsOnly ? "Choisissez qui la reçoit, puis rédigez l’annonce." : "Choisissez les destinataires, puis rédigez le message."
+                        )
+                        if announcementsOnly {
+                            announceHeader
+                        } else {
+                            recipientsCard
+                            if pickingRecipients {
+                                contactPicker
+                            }
+                        }
+
+                        messageCard
+
+                        if canControlReplies {
+                            repliesRow
+                        }
+
+                        if let error {
+                            errorBanner(error)
+                        }
+
+                        sendFooter
+                            .id("send")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                }
+                .background(EduTheme.page.ignoresSafeArea())
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: focused) { _, new in
+                    if new == .subject || new == .body {
+                        withAnimation {
+                            proxy.scrollTo(new == .body ? "body" : "subject", anchor: .center)
+                        }
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        if sending {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "paperplane.fill")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(canSend ? .white : EduTheme.muted.opacity(0.45))
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(canSend ? EduTheme.teal : .white))
+                        }
+                    }
+                    .disabled(!canSend)
+                    .accessibilityLabel("Envoyer")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    if !announcementsOnly, pickingRecipients, !selectedTo.isEmpty {
+                        Button("Écrire le message") {
+                            search = ""
+                            focused = .body
+                        }
+                        .fontWeight(.semibold)
+                    } else if !announcementsOnly, !isStudent, !showCc, !selectedTo.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showCc = true
+                                activeField = .cc
+                                focused = .cc
+                            }
+                        } label: {
+                            Label("Ajouter en Cc", systemImage: "person.badge.plus")
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    Spacer()
+                    Button("Envoyer") {
+                        Task { await send() }
+                    }
+                    .fontWeight(.bold)
+                    .disabled(!canSend)
+                    .foregroundStyle(canSend ? EduTheme.teal : EduTheme.muted)
+                }
+            }
+            .task {
+                await loadContacts()
+                if let presetRole, !announcementsOnly {
+                    selectedTo = contacts.filter { $0.normalizedRole == presetRole }
+                    roleFilter = presetRole
+                    if let presetSubject { subject = presetSubject }
+                    if let presetBody { bodyText = presetBody }
+                    focused = .body
+                } else if !announcementsOnly {
+                    activeField = .to
+                    focused = .to
+                    if auth.primaryRole == .teacher {
+                        // a teacher writes mostly to students
+                        roleFilter = contacts.contains { $0.normalizedRole == "student" } ? "student" : nil
+                    } else {
+                        let hasTeachers = contacts.contains { $0.normalizedRole == "teacher" }
+                        roleFilter = hasTeachers ? "teacher" : nil
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var sendFooter: some View {
+        VStack(spacing: 10) {
+            if let hint = sendHint {
+                Label(hint, systemImage: "info.circle")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(EduTheme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button {
+                Task { await send() }
+            } label: {
+                HStack(spacing: 8) {
+                    if sending {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                    }
+                    Text(sending ? "Envoi…" : (announcementsOnly ? "Publier l’annonce" : "Envoyer"))
+                }
+                .font(.body.weight(.bold))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .foregroundStyle(.white)
+                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                .opacity(canSend ? 1 : 0.5)
+            }
+            .disabled(!canSend)
+            .accessibilityLabel(announcementsOnly ? "Publier l’annonce" : "Envoyer le message")
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 28)
+    }
+
+    private var sendHint: String? {
+        if !announcementsOnly, selectedTo.isEmpty {
+            return "Ajoutez au moins un destinataire, puis rédigez le message."
+        }
+        if announcementsOnly, announceRecipientIds.isEmpty {
+            return "Choisissez au moins un groupe de destinataires."
+        }
+        if bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Rédigez votre message, puis appuyez sur Envoyer."
+        }
+        return nil
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.orange)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(EduTheme.ink)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private func sectionLabel(_ title: String, systemImage: String, trailing: String? = nil) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(EduTheme.teal)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.caption.weight(.heavy))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(EduTheme.muted)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            if let trailing {
+                Text(trailing)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(EduTheme.muted)
+            }
+        }
+    }
+
+    private func fieldTag(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(EduTheme.teal)
+            .frame(width: 38, height: 32)
+            .background(EduTheme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
+    // MARK: Rows
+
+    private var recipientsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            toRow
+            if showCc && !isStudent {
+                Rectangle()
+                    .fill(hairline)
+                    .frame(height: 1)
+                    .padding(.leading, 64)
+                ccRow
+            }
+        }
+        .composeCard()
+    }
+
+    private var toRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            fieldTag("À")
+                .padding(.top, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if !selectedTo.isEmpty {
+                    chipWrap(selectedTo) { contact in
+                        selectedTo.removeAll { $0.id == contact.id }
+                    }
+                }
+                TextField(selectedTo.isEmpty ? "Rechercher un nom…" : "Ajouter…", text: $search)
+                    .font(.body)
+                    .frame(minHeight: 40)
+                    .focused($focused, equals: .to)
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .accessibilityLabel("Destinataire")
+                    .onChange(of: focused) { _, new in
+                        if new == .to { activeField = .to }
+                    }
+                    .onChange(of: search) { _, _ in
+                        if focused == .to { activeField = .to }
+                    }
+            }
+
+            if !isStudent {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showCc.toggle()
+                        if showCc {
+                            activeField = .cc
+                            focused = .cc
+                        } else {
+                            // Closing Cc must route picks back to À — otherwise they keep landing in Cc.
+                            activeField = .to
+                            focused = .to
+                        }
+                    }
+                } label: {
+                    Label("Cc", systemImage: showCc ? "minus" : "plus")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(showCc ? .white : EduTheme.teal)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 32)
+                        .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(showCc ? EduTheme.teal : EduTheme.teal.opacity(0.08)))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showCc ? "Masquer Cc" : "Afficher Cc")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { focused = .to; activeField = .to }
+    }
+
+    private var ccRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            fieldTag("Cc")
+                .padding(.top, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if !selectedCc.isEmpty {
+                    chipWrap(selectedCc) { contact in
+                        selectedCc.removeAll { $0.id == contact.id }
+                    }
+                }
+                TextField("Ajouter en copie…", text: $search)
+                    .frame(minHeight: 40)
+                    .focused($focused, equals: .cc)
+                    .textInputAutocapitalization(.words)
+                    .disableAutocorrection(true)
+                    .accessibilityLabel("Copie")
+                    .onChange(of: focused) { _, new in
+                        if new == .cc { activeField = .cc }
+                    }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { focused = .cc; activeField = .cc }
+    }
+
+    private var messageCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                sectionLabel("Objet", systemImage: "tag.fill")
+                TextField(announcementsOnly ? "Réunion parents…" : "Ajouter un objet (facultatif)", text: $subject)
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                    .frame(minHeight: 36)
+                    .focused($focused, equals: .subject)
+                    .submitLabel(.next)
+                    .onSubmit { focused = .body }
+            }
+            .padding(14)
+            .id("subject")
+
+            Rectangle()
+                .fill(hairline)
+                .frame(height: 1)
+                .padding(.horizontal, 14)
+
+            VStack(alignment: .leading, spacing: 6) {
+                sectionLabel(
+                    announcementsOnly ? "Annonce" : "Message",
+                    systemImage: "text.alignleft",
+                    trailing: bodyText.isEmpty ? nil : "\(bodyText.count)"
+                )
+                bodyEditor
+            }
+            .padding(14)
+            .id("body")
+        }
+        .composeCard()
+    }
+
+    private var bodyEditor: some View {
+        ZStack(alignment: .topLeading) {
+            if bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(announcementsOnly ? "Rédigez l’annonce…" : "Rédigez votre message…")
+                    .foregroundStyle(EduTheme.muted.opacity(0.85))
+                    .padding(.top, 8)
+                    .padding(.leading, 5)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $bodyText)
+                .focused($focused, equals: .body)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 180, maxHeight: 300)
+                .accessibilityLabel(announcementsOnly ? "Texte de l’annonce" : "Texte du message")
+        }
+        .padding(.horizontal, -4)
+    }
+
+    private var announceHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("Destinataires", systemImage: "person.3.fill")
+
+            if loadingContacts {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            } else if announceRoleOptions.isEmpty {
+                Text("Aucun contact disponible.")
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    ForEach(announceRoleOptions, id: \.id) { option in
+                        let on = announceRoles.contains(option.id)
+                        let count = contacts.filter { $0.normalizedRole == option.id }.count
+                        let tint = roleAccent(option.id)
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) {
+                                if on { announceRoles.remove(option.id) } else { announceRoles.insert(option.id) }
+                            }
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: roleIcon(option.id))
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(on ? .white : tint)
+                                    .frame(width: 44, height: 44)
+                                    .background(Circle().fill(on ? .white.opacity(0.18) : tint.opacity(0.12)))
+                                Text(option.label)
+                                    .font(.subheadline.weight(.bold))
+                                    .foregroundStyle(on ? .white : EduTheme.ink)
+                                Text("\(count)")
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(on ? .white.opacity(0.8) : EduTheme.muted)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 116)
+                            .background(
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                    .fill(on ? AnyShapeStyle(LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)))
+                            )
+                            .overlay(alignment: .topTrailing) {
+                                if on {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                        .padding(8)
+                                }
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                    .stroke(on ? .clear : Color.black.opacity(0.06), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(option.label), \(count)")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: announceRecipientIds.isEmpty ? "exclamationmark.circle" : "checkmark.seal.fill")
+                    Text(
+                        announceRecipientIds.isEmpty
+                            ? "Aucun destinataire sélectionné"
+                            : "\(announceRecipientIds.count) destinataire\(announceRecipientIds.count == 1 ? "" : "s")"
+                    )
+                }
+                .font(.caption.weight(.bold))
+                .foregroundStyle(announceRecipientIds.isEmpty ? Color.orange : EduTheme.teal)
+            }
+        }
+        .padding(14)
+        .composeCard()
+    }
+
+    private var contactPicker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if loadingContacts {
+                    HStack {
+                        sectionLabel(addingToCc ? "Ajouter en copie" : "Choisir un destinataire", systemImage: "person.crop.circle.badge.plus")
+                        ProgressView().controlSize(.small)
+                    }
+                } else {
+                    sectionLabel(
+                        addingToCc ? "Ajouter en copie" : "Choisir un destinataire",
+                        systemImage: "person.crop.circle.badge.plus",
+                        trailing: "\(suggestions.count)"
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            if roleFilterOptions.count > 2 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(roleFilterOptions, id: \.label) { option in
+                            let on = roleFilter == option.id
+                            Button {
+                                withAnimation(.snappy(duration: 0.2)) { roleFilter = option.id }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    if let id = option.id {
+                                        Image(systemName: roleIcon(id))
+                                            .font(.caption2.weight(.bold))
+                                    }
+                                    Text(option.label)
+                                }
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(on ? .white : EduTheme.ink)
+                                .padding(.horizontal, 12)
+                                .frame(minHeight: 34)
+                                .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(on ? EduTheme.teal : Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)))
+                                .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(on ? .clear : Color.black.opacity(0.07), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
+                .padding(.bottom, 8)
+            }
+
+            if loadingContacts {
+                ProgressView("Chargement des contacts…")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else if suggestions.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: search.isEmpty ? "person.slash" : "magnifyingglass")
+                        .font(.title2)
+                        .foregroundStyle(EduTheme.muted.opacity(0.7))
+                        .accessibilityHidden(true)
+                    Text(
+                        search.isEmpty
+                            ? (roleFilter == nil ? "Aucun contact disponible." : "Aucun \(roleFilterLabel) dans vos contacts.")
+                            : "Aucun résultat pour « \(search) »."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(EduTheme.muted)
+                    .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 22)
+                .padding(.horizontal, 14)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(suggestions.prefix(40).enumerated()), id: \.element.id) { index, contact in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(hairline)
+                                .frame(height: 1)
+                                .padding(.leading, 68)
+                        }
+                        Button {
+                            addContact(contact)
+                        } label: {
+                            contactRow(contact)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 6)
+            }
+        }
+        .composeCard()
+    }
+
+    private func contactRow(_ contact: MessageContact) -> some View {
+        let tint = roleAccent(contact.normalizedRole)
+        return HStack(spacing: 12) {
+            ContactAvatar(name: contact.fullName, size: 42)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(contact.fullName.isEmpty ? "Sans nom" : contact.fullName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Label(contact.roleLabel, systemImage: roleIcon(contact.normalizedRole))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(tint.opacity(0.12)))
+                    if let className = contact.className, !className.isEmpty {
+                        Text(className)
+                            .font(.caption)
+                            .foregroundStyle(EduTheme.muted)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "plus")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(EduTheme.teal)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(EduTheme.brand50))
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(addingToCc ? "Ajoute en copie" : "Ajoute comme destinataire")
+    }
+
+    private var addingToCc: Bool {
+        showCc && !isStudent && activeField == .cc
+    }
+
+    private var roleFilterLabel: String {
+        switch roleFilter {
+        case "teacher": return "professeur"
+        case "parent": return "parent"
+        case "student": return "élève"
+        case "school_admin": return "administrateur"
+        default: return "contact"
+        }
+    }
+
+    private func roleAccent(_ role: String) -> Color {
+        switch role {
+        case "teacher": return EduTheme.teal
+        case "school_admin": return EduTheme.teal
+        case "parent": return Color(red: 180 / 255, green: 83 / 255, blue: 9 / 255)
+        case "student": return EduTheme.fasoGreen
+        default: return EduTheme.muted
+        }
+    }
+
+    private func roleIcon(_ role: String) -> String {
+        switch role {
+        case "teacher": return "graduationcap.fill"
+        case "school_admin": return "building.columns.fill"
+        case "parent": return "figure.and.child.holdinghands"
+        case "student": return "backpack.fill"
+        default: return "person.fill"
+        }
+    }
+
+    private var repliesRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: noReplies ? "bubble.left.and.exclamationmark.bubble.right.fill" : "arrowshape.turn.up.left.2.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(noReplies ? Color.orange : EduTheme.teal)
+                .frame(width: 40, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(noReplies ? Color.orange.opacity(0.12) : EduTheme.brand50)
+                )
+                .accessibilityHidden(true)
+            Toggle(isOn: Binding(get: { !noReplies }, set: { noReplies = !$0 })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Autoriser les réponses")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                    Text(noReplies ? "Info officielle : personne ne pourra répondre." : "Les destinataires peuvent vous répondre.")
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
+            }
+            .tint(EduTheme.teal)
+        }
+        .padding(14)
+        .composeCard()
+    }
+
+    private func chipWrap(_ items: [MessageContact], onRemove: @escaping (MessageContact) -> Void) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 120), spacing: 6, alignment: .leading)],
+            alignment: .leading,
+            spacing: 6
+        ) {
+            ForEach(Self.collapsingAdmins(items)) { contact in
+                HStack(spacing: 6) {
+                    ContactAvatar(name: contact.fullName, size: 22)
+                    Text(contact.fullName.isEmpty ? "Sans nom" : contact.fullName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            if contact.isAdmin { items.filter(\.isAdmin).forEach(onRemove) } else { onRemove(contact) }
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(EduTheme.muted)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retirer \(contact.fullName)")
+                }
+                .padding(.leading, 4)
+                .padding(.trailing, 2)
+                .padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).fill(EduTheme.brand50))
+                .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.teal.opacity(0.2), lineWidth: 1))
+            }
+        }
+    }
+
+    /// Every administrator is one recipient « Administration » (one chip, one row).
+    static func collapsingAdmins(_ items: [MessageContact]) -> [MessageContact] {
+        var seenAdmin = false
+        return items.filter { c in
+            guard c.isAdmin else { return true }
+            defer { seenAdmin = true }
+            return !seenAdmin
+        }
+    }
+
+    private func addContact(_ contact: MessageContact) {
+        if contact.isAdmin {
+            let admins = contacts.filter(\.isAdmin)
+            if admins.count > 1 { admins.forEach { addSingleContact($0) }; return }
+        }
+        addSingleContact(contact)
+    }
+
+    private func addSingleContact(_ contact: MessageContact) {
+        let intoCc = showCc && !isStudent && activeField == .cc
+        if intoCc {
+            if !selectedCc.contains(where: { $0.id == contact.id }) {
+                selectedCc.append(contact)
+            }
+            selectedTo.removeAll { $0.id == contact.id }
+        } else {
+            if !selectedTo.contains(where: { $0.id == contact.id }) {
+                selectedTo.append(contact)
+            }
+            selectedCc.removeAll { $0.id == contact.id }
+            activeField = .to
+        }
+        search = ""
+        // Close the contact list after a pick (À and Cc behave the same).
+        focused = .body
+    }
+
+    private func loadContacts() async {
+        guard let schoolId = auth.schoolId, let uid = auth.userId, let role = auth.primaryRole else {
+            loadingContacts = false
+            error = "École introuvable pour ce compte."
+            return
+        }
+        loadingContacts = true
+        error = nil
+        do {
+            contacts = try await EduAPI().fetchMessagingContacts(schoolId: schoolId, role: role, userId: uid)
+            if announcementsOnly {
+                let available = Set(announceRoleOptions.map(\.id))
+                if available.contains("student") {
+                    announceRoles = ["student"]
+                } else if let first = available.first {
+                    announceRoles = [first]
+                } else {
+                    announceRoles = []
+                }
+            }
+        } catch {
+            if !error.isCancellation { self.error = error.localizedDescription }
+        }
+        loadingContacts = false
+    }
+
+    private func send() async {
+        guard let schoolId = auth.schoolId, let uid = auth.userId else {
+            error = "Session invalide."
+            return
+        }
+        let text = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        sending = true
+        error = nil
+        do {
+            if announcementsOnly {
+                let ids = announceRecipientIds
+                guard !ids.isEmpty else {
+                    error = "Choisissez au moins un rôle."
+                    sending = false
+                    return
+                }
+                let subjectText = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+                let finalSubject = subjectText.isEmpty
+                    ? "Annonce — \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))"
+                    : subjectText
+                try await EduAPI().sendAnnouncement(
+                    schoolId: schoolId,
+                    senderId: uid,
+                    recipientIds: ids,
+                    subject: finalSubject,
+                    body: text,
+                    allowReplies: canControlReplies ? !noReplies : false
+                )
+            } else {
+                let toIds = selectedTo.map(\.id)
+                guard !toIds.isEmpty else {
+                    error = "Choisissez un destinataire."
+                    sending = false
+                    return
+                }
+                let subjectText = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await EduAPI().sendPersonalMessage(
+                    schoolId: schoolId,
+                    senderId: uid,
+                    recipientIds: toIds,
+                    ccIds: selectedCc.map(\.id),
+                    subject: subjectText.isEmpty ? nil : subjectText,
+                    body: text,
+                    allowReplies: canControlReplies ? !noReplies : true
+                )
+            }
+            onSent()
+        } catch {
+            if !error.isCancellation { self.error = error.localizedDescription }
+        }
+        sending = false
+    }
+}
+
+// MARK: - Conversation models
+
+private enum ChatDirection {
+    case inbound, out
+}
+
+private struct ChatBubbleMessage: Identifiable, Hashable {
+    let id: String
+    let direction: ChatDirection
+    let subject: String?
+    let body: String
+    let createdAt: String?
+    let readAt: String?
+    let allowReplies: Bool?
+    var isCc = false
+    var threadId: String? = nil
+
+    var preview: String {
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cc = isCc ? "Cc · " : ""
+        if let subject, !subject.isEmpty {
+            return "\(cc)\(subject) — \(text)"
+        }
+        return cc + text
+    }
+}
+
+private struct MessageConversation: Identifiable, Hashable {
+    var id: String { otherId }
+    let otherId: String
+    let otherName: String
+    let messages: [ChatBubbleMessage]
+    let unreadCount: Int
+
+    var lastMessage: ChatBubbleMessage { messages.last! }
+}
+
+private enum MessageConversationBuilder {
+    static func build(inbox: [MessageRow], sent: [MessageRow], userId: String?) -> [MessageConversation] {
+        guard let userId else { return [] }
+        var map: [String: (name: String, messages: [ChatBubbleMessage])] = [:]
+
+        for row in inbox where row.isAnnouncement != true {
+            guard let otherId = row.senderId, otherId != userId else { continue }
+            let name = row.sender?.fullName ?? ""
+            var entry = map[otherId] ?? (name: name, messages: [])
+            if entry.name.isEmpty, !name.isEmpty { entry.name = name }
+            entry.messages.append(
+                ChatBubbleMessage(
+                    id: row.id,
+                    direction: .inbound,
+                    subject: row.subject,
+                    body: row.body ?? "",
+                    createdAt: row.createdAt,
+                    readAt: row.readAt,
+                    allowReplies: row.allowReplies,
+                    isCc: row.isCc ?? false,
+                    threadId: row.threadId
+                )
+            )
+            map[otherId] = entry
+        }
+
+        for row in sent where row.isAnnouncement != true {
+            guard let otherId = row.recipientId, otherId != userId else { continue }
+            let name = row.recipient?.fullName ?? ""
+            var entry = map[otherId] ?? (name: name, messages: [])
+            if entry.name.isEmpty, !name.isEmpty { entry.name = name }
+            entry.messages.append(
+                ChatBubbleMessage(
+                    id: row.id,
+                    direction: .out,
+                    subject: row.subject,
+                    body: row.body ?? "",
+                    createdAt: row.createdAt,
+                    readAt: row.readAt,
+                    allowReplies: row.allowReplies,
+                    isCc: row.isCc ?? false,
+                    threadId: row.threadId
+                )
+            )
+            map[otherId] = entry
+        }
+
+        return map.compactMap { otherId, entry -> MessageConversation? in
+            guard !entry.messages.isEmpty else { return nil }
+            let sorted = entry.messages.sorted {
+                ($0.createdAt ?? "") < ($1.createdAt ?? "")
+            }
+            let unread = sorted.filter { $0.direction == .inbound && $0.readAt == nil }.count
+            return MessageConversation(
+                otherId: otherId,
+                otherName: entry.name,
+                messages: sorted,
+                unreadCount: unread
+            )
+        }
+        .sorted { ($0.lastMessage.createdAt ?? "") > ($1.lastMessage.createdAt ?? "") }
+    }
+
+    static func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ").prefix(2)
+        let chars = parts.compactMap { $0.first.map(String.init) }
+        let value = chars.joined().uppercased()
+        return value.isEmpty ? "?" : value
+    }
+}
+
+enum MessageDateFormatting {
+    static func listTime(_ iso: String) -> String {
+        guard let date = parse(iso) else { return String(iso.prefix(10)) }
+        if Calendar.current.isDateInToday(date) {
+            return format(date, "HH:mm")
+        }
+        return format(date, "d MMM")
+    }
+
+    static func dayKey(_ iso: String?) -> String? {
+        guard let iso, let date = parse(iso) else { return nil }
+        return format(date, "yyyy-MM-dd")
+    }
+
+    static func dayLabel(_ iso: String) -> String {
+        guard let date = parse(iso) else { return String(iso.prefix(10)) }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Aujourd’hui" }
+        if calendar.isDateInYesterday(date) { return "Hier" }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            return format(date, "EEEE d MMMM").capitalized
+        }
+        return format(date, "d MMMM yyyy")
+    }
+
+    static func bubbleTime(_ iso: String) -> String {
+        guard let date = parse(iso) else { return String(iso.prefix(16)) }
+        return format(date, "HH:mm")
+    }
+
+    private static func parse(_ iso: String) -> Date? {
+        let trimmed = String(iso.prefix(19))
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        for f in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
+            parser.dateFormat = f
+            if let date = parser.date(from: trimmed) { return date }
+        }
+        return ISO8601DateFormatter().date(from: iso)
+    }
+
+    private static func format(_ date: Date, _ pattern: String) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "fr_FR")
+        df.dateFormat = pattern
+        return df.string(from: date)
+    }
+}
+
+private extension MessageRow {
+    func withReadAt(_ value: String) -> MessageRow {
+        MessageRow(
+            id: id,
+            subject: subject,
+            body: body,
+            createdAt: createdAt,
+            readAt: value,
+            isAnnouncement: isAnnouncement,
+            allowReplies: allowReplies,
+            senderId: senderId,
+            recipientId: recipientId,
+            schoolId: schoolId,
+            threadId: threadId,
+            sender: sender,
+            recipient: recipient
+        )
+    }
+}
+
+private extension View {
+    func composeCard() -> some View {
+        background(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.045), radius: 10, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .stroke(Color.black.opacity(0.04), lineWidth: 1)
+        )
+    }
+}
+
+
+/// « Écrire à l’école »: opens a message already addressed to the school's administration,
+/// with a subject and a first line the parent can complete.
+struct WriteToSchoolButton: View {
+    var title: String = "Écrire à l’école"
+    var subject: String
+    var message: String
+    @State private var composing = false
+    @State private var sent = false
+
+    var body: some View {
+        Button {
+            composing = true
+        } label: {
+            Label(sent ? "Message envoyé" : title, systemImage: sent ? "checkmark" : "square.and.pencil")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $composing) {
+            ComposeMessageSheet(presetRole: "school_admin", presetSubject: subject, presetBody: message) {
+                composing = false
+                sent = true
+            }
+        }
+    }
+}
+
+// MARK: - Parent messages (like the web « Messages » of the parent portal)
+
+/// Someone the parent can write to: a teacher of one of their children, or the school administration.
+struct ParentContact: Identifiable, Hashable {
+    enum Kind { case teacher, admin, student, parent }
+    let id: String
+    let name: String
+    let kind: Kind
+    var subjects: [String]
+    /// students: their class
+    var className: String? = nil
+    /// parents: their children among the teacher's students (« Awa Ouédraogo (6A) »)
+    var parentOf: [String] = []
+
+    var line: String {
+        switch kind {
+        case .admin: return "Administration"
+        case .teacher: return subjects.isEmpty ? "Professeur" : "Professeur · \(subjects.joined(separator: ", "))"
+        case .student: return className.map { "Élève · \($0)" } ?? "Élève"
+        case .parent: return parentOf.isEmpty ? "Parent" : "Parent de \(parentOf.joined(separator: ", "))"
+        }
+    }
+}
+
+extension EduAPI {
+    /// Teachers of the parent's children (with the subjects they teach them) and the school administration —
+    /// same list as the web parent « Écrire ».
+    /// `asStudent`: the user is the student — their own class's teachers instead of their children's.
+    func fetchParentContacts(parentId: String, schoolId: String, asStudent: Bool = false) async throws -> [ParentContact] {
+        struct Link: Decodable { let student_id: String }
+        struct Enrollment: Decodable { let class_section_id: String? }
+        struct Person: Decodable { let id: String?; let first_name: String?; let last_name: String? }
+        struct Named: Decodable { let name: String? }
+        struct Assignment: Decodable { let teacher_id: String?; let matieres: Named?; let profils: Person? }
+        struct AdminRole: Decodable { let profils: Person? }
+
+        func name(_ p: Person?) -> String {
+            "\(p?.first_name ?? "") \(p?.last_name ?? "")".trimmingCharacters(in: .whitespaces)
+        }
+
+        let studentIds: [String]
+        if asStudent {
+            studentIds = [parentId]
+        } else {
+            let links: [Link] = try await client.from("liens_parent_eleve")
+                .select("student_id").eq("parent_id", value: parentId).execute().value
+            studentIds = links.map(\.student_id)
+        }
+        var map: [String: ParentContact] = [:]
+
+        if !studentIds.isEmpty {
+            let enrollments: [Enrollment] = try await client.from("inscriptions")
+                .select("class_section_id").in("student_id", values: studentIds).eq("status", value: "active")
+                .execute().value
+            let classIds = Array(Set(enrollments.compactMap(\.class_section_id)))
+            if !classIds.isEmpty {
+                let rows: [Assignment] = try await client.from("affectations_enseignement")
+                    .select("teacher_id, matieres(name), profils:profils!affectations_enseignement_teacher_id_fkey(first_name, last_name)")
+                    .in("class_section_id", values: classIds)
+                    .execute().value
+                for r in rows {
+                    guard let tid = r.teacher_id, tid != parentId else { continue }
+                    var c = map[tid] ?? ParentContact(id: tid, name: name(r.profils), kind: .teacher, subjects: [])
+                    if let s = r.matieres?.name, !c.subjects.contains(s) { c.subjects.append(s) }
+                    map[tid] = c
+                }
+            }
+        }
+
+        let admins: [AdminRole] = try await client.from("roles_utilisateurs")
+            .select("profils(id, first_name, last_name)")
+            .eq("school_id", value: schoolId).eq("role", value: "school_admin").eq("active", value: true)
+            .execute().value
+        for row in admins {
+            guard let p = row.profils, let id = p.id, id != parentId, map[id] == nil else { continue }
+            map[id] = ParentContact(id: id, name: "Administration", kind: .admin, subjects: [])
+        }
+
+        return map.values.sorted { a, b in
+            if a.kind != b.kind { return a.kind == .teacher }
+            return a.name.localizedCompare(b.name) == .orderedAscending
+        }
+    }
+}
+
+/// One announcement I sent, with how many people received it (web `ef_sent_announcements`).
+struct SentAnnouncement: Decodable {
+    let row: MessageRow
+    let recipientCount: Int
+
+    private enum K: String, CodingKey { case recipientCount }
+
+    init(from decoder: Decoder) throws {
+        row = try MessageRow(from: decoder)
+        let c = try decoder.container(keyedBy: K.self)
+        if let n = try? c.decode(Int.self, forKey: .recipientCount) { recipientCount = n }
+        else if let s = try? c.decode(String.self, forKey: .recipientCount), let n = Int(s) { recipientCount = n }
+        else { recipientCount = 1 }
+    }
+}
+
+extension EduAPI {
+    func fetchSentAnnouncements(limit: Int = 100) async throws -> [SentAnnouncement] {
+        struct Params: Encodable { let p_limit: Int }
+        return try await call("ef_sent_announcements", params: Params(p_limit: limit))
+    }
+}
+
+extension EduAPI {
+    struct ParentLink: Decodable { let parent_id: String; let student_id: String }
+
+    func fetchParentLinks(parentIds: [String]) async throws -> [ParentLink] {
+        try await client.from("liens_parent_eleve")
+            .select("parent_id, student_id")
+            .in("parent_id", values: parentIds)
+            .execute()
+            .value
+    }
+}
+
+extension EduAPI {
+    /// Ids of the school's active administrators (their messages and announcements show as « Administration »).
+    func fetchSchoolAdminIds(schoolId: String) async throws -> Set<String> {
+        struct Row: Decodable { let user_id: String? }
+        let rows: [Row] = try await client.from("roles_utilisateurs")
+            .select("user_id")
+            .eq("school_id", value: schoolId).eq("role", value: "school_admin").eq("active", value: true)
+            .execute().value
+        return Set(rows.compactMap(\.user_id))
+    }
+}
+
+private struct ChatTarget: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let line: String?
+}
+
+struct ParentMessagesView: View {
+    @EnvironmentObject private var auth: AuthViewModel
+
+    @State private var inbox: [MessageRow] = []
+    @State private var sent: [MessageRow] = []
+    @State private var contacts: [ParentContact] = []
+    @State private var contactsLoading = true
+    @State private var picking = false
+    @State private var search = ""
+    @State private var loading = true
+    @State private var error: String?
+    @State private var openChat: ChatTarget?
+    @State private var kindFilter: ParentContact.Kind?
+    @State private var composeGroup = false
+
+    @State private var tour = TabTour(key: "messages-parent")
+    @State private var coach = CoachMarkRegistry()
+
+    /// Parents get "vous", students "tu" (same page as the web, `formal`).
+    private var formal: Bool { auth.primaryRole != .student }
+    /// Teachers write to their students, the students' parents and the administration.
+    private var isTeacher: Bool { auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin }
+    private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
+    private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
+
+    private var tourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "msg.write", icon: "square.and.pencil",
+                title: "Écrire",
+                message: isAdmin
+                    ? "Écrivez à un élève, un parent ou un enseignant de l’école. « Écrire à plusieurs » envoie le même message à plusieurs personnes."
+                    : isTeacher
+                    ? "Écrivez à un de vos élèves, à ses parents ou à l’administration. « Écrire à plusieurs » envoie le même message à plusieurs personnes."
+                    : t("Écrivez à un professeur de vos enfants ou à l’administration de l’école.", "Écris à un de tes professeurs ou à l’administration de l’école.")
+            ),
+            CoachMarkStep(
+                id: "msg.search", icon: "magnifyingglass",
+                title: "Rechercher",
+                message: isTeacher
+                    ? "Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un élève ou un parent par son nom ou sa classe."
+                    : t("Retrouvez une discussion par nom ou par mot. Pendant « Écrire », cherchez un professeur par son nom ou sa matière.", "Retrouve une discussion par nom ou par mot. Pendant « Écrire », cherche un professeur par son nom ou sa matière.")
+            ),
+            CoachMarkStep(
+                id: "msg.list", icon: "bubble.left.and.bubble.right.fill",
+                title: t("Vos discussions", "Tes discussions"),
+                message: t("Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touchez pour ouvrir et répondre.", "Une discussion par personne, la plus récente en haut. Le chiffre vert compte les messages non lus. Touche pour ouvrir et répondre.")
+            ),
+            CoachMarkStep(
+                id: "msg.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: t("Touchez ce bouton à tout moment pour relancer la visite.", "Touche ce bouton à tout moment pour relancer la visite.")
+            ),
+        ]
+    }
+
+    private var conversations: [MessageConversation] {
+        MessageConversationBuilder.build(inbox: inbox, sent: sent, userId: auth.userId)
+    }
+
+    private var contactById: [String: ParentContact] {
+        Dictionary(contacts.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// The administration is shown as « Administration », never by the administrator's name.
+    private func displayName(_ convo: MessageConversation) -> String {
+        if contactById[convo.otherId]?.kind == .admin { return "Administration" }
+        return convo.otherName.isEmpty ? "Contact" : convo.otherName
+    }
+
+    private var totalUnread: Int { conversations.reduce(0) { $0 + $1.unreadCount } }
+
+    private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func matches(_ fields: String?...) -> Bool {
+        guard !query.isEmpty else { return true }
+        return fields.contains { ($0 ?? "").localizedStandardContains(query) }
+    }
+
+    private var shownConversations: [MessageConversation] {
+        conversations.filter {
+            matches(displayName($0), $0.lastMessage.body, $0.lastMessage.subject, contactById[$0.otherId]?.line)
+        }
+    }
+
+    private var shownContacts: [ParentContact] {
+        // one « Administration » entry, even when the school has several administrators
+        let firstAdmin = contacts.first { $0.kind == .admin }?.id
+        return contacts.filter { c in
+            (c.kind != .admin || c.id == firstAdmin)
+                && (kindFilter == nil || c.kind == kindFilter)
+                && (matches(c.name, c.line, c.className) || c.subjects.contains { matches($0) })
+        }
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            Group {
+                if (loading && inbox.isEmpty && sent.isEmpty) || contactsLoading {  // wait for contacts: they tell who is « Administration »
+                    LoadingBlock()
+                } else if let error {
+                    VStack(spacing: 12) {
+                        Text("Impossible de charger les messages")
+                            .font(.headline)
+                            .foregroundStyle(EduTheme.ink)
+                        Text(error).font(.footnote).foregroundStyle(EduTheme.muted).multilineTextAlignment(.center)
+                        Button("Réessayer") { Task { await load() } }
+                            .buttonStyle(.borderedProminent)
+                            .tint(EduTheme.teal)
+                    }
+                    .padding(24)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 14) {
+                                header
+                                searchField.coachMarkTarget("msg.search")
+                                if picking {
+                                    contactsList
+                                } else {
+                                    discussionsList
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .refreshable { await load() }
+                        .tabTour(tour, registry: coach, scroller: proxy)
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
+                }
+            }
+        }
+        .environment(coach)
+        .premiumTitle("Messages")
+        .navigationDestination(item: $openChat) { target in
+            ConversationChatView(
+                otherId: target.id,
+                otherName: target.name,
+                subtitle: target.line,
+                seedInbox: inbox,
+                seedSent: sent,
+                onChanged: { Task { await load() } }
+            )
+        }
+        .task {
+            await load()
+            await loadContacts()
+        }
+        .sheet(isPresented: $composeGroup) {
+            ComposeMessageSheet(onSent: {
+                composeGroup = false
+                Task { await load() }
+            })
+            .environmentObject(auth)
+        }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(picking ? "Nouveau message" : "Messages")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(EduTheme.ink)
+                    Text(picking
+                         ? t("À qui voulez-vous écrire ?", "À qui veux-tu écrire ?")
+                         : totalUnread > 0
+                            ? "\(totalUnread) message\(totalUnread > 1 ? "s" : "") non lu\(totalUnread > 1 ? "s" : "")"
+                            : "Tout est lu")
+                        .font(.subheadline.weight(totalUnread > 0 && !picking ? .semibold : .regular))
+                        .foregroundStyle(totalUnread > 0 && !picking ? EduTheme.teal : EduTheme.muted)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 0)
+                TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                    .coachMarkTarget("msg.help")
+            }
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    picking.toggle()
+                    search = ""
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: picking ? "xmark" : "square.and.pencil")
+                    Text(picking ? "Annuler" : "Écrire")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(picking ? EduTheme.ink : .white)
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(picking ? Color.white : EduTheme.teal)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .stroke(picking ? EduTheme.borderStrong : EduTheme.teal, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .coachMarkTarget("msg.write")
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(EduTheme.muted)
+            TextField(picking ? (isTeacher ? "Nom ou classe…" : "Nom ou matière…") : "Rechercher…", text: $search)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(EduTheme.subtle)
+                }
+                .accessibilityLabel("Effacer la recherche")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 42)
+        .background(cardBackground)
+    }
+
+    // MARK: Discussions
+
+    @ViewBuilder
+    private var discussionsList: some View {
+        if conversations.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.title2)
+                    .foregroundStyle(EduTheme.teal)
+                Text("Aucune discussion")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text(isAdmin
+                     ? "Touchez « Écrire » pour contacter un élève, un parent ou un enseignant."
+                     : isTeacher
+                     ? "Touchez « Écrire » pour contacter un élève, ses parents ou l’administration."
+                     : t("Touchez « Écrire » pour contacter un professeur de vos enfants.", "Touche « Écrire » pour contacter un de tes professeurs."))
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .multilineTextAlignment(.center)
+                let teachers = contacts.filter { $0.kind == .teacher }.prefix(6)
+                if !teachers.isEmpty {
+                    VStack(spacing: 8) {
+                        ForEach(Array(teachers)) { c in
+                            Button { open(c.id, c.name, c.line) } label: {
+                                HStack(spacing: 10) {
+                                    SquareAvatar(name: c.name, size: 32, admin: false)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+                                        if let s = c.subjects.first {
+                                            Text(s).font(.caption).foregroundStyle(EduTheme.muted)
+                                        }
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(EduTheme.subtle)
+                                }
+                                .padding(10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                        .stroke(EduTheme.border, lineWidth: 1)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .background(cardBackground)
+            .coachMarkTarget("msg.list")
+        } else if shownConversations.isEmpty {
+            Text("Aucun résultat.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(shownConversations.enumerated()), id: \.element.id) { index, convo in
+                    if index > 0 { Divider().padding(.leading, 70) }
+                    Button {
+                        open(convo.otherId, displayName(convo), contactById[convo.otherId]?.line)
+                    } label: {
+                        discussionRow(convo)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .background(cardBackground)
+            .coachMarkTarget("msg.list")
+        }
+    }
+
+    private func discussionRow(_ convo: MessageConversation) -> some View {
+        let unread = convo.unreadCount > 0
+        let last = convo.lastMessage
+        let contact = contactById[convo.otherId]
+        return HStack(alignment: .center, spacing: 12) {
+            SquareAvatar(name: displayName(convo), size: 44, admin: contact?.kind == .admin)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(displayName(convo))
+                        .font(.subheadline.weight(unread ? .bold : .semibold))
+                        .foregroundStyle(EduTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let created = last.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption2.weight(unread ? .bold : .regular))
+                            .foregroundStyle(unread ? EduTheme.teal : EduTheme.subtle)
+                    }
+                }
+                if let contact {
+                    Text(contact.line)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(EduTheme.subtle)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    if last.direction == .out {
+                        Image(systemName: last.readAt == nil ? "checkmark" : "checkmark.circle.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(last.readAt == nil ? EduTheme.subtle : EduTheme.teal)
+                    }
+                    Text((last.direction == .out ? t("Vous : ", "Toi : ") : "") + last.body)
+                        .font(.caption.weight(unread ? .semibold : .regular))
+                        .foregroundStyle(unread ? EduTheme.ink : EduTheme.muted)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if unread {
+                        Text("\(convo.unreadCount)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 20, minHeight: 20)
+                            .padding(.horizontal, convo.unreadCount > 9 ? 4 : 0)
+                            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    }
+                }
+                .padding(.top, 1)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(unread ? EduTheme.brand50 : Color.white)
+        .overlay(alignment: .leading) {
+            if unread { Rectangle().fill(EduTheme.teal).frame(width: 3) }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: Contacts (« Écrire »)
+
+    @ViewBuilder
+    private var contactsList: some View {
+        if contactsLoading {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
+        } else if shownContacts.isEmpty {
+            if isTeacher { teacherPickerTools }
+            Text("Aucun contact trouvé.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+        } else {
+            if isTeacher { teacherPickerTools }
+            ForEach(isTeacher ? [ParentContact.Kind.student, .parent, .admin, .teacher] : [ParentContact.Kind.teacher, .admin], id: \.self) { kind in
+                let group = shownContacts.filter { $0.kind == kind }
+                if !group.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(groupTitle(kind))
+                            .font(.caption.weight(.bold))
+                            .tracking(0.6)
+                            .foregroundStyle(EduTheme.muted)
+                        VStack(spacing: 0) {
+                            ForEach(Array(group.enumerated()), id: \.element.id) { index, c in
+                                if index > 0 { Divider().padding(.leading, 62) }
+                                Button { open(c.id, c.name, c.line) } label: {
+                                    HStack(spacing: 12) {
+                                        SquareAvatar(name: c.name, size: 36, admin: kind == .admin)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(c.name)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(EduTheme.ink)
+                                                .lineLimit(1)
+                                            Text(kind == .teacher ? (c.subjects.isEmpty ? "Professeur" : c.subjects.joined(separator: ", ")) : (kind == .admin ? "Administration" : c.line))
+                                                .font(.caption)
+                                                .foregroundStyle(EduTheme.muted)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(EduTheme.subtle)
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .background(cardBackground)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Helpers
+
+    /// « Parent de … »: each parent's children among the teacher's students.
+    private static func withChildren(_ list: [ParentContact]) async -> [ParentContact] {
+        let parentIds = list.filter { $0.kind == .parent }.map(\.id)
+        guard !parentIds.isEmpty,
+              let links = try? await EduAPI().fetchParentLinks(parentIds: parentIds) else { return list }
+        let students = Dictionary(list.filter { $0.kind == .student }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var children: [String: [String]] = [:]
+        for l in links {
+            guard let child = students[l.student_id] else { continue }
+            children[l.parent_id, default: []].append(child.className.map { "\(child.name) (\($0))" } ?? child.name)
+        }
+        return list.map { c in
+            guard c.kind == .parent, let kids = children[c.id] else { return c }
+            var next = c
+            next.parentOf = kids.sorted()
+            return next
+        }
+    }
+
+    private func groupTitle(_ kind: ParentContact.Kind) -> String {
+        switch kind {
+        case .teacher: return isTeacher ? "ENSEIGNANTS" : t("PROFESSEURS DE MES ENFANTS", "MES PROFESSEURS")
+        case .admin: return "ADMINISTRATION"
+        case .student: return "ÉLÈVES"
+        case .parent: return "PARENTS"
+        }
+    }
+
+    /// Teachers: filter by role (with counts) and « Écrire à plusieurs » (several recipients, replies on or off).
+    private var teacherPickerTools: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    let hasAdmin = contacts.contains { $0.kind == .admin }
+                    kindChip(nil, "Tous", contacts.filter { $0.kind != .admin }.count + (hasAdmin ? 1 : 0))
+                    kindChip(.student, "Élèves", contacts.filter { $0.kind == .student }.count)
+                    kindChip(.parent, "Parents", contacts.filter { $0.kind == .parent }.count)
+                    if contacts.contains(where: { $0.kind == .teacher }) { kindChip(.teacher, "Enseignants", contacts.filter { $0.kind == .teacher }.count) }
+                    if hasAdmin { kindChip(.admin, "Administration", 1) }
+                }
+            }
+            Button { composeGroup = true } label: {
+                Label("Écrire à plusieurs", systemImage: "person.2.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .foregroundStyle(EduTheme.teal)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(EduTheme.teal, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func kindChip(_ kind: ParentContact.Kind?, _ label: String, _ count: Int) -> some View {
+        let on = kindFilter == kind
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { kindFilter = kind }
+        } label: {
+            HStack(spacing: 5) {
+                Text(label).font(.caption.weight(.semibold))
+                Text("\(count)").font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(on ? .white.opacity(0.85) : EduTheme.muted)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .foregroundStyle(on ? .white : EduTheme.ink)
+            .background(on ? EduTheme.teal : .white, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous).stroke(on ? .clear : EduTheme.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func open(_ id: String, _ name: String, _ line: String?) {
+        openChat = ChatTarget(id: id, name: name, line: line)
+        picking = false
+        search = ""
+        kindFilter = nil
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    private func load() async {
+        guard let uid = auth.userId else { return }
+        if inbox.isEmpty && sent.isEmpty { loading = true }
+        do {
+            let api = EduAPI()
+            async let inboxTask = api.fetchInbox(userId: uid, announcementsOnly: false, limit: 500)
+            async let sentTask = api.fetchSentPersonalMessages(userId: uid)
+            let (i, s) = try await (inboxTask, sentTask)
+            if Task.isCancelled { return }
+            inbox = i
+            sent = s
+            error = nil
+        } catch {
+            if Task.isCancelled || error.isCancellation { return }
+            self.error = error.localizedDescription
+        }
+        loading = false
+    }
+
+    private func loadContacts() async {
+        guard let uid = auth.userId, let schoolId = auth.schoolId else { contactsLoading = false; return }
+        do {
+            var list: [ParentContact]
+            if isTeacher {
+                list = try await EduAPI().fetchMessagingContacts(schoolId: schoolId, role: auth.primaryRole ?? .teacher, userId: uid)
+                    .filter { $0.id != uid }
+                    .map { c in
+                        let kind: ParentContact.Kind = switch c.normalizedRole {
+                        case "student": .student
+                        case "parent": .parent
+                        case "school_admin": .admin
+                        default: .teacher
+                        }
+                        return ParentContact(id: c.id, name: kind == .admin ? "Administration" : (c.fullName.isEmpty ? "Contact" : c.fullName),
+                                             kind: kind, subjects: [], className: c.className)
+                    }
+                    .sorted { a, b in
+                        a.name.localizedCompare(b.name) == .orderedAscending
+                    }
+                list = await Self.withChildren(list)
+            } else {
+                list = try await EduAPI().fetchParentContacts(parentId: uid, schoolId: schoolId, asStudent: !formal)
+            }
+            if Task.isCancelled { return }
+            contacts = list
+        } catch {}
+        contactsLoading = false
+    }
+}
+
+/// Square initials avatar (web: teal tone for teachers, slate for the administration).
+struct SquareAvatar: View {
+    let name: String
+    var size: CGFloat = 44
+    var admin = false
+
+    var body: some View {
+        Text(MessageConversationBuilder.initials(name))
+            .font(.system(size: size * 0.34, weight: .bold))
+            .foregroundStyle(admin ? Color(red: 51 / 255, green: 65 / 255, blue: 85 / 255) : EduTheme.tealDark)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .fill(admin ? Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255) : Color(red: 204 / 255, green: 251 / 255, blue: 241 / 255))
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Parent announcements (like the web « Annonces » of the parent portal)
+
+struct ParentAnnouncementsView: View {
+    @EnvironmentObject private var auth: AuthViewModel
+    /// Parents get "vous", students "tu" (web `formal`).
+    private var formal: Bool { auth.primaryRole != .student }
+    private func t(_ vous: String, _ tu: String) -> String { formal ? vous : tu }
+
+    @State private var inbox: [MessageRow] = []
+    @State private var sent: [SentAnnouncement] = []
+    @State private var search = ""
+    @State private var unreadOnly = false
+    @State private var sentOnly = false
+    @State private var composing = false
+    @State private var loading = true
+    @State private var error: String?
+
+    /// Teachers also send announcements (web: « Nouvelle », sent ones in the list).
+    private var isTeacher: Bool { auth.primaryRole == .teacher || auth.primaryRole == .schoolAdmin }
+    private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
+
+    /// One line of the list: received, or sent by me (once per announcement, with its recipients).
+    struct Item: Identifiable {
+        let row: MessageRow
+        let sentByMe: Bool
+        let recipientCount: Int
+        var id: String { (sentByMe ? "out-" : "in-") + row.id }
+    }
+
+    @State private var tour = TabTour(key: "annonces-parent")
+    @State private var coach = CoachMarkRegistry()
+
+    private var tourSteps: [CoachMarkStep] {
+        allTourSteps.filter { $0.id != "ann.new" || isTeacher }
+    }
+
+    private var allTourSteps: [CoachMarkStep] {
+        [
+            CoachMarkStep(
+                id: "ann.new", icon: "megaphone.fill",
+                title: "Nouvelle annonce",
+                message: isAdmin
+                    ? "Envoyez une annonce à toute l’école : vous choisissez les rôles qui la reçoivent (élèves, parents, enseignants) et si l’on peut vous répondre."
+                    : "Envoyez une annonce à vos élèves, à leurs parents ou à l’administration. Vous choisissez qui la reçoit et si l’on peut vous répondre."
+            ),
+            CoachMarkStep(
+                id: "ann.search", icon: "magnifyingglass",
+                title: "Rechercher",
+                message: t("Retrouvez une annonce par un mot de son titre, de son texte ou par son auteur.", "Retrouve une annonce par un mot de son titre, de son texte ou par son auteur.")
+            ),
+            CoachMarkStep(
+                id: "ann.filter", icon: "line.3.horizontal.decrease.circle",
+                title: "Toutes ou non lues",
+                message: t("Affichez seulement les annonces que vous n’avez pas encore lues.", "Affiche seulement les annonces que tu n’as pas encore lues.")
+            ),
+            CoachMarkStep(
+                id: "ann.list", icon: "megaphone.fill",
+                title: "Les annonces",
+                message: t("Les informations de l’établissement et des professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touchez pour la lire et y répondre.", "Les informations de l’établissement et de tes professeurs, la plus récente en haut. Le point vert signale une annonce non lue ; touche pour la lire et y répondre.")
+            ),
+            CoachMarkStep(
+                id: "ann.help", icon: "questionmark.circle.fill",
+                title: "Revoir ce guide",
+                message: t("Touchez ce bouton à tout moment pour relancer la visite.", "Touche ce bouton à tout moment pour relancer la visite.")
+            ),
+        ]
+    }
+
+    private var announcements: [MessageRow] { inbox.filter { $0.isAnnouncement == true } }
+    private var unreadCount: Int { announcements.filter { $0.readAt == nil }.count }
+
+    private var items: [Item] {
+        let received = announcements.map { Item(row: $0, sentByMe: false, recipientCount: 1) }
+        let mine = sent.map { Item(row: $0.row, sentByMe: true, recipientCount: $0.recipientCount) }
+        return (received + mine).sorted { ($0.row.createdAt ?? "") > ($1.row.createdAt ?? "") }
+    }
+
+    private var shown: [Item] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return items.filter { item in
+            let a = item.row
+            if unreadOnly && (item.sentByMe || a.readAt != nil) { return false }
+            if sentOnly && !item.sentByMe { return false }
+            guard !q.isEmpty else { return true }
+            return [a.subject, a.body, a.sender?.fullName].contains { ($0 ?? "").localizedStandardContains(q) }
+        }
+    }
+
+    @State private var adminIds: Set<String> = []
+
+    /// Announcements from an administrator show « Administration », not their name.
+    static func senderName(_ a: MessageRow, adminIds: Set<String> = []) -> String {
+        if let id = a.senderId, adminIds.contains(id) { return "Administration" }
+        let n = a.sender?.fullName ?? ""
+        return n.isEmpty ? "Administration" : n
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            Group {
+                if loading && inbox.isEmpty {
+                    LoadingBlock()
+                } else if let error {
+                    VStack(spacing: 12) {
+                        Text("Impossible de charger les annonces")
+                            .font(.headline)
+                            .foregroundStyle(EduTheme.ink)
+                        Text(error).font(.footnote).foregroundStyle(EduTheme.muted).multilineTextAlignment(.center)
+                        Button("Réessayer") { Task { await load() } }
+                            .buttonStyle(.borderedProminent)
+                            .tint(EduTheme.teal)
+                    }
+                    .padding(24)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 14) {
+                                header
+                                searchField.coachMarkTarget("ann.search")
+                                filterBar.coachMarkTarget("ann.filter")
+                                list
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+                        .refreshable { await load() }
+                        .tabTour(tour, registry: coach, scroller: proxy)
+                    }
+                    .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
+                }
+            }
+        }
+        .environment(coach)
+        .premiumTitle("Annonces")
+        .task { await load() }
+        .sheet(isPresented: $composing) {
+            ComposeMessageSheet(announcementsOnly: true, onSent: {
+                composing = false
+                Task { await load() }
+            })
+            .environmentObject(auth)
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerTitle
+            if isTeacher {
+                Button { composing = true } label: {
+                    Label("Nouvelle annonce", systemImage: "megaphone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .coachMarkTarget("ann.new")
+            }
+        }
+    }
+
+    private var headerTitle: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Annonces")
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(-0.3)
+                    .foregroundStyle(EduTheme.ink)
+                Text(unreadCount > 0
+                     ? "\(unreadCount) nouvelle\(unreadCount > 1 ? "s" : "") annonce\(unreadCount > 1 ? "s" : "")"
+                     : "Informations officielles de l’établissement")
+                    .font(.subheadline.weight(unreadCount > 0 ? .semibold : .regular))
+                    .foregroundStyle(unreadCount > 0 ? EduTheme.teal : EduTheme.muted)
+            }
+            Spacer(minLength: 0)
+            TourHelpButton(onDark: false) { tour.start(tourSteps, registry: coach) }
+                .coachMarkTarget("ann.help")
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(EduTheme.muted)
+            TextField("Rechercher…", text: $search)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(EduTheme.subtle)
+                }
+                .accessibilityLabel("Effacer la recherche")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 42)
+        .background(cardBackground)
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: 0) {
+            segment("Toutes (\(items.count))", selected: !unreadOnly && !sentOnly) { unreadOnly = false; sentOnly = false }
+            segment("Non lues (\(unreadCount))", selected: unreadOnly) { unreadOnly = true; sentOnly = false }
+            if isTeacher {
+                segment("Envoyées (\(sent.count))", selected: sentOnly) { sentOnly = true; unreadOnly = false }
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .fill(Color(red: 226 / 255, green: 232 / 255, blue: 240 / 255))
+        )
+    }
+
+    private func segment(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { action() }
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 4)
+                .foregroundStyle(selected ? .white : EduTheme.muted)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(selected ? EduTheme.teal : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        if items.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "megaphone")
+                    .font(.title2)
+                    .foregroundStyle(EduTheme.teal)
+                Text("Aucune annonce")
+                    .font(.headline)
+                    .foregroundStyle(EduTheme.ink)
+                Text(t("Les informations de l’établissement et des professeurs arrivent ici.", "Les informations de l’établissement et de tes professeurs arrivent ici."))
+                    .font(.caption)
+                    .foregroundStyle(EduTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+            .padding(.horizontal, 16)
+            .background(cardBackground)
+            .coachMarkTarget("ann.list")
+        } else if shown.isEmpty {
+            Text(unreadOnly && search.isEmpty ? "Tout est lu." : "Aucun résultat.")
+                .font(.subheadline)
+                .foregroundStyle(EduTheme.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(cardBackground)
+                .coachMarkTarget("ann.list")
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider() }
+                    NavigationLink {
+                        ParentAnnouncementDetail(announcement: item.row, adminIds: adminIds,
+                                                 sentByMe: item.sentByMe, recipientCount: item.recipientCount) {
+                            if !item.sentByMe { markRead(item.row) }
+                        }
+                    } label: {
+                        row(item)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+            .background(cardBackground)
+            .coachMarkTarget("ann.list")
+        }
+    }
+
+    private func row(_ item: Item) -> some View {
+        let a = item.row
+        let unread = !item.sentByMe && a.readAt == nil
+        return HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(unread ? EduTheme.teal : Color.clear)
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(item.sentByMe
+                         ? "Vous · \(item.recipientCount) destinataire\(item.recipientCount > 1 ? "s" : "")"
+                         : Self.senderName(a, adminIds: adminIds))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(item.sentByMe ? EduTheme.teal : EduTheme.muted)
+                        .lineLimit(1)
+                    Spacer(minLength: 6)
+                    if let created = a.createdAt {
+                        Text(MessageDateFormatting.listTime(created))
+                            .font(.caption2.weight(unread ? .bold : .regular))
+                            .foregroundStyle(unread ? EduTheme.teal : EduTheme.subtle)
+                    }
+                }
+                Text(a.subject?.isEmpty == false ? a.subject! : "(Sans objet)")
+                    .font(.subheadline.weight(unread ? .bold : .semibold))
+                    .foregroundStyle(EduTheme.ink)
+                    .lineLimit(1)
+                if let body = a.body, !body.isEmpty {
+                    Text(body)
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EduTheme.subtle)
+                .padding(.top, 14)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(unread ? EduTheme.brand50 : Color.white)
+        .overlay(alignment: .leading) {
+            if unread { Rectangle().fill(EduTheme.teal).frame(width: 3) }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+            .fill(.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                    .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+    }
+
+    private func markRead(_ a: MessageRow) {
+        guard a.readAt == nil, let uid = auth.userId else { return }
+        Task {
+            do {
+                try await EduAPI().markMessagesRead(ids: [a.id], recipientId: uid)
+                let stamp = ISO8601DateFormatter().string(from: Date())
+                if let i = inbox.firstIndex(where: { $0.id == a.id }) { inbox[i] = inbox[i].withReadAt(stamp) }
+            } catch {}
+        }
+    }
+
+    private func load() async {
+        guard let uid = auth.userId else { return }
+        if inbox.isEmpty { loading = true }
+        do {
+            let api = EduAPI()
+            let schoolId = auth.schoolId
+            async let admins: Set<String> = {
+                guard let schoolId else { return [] }
+                return (try? await api.fetchSchoolAdminIds(schoolId: schoolId)) ?? []
+            }()
+            async let mine: [SentAnnouncement] = isTeacher ? ((try? await api.fetchSentAnnouncements()) ?? []) : []
+            let rows = try await api.fetchInbox(userId: uid, announcementsOnly: true, limit: 500)
+            let ids = await admins
+            let sentRows = await mine
+            if Task.isCancelled { return }
+            adminIds = ids
+            inbox = rows
+            sent = sentRows
+            error = nil
+        } catch {
+            if Task.isCancelled || error.isCancellation { return }
+            self.error = error.localizedDescription
+        }
+        loading = false
+    }
+}
+
+/// One announcement, read in full (web: right-hand reader). Opening it marks it read.
+struct ParentAnnouncementDetail: View {
+    let announcement: MessageRow
+    var adminIds: Set<String> = []
+    /// An announcement I sent (teachers): « Vous · envoyée à N destinataires », no reply button.
+    var sentByMe = false
+    var recipientCount = 1
+    var onOpen: () -> Void
+
+    private var sender: String {
+        sentByMe
+            ? "Vous · envoyée à \(recipientCount) destinataire\(recipientCount > 1 ? "s" : "")"
+            : ParentAnnouncementsView.senderName(announcement, adminIds: adminIds)
+    }
+
+    private static func longDate(_ iso: String) -> String {
+        let parsers: [ISO8601DateFormatter] = {
+            let a = ISO8601DateFormatter(); a.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let b = ISO8601DateFormatter(); b.formatOptions = [.withInternetDateTime]
+            return [a, b]
+        }()
+        guard let d = parsers.lazy.compactMap({ $0.date(from: iso) }).first else { return iso }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "EEEE d MMMM yyyy 'à' HH:mm"
+        let s = f.string(from: d)
+        return s.prefix(1).uppercased() + s.dropFirst()
+    }
+
+    var body: some View {
+        PremiumScreenChrome {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label(sentByMe ? "ANNONCE ENVOYÉE" : "ANNONCE OFFICIELLE", systemImage: "megaphone.fill")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(EduTheme.tealDark)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+
+                    Text(announcement.subject?.isEmpty == false ? announcement.subject! : "(Sans objet)")
+                        .font(.system(size: 24, weight: .bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(EduTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 12) {
+                        SquareAvatar(name: sentByMe ? "Vous" : sender, size: 40, admin: !sentByMe)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sender)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EduTheme.ink)
+                            if let created = announcement.createdAt {
+                                Text(Self.longDate(created))
+                                    .font(.caption)
+                                    .foregroundStyle(EduTheme.muted)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    Text(announcement.body ?? "")
+                        .font(.body)
+                        .foregroundStyle(EduTheme.ink.opacity(0.9))
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Divider()
+
+                    if sentByMe {
+                        Text(announcement.allowReplies == false ? "Les destinataires ne peuvent pas répondre." : "Les destinataires peuvent vous répondre.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                    } else if announcement.allowReplies != false, let senderId = announcement.senderId {
+                        NavigationLink {
+                            ConversationChatView(otherId: senderId, otherName: sender, onChanged: {})
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "bubble.left.fill")
+                                Text(sender == "Administration" ? "Répondre à l’administration" : "Répondre à \(sender.split(separator: " ").first.map(String.init) ?? sender)")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Cette annonce n’accepte pas de réponse.")
+                            .font(.subheadline)
+                            .foregroundStyle(EduTheme.muted)
+                    }
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                        .fill(.white)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                                .stroke(EduTheme.borderStrong.opacity(0.7), lineWidth: 1)
+                        )
+                )
+                .padding(16)
+            }
+        }
+        .premiumTitle("Annonce")
+        .onAppear(perform: onOpen)
+    }
+}
+
+
+/// « À … · Cc … », like Gmail: who else got a message sent to several people
+/// (database function ef_message_recipients; nothing is shown until it exists).
+enum MessageRecipients {
+    struct Line: Equatable { let to: [String]; let cc: [String] }
+    private struct Row: Decodable { let recipient_id: String; let first_name: String?; let last_name: String?; let is_cc: Bool; let is_admin: Bool }
+    private struct P: Encodable { let p_thread: String }
+
+    static func line(thread: String, me: String) async -> Line? {
+        guard let rows: [Row] = try? await SupabaseManager.client.rpc("ef_message_recipients", params: P(p_thread: thread)).execute().value,
+              rows.count > 1 else { return nil }
+        func names(_ cc: Bool) -> [String] {
+            var out: [String] = []
+            for r in rows where r.is_cc == cc {
+                let n = r.recipient_id == me ? "vous" : (r.is_admin ? "Administration" : "\(r.first_name ?? "") \(r.last_name ?? "")".trimmingCharacters(in: .whitespaces))
+                if !n.isEmpty, !out.contains(n) { out.append(n) }
+            }
+            return out
+        }
+        return Line(to: names(false), cc: names(true))
+    }
+
+    struct LineView: View {
+        let line: Line
+        var body: some View {
+            (Text("À : ").fontWeight(.semibold) + Text(line.to.joined(separator: ", "))
+             + (line.cc.isEmpty ? Text("") : Text("  ·  Cc : ").fontWeight(.semibold) + Text(line.cc.joined(separator: ", "))))
+                .font(.caption2)
+                .foregroundStyle(EduTheme.muted)
+                .lineLimit(3)
+        }
+    }
+}

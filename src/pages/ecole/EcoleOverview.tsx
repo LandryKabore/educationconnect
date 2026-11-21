@@ -343,7 +343,7 @@ export default function EcoleOverview() {
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-500/40">
           <div>
             <p className="font-semibold text-amber-950">
-              Devoirs en attente de confirmation
+              Examens en attente de confirmation
             </p>
             <p className="mt-1 text-sm text-amber-900">
               {pendingExams} proposition{pendingExams > 1 ? "s" : ""} des
@@ -378,7 +378,7 @@ export default function EcoleOverview() {
           to="/eleves"
         />
         <MetricCard
-          label="Devoirs"
+          label="Examens"
           value={String(pendingExams)}
           hint={
             pendingExams > 0
@@ -470,7 +470,7 @@ export default function EcoleOverview() {
 
         <Panel
           icon={FileText}
-          title="Devoirs"
+          title="Examens"
           subtitle="À confirmer et prochainement"
           action={
             <Link to="/devoirs-ecole" className="block">

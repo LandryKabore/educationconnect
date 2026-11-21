@@ -1,0 +1,22 @@
+{
+  "name": "edufaso-presentation-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts EduFaso out/edufaso-presentation.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "@remotion/google-fonts": "4.0.543",
+    "@remotion/transitions": "4.0.543",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.543"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "playwright": "1.55.0",
+    "typescript": "5.8.3"
+  }
+}

@@ -6,6 +6,7 @@ import path from "path";
 import { readFileSync } from "fs";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8")) as { version: string };
+const capacitor = process.env.CAPACITOR === "true";
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
@@ -19,7 +20,8 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
+    // The native shell loads the bundled files directly. A service worker fights that WebView.
+    ...(capacitor ? [] : [VitePWA({
       registerType: "autoUpdate",
       includeAssets: [
         "favicon.png",
@@ -69,7 +71,7 @@ export default defineConfig({
           },
         ],
       },
-    }),
+    })]),
   ],
   resolve: {
     alias: {

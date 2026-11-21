@@ -1,0 +1,9 @@
+.profiles/
+.tmp/
+out/
+node_modules/
+public/clips/
+public/stills/
+public/voice/
+public/music.wav
+.DS_Store

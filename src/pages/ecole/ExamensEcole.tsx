@@ -476,7 +476,7 @@ export default function ExamensEcole() {
         }}
       />
       <PageHeader
-        title="Devoirs"
+        title="Examens"
         subtitle="Créez un devoir pour une classe, ou confirmez ceux proposés par les enseignants"
         actions={
           <Button type="button" onClick={openCreate} disabled={classes.length === 0}>
