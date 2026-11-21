@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertTriangle, CheckCircle2, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, ClipboardList, Mail, Plus, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { schoolTypeLabel } from "@/lib/schoolForm";
 import { getTimeGreeting } from "@/lib/greeting";
@@ -20,7 +20,6 @@ import {
   AdminLoading,
   AdminPageHeader,
   AdminSection,
-  AdminStat,
   AdminStatusDot,
 } from "@/components/admin/AdminKit";
 
@@ -167,6 +166,35 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Tableau de bord"
+        stats={[
+          {
+            label: "Écoles",
+            value: String(stats.total),
+            hint: `${stats.active} active${stats.active > 1 ? "s" : ""} · ${stats.inactive} inactive${stats.inactive > 1 ? "s" : ""}`,
+            to: "/admin/ecoles",
+          },
+          {
+            label: "Admins d’école",
+            value: String(stats.adminCount),
+            hint:
+              stats.withoutAdmin > 0
+                ? `${stats.withoutAdmin} école${stats.withoutAdmin > 1 ? "s" : ""} sans admin`
+                : "Chaque école en a un",
+            to: "/admin/utilisateurs",
+          },
+          {
+            label: "Invitations",
+            value: String(stats.pending),
+            hint: stats.expiring > 0 ? `${stats.expiring} expire${stats.expiring > 1 ? "nt" : ""} sous 48 h` : "en attente",
+            to: "/admin/invitations",
+          },
+          {
+            label: "Abonnements actifs",
+            value: String(stats.paying),
+            hint: `${stats.trial} en essai · ${stats.pastDue} impayé${stats.pastDue > 1 ? "s" : ""}`,
+            to: "/admin/abonnements",
+          },
+        ]}
         subtitle={
           <>
             {getTimeGreeting()}
@@ -178,7 +206,7 @@ export default function AdminDashboard() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-md font-normal"
+              
               onClick={() => void qc.invalidateQueries()}
               disabled={refreshing}
               aria-label="Actualiser les données"
@@ -188,7 +216,7 @@ export default function AdminDashboard() {
             </Button>
             <Button
               size="sm"
-              className="rounded-md font-normal"
+              
               onClick={() => navigate("/admin/ecoles")}
             >
               <Plus className="h-4 w-4" />
@@ -198,47 +226,9 @@ export default function AdminDashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AdminStat
-          to="/admin/ecoles"
-          label="Écoles"
-          value={stats.total}
-          hint={`${stats.active} active${stats.active > 1 ? "s" : ""} · ${stats.inactive} inactive${stats.inactive > 1 ? "s" : ""}`}
-          tone="brand"
-        />
-        <AdminStat
-          to="/admin/utilisateurs"
-          label="Administrateurs d’école"
-          value={stats.adminCount}
-          hint={
-            stats.withoutAdmin > 0
-              ? `${stats.withoutAdmin} école${stats.withoutAdmin > 1 ? "s" : ""} sans administrateur`
-              : "Chaque école active en a un"
-          }
-          tone={stats.withoutAdmin > 0 ? "warning" : "success"}
-        />
-        <AdminStat
-          to="/admin/invitations"
-          label="Invitations en attente"
-          value={stats.pending}
-          hint={
-            stats.expiring > 0
-              ? `${stats.expiring} expire${stats.expiring > 1 ? "nt" : ""} sous 48 h`
-              : "Aucune n’expire sous 48 h"
-          }
-          tone={stats.expiring > 0 ? "warning" : "neutral"}
-        />
-        <AdminStat
-          to="/admin/abonnements"
-          label="Abonnements actifs"
-          value={stats.paying}
-          hint={`${stats.trial} en essai · ${stats.pastDue} impayé${stats.pastDue > 1 ? "s" : ""}`}
-          tone={stats.pastDue > 0 ? "danger" : "neutral"}
-        />
-      </div>
-
       <AdminSection
         title="À traiter"
+        icon={ClipboardList}
         count={loadingSchools ? undefined : stats.attention.length}
         linkTo={stats.attention.length > 0 ? "/admin/rapports" : undefined}
         linkLabel="Voir les rapports"
@@ -276,7 +266,7 @@ export default function AdminDashboard() {
       </AdminSection>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <AdminSection title="Écoles récentes" linkTo="/admin/ecoles">
+        <AdminSection title="Écoles récentes" icon={Building2} linkTo="/admin/ecoles">
           {loadingSchools ? (
             <AdminLoading />
           ) : stats.recent.length === 0 ? (
@@ -305,6 +295,7 @@ export default function AdminDashboard() {
 
         <AdminSection
           title="Invitations en attente"
+          icon={Mail}
           count={loadingInvites ? undefined : stats.pending}
           linkTo="/admin/invitations"
         >

@@ -27,7 +27,7 @@ export function PageBanner({
   className,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
   /** small line above the title; defaults to the portal and the school */
   eyebrow?: string;
@@ -63,7 +63,7 @@ export function PageBanner({
                 <p className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-white/70">{line}</p>
               ) : null}
               <h1 className="mt-1.5 text-2xl font-bold tracking-tight lg:text-3xl">{title}</h1>
-              {subtitle ? <p className="mt-1.5 text-sm font-medium text-white/85">{subtitle}</p> : null}
+              {subtitle ? <div className="mt-1.5 text-sm font-medium text-white/85">{subtitle}</div> : null}
             </div>
             {actions ? (
               // page buttons were made for a white page: turn them into light buttons on the teal

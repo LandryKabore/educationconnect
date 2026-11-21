@@ -15,7 +15,8 @@ import {
   type ModuleKey,
 } from "@/lib/modules";
 import { schoolModulesKey, useSchoolModules } from "@/hooks/useSchoolModules";
-import { AdminCard, AdminLoading } from "@/components/admin/AdminKit";
+import { LayoutGrid } from "lucide-react";
+import { AdminCard, AdminCardHeader, AdminLoading } from "@/components/admin/AdminKit";
 import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 
 /** Super admin: turn each module on or off for one school. */
@@ -115,20 +116,21 @@ export function SchoolModulesCard({
           onCancel={() => setPending(null)}
         />
       ) : null}
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-medium text-slate-900">
-          Modules
-          {!isLoading ? (
-            <span className="ml-1.5 font-normal text-slate-500">
-              {activeCount} sur {availableCount} activés
-            </span>
-          ) : null}
-        </h2>
-        <p className="text-xs text-slate-500">
-          Un module désactivé disparaît des menus de l’école, pour tous les
-          rôles.
-        </p>
-      </div>
+      <AdminCardHeader
+        className="mb-0 border-b border-slate-200 px-4 py-3.5"
+        icon={LayoutGrid}
+        title={
+          <>
+            Modules
+            {!isLoading ? (
+              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600">
+                {activeCount} sur {availableCount} activés
+              </span>
+            ) : null}
+          </>
+        }
+        subtitle="Un module désactivé disparaît des menus de l’école, pour tous les rôles."
+      />
 
       {tableMissing ? (
         <p className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
@@ -155,7 +157,7 @@ export function SchoolModulesCard({
                 key={cat}
                 className="border-b border-r border-slate-200 bg-white"
               >
-                <h3 className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                <h3 className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {MODULE_CATEGORY_LABELS[cat]}
                 </h3>
                 <ul>

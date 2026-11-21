@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Pencil, RefreshCw } from "lucide-react";
+import { ArrowLeft, Building2, Copy, Pencil, RefreshCw, UserCog } from "lucide-react";
+import { AdminCardHeader, AdminPageHeader } from "@/components/admin/AdminKit";
 import { WEBSITE_URL } from "@/lib/config";
 import { supabase } from "@/lib/supabase";
 import type { Profile, School, UserRoleRow } from "@/lib/types";
@@ -26,7 +27,6 @@ import {
   EmptyState,
   Input,
   Label,
-  PageHeader,
 } from "@/components/ui";
 
 type PendingInvite = {
@@ -321,15 +321,21 @@ export default function EcoleDetail() {
     <div>
       <Link
         to="/admin/ecoles"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour aux écoles
       </Link>
 
-      <PageHeader
+      <AdminPageHeader
         title={school.name}
-        subtitle={[school.city, school.region].filter(Boolean).join(" · ") || undefined}
+        subtitle={[schoolTypeLabel(school.school_type), school.city, school.region].filter((x) => x && x !== "—").join(" · ") || undefined}
+        stats={[
+          { label: "Statut", value: school.active ? "Active" : "Inactive" },
+          { label: "Administrateurs", value: String(admins.length), hint: admins.length ? "actifs" : "à inviter" },
+          { label: "Invitations", value: String(pendingInvites.length), hint: "en attente" },
+          { label: "Code", value: school.code ?? "—" },
+        ]}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -363,7 +369,7 @@ export default function EcoleDetail() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="mb-3 font-semibold">Informations</h2>
+          <AdminCardHeader icon={Building2} title="Informations" subtitle="Identité et coordonnées de l’établissement." />
           {editing && editForm ? (
             <form onSubmit={(e) => void handleSaveSchool(e)} className="space-y-4">
               <SchoolFieldsForm
@@ -440,18 +446,16 @@ export default function EcoleDetail() {
         </Card>
 
         <Card>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="font-semibold">Administrateurs d'école</h2>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={refreshLists}
-              title="Actualiser"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <AdminCardHeader
+            icon={UserCog}
+            title="Administrateurs d’école"
+            subtitle="Comptes actifs et invitations envoyées."
+            action={
+              <Button type="button" variant="ghost" size="sm" onClick={refreshLists} title="Actualiser" aria-label="Actualiser">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            }
+          />
 
           {admins.length === 0 ? (
             <p className="mb-4 text-sm text-slate-500">

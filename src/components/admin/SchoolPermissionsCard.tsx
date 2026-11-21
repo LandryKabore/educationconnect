@@ -18,7 +18,8 @@ import {
   type SchoolRole,
 } from "@/lib/modules";
 import { schoolModulesKey, useSchoolModules } from "@/hooks/useSchoolModules";
-import { AdminCard, AdminLoading } from "@/components/admin/AdminKit";
+import { ShieldCheck } from "lucide-react";
+import { AdminCard, AdminCardHeader, AdminLoading } from "@/components/admin/AdminKit";
 import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 
 const LEVEL_TONE: Record<AccessLevel, string> = {
@@ -126,15 +127,12 @@ export function SchoolPermissionsCard({
           <p>{LEVEL_EFFECT[pending.to](ROLE_PEOPLE[pending.role], pending.mod.name)}</p>
         </AdminConfirmDialog>
       ) : null}
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-medium text-slate-900">
-          Permissions par rôle
-        </h2>
-        <p className="text-xs text-slate-500">
-          Consulter : voir seulement. Modifier : voir et saisir. Aucun accès :
-          le module disparaît pour ce rôle.
-        </p>
-      </div>
+      <AdminCardHeader
+        className="mb-0 border-b border-slate-200 px-4 py-3.5"
+        icon={ShieldCheck}
+        title="Permissions par rôle"
+        subtitle="Consulter : voir seulement. Modifier : voir et saisir. Aucun accès : le module disparaît pour ce rôle."
+      />
 
       {missing ? (
         <p className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">

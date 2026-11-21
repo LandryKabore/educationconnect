@@ -166,10 +166,16 @@ export default function EcolesList() {
     <div>
       <AdminPageHeader
         title="Écoles"
-        subtitle={
+        subtitle="Créer et gérer les établissements"
+        stats={
           isLoading
-            ? "Créer et gérer les établissements"
-            : `${counts.toutes} établissements · ${counts.actives} actifs · ${counts.sans_admin} sans administrateur`
+            ? undefined
+            : [
+                { label: "Établissements", value: String(counts.toutes) },
+                { label: "Actives", value: String(counts.actives) },
+                { label: "Inactives", value: String(counts.inactives) },
+                { label: "Sans admin", value: String(counts.sans_admin), hint: counts.sans_admin ? "à compléter" : "aucune" },
+              ]
         }
         actions={
           <Button onClick={() => setShowForm(true)}>
@@ -215,7 +221,7 @@ export default function EcolesList() {
         <div
           role="tablist"
           aria-label="Filtrer les écoles"
-          className="flex overflow-x-auto rounded-md border border-slate-200 bg-white p-0.5 text-sm"
+          className="flex overflow-x-auto rounded-md border border-slate-200 bg-white p-1 text-sm font-semibold shadow-sm"
         >
           {(
             [
@@ -234,7 +240,7 @@ export default function EcolesList() {
               className={cn(
                 "whitespace-nowrap rounded-sm px-3 py-1.5 transition",
                 filter === key
-                  ? "bg-slate-900 text-white"
+                  ? "bg-brand-700 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50",
               )}
             >
@@ -253,7 +259,7 @@ export default function EcolesList() {
       </div>
 
       <AdminCard className="overflow-hidden">
-        <div className="hidden grid-cols-[minmax(0,2.4fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_7rem_6rem_1rem] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-slate-500 md:grid">
+        <div className="hidden grid-cols-[minmax(0,2.4fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_7rem_6rem_1rem] gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600 md:grid">
           <span>École</span>
           <span>Type</span>
           <span>Ville</span>
@@ -294,7 +300,7 @@ function SchoolListRow({ school: s }: { school: SchoolRow }) {
       >
         <span className="min-w-0">
           <span
-            className="block truncate text-sm text-slate-900"
+            className="block truncate text-sm font-semibold text-slate-900"
             title={s.name}
           >
             {s.name}
