@@ -98,7 +98,7 @@ struct SchoolTimetableView: View {
             var out: [(Conflict.Kind, String, String)] = []
             for slot in slots where slot.id != excluding && slot.day_of_week == d.day {
                 guard s < SchoolTimetableView.minutes(slot.end_time) && SchoolTimetableView.minutes(slot.start_time) < e else { continue }
-                let when = "\(slot.start_time.prefix(5))–\(slot.end_time.prefix(5))"
+                let when = "\(SchoolTimetableView.clockFr(slot.start_time))–\(SchoolTimetableView.clockFr(slot.end_time))"
                 let other = classNames[slot.class_section_id] ?? "une autre classe"
                 let detail = " : \(describe(slot))"
                 if slot.class_section_id == d.classId {
@@ -139,7 +139,7 @@ struct SchoolTimetableView: View {
             }
             if 17 * 60 - cursor >= 30 { free.append((cursor, 17 * 60)) }
             if free.isEmpty { return "Aucun créneau libre pour \(t.name) ce jour (07:00–17:00)." }
-            return "Créneaux libres pour \(t.name) ce jour : " + free.map { "\(SchoolTimetableView.clock($0.0))–\(SchoolTimetableView.clock($0.1))" }.joined(separator: ", ")
+            return "Créneaux libres pour \(t.name) ce jour : " + free.map { "\(SchoolTimetableView.clockFr($0.0))–\(SchoolTimetableView.clockFr($0.1))" }.joined(separator: ", ")
         }
     }
 
@@ -153,6 +153,9 @@ struct SchoolTimetableView: View {
     static func todayDow() -> Int? { let d = EduDates.weekday(); return (1...6).contains(d) ? d : nil }
     static func minutes(_ t: String) -> Int { TeacherLessons.minutes(String(t.prefix(5))) }
     static func clock(_ m: Int) -> String { String(format: "%02d:%02d", m / 60, m % 60) }
+    /// Displayed times, like the other timetables: « 7h », « 7h30 » (clock() stays HH:MM for the form).
+    static func clockFr(_ m: Int) -> String { m % 60 == 0 ? "\(m / 60)h" : String(format: "%dh%02d", m / 60, m % 60) }
+    static func clockFr(_ t: String) -> String { clockFr(minutes(t)) }
     static func dayName(_ d: Int) -> String { days.first { $0.0 == d }?.2 ?? "Jour" }
 
     // MARK: - Derived
@@ -459,8 +462,8 @@ struct SchoolTimetableView: View {
         return Button { editing = draft(of: s) } label: {
             HStack(alignment: .top, spacing: 12) {
                 VStack(spacing: 1) {
-                    Text(s.start_time.prefix(5)).font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(EduTheme.ink).fixedSize()
-                    Text(s.end_time.prefix(5)).font(.caption.monospacedDigit()).foregroundStyle(EduTheme.muted).fixedSize()
+                    Text(Self.clockFr(s.start_time)).font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(EduTheme.ink).fixedSize()
+                    Text(Self.clockFr(s.end_time)).font(.caption.monospacedDigit()).foregroundStyle(EduTheme.muted).fixedSize()
                 }
                 .frame(minWidth: 48)
                 RoundedRectangle(cornerRadius: 2).fill(swatch.border).frame(width: 4, height: 40)
@@ -498,7 +501,7 @@ struct SchoolTimetableView: View {
                 } label: {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(Self.dayName(c.day)) · \(c.start.prefix(5))").font(.caption.weight(.semibold)).foregroundStyle(rose)
+                            Text("\(Self.dayName(c.day)) · \(Self.clockFr(c.start))").font(.caption.weight(.semibold)).foregroundStyle(rose)
                             Text(c.message).font(.caption).foregroundStyle(EduTheme.ink).fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 4)
