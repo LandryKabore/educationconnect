@@ -4,7 +4,7 @@ import { subjectSwatch } from "@/lib/subjectColors";
 import {
   buildTimeScale,
   findPauseBands,
-  formatClock,
+  formatClockFr,
   formatPauseLabel,
   timetableBounds,
 } from "@/lib/timetableLayout";
@@ -192,7 +192,7 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     doc.line(gridLeft, y, gridLeft + timeColW, y);
     doc.setTextColor(71, 85, 105);
     if (m < scale.rangeEnd) {
-      doc.text(formatClock(m), gridLeft + timeColW - 1.5, y + 2.2, {
+      doc.text(formatClockFr(m), gridLeft + timeColW - 1.5, y + 2.2, {
         align: "right",
       });
     }

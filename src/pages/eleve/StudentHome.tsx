@@ -403,12 +403,11 @@ export default function StudentHome() {
     );
   }
 
-  const classLabel = [
-    data.className ?? "Sans classe",
-    data.gradeLevel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // « 6ème A », not « 6ème A · 6ème »: the level is shown only when the class name doesn't already start with it
+  const className = data.className ?? "Sans classe";
+  const level = data.gradeLevel?.trim();
+  const classLabel =
+    level && !className.toLowerCase().startsWith(level.toLowerCase()) ? `${className} · ${level}` : className;
 
   const pendingExercices = data.pendingExercices ?? [];
   const upcomingExamens = data.upcomingExamens ?? [];

@@ -15,6 +15,7 @@ import {
 } from "@/lib/timetableConflicts";
 import {
   formatClock,
+  formatClockFr,
   formatHoursFr,
   freeRangesOnDay,
   snapDown15,
@@ -481,7 +482,7 @@ export default function EmploisDuTemps() {
       return `Aucun créneau libre pour ${name} ce jour (07:00–17:00).`;
     }
     const list = free
-      .map((range) => `${formatClock(range.startMin)}–${formatClock(range.endMin)}`)
+      .map((range) => `${formatClockFr(range.startMin)}–${formatClockFr(range.endMin)}`)
       .join(", ");
     return `Créneaux libres pour ${name} ce jour : ${list}`;
   }, [showForm, teacherId, teacherList, dayOfWeek, slots, editingId]);

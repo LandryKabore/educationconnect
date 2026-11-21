@@ -4,7 +4,7 @@ import type { SlotConflictBadge } from "@/lib/timetableConflicts";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import {
   clickableHours,
-  formatClock,
+  formatClockFr,
   formatPauseLabel,
   formatRoomLabel,
   layoutTimetable,
@@ -208,7 +208,7 @@ export function TimetableGrid({
                   style={{ top: scale.minuteToY(mark) }}
                 >
                   <span className="absolute top-0 right-1.5 -translate-y-1/2 text-[11px] font-semibold tabular-nums text-slate-500 dark:text-slate-300">
-                    {formatClock(mark)}
+                    {formatClockFr(mark)}
                   </span>
                 </div>
               ))}
@@ -240,7 +240,7 @@ export function TimetableGrid({
                           type="button"
                           className="group/hour absolute right-0 left-0 z-[1] hover:bg-brand-50/80 dark:hover:bg-brand-950/30"
                           style={{ top: block.top, height: block.height }}
-                          aria-label={`Ajouter un cours le ${day.label} à ${formatClock(block.startMin)}`}
+                          aria-label={`Ajouter un cours le ${day.label} à ${formatClockFr(block.startMin)}`}
                           onClick={() => onEmptyClick(day.day, block.startMin)}
                         >
                           {block.height >= 36 ? (
