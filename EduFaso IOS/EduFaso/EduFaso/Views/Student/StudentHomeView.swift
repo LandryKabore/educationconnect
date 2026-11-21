@@ -553,7 +553,10 @@ struct StudentHomeView: View {
         let nowMin = Self.minutes(of: now)
         let subtitle: String = {
             if focus?.current == true { return "Cours en cours mis en avant" }
-            if let focus, focus.laterDay { return "Pas de cours aujourd’hui · prochain : \(focus.dayLabel)" }
+            if let focus, focus.laterDay {
+                return todaySlots.isEmpty ? "Pas de cours aujourd’hui · prochain : \(focus.dayLabel)"
+                                          : "Cours du jour terminés · prochain : \(focus.dayLabel)"
+            }
             if focus != nil { return "Prochain cours mis en avant" }
             return "Tes cours du jour"
         }()
