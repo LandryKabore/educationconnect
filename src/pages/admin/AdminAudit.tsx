@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { AuditLogRow, Profile } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import { Card, EmptyState, Input, PageHeader } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
+import { SearchField } from "@/components/SearchField";
 
 type AuditWithActor = AuditLogRow & {
   actor?: Profile | null;
@@ -80,16 +82,22 @@ export default function AdminAudit() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Journal d'audit"
         subtitle="Historique des actions super administrateur"
+        stats={[
+          { label: "Entrées", value: String(logs.length), hint: "les plus récentes" },
+          { label: "Dernière", value: logs[0] ? formatDateTime(logs[0].created_at) : "—" },
+        ]}
       />
 
       <div className="mb-4">
-        <Input
-          placeholder="Filtrer par action, entité ou acteur…"
+        <SearchField
+          id="audit-search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
+          placeholder="Filtrer par action, entité ou acteur…"
+          className="w-full lg:max-w-md"
         />
       </div>
 
