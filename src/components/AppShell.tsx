@@ -665,7 +665,7 @@ export function AppShell() {
         onLogout={() => void handleLogout()}
         name={role === "school_admin" ? "Administration" : personName(profile?.first_name, profile?.last_name)}
         avatarUrl={profile?.avatar_url ?? null}
-        schoolName={schoolName}
+        schoolName={role === "super_admin" && !supportSchoolId ? undefined : schoolName}
         topOffset={!!supportSchoolId}
       />
 

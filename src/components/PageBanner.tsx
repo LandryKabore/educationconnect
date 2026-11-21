@@ -36,8 +36,10 @@ export function PageBanner({
   aside?: ReactNode;
   className?: string;
 }) {
-  const { role, schools, schoolId } = useAuth();
-  const schoolName = schools.find((s) => s.id === schoolId)?.name;
+  const { role, schools, schoolId, supportSchoolId } = useAuth();
+  // a super admin belongs to no school: the school shows only in Mode support
+  const schoolName =
+    role === "super_admin" && !supportSchoolId ? undefined : schools.find((s) => s.id === schoolId)?.name;
   const line =
     eyebrow ?? [role ? SPACE_LABEL[role] : null, schoolName].filter(Boolean).join(" · ");
 
