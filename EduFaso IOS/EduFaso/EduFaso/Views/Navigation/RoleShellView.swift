@@ -37,6 +37,17 @@ struct RoleShellView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if let s = auth.supportSchool, auth.inSupport { supportBanner(s) }
         }
+        // tapped notification: open its screen
+        .onReceive(PushManager.shared.$pendingScreen) { screen in
+            guard let screen else { return }
+            menuOpen = false
+            openScreen(screen)
+            PushManager.shared.pendingScreen = nil
+        }
+        // students for now: the only ones the server sends notifications to
+        .task(id: auth.primaryRole) {
+            if auth.primaryRole == .student { await PushManager.shared.requestAndRegister() }
+        }
         .onChange(of: auth.supportSchool?.id) { _, _ in
             selection = .dashboard
             showProfile = false

@@ -193,6 +193,7 @@ final class AuthViewModel: ObservableObject {
         busy = true
         defer { busy = false }
         do {
+            await PushManager.shared.unregister()
             try await client.auth.signOut()
             session = nil
             profile = nil
