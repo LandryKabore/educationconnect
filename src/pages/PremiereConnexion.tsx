@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Check, X } from "lucide-react";
+import { Check, KeyRound, ShieldCheck, X } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { needsProfileCompletion } from "@/lib/profileCompletion";
 import {
@@ -11,8 +12,7 @@ import {
   passwordStrengthError,
 } from "@/lib/passwordRules";
 import { cn, fromAuthEmail } from "@/lib/utils";
-import { Badge, Button, Card, Label, PasswordInput } from "@/components/ui";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Badge, Button, Label, PasswordInput } from "@/components/ui";
 
 export default function PremiereConnexion() {
   const { t } = useTranslation();
@@ -73,15 +73,18 @@ export default function PremiereConnexion() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md">
-        <h1 className="text-xl font-bold text-slate-900">{t("premiere.title")}</h1>
-        <p className="mt-1 text-sm text-slate-500">{t("premiere.subtitle")}</p>
+    <AuthShell
+      panelTitle="Bienvenue sur EduFaso"
+      panelBody="Choisissez votre mot de passe personnel pour sécuriser votre compte."
+      points={[
+        { icon: KeyRound, title: "Un mot de passe à vous", body: "Le mot de passe provisoire ne fonctionnera plus." },
+        { icon: ShieldCheck, title: "Gardez-le secret", body: "Personne à l’école ne vous le demandera." },
+      ]}
+      title={t("premiere.title")}
+      subtitle={t("premiere.subtitle")}
+    >
         {identifiant || displayName ? (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="mb-6 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
             {displayName ? (
               <p className="text-sm font-medium text-slate-900">{displayName}</p>
             ) : null}
@@ -94,7 +97,7 @@ export default function PremiereConnexion() {
           </div>
         ) : null}
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div>
             <Label htmlFor="newPassword">{t("premiere.newPassword")}</Label>
             <PasswordInput
@@ -138,13 +141,12 @@ export default function PremiereConnexion() {
           </div>
           <Button
             type="submit"
-            className="w-full"
+            size="lg"
             disabled={submitting || !isPasswordStrong(password)}
           >
             {submitting ? t("loading") : t("premiere.submit")}
           </Button>
         </form>
-      </Card>
-    </div>
+    </AuthShell>
   );
 }

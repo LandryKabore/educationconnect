@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import { APP_PUBLIC_URL, WEBSITE_URL } from "@/lib/config";
 import { toAuthEmail } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { BrandLogo } from "@/components/BrandLogo";
-import { Button, Card, Input, Label } from "@/components/ui";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Mail, School } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
+import { Button, Input, Label } from "@/components/ui";
 
 function recoveryRedirectUrl() {
   const base =
@@ -51,26 +51,20 @@ export default function MotDePasseOublie() {
   const isLocalAuth = email.endsWith("@edufaso.local");
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <BrandLogo className="mx-auto h-20 w-auto max-w-[12rem] rounded-2xl" />
-        </div>
-
-        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-          Mot de passe oublié
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Indiquez l’identifiant ou l’e-mail de votre compte EduFaso.
-        </p>
-
+    <AuthShell
+      panelTitle="Un nouveau mot de passe en quelques minutes"
+      panelBody="Recevez un lien par e-mail pour choisir un nouveau mot de passe."
+      points={[
+        { icon: Mail, title: "Compte avec e-mail", body: "Un lien de réinitialisation arrive dans votre boîte mail." },
+        { icon: School, title: "Identifiant scolaire", body: "L’administration de votre école vous donne un nouveau mot de passe." },
+      ]}
+      title="Mot de passe oublié"
+      subtitle="Indiquez l’identifiant ou l’e-mail de votre compte EduFaso."
+    >
         {sent ? (
-          <div className="mt-6 space-y-4">
+          <div className="space-y-4">
             {isLocalAuth ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <p className="font-medium">Identifiant scolaire</p>
                 <p className="mt-1">
                   Les comptes créés par l’établissement (sans e-mail personnel)
@@ -80,7 +74,7 @@ export default function MotDePasseOublie() {
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
                 <p className="font-medium">Vérifiez votre boîte mail</p>
                 <p className="mt-1">
                   Si un compte existe pour{" "}
@@ -92,7 +86,7 @@ export default function MotDePasseOublie() {
             )}
             <Link
               to="/connexion"
-              className="block text-center text-sm font-medium text-brand-700 hover:underline"
+              className="block text-center text-sm font-semibold text-brand-700 hover:underline"
             >
               Retour à la connexion
             </Link>
@@ -100,7 +94,7 @@ export default function MotDePasseOublie() {
         ) : (
           <form
             onSubmit={(e) => void handleSubmit(e)}
-            className="mt-6 space-y-4"
+            className="space-y-4"
           >
             <div>
               <Label htmlFor="identifiant">Identifiant ou e-mail</Label>
@@ -117,20 +111,19 @@ export default function MotDePasseOublie() {
               adressez-vous à votre établissement. Seuls les comptes liés à un
               vrai e-mail peuvent recevoir un lien de réinitialisation.
             </p>
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button type="submit" size="lg" disabled={submitting}>
               {submitting ? "Envoi…" : "Envoyer le lien"}
             </Button>
             <p className="text-center text-sm">
               <Link
                 to="/connexion"
-                className="text-brand-700 hover:underline"
+                className="font-semibold text-brand-700 hover:underline"
               >
                 Retour à la connexion
               </Link>
             </p>
           </form>
         )}
-      </Card>
-    </div>
+    </AuthShell>
   );
 }
