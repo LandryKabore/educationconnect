@@ -5,25 +5,19 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEdtPendingChanges } from "@/hooks/useStudentTimetableUpdates";
 import { generateEmploiDuTempsPdf } from "@/lib/pdfEmploiDuTemps";
-import { dbDayOfWeek } from "@/lib/timetableSchedule";
 import { supabase } from "@/lib/supabase";
 import type { TimetableSlot } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import {
-  TimetableGrid,
-  type TimetableGridSlot,
-} from "@/components/TimetableGrid";
-import { Button, EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { WeekGrid, type Slot } from "@/pages/eleve/MonEmploiDuTemps";
+import { todayDow, useNow, useWeekLayout } from "@/lib/weekGrid";
 import {
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
-import {
-  ParentChildBackLink,
-  ParentChildGate,
-} from "@/pages/parent/ParentChildGate";
+import { ParentChildGate } from "@/pages/parent/ParentChildGate";
 
 export default function EnfantEmploiDuTemps() {
   const id = useParentChildParams();
@@ -60,21 +54,11 @@ export default function EnfantEmploiDuTemps() {
     },
   });
 
-  const gridSlots: TimetableGridSlot[] = useMemo(
-    () =>
-      slots.map((s) => ({
-        id: s.id,
-        day_of_week: s.day_of_week,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        subjectName: s.matieres?.name ?? "Matière",
-        teacherName: s.profils
-          ? fullName(s.profils.first_name, s.profils.last_name)
-          : null,
-        room: s.room,
-      })),
-    [slots],
-  );
+  const now = useNow();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const today = todayDow(now);
+  const { byDay, bounds } = useWeekLayout(slots as Slot[]);
+  const noChanges = useMemo(() => new Set<string>(), []);
 
   const handleDownload = () => {
     if (slots.length === 0) {
@@ -115,45 +99,36 @@ export default function EnfantEmploiDuTemps() {
 
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
-      <div>
-        <ParentChildBackLink childName={childName} />
-        <PageHeader
-          title={
-            childName
-              ? `Emploi du temps — ${childName}`
-              : "Emploi du temps"
-          }
-          subtitle={
-            enrollment?.classes?.name
-              ? `Classe ${enrollment.classes.name} · lundi → samedi`
-              : "Planning de la classe"
-          }
-          actions={
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={isLoading || slots.length === 0 || exporting}
-              onClick={handleDownload}
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? "Export…" : "Télécharger PDF"}
-            </Button>
-          }
-        />
+      <div className="space-y-5">
+        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">
+              {child?.first_name ? `Emploi du temps de ${child.first_name}` : "Emploi du temps"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {enrollment?.classes?.name ? `Classe ${enrollment.classes.name} · ` : ""}du lundi au samedi · mis à jour en
+              direct
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isLoading || slots.length === 0 || exporting}
+            onClick={handleDownload}
+            className="inline-flex items-center gap-2 self-start rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 md:self-auto dark:border-white/10 dark:text-slate-200"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "Export…" : "Télécharger PDF"}
+          </button>
+        </header>
 
         {linkLoading || isLoading ? (
-          <p className="text-slate-500">Chargement…</p>
+          <div className="h-[36rem] animate-pulse rounded-lg bg-slate-100" aria-busy="true" aria-label="Chargement" />
         ) : !enrollment ? (
           <EmptyState message="Cet élève n’est pas encore inscrit dans une classe." />
         ) : slots.length === 0 ? (
           <EmptyState message="Aucun créneau planifié pour cette classe." />
         ) : (
-          <TimetableGrid
-            slots={gridSlots}
-            title="Planning hebdomadaire"
-            highlightDay={dbDayOfWeek()}
-          />
+          <WeekGrid byDay={byDay} bounds={bounds} today={today} nowMin={nowMin} changedIds={noChanges} />
         )}
       </div>
     </ParentChildGate>

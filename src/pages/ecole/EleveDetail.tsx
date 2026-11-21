@@ -1079,8 +1079,18 @@ function EleveFiche({
         </div>
       ) : null}
 
-      <Card className="mb-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+      <section className="relative mb-6 rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 p-5 pb-6 shadow-lg shadow-brand-900/25 sm:p-6 lg:px-8">
+        {/* decoration and flag stripe in their own clipped layer, so the action menus can overflow */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg" aria-hidden>
+          <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-white/[0.06]" />
+          <div className="absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-white/[0.04]" />
+          <div className="absolute inset-x-0 bottom-0 flex h-1">
+            <span className="flex-1 bg-faso-red" />
+            <span className="flex-1 bg-faso-yellow" />
+            <span className="flex-1 bg-faso-green" />
+          </div>
+        </div>
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="flex min-w-0 flex-1 gap-4">
             <ProfileAvatar
               ref={avatarRef}
@@ -1098,7 +1108,8 @@ function EleveFiche({
               ]}
             />
             <div className="min-w-0">
-              <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{name}</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">Fiche élève</p>
+              <h1 className="mt-1 break-words text-2xl font-bold tracking-tight text-white lg:text-3xl">{name}</h1>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {className ? (
                   <Chip tone="class">{classYear ? `${className} · ${classYear}` : className}</Chip>
@@ -1107,7 +1118,7 @@ function EleveFiche({
                 ) : enrollmentReady ? (
                   <Chip tone="warn">Sans classe</Chip>
                 ) : (
-                  <span className="inline-block h-6 w-24 animate-pulse rounded-full bg-slate-100 motion-reduce:animate-none" />
+                  <span className="inline-block h-6 w-24 animate-pulse rounded-full bg-white/20 motion-reduce:animate-none" />
                 )}
                 {student.matricule ? (
                   <Chip className="hidden sm:inline-flex">Matricule {student.matricule}</Chip>
@@ -1120,10 +1131,10 @@ function EleveFiche({
                 <Chip className="hidden md:inline-flex">{accountText}</Chip>
               </div>
               {summaryBits.length > 0 ? (
-                <p className="mt-2 hidden text-sm text-slate-600 sm:block">{summaryBits.join(" · ")}</p>
+                <p className="mt-2 hidden text-sm font-medium text-white/85 sm:block">{summaryBits.join(" · ")}</p>
               ) : null}
               {mobileBits.length > 0 ? (
-                <p className="mt-2 text-sm text-slate-600 sm:hidden">{mobileBits.join(" · ")}</p>
+                <p className="mt-2 text-sm font-medium text-white/85 sm:hidden">{mobileBits.join(" · ")}</p>
               ) : null}
             </div>
           </div>
@@ -1134,11 +1145,12 @@ function EleveFiche({
               shortLabel="Parents"
               icon={<MessageSquare className="h-4 w-4" aria-hidden />}
               variant="primary"
+              onBanner
               items={messageItems}
               emptyLabel="Aucun parent lié"
             />
             <Button
-              className="min-h-11 min-w-11 flex-1 sm:flex-none"
+              className={cn("min-h-11 min-w-11 flex-1 sm:flex-none", BANNER_OUTLINE)}
               variant="outline"
               disabled={!enrollmentReady}
               aria-haspopup="dialog"
@@ -1159,6 +1171,7 @@ function EleveFiche({
               shortLabel="Plus"
               icon={<MoreHorizontal className="h-4 w-4 md:hidden" aria-hidden />}
               variant="outline"
+              onBanner
               items={menuItems}
               forceMenu
               busy={busy}
@@ -1167,7 +1180,7 @@ function EleveFiche({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="relative mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile
             label="Présence · 30 jours"
             shortLabel="Présence 30 j"
@@ -1230,7 +1243,7 @@ function EleveFiche({
               ) : (
                 <>
                   {formatScore(termAverage)}
-                  <span className="text-sm font-semibold text-slate-600"> / 20</span>
+                  <span className="text-sm font-semibold text-white/70"> / 20</span>
                 </>
               )
             }
@@ -1240,7 +1253,7 @@ function EleveFiche({
             hintClass={termAverage === null ? "text-slate-600" : termAverage >= 10 ? "text-emerald-800" : "text-amber-800"}
           />
         </div>
-      </Card>
+      </section>
 
       <div
         role="tablist"
@@ -1726,10 +1739,11 @@ function Chip({
     <span
       className={cn(
         "inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
-        tone === "neutral" && "bg-slate-100 text-slate-700",
-        tone === "class" && "bg-brand-100 text-brand-800",
-        tone === "ok" && "bg-emerald-100 text-emerald-800",
-        tone === "warn" && "bg-amber-100 text-amber-900",
+        // chips sit on the teal banner
+        tone === "neutral" && "bg-white/15 text-white ring-1 ring-white/20",
+        tone === "class" && "bg-white text-brand-800",
+        tone === "ok" && "bg-emerald-400/25 text-emerald-50 ring-1 ring-emerald-200/40",
+        tone === "warn" && "bg-amber-300/30 text-amber-50 ring-1 ring-amber-200/40",
         className,
       )}
     >
@@ -1737,6 +1751,18 @@ function Chip({
     </span>
   );
 }
+
+/** The tiles sit on the teal banner: keep the hint's meaning (good / to watch) in light colours. */
+function onBannerHint(hintClass: string) {
+  if (/emerald|green/.test(hintClass)) return "text-emerald-200";
+  if (/amber|orange/.test(hintClass)) return "text-amber-200";
+  if (/red|rose/.test(hintClass)) return "text-rose-200";
+  return "text-white/80";
+}
+
+const BANNER_PRIMARY = "bg-white text-brand-800 shadow-sm hover:bg-brand-50 dark:bg-white dark:hover:bg-brand-50";
+const BANNER_OUTLINE =
+  "border-white/30 bg-white/10 text-white shadow-sm hover:bg-white/20 dark:border-white/30 dark:bg-white/10 dark:text-white dark:hover:bg-white/20";
 
 function StatTile({
   label,
@@ -1752,13 +1778,13 @@ function StatTile({
   hintClass: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 px-3 py-3">
-      <p className="text-xs font-medium text-slate-600">
+    <div className="rounded-md bg-white/10 p-3.5 ring-1 ring-white/15">
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">
         <span className="lg:hidden">{shortLabel}</span>
         <span className="hidden lg:inline">{label}</span>
       </p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
-      <p className={cn("mt-1 text-xs font-semibold", hintClass)}>{hint}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-white">{value}</p>
+      <p className={cn("mt-0.5 text-xs font-semibold", onBannerHint(hintClass))}>{hint}</p>
     </div>
   );
 }
@@ -1961,6 +1987,7 @@ function ActionMenu({
   emptyLabel,
   forceMenu = false,
   busy = false,
+  onBanner = false,
 }: {
   label: string;
   shortLabel: string;
@@ -1971,8 +1998,11 @@ function ActionMenu({
   emptyLabel?: string;
   forceMenu?: boolean;
   busy?: boolean;
+  /** trigger restyled for the teal banner (the menu itself stays white) */
+  onBanner?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const bannerCls = onBanner ? (variant === "primary" ? BANNER_PRIMARY : BANNER_OUTLINE) : undefined;
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -2028,7 +2058,7 @@ function ActionMenu({
     const only = items[0];
     return (
       <Button
-        className="min-h-11 min-w-11 flex-1 sm:flex-none"
+        className={cn("min-h-11 min-w-11 flex-1 sm:flex-none", bannerCls)}
         variant={variant}
         disabled={!only || only.disabled}
         aria-label={label}
@@ -2047,7 +2077,7 @@ function ActionMenu({
       <Button
         ref={buttonRef}
         id={buttonId}
-        className="min-h-11 w-full"
+        className={cn("min-h-11 w-full", bannerCls)}
         variant={variant}
         aria-label={label}
         aria-haspopup="menu"

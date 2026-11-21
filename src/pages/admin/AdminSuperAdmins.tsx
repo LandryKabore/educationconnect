@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, Plus, UserCog } from "lucide-react";
+import { PageBanner } from "@/components/PageBanner";
+import { AdminCardHeader } from "@/components/admin/AdminKit";
 import { supabase } from "@/lib/supabase";
 import type { Profile, UserRoleRow } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -12,7 +14,6 @@ import {
   EmptyState,
   Input,
   Label,
-  PageHeader,
 } from "@/components/ui";
 
 type SuperAdminRow = UserRoleRow & { profil: Profile | null };
@@ -103,17 +104,18 @@ export default function AdminSuperAdmins() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Super administrateurs"
         subtitle="Comptes avec accès à la plateforme EduFaso"
+        stats={[
+          { label: "Comptes actifs", value: String(superAdmins.length) },
+          { label: "Inactifs", value: String(superAdmins.filter((r) => !r.profil?.active).length) },
+        ]}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <div className="mb-3 flex items-center gap-2">
-            <UserCog className="h-5 w-5 text-brand-700" />
-            <h2 className="font-semibold">Comptes actifs ({superAdmins.length})</h2>
-          </div>
+          <AdminCardHeader icon={UserCog} title={`Comptes actifs · ${superAdmins.length}`} subtitle="Accès à toutes les écoles de la plateforme." />
           {isLoading ? (
             <p className="text-sm text-slate-500">Chargement…</p>
           ) : superAdmins.length === 0 ? (
@@ -145,10 +147,7 @@ export default function AdminSuperAdmins() {
         </Card>
 
         <Card>
-          <div className="mb-3 flex items-center gap-2">
-            <Plus className="h-5 w-5 text-brand-700" />
-            <h2 className="font-semibold">Inviter un super administrateur</h2>
-          </div>
+          <AdminCardHeader icon={Plus} title="Inviter un super administrateur" subtitle="Il recevra un lien par e-mail ; vous pouvez aussi copier le message." />
           <form onSubmit={(e) => void handleInvite(e)} className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

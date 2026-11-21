@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PageBanner } from "@/components/PageBanner";
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Headphones, Loader2, Lock, RefreshCw, Unlock } from "lucide-react";
@@ -18,7 +19,6 @@ import {
   Card,
   EmptyState,
   Input,
-  PageHeader,
   Select,
 } from "@/components/ui";
 
@@ -194,9 +194,15 @@ export default function AdminUsers() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Utilisateurs"
         subtitle="Gérer les comptes et rôles de la plateforme"
+        stats={[
+          { label: "Admins d’école", value: String(roleCount("school_admin")) },
+          { label: "Enseignants", value: String(roleCount("teacher")) },
+          { label: "Élèves", value: String(roleCount("student")) },
+          { label: "Parents", value: String(roleCount("parent")) },
+        ]}
         actions={
           <Button
             type="button"

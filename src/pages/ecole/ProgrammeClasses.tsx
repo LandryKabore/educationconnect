@@ -27,14 +27,8 @@ import {
   matchTemplateToSchoolSubjects,
   type ProgrammeTemplateId,
 } from "@/lib/programmeTemplates";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 function SubjectRow({
   subject,
@@ -375,7 +369,7 @@ export default function ProgrammeClasses() {
   return (
     <div>
       <SetupGuideBar />
-      <PageHeader
+      <PageBanner
         title="Programme par classe"
         subtitle="Appliquez un modèle à plusieurs classes, ou ajustez une classe en particulier"
       />

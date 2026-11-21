@@ -16,14 +16,8 @@ import { cn } from "@/lib/utils";
 import { SetupGuideBar } from "@/components/SetupGuideBar";
 import { ConfirmPasswordDialog } from "@/components/ConfirmPasswordDialog";
 import { Modal } from "@/components/Modal";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-} from "@/components/ui";
+import { Button, Card, EmptyState, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 function isAlreadyAdded(item: CatalogSubject, existing: Subject[]): boolean {
   const key = normalizeSubjectKey(item.name);
@@ -327,7 +321,7 @@ export default function Matieres() {
         }}
       />
       <SetupGuideBar />
-      <PageHeader
+      <PageBanner
         title="Matières"
         subtitle="Catalogue de l’école — le programme se règle ensuite dans chaque classe"
         actions={

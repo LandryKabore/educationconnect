@@ -10,17 +10,8 @@ import { isoToFr } from "@/lib/dateFr";
 import { fullName } from "@/lib/utils";
 import { Modal } from "@/components/Modal";
 import { NotesHistoryModal } from "@/components/NotesHistoryModal";
-import {
-  Badge,
-  Button,
-  Card,
-  DateInputFr,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-  Textarea,
-} from "@/components/ui";
+import { Badge, Button, Card, DateInputFr, EmptyState, Label, Select, Textarea } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type PeriodRow = {
   id: string;
@@ -173,7 +164,7 @@ export default function Periodes() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Périodes et clôture"
         subtitle="Clôturez un trimestre pour verrouiller ses notes. Chaque modification de note est gardée dans l’historique."
         actions={

@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, Mail, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Hourglass, Mail, RefreshCw, XCircle } from "lucide-react";
+import { PageBanner } from "@/components/PageBanner";
+import { SearchField } from "@/components/SearchField";
+import { AdminCardHeader } from "@/components/admin/AdminKit";
 import { supabase } from "@/lib/supabase";
 import { ROLE_LABELS, type AppRole, type InvitationRow } from "@/lib/types";
 import { fullName } from "@/lib/utils";
@@ -11,8 +14,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Input,
-  PageHeader,
 } from "@/components/ui";
 
 type InviteWithSchool = InvitationRow & {
@@ -210,9 +211,17 @@ export default function AdminInvites() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Invitations"
         subtitle="Invitations en attente et récemment acceptées"
+        stats={[
+          { label: "En attente", value: String(pending.length) },
+          {
+            label: "Expirent sous 48 h",
+            value: String(pending.filter((i) => new Date(i.expires_at).getTime() - Date.now() < 48 * 3600 * 1000).length),
+          },
+          { label: "Acceptées", value: String(accepted.length), hint: "récemment" },
+        ]}
         actions={
           <Button type="button" variant="outline" size="sm" onClick={refresh}>
             <RefreshCw className="h-4 w-4" />
@@ -222,10 +231,12 @@ export default function AdminInvites() {
       />
 
       <div className="mb-4">
-        <Input
-          placeholder="Rechercher par nom, e-mail ou école…"
+        <SearchField
+          id="invites-search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
+          placeholder="Rechercher par nom, e-mail ou école…"
+          className="w-full lg:max-w-md"
         />
       </div>
 
@@ -244,7 +255,7 @@ export default function AdminInvites() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="mb-3 font-semibold">En attente ({pendingFiltered.length})</h2>
+          <AdminCardHeader icon={Hourglass} title={`En attente · ${pendingFiltered.length}`} subtitle="Le lien reste valable jusqu’à sa date d’expiration." />
           {loadingPending ? (
             <p className="text-sm text-slate-500">Chargement…</p>
           ) : pendingFiltered.length === 0 ? (
@@ -255,7 +266,7 @@ export default function AdminInvites() {
         </Card>
 
         <Card>
-          <h2 className="mb-3 font-semibold">Récemment acceptées ({acceptedFiltered.length})</h2>
+          <AdminCardHeader icon={CheckCircle2} title={`Récemment acceptées · ${acceptedFiltered.length}`} subtitle="Comptes activés à partir d’une invitation." />
           {loadingAccepted ? (
             <p className="text-sm text-slate-500">Chargement…</p>
           ) : acceptedFiltered.length === 0 ? (

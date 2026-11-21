@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, ChevronRight, ClipboardCheck, Users } from "lucide-react";
+import { BookOpen, ChevronRight, ClipboardCheck, GraduationCap, TrendingDown, Users } from "lucide-react";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { formatAverage } from "@/lib/averages";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { cn } from "@/lib/utils";
+import { PageBanner } from "@/components/PageBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { fetchTeacherClassStats } from "@/lib/scaleApi";
@@ -137,15 +139,59 @@ export default function MesClasses() {
   });
 
   const totalStudents = classes.reduce((n, c) => n + c.studentCount, 0);
-  const totalSubjects = new Set(
-    classes.flatMap((c) => c.subjects.map((s) => s.subjectId)),
-  ).size;
+  const allAverages = classes.flatMap((c) => c.subjects.filter((s) => s.averageOn20 != null));
+  const overall =
+    allAverages.length > 0
+      ? allAverages.reduce((n, s) => n + (s.averageOn20 ?? 0), 0) / allAverages.length
+      : null;
+  const below = classes.filter((c) => {
+    const a = classAverage(c);
+    return a != null && a < 10;
+  });
+  const weakest = [...classes]
+    .filter((c) => classAverage(c) != null)
+    .sort((a, b) => (classAverage(a) ?? 0) - (classAverage(b) ?? 0))[0];
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Mes classes"
-        subtitle="Classes où vous enseignez — moyenne de classe par matière"
+        subtitle="Les classes où vous enseignez, avec la moyenne de classe dans votre matière."
+        stats={[
+          { label: "Classes", value: String(classes.length), hint: "cette année" },
+          { label: "Élèves", value: String(totalStudents), hint: "au total" },
+          {
+            label: "Moyenne",
+            value: overall != null ? `${formatAverage(overall)}/20` : "—",
+            hint: below.length ? `${below.length} classe${below.length > 1 ? "s" : ""} sous 10` : "toutes classes",
+          },
+        ]}
+        aside={
+          weakest ? (
+            <Link
+              to={`/classes/${weakest.classId}`}
+              className="block rounded-md bg-[#fff] p-4 text-slate-900 shadow-sm transition hover:shadow-md dark:bg-[var(--surface)] dark:text-slate-100"
+            >
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <TrendingDown className="h-3.5 w-3.5" />
+                Classe à suivre
+              </p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-xl font-bold">{weakest.className}</p>
+                  <p className="text-xs text-slate-500">la moyenne la plus basse de vos classes</p>
+                </div>
+                <p className={cn("shrink-0 text-2xl font-bold tabular-nums", avgTone(classAverage(weakest)).text)}>
+                  {formatAverage(classAverage(weakest)!)}
+                  <span className="text-sm font-semibold text-slate-400">/20</span>
+                </p>
+              </div>
+              <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 dark:text-brand-300">
+                Ouvrir la classe <ChevronRight className="h-4 w-4" />
+              </p>
+            </Link>
+          ) : undefined
+        }
       />
 
       {isLoading ? (
@@ -153,127 +199,125 @@ export default function MesClasses() {
       ) : classes.length === 0 ? (
         <EmptyState message="Aucune classe assignée pour le moment." />
       ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Classes
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                {classes.length}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Élèves
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                {totalStudents}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-[var(--border)] dark:bg-[var(--surface)] sm:px-4">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                Matières
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                {totalSubjects}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {classes.map((c) => (
-              <Card
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {classes.map((c) => {
+            const avg = classAverage(c);
+            const tone = avgTone(avg);
+            return (
+              <article
                 key={c.classId}
-                className="flex flex-col overflow-hidden border border-slate-200 bg-white p-0 transition hover:border-brand-300 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700"
+                className="flex flex-col overflow-hidden rounded-md border border-slate-200 bg-white transition hover:border-brand-300 hover:shadow-sm dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-700"
               >
                 <Link
                   to={`/classes/${c.classId}`}
                   className="flex flex-1 flex-col outline-none ring-inset ring-brand-500 focus-visible:ring-2"
                 >
-                  <div className="px-4 pt-4">
-                    <h2 className="truncate text-lg font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                      {c.className}
-                    </h2>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-                      <Users className="h-3 w-3 shrink-0" />
-                      {c.studentCount} élève
-                      {c.studentCount > 1 ? "s" : ""}
-                      {c.gradeLevel ? ` · ${c.gradeLevel}` : ""}
-                    </p>
+                  <div className={cn("h-1", tone.bar)} />
+                  <div className="flex items-start gap-3 px-4 pt-4">
+                    <span
+                      className={cn(
+                        "grid h-11 w-11 shrink-0 place-items-center rounded-md bg-brand-50 font-bold text-brand-800 dark:bg-brand-950/40 dark:text-brand-200",
+                        shortName(c.className).length > 2 ? "text-xs" : "text-sm",
+                      )}
+                    >
+                      {shortName(c.className)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-lg font-bold leading-tight text-slate-900 dark:text-slate-100">
+                        {c.className}
+                      </h2>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                        <Users className="h-3 w-3 shrink-0" />
+                        {c.studentCount} élève{c.studentCount > 1 ? "s" : ""}
+                        {c.gradeLevel && c.gradeLevel !== c.className ? ` · ${c.gradeLevel}` : ""}
+                      </p>
+                    </div>
+                    <span className={cn("shrink-0 rounded-md px-2 py-1 text-xs font-bold", tone.chip)}>
+                      {tone.label}
+                    </span>
                   </div>
 
-                  <div className="mt-3 flex-1 space-y-2.5 px-4 pb-3">
-                    {c.subjects.map((s) => (
-                      <div key={s.subjectId}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {s.subjectName}
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                              Moyenne de classe
+                  <div className="flex-1 space-y-3 px-4 pb-4 pt-4">
+                    {c.subjects.map((s) => {
+                      const t = avgTone(s.averageOn20);
+                      return (
+                        <div key={s.subjectId}>
+                          <div className="flex items-baseline justify-between gap-3">
+                            <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{s.subjectName}</p>
+                            <p className={cn("shrink-0 text-xl font-bold tabular-nums leading-none", t.text)}>
+                              {s.averageOn20 != null ? formatAverage(s.averageOn20) : "—"}
+                              <span className="text-xs font-semibold text-slate-400">/20</span>
                             </p>
                           </div>
-                          <p className="shrink-0 text-right text-lg font-bold tabular-nums leading-none text-brand-700">
-                            {s.averageOn20 != null
-                              ? formatAverage(s.averageOn20)
-                              : "—"}
-                            <span className="text-sm font-semibold text-slate-400">
-                              {" "}
-                              / 20
-                            </span>
+                          <div className="relative mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div className={cn("h-full rounded-full", t.bar)} style={{ width: scoreBarWidth(s.averageOn20) }} />
+                            <span className="absolute inset-y-0 left-1/2 w-px bg-slate-400/60" title="10/20" />
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            {s.gradeCount > 0
+                              ? `Moyenne de classe · ${s.gradeCount} note${s.gradeCount > 1 ? "s" : ""}`
+                              : "Aucune note encore"}
                           </p>
                         </div>
-                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-brand-500"
-                            style={{ width: scoreBarWidth(s.averageOn20) }}
-                          />
-                        </div>
-                        {s.gradeCount > 0 ? (
-                          <p className="mt-0.5 text-[10px] text-slate-400">
-                            Calculée sur {s.gradeCount} note
-                            {s.gradeCount > 1 ? "s" : ""}
-                          </p>
-                        ) : (
-                          <p className="mt-0.5 text-[10px] text-slate-400">
-                            Aucune note encore
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </Link>
 
-                <div className="grid grid-cols-3 border-t border-slate-100 dark:border-[var(--border)]">
-                  <Link
-                    to={`/classes/${c.classId}/notes`}
-                    className="flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
-                  >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    Notes
-                  </Link>
-                  <Link
+                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3 dark:border-[var(--border)]">
+                  <FooterLink to={`/devoirs?classe=${c.classId}`} icon={<BookOpen className="h-4 w-4" />} label="Évaluations" />
+                  <FooterLink
                     to={`/classes/${c.classId}/presences`}
-                    className="flex items-center justify-center gap-1.5 border-x border-slate-100 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:border-[var(--border)] dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
-                  >
-                    <ClipboardCheck className="h-3.5 w-3.5" />
-                    Présences
-                  </Link>
-                  <Link
-                    to={`/classes/${c.classId}`}
-                    className="flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-brand-300"
-                  >
-                    Détail
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
+                    icon={<ClipboardCheck className="h-4 w-4" />}
+                    label="Appel"
+                  />
+                  <FooterLink to={`/mes-eleves?classe=${c.classId}`} icon={<GraduationCap className="h-4 w-4" />} label="Élèves" />
                 </div>
-              </Card>
-            ))}
-          </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+function FooterLink({ to, icon, label, className }: { to: string; icon: React.ReactNode; label: string; className?: string }) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "flex items-center justify-center gap-1.5 rounded-md bg-brand-700 px-2 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800",
+        className,
+      )}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+/** Average over the teacher's subjects in the class (null without grades). */
+function classAverage(c: TeacherClass): number | null {
+  const graded = c.subjects.filter((s) => s.averageOn20 != null);
+  if (!graded.length) return null;
+  return graded.reduce((n, s) => n + (s.averageOn20 ?? 0), 0) / graded.length;
+}
+
+function avgTone(avg: number | null) {
+  if (avg == null)
+    return { label: "Pas de notes", text: "text-slate-400", bar: "bg-slate-200 dark:bg-slate-700", chip: "bg-slate-100 text-slate-600 dark:bg-[var(--surface-2)] dark:text-slate-300" };
+  if (avg >= 12)
+    return { label: "Bon niveau", text: "text-emerald-700 dark:text-emerald-400", bar: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300" };
+  if (avg >= 10)
+    return { label: "Moyen", text: "text-amber-700 dark:text-amber-400", bar: "bg-amber-400", chip: "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300" };
+  return { label: "En difficulté", text: "text-rose-700 dark:text-rose-400", bar: "bg-rose-500", chip: "bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-300" };
+}
+
+/** « Terminale A » → « TA », « 6ème A » → « 6A » */
+function shortName(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0]!.slice(0, 3);
+  const first = /^\d/.test(parts[0]!) ? parts[0]!.replace(/\D.*$/, "") : parts[0]!.slice(0, parts[0]!.length <= 3 ? 3 : 1);
+  return `${first}${parts[parts.length - 1]!.slice(0, 2)}`;
 }

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
@@ -33,7 +33,7 @@ export const Button = React.forwardRef<
         size === "lg" && "h-12 px-5",
         variant === "primary" && "bg-brand-700 text-white hover:bg-brand-800",
         variant === "secondary" &&
-          "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white",
+          "bg-brand-700 text-white hover:bg-brand-800 dark:bg-brand-600 dark:hover:bg-brand-500",
         variant === "outline" &&
           "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-[var(--surface-2)] dark:text-slate-100 dark:hover:bg-[#323a4f]",
         variant === "ghost" &&
@@ -620,23 +620,29 @@ export function BackLink({
   to,
   label = "Retour",
   className,
+  preferHistory = true,
 }: {
   to: string;
   label?: string;
   className?: string;
+  /** go back to the page the user came from when there is one (`to` is only the fallback) */
+  preferHistory?: boolean;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  // "default" = the first page of the visit: nothing to go back to
+  const canGoBack = preferHistory && location.key !== "default";
   return (
     <button
       type="button"
-      onClick={() => navigate(to)}
+      onClick={() => (canGoBack ? navigate(-1) : navigate(to))}
       className={cn(
         "mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700",
         className,
       )}
     >
       <ArrowLeft className="h-4 w-4" />
-      {label}
+      {canGoBack ? "Retour" : label}
     </button>
   );
 }

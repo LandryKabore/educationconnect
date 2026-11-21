@@ -23,8 +23,15 @@ export function formatClock(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** Displayed times, like the other timetables: « 7h », « 7h30 » (formatClock stays HH:MM for time inputs). */
+export function formatClockFr(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
+}
+
 export function formatPauseLabel(startMin: number, endMin: number): string {
-  return `Pause ${formatClock(startMin)} – ${formatClock(endMin)}`;
+  return `Pause ${formatClockFr(startMin)} – ${formatClockFr(endMin)}`;
 }
 
 /** "9 h", "1 h 30", "45 min". */

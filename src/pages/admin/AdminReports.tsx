@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Calendar, Mail, School as SchoolIcon, UserX } from "lucide-react";
+import { School as SchoolIcon, UserX } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { School } from "@/lib/types";
 import { schoolTypeLabel } from "@/lib/schoolForm";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
+import { AdminCardHeader } from "@/components/admin/AdminKit";
 
 export default function AdminReports() {
   const { data: schools = [], isLoading: loadingSchools } = useQuery({
@@ -58,56 +60,20 @@ export default function AdminReports() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Rapports"
         subtitle="Vue d'ensemble et alertes de la plateforme"
+        stats={[
+          { label: "Sans admin actif", value: String(withoutAdmin.length), hint: "écoles actives" },
+          { label: "Inactives", value: String(inactiveSchools.length), hint: "écoles" },
+          { label: "Nouvelles", value: String(recentCount), hint: "30 derniers jours" },
+          { label: "Invitations", value: String(pendingInvitesCount), hint: "en attente", to: "/admin/invitations" },
+        ]}
       />
-
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-            <UserX className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{withoutAdmin.length}</p>
-            <p className="text-sm text-slate-500">Écoles sans admin actif</p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-800">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{inactiveSchools.length}</p>
-            <p className="text-sm text-slate-500">Écoles inactives</p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-            <Calendar className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{recentCount}</p>
-            <p className="text-sm text-slate-500">Créées (30 derniers jours)</p>
-          </div>
-        </Card>
-        <Card className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
-            <Mail className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{pendingInvitesCount}</p>
-            <p className="text-sm text-slate-500">Invitations en attente</p>
-          </div>
-        </Card>
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <div className="mb-3 flex items-center gap-2">
-            <UserX className="h-5 w-5 text-amber-700" />
-            <h2 className="font-semibold">Écoles actives sans administrateur</h2>
-          </div>
+          <AdminCardHeader icon={UserX} title="Écoles actives sans administrateur" subtitle="Invitez un administrateur depuis la fiche de l’école." />
           {loadingSchools ? (
             <p className="text-sm text-slate-500">Chargement…</p>
           ) : withoutAdmin.length === 0 ? (
@@ -116,10 +82,10 @@ export default function AdminReports() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
-                    <th className="pb-2 pr-3 font-medium">École</th>
-                    <th className="pb-2 pr-3 font-medium">Type</th>
-                    <th className="pb-2 font-medium">Ville</th>
+                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-600">
+                    <th className="pb-2 pr-3 font-semibold">École</th>
+                    <th className="pb-2 pr-3 font-semibold">Type</th>
+                    <th className="pb-2 font-semibold">Ville</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,10 +112,7 @@ export default function AdminReports() {
         </Card>
 
         <Card>
-          <div className="mb-3 flex items-center gap-2">
-            <SchoolIcon className="h-5 w-5 text-red-700" />
-            <h2 className="font-semibold">Écoles inactives</h2>
-          </div>
+          <AdminCardHeader icon={SchoolIcon} title="Écoles inactives" subtitle="Plus personne ne peut s’y connecter." />
           {loadingSchools ? (
             <p className="text-sm text-slate-500">Chargement…</p>
           ) : inactiveSchools.length === 0 ? (
@@ -158,9 +121,9 @@ export default function AdminReports() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
-                    <th className="pb-2 pr-3 font-medium">École</th>
-                    <th className="pb-2 font-medium">Statut</th>
+                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-600">
+                    <th className="pb-2 pr-3 font-semibold">École</th>
+                    <th className="pb-2 font-semibold">Statut</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -18,15 +18,15 @@ const LABELS: Record<EvaluationType, string> = {
   /** Travaux à la maison (type DB `devoir`). */
   devoir: "Exercice de maison",
   composition: "Composition",
-  /** Devoir surveillé / contrôle (type DB `examen`) — called « devoir » locally. */
-  examen: "Devoir",
+  /** Contrôle surveillé (type DB `examen`). */
+  examen: "Examen",
 };
 
 const SHORT: Record<EvaluationType, string> = {
   interrogation: "Interro",
   devoir: "Exercice",
   composition: "Compo",
-  examen: "Devoir",
+  examen: "Examen",
 };
 
 export function isEvaluationType(value: string): value is EvaluationType {

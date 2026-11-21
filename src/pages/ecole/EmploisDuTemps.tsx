@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/timetableConflicts";
 import {
   formatClock,
+  formatClockFr,
   formatHoursFr,
   freeRangesOnDay,
   snapDown15,
@@ -34,12 +36,8 @@ import { TimetableDayAgenda } from "@/components/TimetableDayAgenda";
 import { TimetableEditorPanel } from "@/components/TimetableEditorPanel";
 import { TimetableHoursCard } from "@/components/TimetableHoursCard";
 import { useSchoolTimetableRealtime } from "@/hooks/useStudentTimetableUpdates";
-import {
-  Button,
-  EmptyState,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, EmptyState, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const EMPTY_CLASSES: ClassSection[] = [];
 
@@ -86,6 +84,7 @@ function clockRange(startMin: number): { start: string; end: string } {
 }
 
 export default function EmploisDuTemps() {
+  const readOnly = useModuleReadOnly("emplois_du_temps");
   const { schoolId, schools } = useAuth();
   const qc = useQueryClient();
   useSchoolTimetableRealtime(schoolId);
@@ -483,7 +482,7 @@ export default function EmploisDuTemps() {
       return `Aucun créneau libre pour ${name} ce jour (07:00–17:00).`;
     }
     const list = free
-      .map((range) => `${formatClock(range.startMin)}–${formatClock(range.endMin)}`)
+      .map((range) => `${formatClockFr(range.startMin)}–${formatClockFr(range.endMin)}`)
       .join(", ");
     return `Créneaux libres pour ${name} ce jour : ${list}`;
   }, [showForm, teacherId, teacherList, dayOfWeek, slots, editingId]);
@@ -583,6 +582,7 @@ export default function EmploisDuTemps() {
   };
 
   const openCreate = (prefill?: { day: number; startMin: number }) => {
+    if (readOnly) return;
     const day = prefill?.day ?? todayDow ?? 1;
     const range = clockRange(prefill?.startMin ?? 8 * 60);
     setEditingId(null);
@@ -597,6 +597,7 @@ export default function EmploisDuTemps() {
   };
 
   const openEdit = (id: string) => {
+    if (readOnly) return;
     const slot = slots.find((item) => item.id === id);
     if (!slot) return;
     setEditingId(slot.id);
@@ -722,7 +723,7 @@ export default function EmploisDuTemps() {
           if (pendingRemoveId) await removeSlot(pendingRemoveId);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Emplois du temps"
         subtitle="Lundi à samedi · cliquez une case vide pour ajouter, un cours pour le modifier"
         actions={
@@ -736,13 +737,14 @@ export default function EmploisDuTemps() {
               <Download className="h-4 w-4" />
               {exporting ? "Export…" : "PDF"}
             </Button>
-            <Button onClick={() => openCreate()}>
+            <Button onClick={() => openCreate()} disabled={readOnly}>
               <Plus className="h-4 w-4" />
               Ajouter un créneau
             </Button>
           </div>
         }
       />
+      {readOnly ? <ReadOnlyBanner module="emplois_du_temps" /> : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-[var(--surface-2)]">

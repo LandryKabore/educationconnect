@@ -2,29 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMessageContacts, fetchSentAnnouncements } from "@/lib/scaleApi";
-import { format, isToday } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ArrowLeft, Check, CheckCheck, Send } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, Megaphone, MessageSquare, MessagesSquare, PenSquare, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { useMessageRecipients, RecipientsLineText } from "@/hooks/useMessageRecipients";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, MessageRow, Profile } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { cn, fullName, joinProfile, matchesSearch } from "@/lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageLoadingState,
-  PageHeader,
-  Select,
-  Textarea,
-} from "@/components/ui";
-import { AnnouncementPaper } from "@/components/AnnouncementPaper";
+import { Button } from "@/components/ui";
 
 type MessageTab = "discussions" | "announcements" | "compose" | "announce";
 
@@ -39,7 +28,15 @@ type MessageContact = {
   role: ContactRole;
   class_name: string | null;
   date_of_birth: string | null;
+  /** teachers: a parent's children among their students (« Awa Ouédraogo (6A) ») */
+  parent_of?: string[];
 };
+
+/** « Parent de Awa Ouédraogo (6A) » for teachers, otherwise the role and the class. */
+function contactRoleLine(c: MessageContact) {
+  if (c.role === "parent" && c.parent_of?.length) return `Parent de ${c.parent_of.join(", ")}`;
+  return [ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name].filter(Boolean).join(" · ");
+}
 
 type InboxMessage = MessageRow & {
   sender: { first_name: string; last_name: string } | null;
@@ -133,8 +130,24 @@ function formatContactDob(iso: string | null | undefined) {
   return formatted || null;
 }
 
+/** The administration is shown as « Administration », never by the administrator's name. */
+function contactName(c: Pick<MessageContact, "first_name" | "last_name" | "role">) {
+  return c.role === "school_admin" ? "Administration" : fullName(c.first_name, c.last_name);
+}
+
+/** Every administrator is one recipient « Administration » (one chip, one row). */
+function collapseAdmins<T extends { role: string }>(list: T[]): T[] {
+  let seen = false;
+  return list.filter((c) => {
+    if (c.role !== "school_admin") return true;
+    if (seen) return false;
+    seen = true;
+    return true;
+  });
+}
+
 function contactDisplayName(c: MessageContact) {
-  const name = fullName(c.first_name, c.last_name);
+  const name = contactName(c);
   const parts: string[] = [];
   if (c.role === "student" && c.class_name) parts.push(c.class_name);
   parts.push(name);
@@ -179,6 +192,8 @@ export default function Messages({
   const [announceBody, setAnnounceBody] = useState("");
   const [announceNoReplies, setAnnounceNoReplies] = useState(true);
   const [announceSending, setAnnounceSending] = useState(false);
+  /** batch progress while a message or an announcement is going out */
+  const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null);
   const markingRead = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const [otherTyping, setOtherTyping] = useState(false);
@@ -293,7 +308,21 @@ export default function Messages({
       // Admins and teachers: the whole list in one SQL call (a single JSON value, so the
       // 1,000-row API limit does not cut it - the old code lost contacts past 1,000).
       if (role === "school_admin" || role === "super_admin" || role === "teacher") {
-        return (await fetchMessageContacts(schoolId!, role)) as MessageContact[];
+        const list = (await fetchMessageContacts(schoolId!, role)) as MessageContact[];
+        if (role !== "teacher") return list;
+        // teachers: say whose parent each parent is (their children among the teacher's students)
+        const parentIds = list.filter((c) => c.role === "parent").map((c) => c.id);
+        if (parentIds.length === 0) return list;
+        const { data: links } = await supabase.from("liens_parent_eleve").select("parent_id, student_id").in("parent_id", parentIds);
+        const students = new Map(list.filter((c) => c.role === "student").map((c) => [c.id, c] as const));
+        const kids = new Map<string, string[]>();
+        for (const l of (links ?? []) as { parent_id: string; student_id: string }[]) {
+          const s = students.get(l.student_id);
+          if (!s) continue;
+          const label = `${fullName(s.first_name, s.last_name)}${s.class_name ? ` (${s.class_name})` : ""}`;
+          kids.set(l.parent_id, [...(kids.get(l.parent_id) ?? []), label]);
+        }
+        return list.map((c) => (kids.has(c.id) ? { ...c, parent_of: kids.get(c.id)!.sort((a, b) => a.localeCompare(b, "fr")) } : c));
       }
 
       const map = new Map<string, MessageContact>();
@@ -450,13 +479,18 @@ export default function Messages({
     return contacts.filter((c) => c.role === recipientRole);
   }, [contacts, recipientRole]);
 
+  const adminIds = useMemo(
+    () => contacts.filter((c) => c.role === "school_admin").map((c) => c.id),
+    [contacts],
+  );
+
   const selectedRecipients = useMemo(
-    () => contacts.filter((c) => recipientIds.includes(c.id)),
+    () => collapseAdmins(contacts.filter((c) => recipientIds.includes(c.id))),
     [contacts, recipientIds],
   );
 
   const selectedCc = useMemo(
-    () => contacts.filter((c) => ccIds.includes(c.id)),
+    () => collapseAdmins(contacts.filter((c) => ccIds.includes(c.id))),
     [contacts, ccIds],
   );
 
@@ -467,7 +501,7 @@ export default function Messages({
   }, [role, pickerTarget, ccIds, recipientIds]);
 
   const searchedContacts = useMemo(() => {
-    return filteredContacts.filter(
+    return collapseAdmins(filteredContacts).filter(
       (c) =>
         !pickerExclude.has(c.id) &&
         matchesSearch(
@@ -477,6 +511,7 @@ export default function Messages({
           c.class_name,
           formatContactDob(c.date_of_birth),
           ROLE_LABELS[c.role as AppRole],
+          c.parent_of?.join(" "),
         ),
     );
   }, [filteredContacts, contactSearch, pickerExclude]);
@@ -531,18 +566,20 @@ export default function Messages({
 
   const conversations = useMemo((): Conversation[] => {
     const map = new Map<string, ChatMessage[]>();
+    const adminIds = new Set(contacts.filter((c) => c.role === "school_admin").map((c) => c.id));
 
     for (const m of directInbox) {
-      const otherName = fullName(m.sender?.first_name, m.sender?.last_name);
+      const otherName = adminIds.has(m.sender_id)
+        ? "Administration"
+        : fullName(m.sender?.first_name, m.sender?.last_name);
       const list = map.get(m.sender_id) ?? [];
       list.push({ ...m, direction: "in", otherId: m.sender_id, otherName });
       map.set(m.sender_id, list);
     }
     for (const m of directSent) {
-      const otherName = fullName(
-        m.recipient?.first_name,
-        m.recipient?.last_name,
-      );
+      const otherName = adminIds.has(m.recipient_id)
+        ? "Administration"
+        : fullName(m.recipient?.first_name, m.recipient?.last_name);
       const list = map.get(m.recipient_id) ?? [];
       list.push({
         ...m,
@@ -577,7 +614,7 @@ export default function Messages({
         new Date(b.lastMessage.created_at).getTime() -
         new Date(a.lastMessage.created_at).getTime(),
     );
-  }, [directInbox, directSent]);
+  }, [directInbox, directSent, contacts]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) =>
@@ -599,7 +636,7 @@ export default function Messages({
     if (selectedConversation) return selectedConversation.otherName;
     if (!selectedOtherId) return "";
     const c = contacts.find((x) => x.id === selectedOtherId);
-    return c ? fullName(c.first_name, c.last_name) : "Conversation";
+    return c ? contactName(c) : "Conversation";
   }, [selectedConversation, selectedOtherId, contacts]);
 
   const announceRoleOptions = useMemo(() => {
@@ -835,17 +872,22 @@ export default function Messages({
   const effectivePickerTarget =
     role === "student" ? "to" : pickerTarget;
 
+  /** Picking « Administration » picks every administrator of the school. */
+  const groupOf = (id: string) => (adminIds.includes(id) ? adminIds : [id]);
+
   const togglePickerId = (id: string) => {
+    const ids = groupOf(id);
+    const toggle = (prev: string[]) =>
+      prev.includes(id)
+        ? prev.filter((x) => !ids.includes(x))
+        : [...prev, ...ids.filter((x) => !prev.includes(x))];
+    const drop = (prev: string[]) => prev.filter((x) => !ids.includes(x));
     if (effectivePickerTarget === "to") {
-      setRecipientIds((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-      );
-      setCcIds((prev) => prev.filter((x) => x !== id));
+      setRecipientIds(toggle);
+      setCcIds(drop);
     } else {
-      setCcIds((prev) =>
-        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-      );
-      setRecipientIds((prev) => prev.filter((x) => x !== id));
+      setCcIds(toggle);
+      setRecipientIds(drop);
     }
   };
 
@@ -921,6 +963,7 @@ export default function Messages({
     const batchSize = 40;
     let sentCount = 0;
     let failed = false;
+    setSendProgress({ done: 0, total: payload.length });
     for (let i = 0; i < payload.length; i += batchSize) {
       const batch = payload.slice(i, i + batchSize);
       const { error } = await supabase.from("messages").insert(batch);
@@ -929,7 +972,9 @@ export default function Messages({
         break;
       }
       sentCount += batch.length;
+      setSendProgress({ done: sentCount, total: payload.length });
     }
+    setSendProgress(null);
     setSending(false);
 
     if (failed && sentCount === 0) {
@@ -995,6 +1040,7 @@ export default function Messages({
     const batchSize = 40;
     let sentCount = 0;
     let failed = false;
+    setSendProgress({ done: 0, total: payload.length });
     for (let i = 0; i < payload.length; i += batchSize) {
       const batch = payload.slice(i, i + batchSize);
       const { error } = await supabase.from("messages").insert(batch);
@@ -1003,7 +1049,9 @@ export default function Messages({
         break;
       }
       sentCount += batch.length;
+      setSendProgress({ done: sentCount, total: payload.length });
     }
+    setSendProgress(null);
     setAnnounceSending(false);
 
     if (failed && sentCount === 0) {
@@ -1026,693 +1074,914 @@ export default function Messages({
     invalidateMessages();
   };
 
-  return (
-    <div>
-      <PageHeader
-        title={isAnnoncesView ? "Annonces" : "Messages"}
-        subtitle={
-          isAnnoncesView
-            ? "Informations officielles de l’établissement"
-            : undefined
-        }
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {isAnnoncesView ? (
-              <>
-                <Button
-                  variant={tab === "announcements" ? "primary" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setTab("announcements");
-                    setListSearch("");
-                  }}
-                >
-                  Liste
-                </Button>
-                {canAnnounce ? (
-                  <Button
-                    variant={tab === "announce" ? "primary" : "outline"}
-                    size="sm"
-                    onClick={() => setTab("announce")}
-                  >
-                    Envoyer une annonce
-                  </Button>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <Button
-                  variant={tab === "discussions" ? "primary" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setTab("discussions");
-                    setSelectedOtherId(null);
-                    setDiscussionsSearch("");
-                  }}
-                >
-                  Discussions
-                </Button>
-                <Button
-                  variant={tab === "compose" ? "primary" : "outline"}
-                  size="sm"
-                  onClick={() => {
-                    setTab("compose");
-                    setContactSearch("");
-                  }}
-                >
-                  Nouveau message
-                </Button>
-              </>
-            )}
-          </div>
-        }
-      />
+  // the announcement open in the reader; on a laptop the newest one opens by itself
+  const [selectedAnnKey, setSelectedAnnKey] = useState<string | null>(null);
+  const [annFilter, setAnnFilter] = useState<"all" | "received" | "sent">("all");
+  useEffect(() => {
+    if (!isAnnoncesView || selectedAnnKey || announcementItems.length === 0) return;
+    if (window.matchMedia("(min-width: 1024px)").matches) setSelectedAnnKey(announcementItems[0]!.key);
+  }, [isAnnoncesView, selectedAnnKey, announcementItems]);
 
-      {tab === "announce" && canAnnounce ? (
-        <Card className="max-w-4xl">
-          <form onSubmit={(e) => void handleAnnounce(e)} className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                Destinataires (rôles)
-              </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {role === "teacher"
-                  ? "Vos élèves, leurs parents, et l’administration (selon votre sélection)."
-                  : "Toute l’école pour les rôles cochés."}
-              </p>
-              {announceRoleOptions.length === 0 ? (
-                <p className="mt-2 text-sm text-amber-700">
-                  Aucun contact disponible pour une annonce.
+  const contactById = new Map(contacts.map((c) => [c.id, c]));
+  const contactLine = (id: string | null) => {
+    const c = id ? contactById.get(id) : undefined;
+    if (!c) return "";
+    return contactRoleLine(c);
+  };
+  const totalUnread = conversations.reduce((n, c) => n + c.unreadCount, 0);
+  const unreadAnnouncements = announcementInbox.filter((m) => !m.read_at).length;
+  const shownAnnouncements = filteredAnnouncements.filter((a) =>
+    annFilter === "all" ? true : annFilter === "sent" ? a.sentByMe : !a.sentByMe,
+  );
+  const selectedAnn = announcementItems.find((a) => a.key === selectedAnnKey) ?? null;
+  const composing = tab === "compose" || tab === "announce";
+
+  const recipientsByThread = useMessageRecipients(
+    (selectedConversation?.messages ?? []).map((m) => m.thread_id),
+    user?.id,
+  );
+
+  // chat messages grouped by day, for the separators
+  const chatDays: { key: string; label: string; items: ChatMessage[] }[] = [];
+  for (const m of selectedConversation?.messages ?? []) {
+    const d = parseValidDate(m.created_at);
+    const key = d ? format(d, "yyyy-MM-dd") : "?";
+    const last = chatDays[chatDays.length - 1];
+    if (last && last.key === key) last.items.push(m);
+    else chatDays.push({ key, label: d ? dayLabel(d) : "", items: [m] });
+  }
+
+  const startCompose = () => {
+    setTab("compose");
+    setSelectedOtherId(null);
+    setContactSearch("");
+  };
+  const closeCompose = () => setTab(isAnnoncesView ? "announcements" : "discussions");
+
+  const inputCls =
+    "h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-[var(--border)] dark:bg-[var(--surface)]";
+  const searchCls =
+    "h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-brand-500 focus:bg-white dark:border-[var(--border)] dark:bg-[var(--surface-2)]";
+  const fieldLabel = "mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500";
+
+  /* ------------------------------------------------------------------ compose: message */
+  const composeMessage = (
+    <form onSubmit={(e) => void handleSend(e)} className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center gap-3 border-b border-slate-200 px-5 py-3 dark:border-[var(--border)]">
+        <button
+          type="button"
+          onClick={closeCompose}
+          aria-label="Fermer"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900 dark:text-slate-50">Nouveau message</p>
+          <p className="text-xs text-slate-500">
+            {role === "teacher"
+              ? "Vos élèves, leurs parents et l’administration"
+              : role === "student"
+                ? "Vos professeurs et l’administration"
+                : "Élèves, parents, enseignants et administrateurs de l’école"}
+          </p>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+        {/* recipients */}
+        <section>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className={fieldLabel}>Destinataires</span>
+            {role !== "student" ? (
+              <div className="inline-flex rounded-md bg-slate-100 p-0.5 dark:bg-[var(--surface-2)]">
+                {(["to", "cc"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPickerTarget(t)}
+                    className={cn(
+                      "rounded px-3 py-1 text-xs font-bold transition",
+                      pickerTarget === t
+                        ? "bg-white text-brand-800 shadow-sm dark:bg-[var(--surface)] dark:text-brand-200"
+                        : "text-slate-500 hover:text-slate-800",
+                    )}
+                  >
+                    {t === "to" ? `À (${recipientIds.length})` : `Copie (${ccIds.length})`}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {selectedRecipients.length + selectedCc.length > 0 ? (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {selectedRecipients.map((c) => (
+                <RecipientChip
+                  key={c.id}
+                  label={contactDisplayName(c)}
+                  tone="brand"
+                  onRemove={() => setRecipientIds((prev) => prev.filter((x) => !groupOf(c.id).includes(x)))}
+                />
+              ))}
+              {selectedCc.map((c) => (
+                <RecipientChip
+                  key={c.id}
+                  label={`Cc · ${contactDisplayName(c)}`}
+                  tone="slate"
+                  onRemove={() => setCcIds((prev) => prev.filter((x) => !groupOf(c.id).includes(x)))}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="mb-3 text-xs text-slate-500">
+              {effectivePickerTarget === "to" ? "Choisissez une ou plusieurs personnes." : "Optionnel : personnes en copie."}
+            </p>
+          )}
+
+          <div className="rounded-md border border-slate-200 dark:border-[var(--border)]">
+            <div className="space-y-2 border-b border-slate-100 p-2.5 dark:border-[var(--border)]">
+              {role !== "student" && availableRoleFilters.length > 2 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {availableRoleFilters.map((o) => (
+                    <button
+                      key={o.value || "all"}
+                      type="button"
+                      onClick={() => {
+                        setRecipientRole(o.value as ContactRole | "");
+                        setContactSearch("");
+                      }}
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-xs font-semibold ring-1 transition",
+                        recipientRole === o.value
+                          ? "bg-brand-700 text-white ring-brand-700"
+                          : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 dark:bg-[var(--surface)] dark:text-slate-300 dark:ring-[var(--border)]",
+                      )}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Nom, classe…"
+                  disabled={contactsLoading || filteredContacts.length === 0}
+                  className={searchCls}
+                />
+              </label>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {contactsLoading ? (
+                <p className="px-3 py-3 text-sm text-slate-500">Chargement…</p>
+              ) : searchedContacts.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-slate-500">
+                  {filteredContacts.length === 0 ? "Aucun contact disponible" : "Aucun résultat"}
                 </p>
               ) : (
-                <div className="mt-3 space-y-2">
-                  {announceRoleOptions.map((o) => {
-                    const checked = announceRoles.has(o.value);
-                    const count = contacts.filter(
-                      (c) => c.role === o.value,
-                    ).length;
-                    return (
-                      <label
-                        key={o.value}
-                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300"
-                          checked={checked}
-                          onChange={() => toggleAnnounceRole(o.value)}
-                        />
-                        <span className="flex-1 font-medium">{o.label}</span>
-                        <span className="text-xs text-slate-500">
-                          {count} personne{count !== 1 ? "s" : ""}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-              {announceRecipients.length > 0 ? (
-                <p className="mt-2 text-sm text-brand-800">
-                  Total : <strong>{announceRecipients.length}</strong> destinataire
-                  {announceRecipients.length !== 1 ? "s" : ""}
-                  {Object.entries(announceCountByRole)
-                    .map(
-                      ([r, n]) =>
-                        ` · ${n} ${ROLE_LABELS[r as AppRole]?.toLowerCase() ?? r}`,
-                    )
-                    .join("")}
-                </p>
-              ) : null}
-            </div>
-            <div>
-              <Label>Objet</Label>
-              <Input
-                value={announceSubject}
-                onChange={(e) => setAnnounceSubject(e.target.value)}
-                placeholder="ex. Réunion parents — vendredi"
-              />
-            </div>
-            <div>
-              <Label>Annonce</Label>
-              <Textarea
-                value={announceBody}
-                onChange={(e) => setAnnounceBody(e.target.value)}
-                required
-                placeholder="Texte de l’annonce…"
-              />
-            </div>
-            <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-slate-300"
-                checked={announceNoReplies}
-                onChange={(e) => setAnnounceNoReplies(e.target.checked)}
-              />
-              <span>
-                Personne ne peut répondre
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  Recommandé pour les annonces officielles.
-                </span>
-              </span>
-            </label>
-            <Button
-              type="submit"
-              disabled={
-                announceSending ||
-                announceRecipients.length === 0 ||
-                announceRoles.size === 0
-              }
-            >
-              {announceSending
-                ? "Envoi…"
-                : `Envoyer l’annonce (${announceRecipients.length})`}
-            </Button>
-          </form>
-        </Card>
-      ) : tab === "compose" ? (
-        <Card className="max-w-4xl">
-          <form onSubmit={(e) => void handleSend(e)} className="space-y-4">
-            {role !== "student" ? (
-              <div>
-                <Label>Type de destinataire</Label>
-                <Select
-                  value={recipientRole}
-                  onChange={(e) => {
-                    setRecipientRole(e.target.value as ContactRole | "");
-                    setContactSearch("");
-                  }}
-                >
-                  {availableRoleFilters.map((o) => (
-                    <option key={o.value || "all"} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            ) : null}
-            <div>
-              {role !== "student" ? (
-                <div className="mb-2 flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={pickerTarget === "to" ? "primary" : "outline"}
-                    onClick={() => setPickerTarget("to")}
-                  >
-                    À ({recipientIds.length})
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={pickerTarget === "cc" ? "primary" : "outline"}
-                    onClick={() => setPickerTarget("cc")}
-                  >
-                    Cc ({ccIds.length})
-                  </Button>
-                </div>
-              ) : null}
-              <Label>
-                {role === "student" || pickerTarget === "to"
-                  ? "Destinataires"
-                  : "Cc (copie)"}
-              </Label>
-              {selectedRecipients.length > 0 ? (
-                <div className="mb-2">
-                  {role !== "student" ? (
-                    <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                      À
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedRecipients.map((c) => (
+                searchedContacts.map((c) => {
+                  const picked = effectivePickerTarget === "to" ? recipientIds.includes(c.id) : ccIds.includes(c.id);
+                  const name = contactName(c);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => togglePickerId(c.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 dark:border-[var(--border)]",
+                        picked ? "bg-brand-50 dark:bg-brand-950/30" : "hover:bg-slate-50 dark:hover:bg-[var(--surface-2)]",
+                      )}
+                    >
                       <span
-                        key={c.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs text-brand-950"
-                      >
-                        {contactDisplayName(c)}
-                        <button
-                          type="button"
-                          className="font-medium text-brand-700 hover:text-brand-900"
-                          onClick={() =>
-                            setRecipientIds((prev) =>
-                              prev.filter((id) => id !== c.id),
-                            )
-                          }
-                          aria-label="Retirer"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {role !== "student" && selectedCc.length > 0 ? (
-                <div className="mb-2">
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                    Cc
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedCc.map((c) => (
-                      <span
-                        key={c.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-800"
-                      >
-                        {contactDisplayName(c)}
-                        <button
-                          type="button"
-                          className="font-medium text-slate-600 hover:text-slate-900"
-                          onClick={() =>
-                            setCcIds((prev) => prev.filter((id) => id !== c.id))
-                          }
-                          aria-label="Retirer"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {selectedRecipients.length === 0 &&
-              (role === "student" || selectedCc.length === 0) ? (
-                <p className="mb-2 text-xs text-slate-500">
-                  {role === "student" || pickerTarget === "to"
-                    ? "Sélectionnez une ou plusieurs personnes."
-                    : "Optionnel — personnes en copie."}
-                </p>
-              ) : null}
-              <Input
-                value={contactSearch}
-                onChange={(e) => setContactSearch(e.target.value)}
-                placeholder="Rechercher un nom…"
-                className="mb-2"
-                disabled={contactsLoading || filteredContacts.length === 0}
-              />
-              <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200">
-                {contactsLoading ? (
-                  <p className="px-3 py-2 text-sm text-slate-500">Chargement…</p>
-                ) : searchedContacts.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-slate-500">
-                    {filteredContacts.length === 0
-                      ? "Aucun contact disponible"
-                      : "Aucun résultat pour cette recherche"}
-                  </p>
-                ) : (
-                  searchedContacts.map((c) => {
-                    const selected =
-                      role === "student" || pickerTarget === "to"
-                        ? recipientIds.includes(c.id)
-                        : ccIds.includes(c.id);
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => togglePickerId(c.id)}
                         className={cn(
-                          "flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0",
-                          selected
-                            ? "bg-brand-50 font-medium text-brand-950"
-                            : "hover:bg-slate-50",
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                          picked ? "border-brand-700 bg-brand-700 text-white" : "border-slate-300 bg-white dark:bg-transparent",
                         )}
                       >
-                        <span className="min-w-0 truncate">
-                          {contactDisplayName(c)}
+                        {picked ? <Check className="h-3.5 w-3.5" /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{name}</span>
+                        <span className="block truncate text-xs text-slate-500">
+                          {c.role === "parent" && c.parent_of?.length
+                            ? contactRoleLine(c)
+                            : [ROLE_LABELS[c.role as AppRole] ?? c.role, c.class_name, c.role === "student" ? formatContactDob(c.date_of_birth) : null]
+                                .filter(Boolean)
+                                .join(" · ")}
                         </span>
-                        <span className="shrink-0 text-xs text-slate-500">
-                          {selected ? "✓ " : ""}
-                          {ROLE_LABELS[c.role as AppRole] ?? c.role}
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-              {role === "teacher" ? (
-                <p className="mt-1 text-xs text-slate-500">
-                  Élèves de vos classes, leurs parents, et l’administration.
-                </p>
-              ) : role === "school_admin" || role === "super_admin" ? (
-                <p className="mt-1 text-xs text-slate-500">
-                  Élèves, parents, enseignants et administrateurs de l’école.
-                </p>
-              ) : null}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
             </div>
-            <div>
-              <Label>Objet</Label>
-              <Input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Message</Label>
-              <Textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                required
-              />
-            </div>
-            {canControlReplies ? (
-              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300"
-                  checked={noReplies}
-                  onChange={(e) => setNoReplies(e.target.checked)}
-                />
-                <span>
-                  Personne ne peut répondre
-                  <span className="mt-0.5 block text-xs text-slate-500">
-                    Utile pour une observation ou une info officielle.
-                  </span>
-                </span>
-              </label>
-            ) : null}
-            <Button
-              type="submit"
-              disabled={
-                sending ||
-                recipientIds.length === 0 ||
-                filteredContacts.length === 0
-              }
-            >
-              {sending
-                ? "Envoi…"
-                : recipientIds.length + ccIds.length > 1
-                  ? `Envoyer (${recipientIds.length + ccIds.length})`
-                  : "Envoyer"}
-            </Button>
-          </form>
-        </Card>
-      ) : tab === "announcements" ? (
-        inboxLoading || sentLoading ? (
-          <PageLoadingState message="Chargement des annonces…" />
-        ) : announcementItems.length === 0 ? (
-          <EmptyState message="Aucune annonce pour le moment." />
-        ) : (
-          <div className="space-y-8">
-            <div className="max-w-md">
-              <Label htmlFor="search-announcements">Rechercher</Label>
-              <Input
-                id="search-announcements"
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                placeholder="Expéditeur, objet, contenu…"
-              />
-            </div>
-            {filteredAnnouncements.length === 0 ? (
-              <EmptyState message="Aucune annonce ne correspond à la recherche." />
-            ) : (
-              filteredAnnouncements.map((item) => {
-                const m = item.message;
-                const canReply = m.allow_replies !== false;
-                return (
-                  <AnnouncementPaper
-                    key={item.key}
-                    title={m.subject || "(Sans objet)"}
-                    senderName={
-                      item.sentByMe
-                        ? `Vous · envoyée à ${item.recipientCount} destinataire${item.recipientCount !== 1 ? "s" : ""}`
-                        : fullName(m.sender?.first_name, m.sender?.last_name)
-                    }
-                    body={m.body}
-                    dateLabel={formatDateSafe(m.created_at, "d MMM yyyy", {
-                      locale: fr,
-                    })}
-                    seenLabel={
-                      m.read_at ? `Vu le ${formatSeenAt(m.read_at)}` : undefined
-                    }
-                    isNew={!m.read_at}
-                    footer={
-                      item.sentByMe ? (
-                        <p className="announcement-paper__note">
-                          Annonce envoyée
-                        </p>
-                      ) : canReply ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-amber-900/30 bg-transparent text-[#2c2416] hover:bg-amber-900/5 dark:border-amber-100/20 dark:text-[#ebe3d4] dark:hover:bg-white/5"
-                          onClick={() => openChat(m.sender_id)}
-                        >
-                          Répondre
-                        </Button>
-                      ) : (
-                        <p className="announcement-paper__note">
-                          Cette annonce n’accepte pas de réponse.
-                        </p>
-                      )
-                    }
-                  />
-                );
-              })
-            )}
           </div>
-        )
-      ) : (
-        <div className="mx-auto max-w-3xl">
-          <Card className="overflow-hidden p-0">
-            {selectedOtherId ? (
-              <div className="flex h-[75vh] flex-col">
-                <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 w-9 rounded-full p-0"
-                    aria-label={
-                      chatReturnTo
-                        ? "Retour au profil élève"
-                        : "Retour aux discussions"
-                    }
-                    onClick={leaveChat}
-                  >
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800">
-                    {initials(chatTitle)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-slate-900">
-                      {chatTitle}
-                    </p>
-                    {otherTyping ? (
-                      <p className="text-xs font-medium text-brand-600">
-                        en train d’écrire…
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
+        </section>
 
-                <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100 px-3 py-4 sm:px-4">
-                  {(selectedConversation?.messages ?? []).length === 0 ? (
-                    <p className="mt-8 text-center text-sm text-slate-400">
-                      Aucun message. Écrivez le premier !
-                    </p>
-                  ) : (
-                    (selectedConversation?.messages ?? []).map((m) => {
-                      const mine = m.direction === "out";
-                      return (
-                        <div
-                          key={m.id}
-                          className={cn(
-                            "flex",
-                            mine ? "justify-end" : "justify-start",
-                          )}
-                        >
-                          <div
+        <section>
+          <label htmlFor="msg-subject" className={fieldLabel}>
+            Objet
+          </label>
+          <input id="msg-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Facultatif" className={inputCls} />
+        </section>
+
+        <section>
+          <label htmlFor="msg-body" className={fieldLabel}>
+            Message
+          </label>
+          <textarea
+            id="msg-body"
+            rows={6}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            required
+            placeholder="Écrivez votre message…"
+            className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+          />
+        </section>
+
+        {canControlReplies ? (
+          <ToggleRow
+            checked={noReplies}
+            onChange={setNoReplies}
+            title="Personne ne peut répondre"
+            hint="Utile pour une observation ou une information officielle."
+          />
+        ) : null}
+      </div>
+
+      {sendProgress ? <SendProgressBar done={sendProgress.done} total={sendProgress.total} /> : null}
+      <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-[var(--border)]">
+        <Button type="button" variant="ghost" onClick={closeCompose} disabled={!!sendProgress}>
+          Annuler
+        </Button>
+        <Button type="submit" disabled={sending || recipientIds.length === 0 || filteredContacts.length === 0}>
+          <Send className="h-4 w-4" />
+          {sending
+            ? sendProgress && sendProgress.total > 1
+              ? `Envoi… ${sendProgress.done} / ${sendProgress.total}`
+              : "Envoi…"
+            : recipientIds.length + ccIds.length > 1
+              ? `Envoyer à ${recipientIds.length + ccIds.length} personnes`
+              : "Envoyer"}
+        </Button>
+      </footer>
+    </form>
+  );
+
+  /* ------------------------------------------------------------------ compose: announcement */
+  const composeAnnouncement = (
+    <form onSubmit={(e) => void handleAnnounce(e)} className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center gap-3 border-b border-slate-200 px-5 py-3 dark:border-[var(--border)]">
+        <button
+          type="button"
+          onClick={closeCompose}
+          aria-label="Fermer"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900 dark:text-slate-50">Nouvelle annonce</p>
+          <p className="text-xs text-slate-500">
+            {role === "teacher"
+              ? "Vos élèves, leurs parents et l’administration, selon votre choix"
+              : "Toute l’école, pour les rôles choisis"}
+          </p>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
+        <section>
+          <span className={fieldLabel}>Qui reçoit l’annonce ?</span>
+          {announceRoleOptions.length === 0 ? (
+            <p className="text-sm text-amber-700">Aucun contact disponible pour une annonce.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {announceRoleOptions.map((o) => {
+                const checked = announceRoles.has(o.value);
+                const count = contacts.filter((c) => c.role === o.value).length;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => toggleAnnounceRole(o.value)}
+                    aria-pressed={checked}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md border px-3 py-2.5 text-left transition",
+                      checked
+                        ? "border-brand-600 bg-brand-50 ring-1 ring-brand-600/20 dark:bg-brand-950/30"
+                        : "border-slate-200 hover:bg-slate-50 dark:border-[var(--border)] dark:hover:bg-[var(--surface-2)]",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                        checked ? "border-brand-700 bg-brand-700 text-white" : "border-slate-300",
+                      )}
+                    >
+                      {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</span>
+                    <span className="text-xs font-semibold tabular-nums text-slate-500">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {announceRecipients.length > 0 ? (
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              <strong className="text-brand-800 dark:text-brand-200">{announceRecipients.length}</strong> destinataire
+              {announceRecipients.length > 1 ? "s" : ""}
+              {Object.entries(announceCountByRole)
+                .map(([r, n]) => ` · ${n} ${ROLE_LABELS[r as AppRole]?.toLowerCase() ?? r}`)
+                .join("")}
+            </p>
+          ) : null}
+        </section>
+
+        <section>
+          <label htmlFor="ann-subject" className={fieldLabel}>
+            Objet
+          </label>
+          <input
+            id="ann-subject"
+            value={announceSubject}
+            onChange={(e) => setAnnounceSubject(e.target.value)}
+            placeholder="ex. Réunion des parents, vendredi"
+            className={inputCls}
+          />
+        </section>
+
+        <section>
+          <label htmlFor="ann-body" className={fieldLabel}>
+            Annonce
+          </label>
+          <textarea
+            id="ann-body"
+            rows={7}
+            value={announceBody}
+            onChange={(e) => setAnnounceBody(e.target.value)}
+            required
+            placeholder="Texte de l’annonce…"
+            className="w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-[var(--border)] dark:bg-[var(--surface)]"
+          />
+        </section>
+
+        <ToggleRow
+          checked={announceNoReplies}
+          onChange={setAnnounceNoReplies}
+          title="Personne ne peut répondre"
+          hint="Recommandé pour les annonces officielles."
+        />
+      </div>
+
+      {sendProgress ? <SendProgressBar done={sendProgress.done} total={sendProgress.total} /> : null}
+      <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-[var(--border)]">
+        <Button type="button" variant="ghost" onClick={closeCompose} disabled={!!sendProgress}>
+          Annuler
+        </Button>
+        <Button type="submit" disabled={announceSending || announceRecipients.length === 0 || announceRoles.size === 0}>
+          <Megaphone className="h-4 w-4" />
+          {announceSending
+            ? sendProgress
+              ? `Envoi… ${sendProgress.done} / ${sendProgress.total}`
+              : "Envoi…"
+            : `Envoyer l’annonce (${announceRecipients.length})`}
+        </Button>
+      </footer>
+    </form>
+  );
+
+  /* ------------------------------------------------------------------ chat */
+  const chatPane = (
+    <>
+      <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-[var(--border)]">
+        <button
+          type="button"
+          onClick={leaveChat}
+          aria-label={chatReturnTo ? "Retour au profil élève" : "Retour aux discussions"}
+          className={cn(
+            "flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 dark:hover:bg-[var(--surface-2)]",
+            !chatReturnTo && "lg:hidden",
+          )}
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <Initials name={chatTitle} size="sm" />
+        <div className="min-w-0">
+          <p className="truncate font-bold text-slate-900 dark:text-slate-50">{chatTitle}</p>
+          <p className={cn("truncate text-xs", otherTyping ? "font-semibold text-brand-700" : "text-slate-500")}>
+            {otherTyping ? "en train d’écrire…" : contactLine(selectedOtherId) || " "}
+          </p>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-4 py-4 sm:px-6 dark:bg-[var(--surface-2)]">
+        {chatDays.length === 0 ? (
+          <div className="mt-16 text-center">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nouvelle discussion</p>
+            <p className="mt-1 text-xs text-slate-500">Écrivez votre premier message à {chatTitle}.</p>
+          </div>
+        ) : (
+          chatDays.map((day) => (
+            <div key={day.key} className="space-y-1.5">
+              <div className="sticky top-0 z-10 flex justify-center py-2">
+                <span className="rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-[var(--surface)] dark:ring-[var(--border)]">
+                  {day.label}
+                </span>
+              </div>
+              {day.items.map((m, i) => {
+                const mine = m.direction === "out";
+                const grouped = day.items[i - 1]?.direction === m.direction;
+                return (
+                  <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start", !grouped && "pt-2")}>
+                    <div className={cn("flex max-w-[75%] flex-col", mine ? "items-end" : "items-start")}>
+                      {m.thread_id && recipientsByThread.get(m.thread_id) ? (
+                        <RecipientsLineText line={recipientsByThread.get(m.thread_id)!} mine={mine} />
+                      ) : null}
+                      {m.subject ? (
+                        <span className="mb-1 max-w-full truncate px-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                          {m.subject}
+                        </span>
+                      ) : null}
+                      <div
+                        className={cn(
+                          "rounded-lg px-3.5 py-2 text-sm",
+                          mine
+                            ? "bg-brand-700 text-white"
+                            : "bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-[var(--surface)] dark:text-slate-100 dark:ring-[var(--border)]",
+                        )}
+                      >
+                        {m.is_cc ? (
+                          <p
                             className={cn(
-                              "flex max-w-[80%] flex-col",
-                              mine ? "items-end" : "items-start",
+                              "mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold",
+                              mine ? "bg-white/15 text-white" : "bg-brand-50 text-brand-700",
                             )}
                           >
-                            {m.subject ? (
-                              <span className="mb-1 max-w-full truncate px-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                                {m.subject}
-                              </span>
-                            ) : null}
-                            <div
-                              className={cn(
-                                "rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-                                mine
-                                  ? "bg-brand-600 text-white"
-                                  : "bg-slate-200 text-slate-800",
-                              )}
-                            >
-                              <p className="whitespace-pre-wrap break-words">
-                                {m.body}
-                              </p>
-                              <div
-                                className={cn(
-                                  "mt-1 flex items-center gap-1.5 text-[11px]",
-                                  mine
-                                    ? "justify-end text-brand-100/80"
-                                    : "text-slate-500",
-                                )}
-                              >
-                                {m.is_cc ? (
-                                  <span
-                                    className={cn(
-                                      "rounded px-1 py-0.5 font-medium",
-                                      mine
-                                        ? "bg-white/15"
-                                        : "bg-slate-300/70 text-slate-600",
-                                    )}
-                                  >
-                                    Cc
-                                  </span>
-                                ) : null}
-                                <span>
-                                  {formatDateSafe(m.created_at, "HH:mm")}
-                                </span>
-                                {mine ? (
-                                  m.read_at ? (
-                                    <CheckCheck
-                                      className="h-3.5 w-3.5 text-sky-300"
-                                      aria-label="Vu"
-                                    />
-                                  ) : (
-                                    <Check
-                                      className="h-3.5 w-3.5 opacity-80"
-                                      aria-label="Envoyé"
-                                    />
-                                  )
-                                ) : null}
-                              </div>
-                            </div>
-                            {m.allow_replies === false ? (
-                              <span className="mt-1 max-w-full px-1 text-[10px] italic text-slate-400">
-                                Réponses désactivées pour ce message
-                              </span>
-                            ) : null}
-                          </div>
+                            {mine ? "Envoyé en copie (Cc)" : "Vous êtes en copie (Cc)"}
+                          </p>
+                        ) : null}
+                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                        <div className={cn("mt-1 flex items-center justify-end gap-1 text-[10px]", mine ? "text-white/70" : "text-slate-400")}>
+                          
+                          <span>{formatDateSafe(m.created_at, "HH:mm")}</span>
+                          {mine ? (
+                            m.read_at ? (
+                              <CheckCheck className="h-3.5 w-3.5 text-sky-200" aria-label={`Vu le ${formatSeenAt(m.read_at)}`} />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" aria-label="Envoyé" />
+                            )
+                          ) : null}
                         </div>
-                      );
-                    })
-                  )}
-                  {otherTyping ? (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-1 rounded-2xl bg-slate-200 px-4 py-3 shadow-sm">
-                        <span
-                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <span
-                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <span
-                          className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-500"
-                          style={{ animationDelay: "300ms" }}
-                        />
                       </div>
+                      {m.allow_replies === false ? (
+                        <span className="mt-1 max-w-full px-1 text-[10px] italic text-slate-400">Réponses désactivées pour ce message</span>
+                      ) : null}
                     </div>
-                  ) : null}
-                  <div ref={chatEndRef} />
-                </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+        {otherTyping ? (
+          <div className="flex justify-start pt-2">
+            <div className="flex items-center gap-1 rounded-lg bg-white px-4 py-3 ring-1 ring-slate-200 dark:bg-[var(--surface)] dark:ring-[var(--border)]">
+              {[0, 150, 300].map((delay) => (
+                <span key={delay} className="h-1.5 w-1.5 animate-typing-dot rounded-full bg-slate-400" style={{ animationDelay: `${delay}ms` }} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div ref={chatEndRef} />
+      </div>
 
-                <form
-                  onSubmit={(e) => void handleSendChat(e)}
-                  className="flex items-center gap-2 border-t border-slate-200 bg-white p-3"
-                >
-                  <Input
-                    value={chatInput}
-                    onChange={(e) => {
-                      setChatInput(e.target.value);
-                      notifyTyping();
-                    }}
-                    placeholder="Écrivez un message…"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="submit"
-                    disabled={chatSending || !chatInput.trim()}
-                    className="h-11 w-11 shrink-0 rounded-full p-0"
-                    aria-label="Envoyer"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </form>
-              </div>
-            ) : (
-              <div>
-                <div className="border-b border-slate-100 p-3">
-                  <Input
-                    value={discussionsSearch}
-                    onChange={(e) => setDiscussionsSearch(e.target.value)}
-                    placeholder="Rechercher une discussion…"
-                  />
-                </div>
-                {inboxLoading || sentLoading ? (
-                  <p className="p-6 text-center text-slate-500">Chargement…</p>
-                ) : conversations.length === 0 ? (
-                  <div className="p-4">
-                    <EmptyState message="Aucune discussion pour le moment. Lancez une conversation depuis « Nouveau message »." />
-                  </div>
-                ) : filteredConversations.length === 0 ? (
-                  <div className="p-4">
-                    <EmptyState message="Aucune discussion ne correspond à la recherche." />
-                  </div>
-                ) : (
-                  <div className="max-h-[70vh] overflow-y-auto">
-                    {filteredConversations.map((c) => {
-                      const unread = c.unreadCount > 0;
-                      return (
-                        <button
-                          key={c.otherId}
-                          type="button"
-                          onClick={() => setSelectedOtherId(c.otherId)}
-                          className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 last:border-b-0"
-                        >
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                            {initials(c.otherName)}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center justify-between gap-2">
-                              <span
-                                className={cn(
-                                  "truncate text-sm",
-                                  unread
-                                    ? "font-semibold text-slate-900"
-                                    : "font-medium text-slate-800",
-                                )}
-                              >
-                                {c.otherName}
-                              </span>
-                              <span className="shrink-0 text-xs text-slate-400">
-                                {formatConvoTime(c.lastMessage.created_at)}
-                              </span>
-                            </span>
-                            <span className="flex items-center justify-between gap-2">
-                              <span
-                                className={cn(
-                                  "truncate text-xs",
-                                  unread
-                                    ? "font-medium text-slate-700"
-                                    : "text-slate-500",
-                                )}
-                              >
-                                {c.lastMessage.direction === "out"
-                                  ? "Vous : "
-                                  : ""}
-                                {c.lastMessage.body}
-                              </span>
-                              {unread ? (
-                                <Badge tone="success">{c.unreadCount}</Badge>
-                              ) : null}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
+      <form onSubmit={(e) => void handleSendChat(e)} className="flex items-end gap-2 border-t border-slate-200 p-3 dark:border-[var(--border)]">
+        <textarea
+          rows={1}
+          value={chatInput}
+          onChange={(e) => {
+            setChatInput(e.target.value);
+            notifyTyping();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder={`Écrire à ${chatTitle}…`}
+          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition [field-sizing:content] focus:border-brand-500 focus:bg-white dark:border-[var(--border)] dark:bg-[var(--surface-2)]"
+        />
+        <button
+          type="submit"
+          disabled={chatSending || !chatInput.trim()}
+          aria-label="Envoyer"
+          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md bg-brand-700 text-white transition hover:bg-brand-800 disabled:opacity-40"
+        >
+          {chatSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </button>
+      </form>
+    </>
+  );
+
+  /* ------------------------------------------------------------------ announcement reader */
+  const annReader = selectedAnn ? (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2 lg:hidden dark:border-[var(--border)]">
+        <button
+          type="button"
+          onClick={() => setSelectedAnnKey(null)}
+          aria-label="Retour aux annonces"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <span className="text-sm font-semibold text-slate-700">Annonces</span>
+      </div>
+      <article className="mx-auto max-w-2xl px-6 py-8 lg:px-10">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-800 dark:bg-brand-900/40 dark:text-brand-200">
+          <Megaphone className="h-3 w-3" />
+          {selectedAnn.sentByMe ? "Annonce envoyée" : "Annonce officielle"}
+        </span>
+        <h2 className="mt-4 text-2xl font-bold leading-tight tracking-tight text-slate-900 lg:text-[1.75rem] dark:text-slate-50">
+          {selectedAnn.message.subject || "(Sans objet)"}
+        </h2>
+        <div className="mt-4 flex items-center gap-3 border-b border-slate-200 pb-5 dark:border-[var(--border)]">
+          <Initials name={selectedAnn.sentByMe ? "Vous" : annSender(selectedAnn)} size="sm" tone="slate" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {selectedAnn.sentByMe
+                ? `Vous · envoyée à ${selectedAnn.recipientCount} destinataire${selectedAnn.recipientCount > 1 ? "s" : ""}`
+                : annSender(selectedAnn)}
+            </p>
+            <p className="text-xs text-slate-500">{capitalize(formatDateSafe(selectedAnn.message.created_at, "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr }))}</p>
+          </div>
         </div>
+        <p className="mt-6 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-800 dark:text-slate-200">
+          {selectedAnn.message.body}
+        </p>
+        <div className="mt-8 border-t border-slate-200 pt-5 dark:border-[var(--border)]">
+          {selectedAnn.sentByMe ? (
+            <p className="text-sm text-slate-500">
+              {selectedAnn.message.allow_replies === false ? "Les destinataires ne peuvent pas répondre." : "Les destinataires peuvent vous répondre."}
+            </p>
+          ) : selectedAnn.message.allow_replies !== false ? (
+            <Button type="button" onClick={() => openChat(selectedAnn.message.sender_id)}>
+              <MessageSquare className="h-4 w-4" />
+              Répondre
+            </Button>
+          ) : (
+            <p className="text-sm text-slate-500">Cette annonce n’accepte pas de réponse.</p>
+          )}
+        </div>
+      </article>
+    </div>
+  ) : null;
+
+  /* ------------------------------------------------------------------ layout */
+  const listOpenOnMobile = isAnnoncesView ? !selectedAnnKey && !composing : !selectedOtherId && !composing;
+
+  return (
+    <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-[var(--border)] dark:bg-[var(--surface)]">
+      <aside
+        className={cn(
+          "w-full flex-col border-r border-slate-200 lg:flex lg:w-[350px] lg:shrink-0 dark:border-[var(--border)]",
+          listOpenOnMobile ? "flex" : "hidden",
+        )}
+      >
+        <div className="border-b border-slate-200 px-4 pb-3 pt-4 dark:border-[var(--border)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                {isAnnoncesView ? "Annonces" : "Messages"}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {isAnnoncesView
+                  ? unreadAnnouncements > 0
+                    ? `${unreadAnnouncements} nouvelle${unreadAnnouncements > 1 ? "s" : ""}`
+                    : "Informations officielles de l’établissement"
+                  : totalUnread > 0
+                    ? `${totalUnread} message${totalUnread > 1 ? "s" : ""} non lu${totalUnread > 1 ? "s" : ""}`
+                    : "Tout est lu"}
+              </p>
+            </div>
+            {isAnnoncesView ? (
+              canAnnounce ? (
+                <button
+                  type="button"
+                  onClick={() => setTab("announce")}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-700 px-3 text-sm font-semibold text-white transition hover:bg-brand-800"
+                >
+                  <Megaphone className="h-4 w-4" />
+                  Nouvelle
+                </button>
+              ) : null
+            ) : (
+              <button
+                type="button"
+                onClick={startCompose}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-700 px-3 text-sm font-semibold text-white transition hover:bg-brand-800"
+              >
+                <PenSquare className="h-4 w-4" />
+                Écrire
+              </button>
+            )}
+          </div>
+          <label className="relative mt-3 block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={isAnnoncesView ? listSearch : discussionsSearch}
+              onChange={(e) => (isAnnoncesView ? setListSearch(e.target.value) : setDiscussionsSearch(e.target.value))}
+              placeholder={isAnnoncesView ? "Expéditeur, objet, contenu…" : "Rechercher une discussion…"}
+              className={searchCls}
+            />
+          </label>
+          {isAnnoncesView && canAnnounce ? (
+            <div className="mt-2 grid grid-cols-3 rounded-md bg-slate-100 p-0.5 dark:bg-[var(--surface-2)]">
+              {(
+                [
+                  ["all", "Toutes"],
+                  ["received", "Reçues"],
+                  ["sent", "Envoyées"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAnnFilter(key)}
+                  className={cn(
+                    "rounded px-2 py-1.5 text-xs font-semibold transition",
+                    annFilter === key
+                      ? "bg-white text-brand-800 shadow-sm dark:bg-[var(--surface)] dark:text-brand-200"
+                      : "text-slate-500 hover:text-slate-800",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {isAnnoncesView ? (
+            inboxLoading || sentLoading ? (
+              <p className="p-6 text-center text-sm text-slate-500">Chargement…</p>
+            ) : announcementItems.length === 0 ? (
+              <p className="p-6 text-center text-sm text-slate-500">Aucune annonce pour le moment.</p>
+            ) : shownAnnouncements.length === 0 ? (
+              <p className="p-6 text-center text-sm text-slate-500">Aucun résultat.</p>
+            ) : (
+              shownAnnouncements.map((a) => {
+                const active = a.key === selectedAnnKey && !composing;
+                const unread = !a.sentByMe && !a.message.read_at;
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnnKey(a.key);
+                      setTab("announcements");
+                    }}
+                    className={cn(
+                      "flex w-full gap-3 border-b border-l-[3px] border-b-slate-100 px-4 py-3 text-left transition dark:border-b-[var(--border)]",
+                      active ? "border-l-brand-700 bg-brand-50 dark:bg-brand-900/30" : "border-l-transparent hover:bg-slate-50 dark:hover:bg-[var(--surface-2)]",
+                    )}
+                  >
+                    <span className="mt-1.5 flex w-2 shrink-0 justify-center">
+                      {unread ? <span className="h-2 w-2 rounded-full bg-brand-600" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-xs font-semibold text-slate-500">
+                          {a.sentByMe ? `Vous · ${a.recipientCount} destinataire${a.recipientCount > 1 ? "s" : ""}` : annSender(a)}
+                        </span>
+                        <span className={cn("shrink-0 text-[11px]", unread ? "font-bold text-brand-700" : "text-slate-400")}>
+                          {formatConvoTime(a.message.created_at)}
+                        </span>
+                      </span>
+                      <span className={cn("mt-0.5 block truncate text-sm text-slate-900 dark:text-slate-100", unread ? "font-bold" : "font-semibold")}>
+                        {a.message.subject || "(Sans objet)"}
+                      </span>
+                      <span className="mt-0.5 line-clamp-2 text-xs text-slate-500">{a.message.body}</span>
+                    </span>
+                  </button>
+                );
+              })
+            )
+          ) : inboxLoading || sentLoading ? (
+            <p className="p-6 text-center text-sm text-slate-500">Chargement…</p>
+          ) : conversations.length === 0 ? (
+            <div className="p-6 text-center">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Aucune discussion</p>
+              <p className="mt-1 text-xs text-slate-500">Cliquez sur « Écrire » pour lancer une conversation.</p>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-500">Aucun résultat.</p>
+          ) : (
+            filteredConversations.map((c) => {
+              const active = c.otherId === selectedOtherId && tab === "discussions";
+              const unread = c.unreadCount > 0;
+              const line = contactLine(c.otherId);
+              return (
+                <button
+                  key={c.otherId}
+                  type="button"
+                  onClick={() => openChat(c.otherId)}
+                  className={cn(
+                    "flex w-full items-center gap-3 border-l-[3px] px-4 py-3 text-left transition",
+                    active ? "border-brand-700 bg-brand-50 dark:bg-brand-900/30" : "border-transparent hover:bg-slate-50 dark:hover:bg-[var(--surface-2)]",
+                  )}
+                >
+                  <Initials name={c.otherName} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className={cn("truncate text-sm text-slate-900 dark:text-slate-100", unread ? "font-bold" : "font-semibold")}>
+                        {c.otherName}
+                      </span>
+                      <span className={cn("shrink-0 text-[11px]", unread ? "font-bold text-brand-700 dark:text-brand-300" : "text-slate-400")}>
+                        {formatConvoTime(c.lastMessage.created_at)}
+                      </span>
+                    </span>
+                    {line ? <span className="block truncate text-[11px] font-medium text-slate-400">{line}</span> : null}
+                    <span className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className={cn("truncate text-xs", unread ? "font-semibold text-slate-800 dark:text-slate-200" : "text-slate-500")}>
+                        {c.lastMessage.direction === "out" ? "Vous : " : ""}
+                        {c.lastMessage.is_cc ? "Cc · " : ""}{c.lastMessage.body}
+                      </span>
+                      {unread ? (
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-brand-700 px-1.5 text-[11px] font-bold text-white">
+                          {c.unreadCount}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </aside>
+
+      <section className={cn("min-w-0 flex-1 flex-col", listOpenOnMobile ? "hidden lg:flex" : "flex")}>
+        {tab === "compose" ? (
+          composeMessage
+        ) : tab === "announce" && canAnnounce ? (
+          composeAnnouncement
+        ) : isAnnoncesView ? (
+          annReader ?? (
+            <EmptyPane
+              icon={Megaphone}
+              title={announcementItems.length ? "Choisissez une annonce" : "Aucune annonce"}
+              text="Les informations de l’établissement arrivent ici."
+              action={canAnnounce ? { label: "Nouvelle annonce", onClick: () => setTab("announce") } : undefined}
+            />
+          )
+        ) : selectedOtherId ? (
+          chatPane
+        ) : (
+          <EmptyPane
+            icon={MessagesSquare}
+            title="Vos discussions"
+            text="Choisissez une discussion à gauche, ou écrivez à quelqu’un."
+            action={{ label: "Nouveau message", onClick: startCompose }}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+
+function dayLabel(d: Date) {
+  if (isToday(d)) return "Aujourd’hui";
+  if (isYesterday(d)) return "Hier";
+  return capitalize(format(d, "EEEE d MMMM", { locale: fr }));
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function annSender(a: AnnouncementListItem) {
+  return fullName(a.message.sender?.first_name, a.message.sender?.last_name) || "L’établissement";
+}
+
+function Initials({ name, size = "md", tone = "brand" }: { name: string; size?: "sm" | "md"; tone?: "brand" | "slate" }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-md font-bold",
+        size === "md" ? "h-11 w-11 text-sm" : "h-9 w-9 text-xs",
+        tone === "brand" ? "bg-brand-100 text-brand-800" : "bg-slate-200 text-slate-700",
       )}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+function RecipientChip({ label, tone, onRemove }: { label: string; tone: "brand" | "slate"; onRemove: () => void }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md py-1 pl-2.5 pr-1 text-xs font-semibold",
+        tone === "brand" ? "bg-brand-50 text-brand-900 ring-1 ring-brand-200" : "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+      )}
+    >
+      {label}
+      <button type="button" onClick={onRemove} aria-label="Retirer" className="rounded p-0.5 hover:bg-black/10">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+function ToggleRow({
+  checked,
+  onChange,
+  title,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center gap-3 rounded-md border border-slate-200 px-3 py-2.5 text-left transition hover:bg-slate-50 dark:border-[var(--border)] dark:hover:bg-[var(--surface-2)]"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</span>
+        <span className="block text-xs text-slate-500">{hint}</span>
+      </span>
+      <span className={cn("relative h-6 w-11 shrink-0 rounded-full transition", checked ? "bg-brand-700" : "bg-slate-300")}>
+        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition", checked ? "left-[22px]" : "left-0.5")} />
+      </span>
+    </button>
+  );
+}
+
+function EmptyPane({
+  icon: Icon,
+  title,
+  text,
+  action,
+}: {
+  icon: typeof Megaphone;
+  title: string;
+  text: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center bg-slate-50 p-8 text-center dark:bg-[var(--surface-2)]">
+      <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+        <Icon className="h-7 w-7" />
+      </span>
+      <p className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-slate-500">{text}</p>
+      {action ? (
+        <Button type="button" className="mt-5" onClick={action.onClick}>
+          {action.label}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/** Progress of a send: batches of 40, so the bar shows the real count. */
+function SendProgressBar({ done, total }: { done: number; total: number }) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className="border-t border-slate-200 px-5 pt-3 dark:border-[var(--border)]" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-label="Envoi en cours">
+      <div className="mb-1.5 flex items-center justify-between text-xs font-semibold">
+        <span className="inline-flex items-center gap-1.5 text-brand-800 dark:text-brand-200">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Envoi en cours…
+        </span>
+        <span className="tabular-nums text-slate-500">
+          {total > 1 ? `${done.toLocaleString("fr-FR")} / ${total.toLocaleString("fr-FR")} · ` : ""}
+          {pct} %
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-sm bg-slate-100 dark:bg-[var(--surface-2)]">
+        <div
+          className={cn("h-full rounded-sm bg-brand-600 transition-all duration-300", done === 0 && "animate-pulse")}
+          style={{ width: `${Math.max(pct, 6)}%` }}
+        />
+      </div>
     </div>
   );
 }

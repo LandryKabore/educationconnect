@@ -16,7 +16,8 @@ import {
   type SchoolStatistics,
 } from "@/lib/scaleApi";
 import type { AcademicYear } from "@/lib/types";
-import { Badge, Button, Card, DateInputFr, EmptyState, PageHeader, Select } from "@/components/ui";
+import { Badge, Button, Card, DateInputFr, EmptyState, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : "—");
 const avg = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2).replace(".", ","));
@@ -141,7 +142,7 @@ export default function Statistiques() {
   if (!stats || !stats.year) {
     return (
       <div>
-        <PageHeader title="Statistiques" />
+        <PageBanner title="Statistiques" />
         <EmptyState message="Aucune année scolaire n'est définie. Créez-en une dans « Années scolaires »." />
       </div>
     );
@@ -153,7 +154,7 @@ export default function Statistiques() {
 
   return (
     <div className="print:text-sm">
-      <PageHeader
+      <PageBanner
         title="Statistiques annuelles"
         subtitle={`${school?.name ?? "École"} · année ${stats.year.label}`}
         actions={

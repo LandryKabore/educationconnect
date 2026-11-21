@@ -1,22 +1,17 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { fetchLessonHomework, sortByDue } from "@/lib/homework";
 import { useExercicesPendingChanges } from "@/hooks/useExamRealtime";
-import { PageHeader } from "@/components/ui";
+import { type DevoirListItem } from "@/components/DevoirsClearList";
+import { DevoirsView } from "@/pages/eleve/MesDevoirs";
+import type { ExamScore } from "@/components/ExamensSubjectBoards";
 import {
-  DevoirsClearList,
-  type DevoirListItem,
-} from "@/components/DevoirsClearList";
-import {
-  childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
-import {
-  ParentChildBackLink,
-  ParentChildGate,
-} from "@/pages/parent/ParentChildGate";
+import { ParentChildGate } from "@/pages/parent/ParentChildGate";
 
 type Props = {
   isExam: boolean;
@@ -25,7 +20,6 @@ type Props = {
 export default function EnfantDevoirs({ isExam }: Props) {
   const id = useParentChildParams();
   const { data: link, isLoading: linkLoading } = useParentChildLink(id);
-  const childName = childDisplayName(link?.profils);
   const { data: enrollment } = useChildEnrollment(id, !!link);
   const { markSeen: markExercicesSeen } = useExercicesPendingChanges();
 
@@ -54,12 +48,16 @@ export default function EnfantDevoirs({ isExam }: Props) {
 
       const evalIds = (rows ?? []).map((r) => (r as { id: string }).id);
       let gradedIds = new Set<string>();
+      const scores: Record<string, ExamScore> = {};
       if (evalIds.length > 0) {
         const { data: graded } = await supabase
           .from("notes")
-          .select("evaluation_id")
+          .select("evaluation_id, score, max_score, is_absent")
           .eq("student_id", id!)
           .in("evaluation_id", evalIds);
+        for (const n of (graded ?? []) as { evaluation_id: string | null; score: number | null; max_score: number | null; is_absent: boolean | null }[]) {
+          if (n.evaluation_id) scores[n.evaluation_id] = { score: n.score, max: n.max_score, absent: !!n.is_absent };
+        }
         gradedIds = new Set(
           (graded ?? [])
             .map((n) => (n as { evaluation_id: string | null }).evaluation_id)
@@ -67,10 +65,13 @@ export default function EnfantDevoirs({ isExam }: Props) {
         );
       }
 
+      // exercices de maison = exercises + the homework written in the lessons
+      const lessonHomework = isExam ? [] : await fetchLessonHomework(classId).catch(() => []);
       return {
         className,
-        items: (rows ?? []) as DevoirListItem[],
+        items: isExam ? ((rows ?? []) as DevoirListItem[]) : sortByDue([...((rows ?? []) as DevoirListItem[]), ...lessonHomework]),
         gradedIds: [...gradedIds],
+        scores,
       };
     },
   });
@@ -81,48 +82,20 @@ export default function EnfantDevoirs({ isExam }: Props) {
 
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
-      <div>
-        <ParentChildBackLink childName={childName} />
-        <PageHeader
-          title={
-            childName
-              ? `${isExam ? "Devoirs" : "Exercices"} — ${childName}`
-              : isExam
-                ? "Devoirs"
-                : "Exercices de maison"
-          }
-          subtitle={
-            className
-              ? `Classe ${className}`
-              : isExam
-                ? "Devoirs confirmés par l’établissement"
-                : "Travaux à faire à la maison"
-          }
+      {!enrollment && !linkLoading && !isLoading ? (
+        <p className="text-sm text-slate-500">Cet élève n’est pas encore inscrit dans une classe.</p>
+      ) : (
+        <DevoirsView
+          items={items}
+          gradedIds={gradedIds}
+          scores={data?.scores ?? {}}
+          isLoading={linkLoading || isLoading}
+          isExam={isExam}
+          className={className}
+          childFirstName={link?.profils?.first_name ?? null}
+          notesHref={`/enfants/${id}/notes`}
         />
-
-        {!enrollment && !linkLoading && !isLoading ? (
-          <p className="text-sm text-slate-500">
-            Cet élève n’est pas encore inscrit dans une classe.
-          </p>
-        ) : (
-          <DevoirsClearList
-            items={items}
-            gradedIds={gradedIds}
-            isExam={isExam}
-            isLoading={linkLoading || isLoading}
-            emptyMessage={
-              isExam
-                ? "Aucun devoir confirmé pour le moment."
-                : "Aucun exercice de maison pour le moment."
-            }
-            hint={
-              isExam
-                ? "Seuls les devoirs confirmés apparaissent ici. Les notes sont dans « Notes »."
-                : "Rappel des exercices à préparer. Les notes apparaissent dans « Notes »."
-            }
-          />
-        )}
-      </div>
+      )}
     </ParentChildGate>
   );
 }

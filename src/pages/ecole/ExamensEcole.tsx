@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isPast } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -17,18 +18,8 @@ import { supabase } from "@/lib/supabase";
 import type { ClassSection, Evaluation, Profile, Subject } from "@/lib/types";
 import { sortClassesByProgression } from "@/lib/classCatalog";
 import { fullName, joinProfile } from "@/lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-  Textarea,
-  TimeInput24,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select, Textarea, TimeInput24 } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type StatusFilter = "upcoming" | "past" | "pending" | "confirmed" | "all";
 
@@ -65,6 +56,7 @@ type ExamRow = Evaluation & {
 };
 
 export default function ExamensEcole() {
+  const readOnly = useModuleReadOnly("devoirs");
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
   const [filter, setFilter] = useState<StatusFilter>("upcoming");
@@ -475,16 +467,17 @@ export default function ExamensEcole() {
           if (pendingDelete) await deleteExam(pendingDelete);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Devoirs"
         subtitle="Créez un devoir pour une classe, ou confirmez ceux proposés par les enseignants"
         actions={
-          <Button type="button" onClick={openCreate} disabled={classes.length === 0}>
+          <Button type="button" onClick={openCreate} disabled={readOnly || classes.length === 0}>
             <Plus className="h-4 w-4" />
             Créer un devoir
           </Button>
         }
       />
+      {readOnly ? <ReadOnlyBanner module="devoirs" /> : null}
 
       <div className="mb-6 grid max-w-2xl gap-4 sm:grid-cols-2">
         <div>
@@ -650,7 +643,7 @@ export default function ExamensEcole() {
                             </span>
                           </p>
                         </div>
-                        <div className="mt-auto space-y-2">
+                        <div className={`mt-auto space-y-2${readOnly ? " hidden" : ""}`}>
                           {!past && !exam.admin_confirmed ? (
                             <Button
                               type="button"

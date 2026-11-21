@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fr } from "date-fns/locale";
 import { ClipboardList, Plus, Trash2 } from "lucide-react";
@@ -16,15 +17,8 @@ import { formatDateSafe } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { ClassSection, Profile, Subject } from "@/lib/types";
 import { joinProfile } from "@/lib/utils";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const COMPOSITION_PERIODS = [
   "Trimestre 1",
@@ -50,6 +44,7 @@ type SessionRow = {
 };
 
 export default function CompositionsEcole() {
+  const readOnly = useModuleReadOnly("compositions");
   const { schoolId, user } = useAuth();
   const qc = useQueryClient();
   const [classId, setClassId] = useState("");
@@ -290,16 +285,17 @@ export default function CompositionsEcole() {
           if (pendingDelete) await handleDelete(pendingDelete);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Compositions"
         subtitle="Sessions multi-matières sur 2–3 jours — planifiées par l’administration"
         actions={
-          <Button type="button" onClick={openCreate}>
+          <Button type="button" onClick={openCreate} disabled={readOnly}>
             <Plus className="h-4 w-4" />
             Nouvelle composition
           </Button>
         }
       />
+      {readOnly ? <ReadOnlyBanner module="compositions" /> : null}
 
       <div className="mb-6 max-w-sm">
         <Label htmlFor="compo-classe">Classe</Label>
@@ -396,7 +392,7 @@ export default function CompositionsEcole() {
                         variant="outline"
                         disabled={deletingId === session.id}
                         onClick={() => setPendingDelete(session)}
-                        className="w-full text-rose-700 hover:bg-rose-50 dark:text-rose-300"
+                        className={`w-full text-rose-700 hover:bg-rose-50 dark:text-rose-300${readOnly ? " hidden" : ""}`}
                         title="Supprimer"
                       >
                         <Trash2 className="h-4 w-4" />

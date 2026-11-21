@@ -4,7 +4,7 @@ import { subjectSwatch } from "@/lib/subjectColors";
 import {
   buildTimeScale,
   findPauseBands,
-  formatClock,
+  formatClockFr,
   formatPauseLabel,
   timetableBounds,
 } from "@/lib/timetableLayout";
@@ -14,6 +14,8 @@ export type EdtPdfSlot = {
   start_time: string;
   end_time: string;
   subjectName: string;
+  /** Colour of the box (defaults to the subject); teachers colour by class. */
+  colorKey?: string | null;
   teacherName?: string | null;
   room?: string | null;
 };
@@ -190,7 +192,7 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     doc.line(gridLeft, y, gridLeft + timeColW, y);
     doc.setTextColor(71, 85, 105);
     if (m < scale.rangeEnd) {
-      doc.text(formatClock(m), gridLeft + timeColW - 1.5, y + 2.2, {
+      doc.text(formatClockFr(m), gridLeft + timeColW - 1.5, y + 2.2, {
         align: "right",
       });
     }
@@ -226,7 +228,7 @@ export function generateEmploiDuTempsPdf(data: EmploiDuTempsPdfData): jsPDF {
     const height = Math.max(5.5, scale.minuteToY(end) - scale.minuteToY(start) - 0.6);
     const x = gridLeft + timeColW + dayIdx * dayColW + padX;
     const w = dayColW - padX * 2;
-    const palette = subjectSwatch(slot.subjectName);
+    const palette = subjectSwatch(slot.colorKey ?? slot.subjectName);
 
     doc.setFillColor(palette.fill[0], palette.fill[1], palette.fill[2]);
     doc.setDrawColor(palette.border[0], palette.border[1], palette.border[2]);

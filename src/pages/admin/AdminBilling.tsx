@@ -7,7 +7,9 @@ import { logAudit } from "@/lib/audit";
 import type { School } from "@/lib/types";
 import { SaveButton } from "@/components/SaveButton";
 import { isFormDirty } from "@/lib/formDirty";
-import { Badge, Card, EmptyState, Input, PageHeader, Select } from "@/components/ui";
+import { Badge, Card, EmptyState, Input, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
+
 
 const PLANS = [
   { value: "essai", label: "Essai" },
@@ -119,9 +121,15 @@ export default function AdminBilling() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Abonnements"
         subtitle="Plans et statuts de facturation par école"
+        stats={[
+          { label: "Actifs", value: String(schools.filter((s) => s.billing_status === "active").length) },
+          { label: "En essai", value: String(schools.filter((s) => (s.billing_status ?? "trial") === "trial").length) },
+          { label: "Impayés", value: String(schools.filter((s) => s.billing_status === "past_due").length) },
+          { label: "Annulés", value: String(schools.filter((s) => s.billing_status === "cancelled").length) },
+        ]}
       />
 
       <Card>

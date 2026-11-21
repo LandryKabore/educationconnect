@@ -1,19 +1,23 @@
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { NotesPeriodTables } from "@/components/NotesPeriodTables";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { NotesBanner } from "@/pages/eleve/MesNotes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotesPendingChanges } from "@/hooks/useNotesRealtime";
-import { programmeToCoefMap } from "@/lib/averages";
+import { ANNUAL_PERIOD_LABEL, programmeToCoefMap, TRIMESTER_PERIODS } from "@/lib/averages";
+import { periodTabLabel } from "@/lib/bulletinFormat";
+import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { EvaluationType, GradeRow, Subject } from "@/lib/types";
-import { fullName } from "@/lib/utils";
+import { cn, fullName } from "@/lib/utils";
+
+const NOTES_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 import { supabase } from "@/lib/supabase";
 
 export default function EnfantNotes() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, schoolId } = useAuth();
   const { markSeen } = useNotesPendingChanges();
 
   useEffect(() => {
@@ -85,27 +89,59 @@ export default function EnfantNotes() {
     },
   });
 
+  // opens on the current trimester (the school's open period), like the student page
+  const { period, selectPeriod, closedLabels } = useGradingPeriodState(NOTES_PERIODS, {
+    classSectionId: enrollment?.class_section_id,
+    schoolId,
+  });
+
   if (!link && !isLoading) {
     return <EmptyState message="Accès non autorisé à cet élève." />;
   }
 
   return (
     <div>
-      <Link
-        to="/enfants"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-brand-700 hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Retour aux enfants
-      </Link>
-
-      <PageHeader
-        title={
-          child
-            ? `Notes — ${fullName(child.first_name, child.last_name)}`
-            : "Notes"
-        }
+      <NotesBanner
+        eyebrow={child ? `Résultats scolaires · ${fullName(child.first_name, child.last_name)}` : "Résultats scolaires"}
+        title={child ? `Notes de ${child.first_name}` : "Notes"}
+        subtitle="Moyennes calculées avec les coefficients de la classe, comme sur le bulletin."
+        grades={grades}
+        coefMap={coefMap}
+        period={period}
+        bulletinHref={`/enfants/${id}/bulletin`}
       />
+
+      <div
+        role="tablist"
+        aria-label="Période"
+        className="sticky top-0 z-20 my-6 flex gap-1 overflow-x-auto rounded-lg border border-brand-200 bg-brand-50/95 p-1 backdrop-blur dark:border-[var(--border)] dark:bg-[var(--surface)]/95"
+      >
+        {NOTES_PERIODS.map((p) => {
+          const active = p === period;
+          const count = p === ANNUAL_PERIOD_LABEL ? grades.length : grades.filter((g) => g.period_label === p).length;
+          return (
+            <button
+              key={p}
+              role="tab"
+              type="button"
+              aria-selected={active}
+              onClick={() => selectPeriod(p)}
+              className={cn(
+                "min-w-16 flex-1 whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition",
+                active
+                  ? "bg-brand-700 text-white shadow-sm"
+                  : "text-brand-900 hover:bg-white dark:text-slate-200 dark:hover:bg-[var(--surface-2)]",
+              )}
+            >
+              {periodTabLabel(p)}
+              <span className={cn("ml-1.5 text-xs font-medium", active ? "text-white/80" : "text-slate-500")}>
+                · {count} note{count > 1 ? "s" : ""}
+              </span>
+              {closedLabels.has(p) ? <span className="ml-1 text-xs font-medium opacity-75">(clôturé)</span> : null}
+            </button>
+          );
+        })}
+      </div>
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
@@ -116,6 +152,7 @@ export default function EnfantNotes() {
           grades={grades}
           coefficientBySubject={coefMap}
           showEvaluation
+          periodFilter={period}
         />
       )}
     </div>

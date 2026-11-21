@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import { useMemo } from "react";
 import type { SlotConflictBadge } from "@/lib/timetableConflicts";
 import { timeToMinutes } from "@/lib/timetableConflicts";
-import { formatClock, formatPauseLabel, formatRoomLabel } from "@/lib/timetableLayout";
+import { formatClockFr, formatPauseLabel, formatRoomLabel } from "@/lib/timetableLayout";
 import { subjectSwatch } from "@/lib/subjectColors";
 import { cn } from "@/lib/utils";
 
@@ -180,9 +180,9 @@ export function TimetableDayAgenda({
                     aria-hidden
                   />
                   <span className="w-14 shrink-0 text-xs font-semibold tabular-nums text-slate-500">
-                    {formatClock(timeToMinutes(slot.start_time))}
+                    {formatClockFr(timeToMinutes(slot.start_time))}
                     <span className="mt-0.5 block font-medium text-slate-400">
-                      {slot.end_time.slice(0, 5)}
+                      {formatClockFr(timeToMinutes(slot.end_time))}
                     </span>
                   </span>
                   <span className="min-w-0 flex-1">

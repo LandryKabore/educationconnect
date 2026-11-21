@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ReadOnlyBanner, useModuleReadOnly } from "@/components/ReadOnlyBanner";
 import { zipSync } from "fflate";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -32,20 +33,15 @@ import { BulletinView } from "@/components/BulletinView";
 import { SearchField } from "@/components/SearchField";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type StudentRow = StudentPageRow;
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
 export default function Bulletins() {
+  const readOnly = useModuleReadOnly("bulletins");
   const { schoolId, schools } = useAuth();
   const school = schools.find((s) => s.id === schoolId);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -378,10 +374,16 @@ export default function Bulletins() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Bulletins"
         subtitle="Recherchez un élève (toutes classes, ou filtrez par classe), puis téléchargez le PDF"
       />
+      {readOnly ? (
+        <ReadOnlyBanner
+          module="bulletins"
+          detail="Vous pouvez consulter les bulletins à l’écran, mais pas télécharger ni émettre de bulletin PDF."
+        />
+      ) : null}
 
       {isLoading ? (
         <p className="text-slate-500">Chargement…</p>
@@ -454,7 +456,7 @@ export default function Bulletins() {
               )}
               <Button
                 onClick={() => void handleGenerate()}
-                disabled={generating || !studentId}
+                disabled={readOnly || generating || !studentId}
               >
                 <Download className="h-4 w-4" />
                 {generating ? "Génération…" : "Télécharger le bulletin PDF"}
@@ -463,7 +465,7 @@ export default function Bulletins() {
                 type="button"
                 variant="outline"
                 onClick={() => void handleGenerateClass()}
-                disabled={!!classProgress || generating || !selectedClass}
+                disabled={readOnly || !!classProgress || generating || !selectedClass}
                 title={selectedClass ? undefined : "Choisissez une classe pour télécharger toute la classe"}
               >
                 <FolderDown className="h-4 w-4" />

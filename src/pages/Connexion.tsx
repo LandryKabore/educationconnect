@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Trash2, UserRound } from "lucide-react";
+import { BookOpen, CalendarCheck, ClipboardList, MessageSquare, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { needsProfileCompletion } from "@/lib/profileCompletion";
 import { WEBSITE_URL } from "@/lib/config";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/savedLogins";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, Input, Label, PasswordInput } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 type PendingSave = {
@@ -110,156 +111,183 @@ export default function Connexion() {
     refreshSaved();
   };
 
+  const linkCls = "font-semibold text-brand-700! hover:text-brand-800! hover:underline! dark:text-brand-300!";
+
   return (
-    <div className="grid min-h-screen lg:grid-cols-[2fr_1fr]">
-      <div className="relative flex items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 px-4 py-16 dark:from-[#243044] dark:to-[#1a2030]">
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
+    <div className="grid min-h-screen bg-white lg:grid-cols-12 dark:bg-[var(--bg)]">
+      {/* ── Brand panel: same teal gradient as the portal banners ── */}
+      <aside className="relative hidden overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white lg:col-span-7 lg:flex lg:flex-col">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-40 left-1/4 h-96 w-96 rounded-full bg-white/[0.04]" />
+        <div className="relative flex flex-1 flex-col px-12 py-10 xl:px-16">
+          <div className="my-auto max-w-xl py-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">{t("tagline")}</p>
+            <h2 className="mt-3 text-4xl font-bold leading-tight tracking-tight xl:text-[2.75rem]">
+              {t("connexions.panelTitle")}
+            </h2>
+            <p className="mt-4 text-base font-medium text-white/85">{t("connexions.panelBody")}</p>
+            <ul className="mt-10 grid grid-cols-2 gap-3">
+              {[
+                { icon: BookOpen, title: "Notes et bulletins", body: "Moyennes, rang et bulletin PDF" },
+                { icon: CalendarCheck, title: "Présences", body: "Absences et retards en direct" },
+                { icon: ClipboardList, title: "Devoirs", body: "Exercices et compositions à venir" },
+                { icon: MessageSquare, title: "Messages", body: "École, professeurs et familles" },
+              ].map((f) => (
+                <li key={f.title} className="flex gap-3 rounded-md bg-white/10 p-4 ring-1 ring-white/15">
+                  <f.icon className="mt-0.5 h-5 w-5 shrink-0 text-white/90" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold">{f.title}</span>
+                    <span className="mt-0.5 block text-xs text-white/75">{f.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-white/60">EduFaso · Burkina Faso</p>
         </div>
-        <Card className="w-full max-w-sm border-t-4 border-t-navy-700 p-6 shadow-xl sm:p-8">
-          <div className="mb-6 text-center">
-            <BrandLogo
-              file="edufaso-logo-tight.png"
-              className="mx-auto h-32 w-auto max-w-[12rem]"
-            />
-            <h1 className="sr-only">{t("connexions.title")}</h1>
-            <p className="mt-2 text-sm text-slate-600">{t("tagline")}</p>
-          </div>
-
-          {saved.length > 0 ? (
-            <div className="mb-5">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                {t("connexions.savedTitle")}
-              </p>
-              <ul className="space-y-2">
-                {saved.map((entry) => (
-                  <li key={entry.id} className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => pickSaved(entry)}
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/60 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-brand-500"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-200">
-                        <UserRound className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {entry.identifiant}
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {getSavedPassword(entry)
-                            ? t("connexions.savedTapLogin")
-                            : t("connexions.savedTap")}
-                        </span>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
-                      title={t("connexions.savedRemove")}
-                      aria-label={t("connexions.savedRemove")}
-                      onClick={() => deleteSaved(entry.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-            <div>
-              <Label htmlFor="identifiant" className="font-semibold text-slate-900">
-                {t("connexions.identifiant")}
-              </Label>
-              <Input
-                id="identifiant"
-                value={identifiant}
-                onChange={(e) => setIdentifiant(e.target.value)}
-                placeholder={t("connexions.identifiantPlaceholder")}
-                autoComplete="username"
-                className="h-12 border-slate-400 focus:border-navy-700 focus:ring-navy-700/20"
-                required
-              />
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <Label
-                  htmlFor="password"
-                  className="mb-0 font-semibold text-slate-900"
-                >
-                  {t("connexions.password")}
-                </Label>
-                <Link
-                  to="/mot-de-passe-oublie"
-                  className="text-sm font-semibold text-navy-700! underline! hover:text-navy-800! dark:text-slate-100!"
-                >
-                  {t("connexions.forgotPassword")}
-                </Link>
-              </div>
-              <PasswordInput
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                className="h-12 border-slate-400 focus:border-navy-700 focus:ring-navy-700/20"
-                required
-              />
-            </div>
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full bg-navy-700 font-bold! hover:bg-navy-800"
-              disabled={submitting}
-            >
-              {submitting ? t("loading") : t("connexions.submit")}
-            </Button>
-          </form>
-
-          <p className="mt-5 text-center text-sm text-slate-600">
-            {t("connexions.hint")}
-            {!isDesktopApp() ? (
-              <>
-                {" "}
-                <Link
-                  to="/telecharger"
-                  className="font-semibold text-navy-700! underline! hover:text-navy-800! dark:text-slate-100!"
-                >
-                  {t("connexions.installLink")}
-                </Link>
-              </>
-            ) : null}
-          </p>
-          {WEBSITE_URL ? (
-            <p className="mt-2 text-center text-xs">
-              <a
-                href={WEBSITE_URL}
-                className="text-slate-500 hover:text-navy-700 hover:underline"
-              >
-                Retour au site EduFaso
-              </a>
-            </p>
-          ) : null}
-        </Card>
-      </div>
-
-      <aside className="flex items-center bg-navy-700 px-8 py-12 text-white sm:px-12 lg:px-14">
-        <div className="max-w-sm">
-          <h2 className="text-2xl font-bold leading-tight sm:text-3xl">
-            {t("connexions.panelTitle")}
-          </h2>
-          <p className="mt-4 text-sm text-slate-200 sm:text-base">
-            {t("connexions.panelBody")}
-          </p>
-          <div className="mt-6 flex gap-2" aria-hidden>
-            <span className="h-1.5 w-10 rounded-full bg-faso-red" />
-            <span className="h-1.5 w-10 rounded-full bg-faso-yellow" />
-            <span className="h-1.5 w-10 rounded-full bg-faso-green" />
-          </div>
+        <div className="relative flex h-1.5" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
         </div>
       </aside>
+
+      {/* ── Form ── */}
+      <main className="relative flex flex-col lg:col-span-5">
+        {/* small screens: compact teal header instead of the panel */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 pb-6 pt-8 text-white lg:hidden">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/[0.06]" />
+          <p className="relative text-lg font-bold leading-snug">{t("connexions.panelTitle")}</p>
+        </div>
+        <div className="absolute right-4 top-4 z-10 hidden lg:block">
+          <ThemeToggle />
+        </div>
+
+        <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">
+          <div className="w-full max-w-sm">
+            <BrandLogo file="edufaso-logo-tight.png" className="mx-auto mb-8 h-20 w-auto max-w-[10rem]" imgClassName="h-20" />
+            <h1 className="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+              {t("connexions.title")}
+            </h1>
+            <p className="mt-1.5 text-center text-sm text-slate-500">Utilisez l’identifiant fourni par votre établissement.</p>
+
+            {saved.length > 0 ? (
+              <div className="mt-7">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  {t("connexions.savedTitle")}
+                </p>
+                <ul className="space-y-2">
+                  {saved.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => pickSaved(entry)}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-brand-400 hover:bg-brand-50/60 disabled:opacity-60 dark:border-[var(--border)] dark:bg-[var(--surface)] dark:hover:border-brand-500"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-xs font-bold text-brand-800 dark:bg-brand-900/50 dark:text-brand-200">
+                          {entry.identifiant.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {entry.identifiant}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {getSavedPassword(entry) ? t("connexions.savedTapLogin") : t("connexions.savedTap")}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                        title={t("connexions.savedRemove")}
+                        aria-label={t("connexions.savedRemove")}
+                        onClick={() => deleteSaved(entry.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="my-6 flex items-center gap-3 text-xs font-medium text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200 dark:bg-[var(--border)]" />
+                  ou avec un autre compte
+                  <span className="h-px flex-1 bg-slate-200 dark:bg-[var(--border)]" />
+                </div>
+              </div>
+            ) : (
+              <div className="h-7" />
+            )}
+
+            <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+              <div>
+                <Label htmlFor="identifiant" className="font-semibold text-slate-900">
+                  {t("connexions.identifiant")}
+                </Label>
+                <Input
+                  id="identifiant"
+                  value={identifiant}
+                  onChange={(e) => setIdentifiant(e.target.value)}
+                  placeholder={t("connexions.identifiantPlaceholder")}
+                  autoComplete="username"
+                  className="h-12 rounded-md border-slate-300 focus:border-brand-600 focus:ring-brand-600/20"
+                  required
+                />
+              </div>
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <Label htmlFor="password" className="mb-0 font-semibold text-slate-900">
+                    {t("connexions.password")}
+                  </Label>
+                  <Link to="/mot-de-passe-oublie" className={cn("text-sm", linkCls)}>
+                    {t("connexions.forgotPassword")}
+                  </Link>
+                </div>
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="h-12 rounded-md border-slate-300 focus:border-brand-600 focus:ring-brand-600/20"
+                  required
+                />
+              </div>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 w-full rounded-md bg-brand-700 font-bold! hover:bg-brand-800"
+                disabled={submitting}
+              >
+                {submitting ? t("loading") : t("connexions.submit")}
+              </Button>
+            </form>
+
+            <div className="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-500 dark:border-[var(--border)]">
+              <p>
+                {t("connexions.hint")}
+                {!isDesktopApp() ? (
+                  <>
+                    {" "}
+                    <Link to="/telecharger" className={linkCls}>
+                      {t("connexions.installLink")}
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+              {WEBSITE_URL ? (
+                <p className="mt-2 text-xs">
+                  <a href={WEBSITE_URL} className="text-slate-500 hover:text-brand-700 hover:underline">
+                    Retour au site EduFaso
+                  </a>
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-6 lg:hidden">
+              <ThemeToggle className="w-full justify-center" />
+            </div>
+          </div>
+        </div>
+      </main>
 
       {pendingSave ? (
         <div
@@ -268,7 +296,7 @@ export default function Connexion() {
           aria-modal="true"
           aria-labelledby="save-login-title"
         >
-          <Card className="w-full max-w-sm shadow-xl">
+          <Card className="w-full max-w-sm rounded-lg shadow-xl">
             <h3
               id="save-login-title"
               className="text-lg font-semibold text-slate-900 dark:text-slate-50"

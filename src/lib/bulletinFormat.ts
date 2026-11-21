@@ -193,9 +193,9 @@ export function conseilSentence(opts: {
   return text;
 }
 
-/** Short tab label: "Trimestre 2" → "T2", "Année" stays. */
+/** Tab label: the period name in full, "Année" for the year. */
 export function periodTabLabel(p: string): string {
   if (p === ANNUAL_PERIOD_LABEL) return "Année";
-  const m = /^Trimestre\s+(\d)$/.exec(p);
-  return m ? `T${m[1]}` : p;
+  // "Trimestre 1" stays in full, never "T1"
+  return p;
 }
