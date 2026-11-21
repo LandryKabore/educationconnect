@@ -536,7 +536,8 @@ export function AppShell() {
   const { pendingCount: compositionsUpdatesCount = 0 } =
     useCompositionsPendingChanges();
   // teacher: late roll calls / cahiers and evaluations to grade (only fetched for teachers)
-  const shellNow = useNow(5 * 60_000);
+  // same clock as « À faire » and the home tile, so the badge always shows the same number
+  const shellNow = useNow(60_000);
   const teacherTodo = useTeacherTodo(shellNow, role === "teacher");
   const enfantsAttentionCount =
     notesUpdatesCount +

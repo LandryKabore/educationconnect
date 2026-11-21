@@ -665,7 +665,9 @@ export default function StudentHome() {
             scheduleFocus?.kind === "current"
               ? "Cours en cours mis en avant"
               : scheduleFocus?.isLaterDay
-                ? `Pas de cours aujourd’hui · prochain : ${scheduleFocus.dayLabel}`
+                ? todaySlots.length > 0
+                  ? `Cours du jour terminés · prochain : ${scheduleFocus.dayLabel}`
+                  : `Pas de cours aujourd’hui · prochain : ${scheduleFocus.dayLabel}`
                 : scheduleFocus?.kind === "next"
                   ? "Prochain cours mis en avant"
                   : "Tes cours du jour"

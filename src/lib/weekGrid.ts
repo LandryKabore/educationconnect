@@ -11,8 +11,17 @@ export function todayDow(d = new Date()) {
 export function useNow(intervalMs = 30_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), intervalMs);
-    return () => window.clearInterval(id);
+    // Tick on the interval's boundaries (e.g. every whole minute), not from when the screen
+    // opened, so every screen using the same interval agrees (sidebar badge, page, home tile).
+    let id: number | undefined;
+    const first = window.setTimeout(() => {
+      setNow(new Date());
+      id = window.setInterval(() => setNow(new Date()), intervalMs);
+    }, intervalMs - (Date.now() % intervalMs));
+    return () => {
+      window.clearTimeout(first);
+      if (id !== undefined) window.clearInterval(id);
+    };
   }, [intervalMs]);
   return now;
 }
