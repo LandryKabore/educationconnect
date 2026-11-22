@@ -9,6 +9,7 @@
 --   message, annonce  as for students and parents
 --
 -- Nothing is sent about what the teacher did themself.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 create or replace function public.ef_class_name(p_class uuid)
 returns text language sql stable security definer set search_path = public as $$
