@@ -29,6 +29,8 @@ const SUMMARY: Record<string, (n: number) => string> = {
   confirmation: (n) => `${n} évaluations confirmées`,
   appel: (n) => `${n} appels non faits`,
   saisie: (n) => `${n} évaluations à noter`,
+  aconfirmer: (n) => `${n} évaluations à confirmer`,
+  signalement: (n) => `${n} nouveaux signalements`,
   bulletin: () => "Bulletins disponibles",
 };
 
