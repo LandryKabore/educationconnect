@@ -7,6 +7,7 @@
 --   message, annonce  as for everyone else
 --
 -- Nothing is sent about what the administrator did themself.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 -- the active administrators of a school
 create or replace function public.ef_school_admins(p_school uuid)
