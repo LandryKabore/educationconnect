@@ -1,4 +1,5 @@
 -- Push notifications, first for students (22 Nov 2026).
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 21 Nov 2026.
 --
 --   * ef_push_tokens  : the iPhones signed in to an account (registered by the app).
 --   * ef_push_prefs   : what each person turned off (or on, for the morning reminder) in Profil.
