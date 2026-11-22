@@ -41,9 +41,9 @@ struct RoleShellView: View {
         // (kept until the portal is ready: a tap that launches the app arrives during the opening screen)
         .onReceive(PushManager.shared.$pendingScreen) { _ in openPendingScreen() }
         .onChange(of: auth.portalReady) { _, _ in openPendingScreen() }
-        // students for now: the only ones the server sends notifications to
+        // students and parents: the ones the server sends notifications to
         .task(id: auth.primaryRole) {
-            if auth.primaryRole == .student { await PushManager.shared.requestAndRegister() }
+            if auth.primaryRole == .student || auth.primaryRole == .parent { await PushManager.shared.requestAndRegister() }
         }
         .onChange(of: auth.supportSchool?.id) { _, _ in
             selection = .dashboard
@@ -252,12 +252,30 @@ struct RoleShellView: View {
                 print("[push] waiting for the portal to open \(screen.rawValue)")
                 return
             }
-            print("[push] opening \(screen.rawValue)")
             PushManager.shared.pendingScreen = nil
             menuOpen = false
+            // a parent: the child's own screen, showing that child
+            if auth.primaryRole == .parent {
+                if let child = PushManager.shared.pendingChild {
+                    UserDefaults.standard.set(child, forKey: "edufaso.parent.selectedChild")
+                }
+                PushManager.shared.pendingChild = nil
+                let parentScreen = Self.parentScreen[screen] ?? screen
+                print("[push] opening \(parentScreen.rawValue) child=\(UserDefaults.standard.string(forKey: "edufaso.parent.selectedChild") ?? "-")")
+                openScreen(parentScreen)
+                return
+            }
+            print("[push] opening \(screen.rawValue)")
             openScreen(screen)
         }
     }
+
+    /// A student's screen → the same screen for one child, on the parent's side.
+    private static let parentScreen: [AppScreen: AppScreen] = [
+        .grades: .childNotes, .exercises: .childExercises, .exams: .childExams,
+        .compositions: .childCompositions, .timetable: .childTimetable, .bulletin: .childBulletin,
+        .attendance: .childAttendance, .cahier: .childCahier,
+    ]
 
     private func closeMenu() {
         menuOpen = false

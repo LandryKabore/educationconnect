@@ -65,13 +65,15 @@ final class PushManager: NSObject, ObservableObject {
         "note": .grades, "exercice": .exercises, "rappel": .exercises,
         "evaluation": .compositions, "composition": .compositions,
         "edt": .timetable, "matin": .timetable, "bulletin": .bulletin,
-        "message": .messages, "annonce": .announcements,
+        "message": .messages, "annonce": .announcements, "absence": .attendance,
     ]
 
     func open(_ userInfo: [AnyHashable: Any]) {
         let raw = userInfo["screen"] as? String
         let kind = userInfo["kind"] as? String
         let refs = userInfo["refs"] as? [String] ?? []
+        // a parent's notification: which child it is about
+        pendingChild = userInfo["child"] as? String
         print("[push] tapped screen=\(raw ?? "nil") kind=\(kind ?? "nil") refs=\(refs)")
         // an évaluation is shown with its exact date on Examens
         let override: AppScreen? = kind == "evaluation" ? .exams : nil
@@ -83,6 +85,8 @@ final class PushManager: NSObject, ObservableObject {
 
     /// The items the tapped notification is about, until the screen showing them takes it.
     @Published var focus: PushFocus?
+    /// Parents: the child the tapped notification is about.
+    var pendingChild: String?
 }
 
 /// What a tapped notification points at. Refs look like « note:<id> », « eval:<id> »,
@@ -207,7 +211,20 @@ struct PushPrefsCard: View {
     @State private var prefs: [String: Bool] = [:]
 
     private struct Kind: Identifiable { let id: String; let icon: String; let title: String; let detail: String; let defaultOn: Bool }
-    private let kinds: [Kind] = [
+    private var kinds: [Kind] { auth.primaryRole == .parent ? parentKinds : studentKinds }
+    private let parentKinds: [Kind] = [
+        Kind(id: "absence", icon: "person.crop.circle.badge.xmark", title: "Absences et retards", detail: "Dès que l’appel est fait", defaultOn: true),
+        Kind(id: "note", icon: "chart.bar.fill", title: "Notes", detail: "Chaque nouvelle note de vos enfants", defaultOn: true),
+        Kind(id: "exercice", icon: "book.fill", title: "Exercices", detail: "Nouveaux exercices et devoirs", defaultOn: true),
+        Kind(id: "rappel", icon: "bell.badge.fill", title: "Rappels de la veille", detail: "À 18h, ce qui est à rendre demain", defaultOn: true),
+        Kind(id: "evaluation", icon: "pencil.and.list.clipboard", title: "Évaluations", detail: "Évaluations confirmées par l’école", defaultOn: true),
+        Kind(id: "composition", icon: "doc.text.fill", title: "Compositions", detail: "Dates des compositions", defaultOn: true),
+        Kind(id: "edt", icon: "calendar", title: "Emploi du temps", detail: "Cours ajoutés, déplacés ou retirés", defaultOn: true),
+        Kind(id: "bulletin", icon: "rosette", title: "Bulletins", detail: "Quand un bulletin est disponible", defaultOn: true),
+        Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages reçus", defaultOn: true),
+        Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
+    ]
+    private let studentKinds: [Kind] = [
         Kind(id: "note", icon: "chart.bar.fill", title: "Notes", detail: "Chaque nouvelle note", defaultOn: true),
         Kind(id: "exercice", icon: "book.fill", title: "Exercices", detail: "Nouveaux exercices et devoirs", defaultOn: true),
         Kind(id: "rappel", icon: "bell.badge.fill", title: "Rappels de la veille", detail: "À 18h, ce qui est à rendre demain", defaultOn: true),
@@ -236,7 +253,7 @@ struct PushPrefsCard: View {
                         Image(systemName: "bell.slash.fill").foregroundStyle(EduTheme.fasoRed)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Notifications désactivées").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
-                            Text("Active-les dans Réglages pour recevoir tes notes et exercices.").font(.caption).foregroundStyle(EduTheme.muted)
+                            Text(auth.primaryRole == .parent ? "Activez-les dans Réglages pour être prévenu des notes et absences." : "Active-les dans Réglages pour recevoir tes notes et exercices.").font(.caption).foregroundStyle(EduTheme.muted)
                         }
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(EduTheme.subtle)

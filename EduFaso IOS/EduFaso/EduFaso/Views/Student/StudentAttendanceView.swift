@@ -35,6 +35,8 @@ struct StudentAttendanceView: View {
     @State private var ready = false
     @State private var listLoading = false
     @State private var error: String?
+    /// absence a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
 
     // guided tour (shares targets with ChildGate's child switcher when there is one)
     @State private var tour = TabTour(key: "presences")
@@ -136,6 +138,12 @@ struct StudentAttendanceView: View {
                         }
                         .refreshable { await bootstrap() }
                         .tabTour(tour, registry: coach, scroller: proxy)
+                        .pushFocus(["absence"], ready: ready && !listLoading, proxy: proxy, highlighted: $highlighted) { f in
+                            let ids = Set(f.ids("presence"))
+                            let hits = rows.filter { ids.contains($0.id) }
+                            guard let first = hits.first else { return nil }
+                            return (first.id, Set(hits.map(\.id)))
+                        }
                     }
                     .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
@@ -433,6 +441,8 @@ struct StudentAttendanceView: View {
                         VStack(spacing: 0) {
                             ForEach(Array(group.rows.enumerated()), id: \.element.id) { index, r in
                                 exceptionRow(r)
+                                    .pushHighlight(highlighted.contains(r.id), cornerRadius: 0)
+                                    .id(r.id)
                                     .overlay(alignment: .top) {
                                         if index > 0 { Rectangle().fill(EduTheme.border).frame(height: 1) }
                                     }
