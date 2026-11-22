@@ -2708,6 +2708,17 @@ struct BulletinBoard: View {
             expandedIds.removeAll()
             Task { await load(reset: false) }
         }
+        // tapped « Bulletin disponible »: open that Trimestre
+        .onReceive(PushManager.shared.$focus) { f in
+            guard let f, f.isFresh, f.kind == "bulletin", let id = f.ids("bulletin").first else { return }
+            DispatchQueue.main.async { PushManager.shared.focus = nil }
+            Task {
+                struct Row: Decodable { let label: String }
+                let row: Row? = try? await SupabaseManager.client.from("periodes_scolaires").select("label")
+                    .eq("id", value: id).single().execute().value
+                if let label = row?.label, periods.contains(label) { period = label }
+            }
+        }
     }
 
     private func exportPdf() async {

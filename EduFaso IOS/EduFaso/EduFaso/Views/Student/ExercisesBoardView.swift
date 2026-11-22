@@ -30,6 +30,8 @@ struct ExercisesBoardView: View {
     @State private var tab: Tab = .todo
     @State private var subject = ""
     @State private var open: String?
+    /// exercises a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
     @State private var loading = true
     @State private var notEnrolled = false
     @State private var error: String?
@@ -192,6 +194,15 @@ struct ExercisesBoardView: View {
                         }
                         .refreshable { await load() }
                         .tabTour(tour, registry: coach, scroller: proxy)
+                        .pushFocus(["exercice", "rappel"], ready: !loading, proxy: proxy, highlighted: $highlighted) { f in
+                            let ids = Set(f.ids("eval", "rappel") + f.ids("cahier", "rappel").map { "cahier-\($0)" })
+                            let hits = items.filter { ids.contains($0.id) }
+                            guard let first = hits.first else { return nil }
+                            tab = status(first)
+                            subject = ""
+                            if hits.count == 1 { open = first.id }
+                            return (first.id, Set(hits.filter { status($0) == status(first) }.map(\.id)))
+                        }
                     }
                     .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
@@ -411,7 +422,9 @@ struct ExercisesBoardView: View {
                                 .lineLimit(1)
                             Rectangle().fill(EduTheme.borderStrong.opacity(0.6)).frame(height: 1)
                         }
-                        ForEach(g.items) { item in row(item) }
+                        ForEach(g.items) { item in
+                            row(item).pushHighlight(highlighted.contains(item.id)).id(item.id)
+                        }
                     }
                 }
             }

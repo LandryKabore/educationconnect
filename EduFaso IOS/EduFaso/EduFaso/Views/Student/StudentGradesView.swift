@@ -21,6 +21,8 @@ struct StudentGradesView: View {
     @State private var error: String?
     @State private var period: String = NotesMath.trimesters[0]
     @State private var didPickPeriod = false
+    /// grades a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
 
     // guided tour (shares targets with ChildGate's child switcher when there is one)
     @State private var tour = TabTour(key: "notes.v3")
@@ -112,6 +114,18 @@ struct StudentGradesView: View {
                         }
                         .refreshable { await load() }
                         .tabTour(tour, registry: coach, scroller: proxy)
+                        .pushFocus(["note"], ready: !loading, proxy: proxy, highlighted: $highlighted) { f in
+                            let ids = Set(f.ids("note"))
+                            let hits = rows.filter { ids.contains($0.id) }
+                            guard let first = hits.first else { return nil }
+                            if let p = first.periodLabel, periods.contains(p), !hits.contains(where: { $0.periodLabel != p }) {
+                                period = p
+                            } else if hits.contains(where: { $0.periodLabel != first.periodLabel }) {
+                                period = Self.annual
+                            }
+                            didPickPeriod = true
+                            return (first.id, Set(hits.map(\.id)))
+                        }
                     }
                     .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
@@ -466,6 +480,8 @@ struct StudentGradesView: View {
 
             ForEach(sorted) { g in
                 gradeRow(g, subjectName: subject.name)
+                    .pushHighlight(highlighted.contains(g.id), cornerRadius: 0)
+                    .id(g.id)
                     .overlay(alignment: .top) { Rectangle().fill(EduTheme.border).frame(height: 1) }
             }
         }

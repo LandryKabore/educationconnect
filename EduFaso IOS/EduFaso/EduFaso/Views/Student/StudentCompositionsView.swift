@@ -70,6 +70,8 @@ struct StudentCompositionsView: View {
         ]
     }
     @State private var expandedIds: Set<String> = []
+    /// composition a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
     @State private var statusFilter: StatusFilter = .all
     @State private var className: String?
     @State private var loading = true
@@ -146,6 +148,8 @@ struct StudentCompositionsView: View {
                                             } else {
                                                 ForEach(filteredSessions) { session in
                                                     sessionCard(session, now: context.date)
+                                                        .pushHighlight(highlighted.contains(session.id))
+                                                        .id(session.id)
                                                 }
                                             }
                                         }
@@ -158,6 +162,13 @@ struct StudentCompositionsView: View {
                             }
                             .refreshable { await load() }
                             .tabTour(tour, registry: coach, scroller: proxy)
+                            .pushFocus(["composition"], ready: !loading, proxy: proxy, highlighted: $highlighted) { f in
+                                let ids = Set(f.ids("compo"))
+                                guard let hit = sessions.first(where: { ids.contains($0.id) }) else { return nil }
+                                statusFilter = .all
+                                expandedIds.insert(hit.id)
+                                return (hit.id, [hit.id])
+                            }
                         }
                     }
                     .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }

@@ -18,6 +18,8 @@ struct ExamsBoardView: View {
     @State private var period = NotesMath.trimesters[0]
     @State private var didPickPeriod = false
     @State private var loading = true
+    /// évaluation a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
     @State private var notEnrolled = false
     @State private var error: String?
 
@@ -135,6 +137,16 @@ struct ExamsBoardView: View {
                         }
                         .refreshable { await load() }
                         .tabTour(tour, registry: coach, scroller: proxy)
+                        .pushFocus(["evaluation"], ready: !loading, proxy: proxy, highlighted: $highlighted) { f in
+                            let ids = Set(f.ids("eval"))
+                            guard let hit = exams.first(where: { ids.contains($0.id) }) else { return nil }
+                            if upcoming.prefix(8).contains(where: { $0.id == hit.id }) { return (hit.id, [hit.id]) }
+                            // already past: its subject in its Trimestre
+                            let p = Self.normalize(hit.periodLabel)
+                            if Self.trimesters.contains(p) { period = p; didPickPeriod = true }
+                            let key = "subject-" + (hit.matieres?.name.trimmingCharacters(in: .whitespaces) ?? "Matière")
+                            return (key, [key])
+                        }
                     }
                     .onAppear { tour.autoStartOnce({ tourSteps }, registry: coach) }
                 }
@@ -287,6 +299,8 @@ struct ExamsBoardView: View {
             } else {
                 ForEach(Array(upcoming.prefix(8).enumerated()), id: \.element.id) { index, e in
                     upcomingRow(e)
+                        .pushHighlight(highlighted.contains(e.id), cornerRadius: 0)
+                        .id(e.id)
                         .overlay(alignment: .top) {
                             if index > 0 { Rectangle().fill(EduTheme.border).frame(height: 1) }
                         }
@@ -391,6 +405,8 @@ struct ExamsBoardView: View {
             VStack(spacing: 10) {
                 ForEach(subjectNames, id: \.self) { subject in
                     subjectRow(subject)
+                        .pushHighlight(highlighted.contains("subject-" + subject))
+                        .id("subject-" + subject)
                 }
             }
         }

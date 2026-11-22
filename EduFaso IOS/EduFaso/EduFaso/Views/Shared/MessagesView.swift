@@ -2501,6 +2501,12 @@ struct ParentMessagesView: View {
         }
         .environment(coach)
         .premiumTitle("Messages")
+        .pushFocus(["message"], ready: !loading && !contactsLoading, proxy: nil, highlighted: .constant([])) { f in
+            guard let id = f.ids("msg").first, let row = inbox.first(where: { $0.id == id }), let from = row.senderId else { return nil }
+            let name = conversations.first(where: { $0.otherId == from }).map(displayName) ?? row.sender?.fullName ?? "Contact"
+            open(from, name, contactById[from]?.line)
+            return nil
+        }
         .navigationDestination(item: $openChat) { target in
             ConversationChatView(
                 otherId: target.id,
@@ -2971,13 +2977,15 @@ struct ParentAnnouncementsView: View {
     private var isAdmin: Bool { auth.primaryRole == .schoolAdmin }
 
     /// One line of the list: received, or sent by me (once per announcement, with its recipients).
-    struct Item: Identifiable {
+    struct Item: Identifiable, Hashable {
         let row: MessageRow
         let sentByMe: Bool
         let recipientCount: Int
         var id: String { (sentByMe ? "out-" : "in-") + row.id }
     }
 
+    /// announcement opened by a tapped notification
+    @State private var openItem: Item?
     @State private var tour = TabTour(key: "annonces-parent")
     @State private var coach = CoachMarkRegistry()
 
@@ -3084,6 +3092,17 @@ struct ParentAnnouncementsView: View {
         .environment(coach)
         .premiumTitle("Annonces")
         .task { await load() }
+        .pushFocus(["annonce"], ready: !loading, proxy: nil, highlighted: .constant([])) { f in
+            guard let id = f.ids("msg").first, let item = items.first(where: { $0.row.id == id && !$0.sentByMe }) else { return nil }
+            openItem = item
+            return nil
+        }
+        .navigationDestination(item: $openItem) { item in
+            ParentAnnouncementDetail(announcement: item.row, adminIds: adminIds,
+                                     sentByMe: item.sentByMe, recipientCount: item.recipientCount) {
+                if !item.sentByMe { markRead(item.row) }
+            }
+        }
         .sheet(isPresented: $composing) {
             ComposeMessageSheet(announcementsOnly: true, onSent: {
                 composing = false

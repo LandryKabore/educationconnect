@@ -85,6 +85,8 @@ struct TimetableView: View {
     @State private var selectedDay: Int = Self.defaultSelectedDay()
     /// 0 = current calendar week; ±1 previous/next, etc.
     @State private var weekOffset: Int = 0
+    /// lesson a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
 
     /// Every gap of 10 minutes or more between two lessons is shown (récréation, déjeuner…).
     private let pauseGapMin = 10
@@ -233,6 +235,19 @@ struct TimetableView: View {
                         }
                         .refreshable { await load(isRefresh: true) }
                         .tabTour(tour, registry: coach, scroller: proxy)
+                        .pushFocus(["edt", "matin"], ready: ready && !loading, proxy: proxy, highlighted: $highlighted) { f in
+                            scope = .day
+                            let today = EduDates.weekday(Date())
+                            let ids = Set(f.ids("edt", "edt-new"))
+                            // a removed lesson or the morning summary: today, or the next school day
+                            guard let slot = slots.first(where: { ids.contains($0.id) }), (1...6).contains(slot.dayOfWeek) else {
+                                snapToNow()
+                                return nil
+                            }
+                            selectedDay = slot.dayOfWeek
+                            weekOffset = (today == 7 || slot.dayOfWeek < today) ? 1 : 0
+                            return (slot.id, [slot.id])
+                        }
                     }
                     .onChange(of: scope) { _, newScope in
                         guard newScope == .week else { return }
@@ -641,12 +656,19 @@ struct TimetableView: View {
                             Divider().padding(.leading, 70)
                         }
                         timelineRow(block, at: date)
+                            .pushHighlight(courseId(block).map(highlighted.contains) ?? false, cornerRadius: 0)
+                            .id(courseId(block) ?? block.id)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
                 .background(cardBackground)
             }
         }
+    }
+
+    private func courseId(_ block: TimelineBlock) -> String? {
+        if case .course(let slot) = block.kind { return slot.id }
+        return nil
     }
 
     private func timelineRow(_ block: TimelineBlock, at date: Date) -> some View {

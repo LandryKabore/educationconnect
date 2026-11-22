@@ -71,11 +71,97 @@ final class PushManager: NSObject, ObservableObject {
     func open(_ userInfo: [AnyHashable: Any]) {
         let raw = userInfo["screen"] as? String
         let kind = userInfo["kind"] as? String
-        print("[push] tapped screen=\(raw ?? "nil") kind=\(kind ?? "nil")")
-        if let screen = raw.flatMap(AppScreen.init(rawValue:)) ?? (raw == "notes" ? .grades : nil) ?? kind.flatMap({ Self.screenOfKind[$0] }) {
+        let refs = userInfo["refs"] as? [String] ?? []
+        print("[push] tapped screen=\(raw ?? "nil") kind=\(kind ?? "nil") refs=\(refs)")
+        // an évaluation is shown with its exact date on Examens
+        let override: AppScreen? = kind == "evaluation" ? .exams : nil
+        if let screen = override ?? raw.flatMap(AppScreen.init(rawValue:)) ?? (raw == "notes" ? .grades : nil) ?? kind.flatMap({ Self.screenOfKind[$0] }) {
+            focus = PushFocus(kind: kind ?? "", refs: refs)
             pendingScreen = screen
         }
     }
+
+    /// The items the tapped notification is about, until the screen showing them takes it.
+    @Published var focus: PushFocus?
+}
+
+/// What a tapped notification points at. Refs look like « note:<id> », « eval:<id> »,
+/// « cahier:<id> », « edt:<slot>[:<student>] », « compo:<id> », « bulletin:<period> »,
+/// « msg:<id> », « rappel:<date>:<id> ».
+struct PushFocus: Equatable {
+    let kind: String
+    let refs: [String]
+    var at = Date()
+
+    /// Not taken within a minute and a half: a later visit of the screen is not about it.
+    var isFresh: Bool { Date().timeIntervalSince(at) < 90 }
+
+    /// The ids of the refs of these types (a reminder's id is its last part).
+    func ids(_ types: String...) -> [String] {
+        refs.compactMap { ref in
+            let parts = ref.split(separator: ":").map(String.init)
+            guard parts.count >= 2, types.contains(parts[0]) else { return nil }
+            return parts[0] == "rappel" ? parts.last : parts[1]
+        }
+    }
+}
+
+/// Scrolls to the item a tapped notification points at and highlights it for a moment.
+private struct PushFocusModifier: ViewModifier {
+    let kinds: Set<String>
+    let ready: Bool
+    let proxy: ScrollViewProxy?
+    @Binding var highlighted: Set<String>
+    /// Puts the screen on the right tab / period / day and returns where to scroll and what to
+    /// highlight (nil: nothing to point at, e.g. a removed lesson).
+    let reveal: (PushFocus) -> (scrollTo: String, highlight: Set<String>)?
+    @State private var waiting: PushFocus?
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(PushManager.shared.$focus) { f in
+                guard let f, f.isFresh, kinds.contains(f.kind) else { return }
+                waiting = f
+                apply()
+            }
+            .onChange(of: ready) { _, _ in apply() }
+    }
+
+    private func apply() {
+        guard ready, let f = waiting else { return }
+        waiting = nil
+        DispatchQueue.main.async { if PushManager.shared.focus == f { PushManager.shared.focus = nil } }
+        guard let hit = reveal(f) else { return }
+        // after the tab / period switch has been laid out
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.easeInOut(duration: 0.4)) { proxy?.scrollTo(hit.scrollTo, anchor: .center) }
+            withAnimation(.easeOut(duration: 0.25)) { highlighted = hit.highlight }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                withAnimation(.easeOut(duration: 0.7)) { highlighted = [] }
+            }
+        }
+    }
+}
+
+extension View {
+    func pushFocus(_ kinds: Set<String>, ready: Bool, proxy: ScrollViewProxy?, highlighted: Binding<Set<String>>,
+                   reveal: @escaping (PushFocus) -> (scrollTo: String, highlight: Set<String>)?) -> some View {
+        modifier(PushFocusModifier(kinds: kinds, ready: ready, proxy: proxy, highlighted: highlighted, reveal: reveal))
+    }
+
+    /// Teal wash and outline on the item a notification opened.
+    func pushHighlight(_ on: Bool, cornerRadius: CGFloat = EduTheme.radius) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(EduTheme.teal.opacity(on ? 0.10 : 0))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(EduTheme.teal.opacity(on ? 0.9 : 0), lineWidth: 2))
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+extension PushManager {
 }
 
 extension PushManager: UNUserNotificationCenterDelegate {
