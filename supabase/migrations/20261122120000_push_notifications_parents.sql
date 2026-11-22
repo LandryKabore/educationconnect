@@ -6,6 +6,7 @@
 -- about absences and lateness (not the student), and receive their own messages and announcements.
 --
 -- A parent's copy remembers the child (child_id): the app opens that child's screen.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 alter table public.ef_push_queue add column if not exists child_id uuid;
 create index if not exists ef_push_queue_child on public.ef_push_queue (child_id) where child_id is not null;
