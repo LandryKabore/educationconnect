@@ -23,6 +23,7 @@ import { timeToMinutes } from "@/lib/timetableConflicts";
 import { cn, personName } from "@/lib/utils";
 import { useNow } from "@/lib/weekGrid";
 import { Card } from "@/components/ui";
+import { timeFr } from "@/lib/timetableLayout";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const dayLong = (date: string) => capitalize(format(new Date(`${date}T12:00:00`), "EEEE d MMMM", { locale: fr }));
@@ -139,7 +140,7 @@ export default function TeacherDay() {
                 {!hasTimetable
                   ? "Votre emploi du temps n’est pas encore saisi par l’établissement."
                   : nextDay
-                    ? `Prochain cours : ${dayLong(nextDay.date).toLowerCase()} à ${nextDay.first.start_time.slice(0, 5)} — ${nextDay.first.matieres?.name ?? ""} · ${nextDay.first.classes?.name ?? ""}`
+                    ? `Prochain cours : ${dayLong(nextDay.date).toLowerCase()} à ${timeFr(nextDay.first.start_time)} — ${nextDay.first.matieres?.name ?? ""} · ${nextDay.first.classes?.name ?? ""}`
                     : "Aucun cours cette semaine."}
               </p>
             </Card>
@@ -292,14 +293,14 @@ function CompositionsCard({ sessions, slots, now }: { sessions: TeacherCompositi
                       )}
                     >
                       <span className={cn("w-12 shrink-0 text-xs font-bold tabular-nums", live ? "text-emerald-700" : "text-slate-900 dark:text-slate-100")}>
-                        {running ? p.start_time?.slice(0, 5) : p.eval_date ? shortDay(p.eval_date) : ""}
+                        {running ? timeFr(p.start_time) : p.eval_date ? shortDay(p.eval_date) : ""}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className={cn("block truncate text-sm", mine ? "font-bold" : "font-semibold", done ? "text-slate-400 line-through" : "text-slate-900 dark:text-slate-100")}>
                           {p.subjectName}
                         </span>
                         <span className="block text-xs text-slate-500">
-                          {p.start_time?.slice(0, 5)} – {p.end_time?.slice(0, 5)}
+                          {timeFr(p.start_time)} – {timeFr(p.end_time)}
                           {mine ? " · votre matière" : ""}
                         </span>
                       </span>
@@ -377,7 +378,7 @@ function NowCard({
             {live ? "En cours" : "Prochain cours"}
           </span>
           <span className="text-xs font-semibold text-slate-500">
-            {live ? `fin à ${lesson.end.slice(0, 5)}` : inMin < 60 ? `dans ${inMin} min` : `à ${lesson.start.slice(0, 5)}`}
+            {live ? `fin à ${timeFr(lesson.end)}` : inMin < 60 ? `dans ${inMin} min` : `à ${timeFr(lesson.start)}`}
           </span>
         </div>
         <p className="mt-3 truncate text-xl font-bold text-slate-900">
@@ -427,7 +428,7 @@ function NowCard({
       {nextDay ? (
         <>
           <p className="mt-3 text-xl font-bold text-slate-900">
-            {capitalize(format(new Date(`${nextDay.date}T12:00:00`), "EEEE", { locale: fr }))} à {nextDay.first.start_time.slice(0, 5)}
+            {capitalize(format(new Date(`${nextDay.date}T12:00:00`), "EEEE", { locale: fr }))} à {timeFr(nextDay.first.start_time)}
           </p>
           <p className="mt-0.5 text-sm text-slate-500">
             {nextDay.first.matieres?.name} · {nextDay.first.classes?.name} — {nextDay.count} cours ce jour-là
@@ -467,8 +468,8 @@ function LessonRow({ lesson: l, nowMin }: { lesson: Lesson; nowMin: number }) {
   return (
     <li className="relative flex gap-4">
       <div className="w-16 shrink-0 pt-3 text-right">
-        <p className={cn("text-sm font-bold tabular-nums", live ? "text-emerald-700" : "text-slate-900 dark:text-slate-100")}>{l.start.slice(0, 5)}</p>
-        <p className="text-xs tabular-nums text-slate-400">{l.end.slice(0, 5)}</p>
+        <p className={cn("text-sm font-bold tabular-nums", live ? "text-emerald-700" : "text-slate-900 dark:text-slate-100")}>{timeFr(l.start)}</p>
+        <p className="text-xs tabular-nums text-slate-400">{timeFr(l.end)}</p>
       </div>
       <span
         className={cn(

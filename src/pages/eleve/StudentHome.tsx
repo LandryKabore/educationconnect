@@ -43,7 +43,9 @@ import { supabase } from "@/lib/supabase";
 import { fetchLessonHomework } from "@/lib/homework";
 import { fetchAttendanceCounts } from "@/lib/scaleApi";
 import { cn, fullName, personName } from "@/lib/utils";
+import { hideAdminNames } from "@/lib/adminNames";
 import type { GradeRow, Subject } from "@/lib/types";
+import { timeFr } from "@/lib/timetableLayout";
 
 const WEEKDAY_LABELS: Record<number, string> = {
   1: "Lundi",
@@ -278,7 +280,7 @@ export default function StudentHome() {
       const { data: msgData } = await supabase
         .from("messages")
         .select(
-          "id, subject, body, created_at, read_at, is_announcement, sender:profils!messages_sender_id_fkey(first_name, last_name)",
+          "id, subject, body, created_at, read_at, is_announcement, school_id, sender_id, sender:profils!messages_sender_id_fkey(first_name, last_name)",
         )
         .eq("recipient_id", uid)
         .order("created_at", { ascending: false })
@@ -291,10 +293,12 @@ export default function StudentHome() {
         created_at: string;
         read_at: string | null;
         is_announcement: boolean;
+        school_id: string | null;
+        sender_id: string | null;
         sender: { first_name: string; last_name: string } | null;
       };
 
-      const allMsgs = (msgData ?? []) as unknown as Msg[];
+      const allMsgs = await hideAdminNames((msgData ?? []) as unknown as Msg[]);
       const announcements = allMsgs
         .filter((m) => m.is_announcement)
         .slice(0, 3);
@@ -473,7 +477,7 @@ export default function StudentHome() {
               <BannerStat
                 to="/mon-bulletin"
                 label="Moyenne"
-                value={annual?.annualAverage != null ? formatAverage(annual.annualAverage, 1) : "—"}
+                value={annual?.annualAverage != null ? formatAverage(annual.annualAverage, 2) : "—"}
                 hint={
                   annual?.annualAverage != null
                     ? `${formatPassDecision(annual)}${!annual.complete ? " · provisoire" : ""}`
@@ -582,7 +586,7 @@ export default function StudentHome() {
                           : "text-amber-600",
                     )}
                   >
-                    {formatAverage(value, 1)}
+                    {formatAverage(value, 2)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-slate-400">/ 20</p>
                 </div>
@@ -602,7 +606,7 @@ export default function StudentHome() {
                       : "text-amber-600",
                 )}
               >
-                {formatAverage(annual?.annualAverage ?? null, 1)}
+                {formatAverage(annual?.annualAverage ?? null, 2)}
               </p>
               <p className="mt-0.5 text-[11px] text-brand-600/80 dark:text-brand-300/80">
                 {annual?.annualAverage != null
@@ -644,7 +648,7 @@ export default function StudentHome() {
                       <p className="text-xs text-slate-500">{n.period_label}</p>
                     </div>
                     <p className="shrink-0 text-lg font-bold text-brand-700">
-                      {v != null ? v.toFixed(1) : "—"}
+                      {v != null ? (Number.isInteger(v) ? String(v) : v.toFixed(1).replace(".", ",")) : "—"}
                       <span className="text-xs font-medium text-slate-400">
                         {" "}
                         / 20
@@ -747,8 +751,8 @@ export default function StudentHome() {
                                 done ? "text-slate-400" : "text-slate-600 dark:text-slate-300",
                               )}
                             >
-                              {s.start_time?.slice(0, 5)}
-                              {s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
+                              {timeFr(s.start_time)}
+                              {s.end_time ? `–${timeFr(s.end_time)}` : ""}
                             </span>
                           </div>
                         </li>
@@ -761,9 +765,9 @@ export default function StudentHome() {
                 <ul className="space-y-2">
                   <li className="flex items-center gap-3 rounded-xl bg-brand-50 px-3 py-2.5 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-700">
                     <span className="w-24 shrink-0 text-xs font-semibold tabular-nums text-brand-800">
-                      {scheduleFocus.slot.start_time?.slice(0, 5)}
+                      {timeFr(scheduleFocus.slot.start_time)}
                       {scheduleFocus.slot.end_time
-                        ? `–${scheduleFocus.slot.end_time.slice(0, 5)}`
+                        ? `–${timeFr(scheduleFocus.slot.end_time)}`
                         : ""}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -854,8 +858,8 @@ export default function StudentHome() {
           ) : (
             <ul className="space-y-2">
               {upcomingExamens.map((e) => {
-                const start = e.start_time?.slice(0, 5);
-                const end = e.end_time?.slice(0, 5);
+                const start = timeFr(e.start_time);
+                const end = timeFr(e.end_time);
                 const slot =
                   start && end ? `${start}–${end}` : start ? start : null;
                 return (
@@ -1087,7 +1091,7 @@ function NextClassCard({ focus, nowMinutes }: { focus: NextFocus; nowMinutes: nu
   const status = live
     ? `Se termine dans ${waitLabel(end - nowMinutes)}`
     : focus.isLaterDay
-      ? `${focus.dayLabel} à ${focus.slot.start_time.slice(0, 5)}`
+      ? `${focus.dayLabel} à ${timeFr(focus.slot.start_time)}`
       : `Commence dans ${waitLabel(start - nowMinutes)}`;
   return (
     <Link
@@ -1112,7 +1116,7 @@ function NextClassCard({ focus, nowMinutes }: { focus: NextFocus; nowMinutes: nu
           {live ? "En cours" : "Prochain cours"}
         </span>
         <span className="text-xs font-semibold tabular-nums text-slate-500">
-          {focus.slot.start_time.slice(0, 5)}–{focus.slot.end_time.slice(0, 5)}
+          {timeFr(focus.slot.start_time)}–{timeFr(focus.slot.end_time)}
         </span>
       </div>
       <p className="mt-3 truncate text-xl font-bold text-slate-900">{focus.slot.matieres?.name ?? "Cours"}</p>

@@ -11,6 +11,7 @@ import { formatDateSafe, parseValidDate } from "@/lib/dateFr";
 import { supabase } from "@/lib/supabase";
 import type { MessageRow } from "@/lib/types";
 import { cn, fullName, joinOne, matchesSearch } from "@/lib/utils";
+import { hideAdminNames } from "@/lib/adminNames";
 import Messages from "@/pages/Messages";
 
 /** /messages: students and parents get this page, staff keep the shared one. */
@@ -137,7 +138,7 @@ function StudentMessages({ formal }: { formal: boolean }) {
         .eq("recipient_id", user!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as unknown as (MessageRow & { sender: Person })[];
+      return hideAdminNames(data as unknown as (MessageRow & { sender: Person })[]);
     },
   });
 
@@ -154,7 +155,7 @@ function StudentMessages({ formal }: { formal: boolean }) {
         .order("created_at", { ascending: false })
         .limit(1000);
       if (error) throw error;
-      return data as unknown as (MessageRow & { recipient: Person })[];
+      return hideAdminNames(data as unknown as (MessageRow & { recipient: Person })[]);
     },
   });
 
@@ -216,7 +217,7 @@ function StudentMessages({ formal }: { formal: boolean }) {
           (row as { profils: unknown }).profils,
         );
         if (!p?.id || p.id === user!.id || map.has(p.id)) continue;
-        map.set(p.id, { id: p.id, name: fullName(p.first_name, p.last_name), kind: "admin", subjects: [] });
+        map.set(p.id, { id: p.id, name: "Administration", kind: "admin", subjects: [] });
       }
       return [...map.values()].sort(
         (a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "fr") : a.kind === "teacher" ? -1 : 1),

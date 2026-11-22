@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import { EmptyState, PageLoadingState } from "@/components/ui";
 import type { DevoirListItem } from "@/components/DevoirsClearList";
+import { timeFr } from "@/lib/timetableLayout";
 
 /** Burkina pattern: 3 examens par matière et par trimestre. */
 export const PLANNED_EXAMS = 3;
@@ -132,8 +133,8 @@ export function ExamensSubjectBoards({ items, gradedIds, isLoading, emptyMessage
                       {e.start_time ? (
                         <span className="inline-flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {e.start_time.slice(0, 5)}
-                          {e.end_time ? ` – ${e.end_time.slice(0, 5)}` : ""}
+                          {timeFr(e.start_time)}
+                          {e.end_time ? ` – ${timeFr(e.end_time)}` : ""}
                         </span>
                       ) : null}
                       <span>· {normalizePeriod(e.period_label)}</span>
@@ -272,7 +273,7 @@ function ExamCell({ exam, done }: { exam: DevoirListItem | undefined; done: bool
     );
   }
   const date = exam.eval_date ? capitalize(shortDate(exam.eval_date)) : "Date à confirmer";
-  const time = exam.start_time ? exam.start_time.slice(0, 5) : null;
+  const time = exam.start_time ? timeFr(exam.start_time) : null;
   if (done) {
     return (
       <div className="rounded-md bg-emerald-50/70 px-2 py-2 text-center dark:bg-emerald-500/10" title={exam.title}>

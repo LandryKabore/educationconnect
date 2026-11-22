@@ -321,3 +321,10 @@ export function plannedMinutesBySubject(
       (a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name, "fr"),
     );
 }
+
+/** « 07:00:00 » → « 7h », « 07:30 » → « 7h30 » (displayed times everywhere, like the timetables). */
+export function timeFr(t: string | null | undefined): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t ?? "");
+  if (!m) return t ?? "";
+  return formatClockFr(Number(m[1]) * 60 + Number(m[2]));
+}

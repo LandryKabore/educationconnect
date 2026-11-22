@@ -23,6 +23,7 @@ import { timeToMinutes } from "@/lib/timetableConflicts";
 import { compositionOn } from "@/hooks/useTeacherCompositions";
 import { PageBanner } from "@/components/PageBanner";
 import { EmptyState } from "@/components/ui";
+import { timeFr } from "@/lib/timetableLayout";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const dayLabel = (d: string) => capitalize(format(new Date(`${d}T12:00:00`), "EEEE d MMMM", { locale: fr }));
@@ -359,8 +360,8 @@ function LessonRow({ lesson: l, date }: { lesson: DayLesson; date: string }) {
     >
       <div className="flex min-w-0 flex-1 items-center gap-4">
         <div className="w-14 shrink-0 text-center">
-          <p className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{l.start.slice(0, 5)}</p>
-          <p className="text-xs tabular-nums text-slate-500">{l.end.slice(0, 5)}</p>
+          <p className="text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">{timeFr(l.start)}</p>
+          <p className="text-xs tabular-nums text-slate-500">{timeFr(l.end)}</p>
         </div>
         <div
           className={cn(

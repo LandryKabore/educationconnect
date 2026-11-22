@@ -53,6 +53,7 @@ import {
 } from "@/lib/parentHome";
 import type { AttendanceStatus } from "@/lib/types";
 import { cn, fullName, personName } from "@/lib/utils";
+import { timeFr } from "@/lib/timetableLayout";
 
 const CARD_LABEL =
   "text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300";
@@ -463,7 +464,7 @@ function HomeworkPanel({
                   </p>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
                     {w.type === "examen" ? "Devoir" : "Exercice"}
-                    {w.start_time ? ` · ${w.start_time.slice(0, 5)}` : ""}
+                    {w.start_time ? ` · ${timeFr(w.start_time)}` : ""}
                   </p>
                 </div>
                 <span

@@ -7,6 +7,7 @@ import { subjectSwatch } from "@/lib/subjectColors";
 import { timeToMinutes } from "@/lib/timetableConflicts";
 import { cn, fullName, joinOne, joinProfile } from "@/lib/utils";
 import { EmptyState } from "@/components/ui";
+import { timeFr } from "@/lib/timetableLayout";
 
 type AssignmentRow = {
   id: string;
@@ -83,8 +84,8 @@ function nextSlot(slots: SlotRow[]): TeacherCard["next"] {
   const s = best!.slot;
   return {
     day: s.day_of_week,
-    start: s.start_time.slice(0, 5),
-    end: s.end_time.slice(0, 5),
+    start: timeFr(s.start_time),
+    end: timeFr(s.end_time),
     subject: s.matieres?.name ?? null,
     room: s.room,
   };

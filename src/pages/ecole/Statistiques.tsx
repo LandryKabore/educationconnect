@@ -59,7 +59,7 @@ export default function Statistiques() {
     },
   });
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["statistiques", schoolId, yearId],
     enabled: !!schoolId,
     queryFn: () => fetchSchoolStatistics(schoolId!, yearId || null),
@@ -139,6 +139,30 @@ export default function Statistiques() {
   };
 
   if (isLoading) return <p className="text-slate-500">Chargement…</p>;
+  // a failed load is not « no year »: say so, and keep the year picker to try another year
+  if (isError || (stats?.year == null && years.length > 0)) {
+    return (
+      <div>
+        <PageBanner title="Statistiques" />
+        <div className="rounded-md border border-slate-200 bg-white p-6 text-center dark:border-[var(--border)] dark:bg-[var(--surface)]">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {isError ? "Les statistiques n’ont pas pu être chargées." : "Aucune statistique pour cette année scolaire."}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {years.length > 0 ? (
+              <Select value={yearId} onChange={(e) => setYearId(e.target.value)} aria-label="Année scolaire" className="!h-9 w-auto">
+                <option value="">Année en cours</option>
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>{y.label}</option>
+                ))}
+              </Select>
+            ) : null}
+            <Button onClick={() => void refetch()} disabled={isFetching}>{isFetching ? "Chargement…" : "Réessayer"}</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!stats || !stats.year) {
     return (
       <div>

@@ -120,17 +120,18 @@ export function computeWeightedAverage(
   };
 }
 
+/** Displayed average with the French decimal comma, like the bulletins (13,16). */
 export function formatAverage(value: number | null, digits = 2): string {
   if (value === null || Number.isNaN(value)) return "—";
-  return value.toFixed(digits);
+  return value.toFixed(digits).replace(".", ",");
 }
 
-/** Same as `formatAverage`, with the French decimal comma used on paper bulletins (13,16). */
+/** Same as `formatAverage` (kept for the bulletin code). */
 export function formatAverageFr(
   value: number | null | undefined,
   digits = 2,
 ): string {
-  return formatAverage(value ?? null, digits).replace(".", ",");
+  return formatAverage(value ?? null, digits);
 }
 
 /** Build subject_id → coefficient map from programme_classe rows. */
