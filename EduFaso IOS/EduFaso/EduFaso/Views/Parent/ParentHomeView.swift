@@ -900,7 +900,7 @@ struct ParentHomeView: View {
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(EduTheme.ink)
                                         .lineLimit(1)
-                                    Text((isExam ? "Devoir" : "Exercice") + (row.startTime.map { " · \($0.prefix(5))" } ?? ""))
+                                    Text((isExam ? "Devoir" : "Exercice") + (row.startTime.map { " · \(FrTime.of($0))" } ?? ""))
                                         .font(.caption)
                                         .foregroundStyle(EduTheme.muted)
                                 }

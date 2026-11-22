@@ -382,9 +382,9 @@ struct TeacherAppelView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(spacing: 1) {
-                        Text(l.start.prefix(5)).font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(EduTheme.ink)
+                        Text(FrTime.of(l.start)).font(.subheadline.weight(.bold).monospacedDigit()).foregroundStyle(EduTheme.ink)
                             .lineLimit(1).fixedSize()
-                        Text(l.end.prefix(5)).font(.caption.monospacedDigit()).foregroundStyle(EduTheme.muted)
+                        Text(FrTime.of(l.end)).font(.caption.monospacedDigit()).foregroundStyle(EduTheme.muted)
                             .lineLimit(1).fixedSize()
                     }
                     .frame(minWidth: 48)

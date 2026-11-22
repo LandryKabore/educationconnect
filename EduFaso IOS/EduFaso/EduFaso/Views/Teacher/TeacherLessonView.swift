@@ -92,7 +92,7 @@ struct TeacherLessonView: View {
                 RoundedRectangle(cornerRadius: 2).fill(swatch.border).frame(width: 4, height: 48)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(className).font(.title2.weight(.bold)).foregroundStyle(EduTheme.ink)
-                    Text("\(subjectName) · \(slot.startTime.prefix(5)) – \(slot.endTime.prefix(5))")
+                    Text("\(subjectName) · \(FrTime.of(slot.startTime)) – \(FrTime.of(slot.endTime))")
                         .font(.subheadline).foregroundStyle(EduTheme.muted)
                 }
             }

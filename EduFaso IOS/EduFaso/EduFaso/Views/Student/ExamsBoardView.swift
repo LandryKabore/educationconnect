@@ -458,7 +458,7 @@ struct ExamsBoardView: View {
                 } else {
                     VStack(spacing: 2) {
                         Text(date).font(.caption.weight(.bold)).foregroundStyle(Self.amber).lineLimit(1).minimumScaleFactor(0.75)
-                        Text(e.startTime.map { "à \($0.prefix(5))" } ?? "heure à confirmer")
+                        Text(e.startTime.map { "à \(FrTime.of($0))" } ?? "heure à confirmer")
                             .font(.system(size: 10)).foregroundStyle(EduTheme.muted).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -557,8 +557,8 @@ struct ExamsBoardView: View {
 
     private static func slot(_ e: EvaluationRow) -> String? {
         guard let start = e.startTime, !start.isEmpty else { return nil }
-        if let end = e.endTime, !end.isEmpty { return "\(start.prefix(5)) – \(end.prefix(5))" }
-        return "à partir de \(start.prefix(5))"
+        if let end = e.endTime, !end.isEmpty { return "\(FrTime.of(start)) – \(FrTime.of(end))" }
+        return "à partir de \(FrTime.of(start))"
     }
 }
 

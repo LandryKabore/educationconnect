@@ -310,8 +310,9 @@ struct MessageRow: Codable, Identifiable, Hashable {
     let threadId: String?
     /// Received in copy (Cc), like Gmail.
     var isCc: Bool? = nil
-    let sender: PersonName?
-    let recipient: PersonName?
+    /// school administrators already read « Administration » (EduAPI.hidingAdminNames)
+    var sender: PersonName?
+    var recipient: PersonName?
 
     enum CodingKeys: String, CodingKey {
         case id, subject, body, sender, recipient

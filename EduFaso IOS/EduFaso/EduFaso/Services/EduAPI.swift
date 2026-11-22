@@ -234,7 +234,7 @@ actor EduAPI {
     }
 
     func fetchInbox(userId: String, announcementsOnly: Bool = false, kind: InboxKind? = nil, limit: Int = 80) async throws -> [MessageRow] {
-        let rows: [MessageRow] = try await client
+        let fetched: [MessageRow] = try await client
             .from("messages")
             .select("""
                 id, subject, body, created_at, read_at, is_announcement, allow_replies,
@@ -247,6 +247,7 @@ actor EduAPI {
             .execute()
             .value
         let mode = kind ?? (announcementsOnly ? .announcements : .personal)
+        let rows = await hidingAdminNames(fetched)
         switch mode {
         case .all: return rows
         case .announcements: return rows.filter { $0.isAnnouncement == true }
@@ -275,7 +276,7 @@ actor EduAPI {
 
     /// Personal messages I sent (used to build conversation threads like the web).
     func fetchSentPersonalMessages(userId: String, limit: Int = 1000) async throws -> [MessageRow] {
-        try await client
+        let rows: [MessageRow] = try await client
             .from("messages")
             .select("""
                 id, subject, body, created_at, read_at, is_announcement, allow_replies,
@@ -288,6 +289,26 @@ actor EduAPI {
             .limit(limit)
             .execute()
             .value
+        return await hidingAdminNames(rows)
+    }
+
+    /// School administrators appear as « Administration », never by name, wherever a message
+    /// shows its sender or recipient (conversations, homes, message details).
+    func hidingAdminNames(_ rows: [MessageRow]) async -> [MessageRow] {
+        let schools = Set(rows.compactMap(\.schoolId))
+        guard !schools.isEmpty else { return rows }
+        var admins = Set<String>()
+        for school in schools {
+            if let ids = try? await fetchSchoolAdminIds(schoolId: school) { admins.formUnion(ids) }
+        }
+        guard !admins.isEmpty else { return rows }
+        let administration = PersonName(firstName: "Administration", lastName: nil)
+        return rows.map { row in
+            var r = row
+            if let s = r.senderId, admins.contains(s) { r.sender = administration }
+            if let t = r.recipientId, admins.contains(t) { r.recipient = administration }
+            return r
+        }
     }
 
     /// Chat reply in an open conversation (matches web `handleSendChat`).

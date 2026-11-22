@@ -268,7 +268,7 @@ struct TeacherHomeView: View {
                     tag(live != nil ? "En cours" : "Prochain cours", icon: "clock",
                         fg: live != nil ? Self.emerald : Self.sky, bg: live != nil ? Self.emerald50 : Self.sky100)
                     Spacer()
-                    Text(live != nil ? "fin à \(lesson.end.prefix(5))" : (inMin < 60 ? "dans \(inMin) min" : "à \(lesson.start.prefix(5))"))
+                    Text(live != nil ? "fin à \(FrTime.of(lesson.end))" : (inMin < 60 ? "dans \(inMin) min" : "à \(FrTime.of(lesson.start))"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(EduTheme.muted)
                 }
@@ -316,7 +316,7 @@ struct TeacherHomeView: View {
             } else {
                 tag("Pas de cours aujourd’hui", icon: "calendar", fg: Self.sky, bg: Self.sky100)
                 if let next = TeacherLessons.nextDay(snapshot.slots, compositions: snapshot.compositions, now: now) {
-                    Text("\(Self.weekdayName(next.date)) à \(next.first.startTime.prefix(5))")
+                    Text("\(Self.weekdayName(next.date)) à \(FrTime.of(next.first.startTime))")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(EduTheme.ink)
                         .padding(.top, 12)
@@ -397,7 +397,7 @@ struct TeacherHomeView: View {
                         let done = isToday && nowMin >= end
                         let mine = mySubjects.contains(p.matieres?.name ?? "")
                         HStack(spacing: 10) {
-                            Text(running ? "\(p.startTime?.prefix(5) ?? "")" : Self.shortDay(p.evalDate ?? ""))
+                            Text(running ? "\(FrTime.of(p.startTime))" : Self.shortDay(p.evalDate ?? ""))
                                 .font(.caption.weight(.bold).monospacedDigit())
                                 .foregroundStyle(live ? Self.emerald : EduTheme.ink)
                                 .frame(width: 46, alignment: .leading)
@@ -406,7 +406,7 @@ struct TeacherHomeView: View {
                                     .font(.subheadline.weight(mine ? .bold : .semibold))
                                     .foregroundStyle(done ? EduTheme.muted : EduTheme.ink)
                                     .strikethrough(done)
-                                Text("\(p.startTime?.prefix(5) ?? "") – \(p.endTime?.prefix(5) ?? "")" + (mine ? " · votre matière" : ""))
+                                Text("\(FrTime.of(p.startTime)) – \(FrTime.of(p.endTime))" + (mine ? " · votre matière" : ""))
                                     .font(.caption)
                                     .foregroundStyle(EduTheme.muted)
                             }
@@ -496,7 +496,7 @@ struct TeacherHomeView: View {
     private func noLessonText(now: Date) -> String {
         if snapshot.slots.isEmpty { return "Votre emploi du temps n’est pas encore saisi par l’établissement." }
         guard let next = TeacherLessons.nextDay(snapshot.slots, compositions: snapshot.compositions, now: now) else { return "Aucun cours cette semaine." }
-        return "Prochain cours : \(Self.dayLong(EduDates.parseDay(next.date) ?? now).lowercased()) à \(next.first.startTime.prefix(5)) — \(next.first.matieres?.name ?? "") · \(next.first.classes?.name ?? "")"
+        return "Prochain cours : \(Self.dayLong(EduDates.parseDay(next.date) ?? now).lowercased()) à \(FrTime.of(next.first.startTime)) — \(next.first.matieres?.name ?? "") · \(next.first.classes?.name ?? "")"
     }
 
     private func lessonRow(_ l: TeacherLessons.Lesson, now: Date) -> some View {
@@ -506,12 +506,12 @@ struct TeacherHomeView: View {
         let inMin = TeacherLessons.minutes(l.start) - TeacherLessons.minutes(of: now)
         return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .trailing, spacing: 2) {
-                Text(l.start.prefix(5))
+                Text(FrTime.of(l.start))
                     .font(.subheadline.weight(.bold).monospacedDigit())
                     .foregroundStyle(live ? Self.emerald : EduTheme.ink)
                     .lineLimit(1)
                     .fixedSize()
-                Text(l.end.prefix(5))
+                Text(FrTime.of(l.end))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(EduTheme.muted)
                     .lineLimit(1)
@@ -838,7 +838,7 @@ struct TeacherHomeView: View {
     }
 
     private static func meta(_ l: TeacherLessons.Lesson) -> String {
-        ["\(l.start.prefix(5)) – \(l.end.prefix(5))", room(l.room), "\(l.studentCount) élèves"].compactMap { $0 }.joined(separator: " · ")
+        ["\(FrTime.of(l.start)) – \(FrTime.of(l.end))", room(l.room), "\(l.studentCount) élèves"].compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: - Loading

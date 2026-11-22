@@ -480,7 +480,7 @@ struct StudentCompositionsView: View {
             }
             Spacer(minLength: 8)
             if let start = paper.startTime, let end = paper.endTime {
-                Text("\(start.prefix(5))–\(end.prefix(5))")
+                Text("\(FrTime.of(start))–\(FrTime.of(end))")
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(swatch.border)
                     .padding(.horizontal, 8)
@@ -703,7 +703,7 @@ private struct CompositionMiniTimetableView: View {
         if let paper = cellMap[SlotKey(day: day, start: start)] {
             let name = paper.matieres?.name ?? "Matière"
             let swatch = SubjectPalette.swatch(for: name)
-            let end = paper.endTime.map { String($0.prefix(5)) } ?? ""
+            let end = paper.endTime.map { FrTime.of($0) } ?? ""
             HStack(spacing: 0) {
                 Capsule()
                     .fill(swatch.border)

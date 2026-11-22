@@ -247,3 +247,13 @@ struct HomeRowCard: View {
         )
     }
 }
+
+/// Displayed times, like the timetables: « 07:00:00 » → « 7h », « 07:30 » → « 7h30 ».
+enum FrTime {
+    static func of(_ t: String?) -> String {
+        guard let t else { return "" }
+        let parts = t.split(separator: ":")
+        guard parts.count >= 2, let h = Int(parts[0]), let m = Int(parts[1].prefix(2)) else { return t }
+        return m == 0 ? "\(h)h" : "\(h)h\(String(format: "%02d", m))"
+    }
+}

@@ -70,8 +70,20 @@ struct SchoolStatisticsView: View {
                 if ready {
                     VStack(alignment: .leading, spacing: 14) {
                         banner
-                        if let error { Text(error).font(.subheadline).foregroundStyle(EduTheme.fasoRed) }
-                        if let s = stats, s.year != nil {
+                        if error != nil {
+                            // a failed load is not « no year »
+                            VStack(spacing: 12) {
+                                Text("Les statistiques n’ont pas pu être chargées.")
+                                    .font(.subheadline).foregroundStyle(EduTheme.ink)
+                                Button { Task { await load() } } label: {
+                                    Text("Réessayer").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                        .padding(.horizontal, 18).frame(minHeight: 40)
+                                        .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .frame(maxWidth: .infinity).padding(16).modifier(HomeCardStyle())
+                        } else if let s = stats, s.year != nil {
                             totals(s).coachMarkTarget("st.totals")
                             levelsCard(s).coachMarkTarget("st.levels")
                             Text("* Taux de réussite indicatif : élèves dont la moyenne annuelle est d’au moins 10/20, parmi ceux qui ont des notes. La décision officielle de passage reste celle du conseil de classe.")

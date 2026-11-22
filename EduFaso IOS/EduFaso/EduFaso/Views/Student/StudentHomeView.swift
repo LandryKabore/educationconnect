@@ -664,7 +664,7 @@ struct StudentHomeView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(upcomingExams) { e in
-                        let time = [e.startTime, e.endTime].compactMap { $0.map { String($0.prefix(5)) } }.joined(separator: "–")
+                        let time = [e.startTime, e.endTime].compactMap { $0.map { FrTime.of($0) } }.joined(separator: "–")
                         workRow(
                             title: e.title?.isEmpty == false ? e.title! : (e.matieres?.name ?? "Examen"),
                             subject: e.matieres?.name,
@@ -771,8 +771,8 @@ struct StudentHomeView: View {
     }
 
     private func paperRow(_ p: CompositionPaper, nowMin: Int, isToday: Bool) -> some View {
-        let startText = String((p.startTime ?? "").prefix(5))
-        let endText = String((p.endTime ?? "").prefix(5))
+        let startText = FrTime.of(p.startTime)
+        let endText = FrTime.of(p.endTime)
         let start = p.startTime.map { Self.minutes($0) } ?? 0
         let end = p.endTime.map { Self.minutes($0) } ?? 0
         let live = isToday && start <= nowMin && nowMin < end
@@ -1228,7 +1228,7 @@ struct StudentHomeView: View {
     }
 
     private static func timeRange(_ slot: TimetableSlot) -> String {
-        "\(String(slot.startTime.prefix(5)))–\(String(slot.endTime.prefix(5)))"
+        "\(FrTime.of(slot.startTime))–\(FrTime.of(slot.endTime))"
     }
 
     private static func formatRoom(_ room: String?) -> String? {

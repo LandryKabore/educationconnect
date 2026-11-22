@@ -73,7 +73,7 @@ struct TeacherTodoView: View {
                     dayHeader(group.title, group.items.count)
                     ForEach(group.items) { l in
                         item(title: "\(l.subjectName) · \(l.className)",
-                             meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
+                             meta: "\(H.shortDay(l.date)) · \(FrTime.of(l.start)) – \(FrTime.of(l.end))",
                              cta: "Faire l’appel") {
                             TeacherAttendanceView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
                         }
@@ -88,7 +88,7 @@ struct TeacherTodoView: View {
                     dayHeader(group.title, group.items.count)
                     ForEach(group.items) { l in
                         item(title: "\(l.subjectName) · \(l.className)",
-                             meta: "\(H.shortDay(l.date)) · \(l.start.prefix(5)) – \(l.end.prefix(5))",
+                             meta: "\(H.shortDay(l.date)) · \(FrTime.of(l.start)) – \(FrTime.of(l.end))",
                              cta: "Remplir") {
                             TeacherCahierView(initialClassId: l.classId, initialSubjectId: l.subjectId, initialDate: l.date)
                         }
