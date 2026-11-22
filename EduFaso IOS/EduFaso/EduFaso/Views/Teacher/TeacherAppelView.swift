@@ -15,6 +15,9 @@ struct TeacherAppelView: View {
     @State private var ready = false
     @State private var error: String?
     @State private var pickingDate = false
+    /// « Appel non fait » notification: the appel of that lesson, opened directly
+    @State private var appelTarget: AppelTarget?
+    struct AppelTarget: Identifiable, Hashable { let classId: String; let subjectId: String; let date: String; var id: String { "\(classId)|\(subjectId)|\(date)" } }
 
     @State private var tour = TabTour(key: "appel-enseignant")
     @State private var coach = CoachMarkRegistry()
@@ -73,6 +76,16 @@ struct TeacherAppelView: View {
             }
             .refreshable { await load(); await loadDay() }
             .tabTour(tour, registry: coach, scroller: proxy)
+            .pushFocus(["appel"], ready: ready, proxy: proxy, highlighted: .constant([])) { f in
+                // ref « appel:<class>:<subject>:<yyyy-MM-dd> »
+                guard let parts = f.refs.first(where: { $0.hasPrefix("appel:") })?.split(separator: ":").map(String.init),
+                      parts.count == 4 else { return nil }
+                appelTarget = AppelTarget(classId: parts[1], subjectId: parts[2], date: parts[3])
+                return nil
+            }
+        }
+        .navigationDestination(item: $appelTarget) { t in
+            TeacherAttendanceView(initialClassId: t.classId, initialSubjectId: t.subjectId, initialDate: t.date)
         }
         .environment(coach)
         .background(EduTheme.page.ignoresSafeArea())

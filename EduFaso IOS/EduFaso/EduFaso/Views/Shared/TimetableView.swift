@@ -238,7 +238,7 @@ struct TimetableView: View {
                         .pushFocus(["edt", "matin"], ready: ready && !loading, proxy: proxy, highlighted: $highlighted) { f in
                             scope = .day
                             let today = EduDates.weekday(Date())
-                            let ids = Set(f.ids("edt", "edt-new"))
+                            let ids = Set(f.ids("edt", "edt-new", "edt-t", "edt-t-new"))
                             // a removed lesson or the morning summary: today, or the next school day
                             guard let slot = slots.first(where: { ids.contains($0.id) }), (1...6).contains(slot.dayOfWeek) else {
                                 snapToNow()

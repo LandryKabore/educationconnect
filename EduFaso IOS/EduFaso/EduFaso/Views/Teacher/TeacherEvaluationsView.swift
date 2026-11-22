@@ -21,6 +21,8 @@ struct TeacherEvaluationsView: View {
     @State private var form: FormTarget?
     @State private var removing: Eval?
     @State private var gradeTarget: EvaluationRow?
+    /// évaluation a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
 
     @State private var tour = TabTour(key: "examens-evaluations-enseignant")
     @State private var coach = CoachMarkRegistry()
@@ -118,6 +120,19 @@ struct TeacherEvaluationsView: View {
             }
             .refreshable { await load() }
             .tabTour(tour, registry: coach, scroller: proxy)
+            // « Évaluation confirmée »: shown in its class; « Notes à saisir »: straight to the grade entry
+            .pushFocus(["confirmation", "saisie"], ready: ready, proxy: proxy, highlighted: $highlighted) { f in
+                let ids = Set(f.ids("eval", "saisie"))
+                guard let c = classes.first(where: { $0.evals.contains { ids.contains($0.id) } }),
+                      let e = c.evals.first(where: { ids.contains($0.id) }) else { return nil }
+                selectedId = c.classId
+                trimester = ""
+                if f.kind == "saisie" {
+                    gradeTarget = e.row
+                    return nil
+                }
+                return (e.id, [e.id])
+            }
         }
         .environment(coach)
         .background(EduTheme.page.ignoresSafeArea())
@@ -335,7 +350,7 @@ struct TeacherEvaluationsView: View {
             .background(H.slate100.opacity(0.8))
 
             ForEach(Array(list.enumerated()), id: \.element.id) { j, e in
-                let r = row(e, in: c)
+                let r = row(e, in: c).pushHighlight(highlighted.contains(e.id), cornerRadius: 0).id(e.id)
                 if first && j == 0 { r.coachMarkTarget("evals.list") } else { r }
                 if j < list.count - 1 { Divider().padding(.leading, 16) }
             }

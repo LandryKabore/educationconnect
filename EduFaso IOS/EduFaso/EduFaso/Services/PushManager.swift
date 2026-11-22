@@ -66,6 +66,7 @@ final class PushManager: NSObject, ObservableObject {
         "evaluation": .compositions, "composition": .compositions,
         "edt": .timetable, "matin": .timetable, "bulletin": .bulletin,
         "message": .messages, "annonce": .announcements, "absence": .attendance,
+        "confirmation": .teacherEvaluations, "saisie": .teacherEvaluations, "appel": .teacherAttendance,
     ]
 
     func open(_ userInfo: [AnyHashable: Any]) {
@@ -211,7 +212,23 @@ struct PushPrefsCard: View {
     @State private var prefs: [String: Bool] = [:]
 
     private struct Kind: Identifiable { let id: String; let icon: String; let title: String; let detail: String; let defaultOn: Bool }
-    private var kinds: [Kind] { auth.primaryRole == .parent ? parentKinds : studentKinds }
+    private var kinds: [Kind] {
+        switch auth.primaryRole {
+        case .parent: return parentKinds
+        case .teacher: return teacherKinds
+        default: return studentKinds
+        }
+    }
+    private let teacherKinds: [Kind] = [
+        Kind(id: "appel", icon: "checklist", title: "Appel non fait", detail: "10 minutes après la fin d’un cours sans appel", defaultOn: true),
+        Kind(id: "saisie", icon: "square.and.pencil", title: "Notes à saisir", detail: "3 jours après une évaluation sans notes", defaultOn: true),
+        Kind(id: "confirmation", icon: "checkmark.seal.fill", title: "Évaluations confirmées", detail: "Quand l’administration confirme une évaluation", defaultOn: true),
+        Kind(id: "edt", icon: "calendar", title: "Emploi du temps", detail: "Vos cours ajoutés, déplacés ou retirés", defaultOn: true),
+        Kind(id: "composition", icon: "doc.text.fill", title: "Compositions", detail: "Dates des compositions de vos classes", defaultOn: true),
+        Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages des parents, élèves et de l’administration", defaultOn: true),
+        Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
+        Kind(id: "matin", icon: "sunrise.fill", title: "Résumé du matin", detail: "À 6h15 : vos cours du jour", defaultOn: false),
+    ]
     private let parentKinds: [Kind] = [
         Kind(id: "absence", icon: "person.crop.circle.badge.xmark", title: "Absences et retards", detail: "Dès que l’appel est fait", defaultOn: true),
         Kind(id: "note", icon: "chart.bar.fill", title: "Notes", detail: "Chaque nouvelle note de vos enfants", defaultOn: true),
@@ -253,7 +270,9 @@ struct PushPrefsCard: View {
                         Image(systemName: "bell.slash.fill").foregroundStyle(EduTheme.fasoRed)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Notifications désactivées").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
-                            Text(auth.primaryRole == .parent ? "Activez-les dans Réglages pour être prévenu des notes et absences." : "Active-les dans Réglages pour recevoir tes notes et exercices.").font(.caption).foregroundStyle(EduTheme.muted)
+                            Text(auth.primaryRole == .parent ? "Activez-les dans Réglages pour être prévenu des notes et absences."
+                                 : auth.primaryRole == .teacher ? "Activez-les dans Réglages pour être prévenu des appels et des messages."
+                                 : "Active-les dans Réglages pour recevoir tes notes et exercices.").font(.caption).foregroundStyle(EduTheme.muted)
                         }
                         Spacer(minLength: 0)
                         Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(EduTheme.subtle)
