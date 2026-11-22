@@ -60,8 +60,18 @@ final class PushManager: NSObject, ObservableObject {
         _ = try? await SupabaseManager.client.rpc("ef_unregister_push_token", params: ["p_token": token]).execute()
     }
 
+    /// Screen of each kind, used when the payload's screen is missing or unknown to this build.
+    private static let screenOfKind: [String: AppScreen] = [
+        "note": .grades, "exercice": .exercises, "rappel": .exercises,
+        "evaluation": .compositions, "composition": .compositions,
+        "edt": .timetable, "matin": .timetable, "bulletin": .bulletin,
+        "message": .messages, "annonce": .announcements,
+    ]
+
     func open(_ userInfo: [AnyHashable: Any]) {
-        if let raw = userInfo["screen"] as? String, let screen = AppScreen(rawValue: raw) {
+        let raw = userInfo["screen"] as? String
+        let kind = userInfo["kind"] as? String
+        if let screen = raw.flatMap(AppScreen.init(rawValue:)) ?? (raw == "notes" ? .grades : nil) ?? kind.flatMap({ Self.screenOfKind[$0] }) {
             pendingScreen = screen
         }
     }

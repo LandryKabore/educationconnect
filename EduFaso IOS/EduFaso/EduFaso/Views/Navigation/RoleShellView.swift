@@ -38,12 +38,9 @@ struct RoleShellView: View {
             if let s = auth.supportSchool, auth.inSupport { supportBanner(s) }
         }
         // tapped notification: open its screen
-        .onReceive(PushManager.shared.$pendingScreen) { screen in
-            guard let screen else { return }
-            menuOpen = false
-            openScreen(screen)
-            PushManager.shared.pendingScreen = nil
-        }
+        // (kept until the portal is ready: a tap that launches the app arrives during the opening screen)
+        .onReceive(PushManager.shared.$pendingScreen) { _ in openPendingScreen() }
+        .onChange(of: auth.portalReady) { _, _ in openPendingScreen() }
         // students for now: the only ones the server sends notifications to
         .task(id: auth.primaryRole) {
             if auth.primaryRole == .student { await PushManager.shared.requestAndRegister() }
@@ -245,6 +242,15 @@ struct RoleShellView: View {
         showProfile = false
         navigationDepth = 1
         contentID = UUID()
+    }
+
+    private func openPendingScreen() {
+        guard let screen = PushManager.shared.pendingScreen, auth.portalReady, auth.primaryRole != nil else { return }
+        DispatchQueue.main.async {
+            PushManager.shared.pendingScreen = nil
+            menuOpen = false
+            openScreen(screen)
+        }
     }
 
     private func closeMenu() {
