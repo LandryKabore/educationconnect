@@ -496,7 +496,7 @@ private extension ProfileView {
             infoCard.coachMarkTarget("prof.form")
             photoCard
             accountCard.coachMarkTarget("prof.account")
-            if isStudent || isParent || isTeacher { PushPrefsCard() }
+            if isStudent || isParent || isTeacher || isAdmin { PushPrefsCard() }
             parentSignOut
         }
     }

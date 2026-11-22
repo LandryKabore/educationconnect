@@ -41,9 +41,9 @@ struct RoleShellView: View {
         // (kept until the portal is ready: a tap that launches the app arrives during the opening screen)
         .onReceive(PushManager.shared.$pendingScreen) { _ in openPendingScreen() }
         .onChange(of: auth.portalReady) { _, _ in openPendingScreen() }
-        // students, parents and teachers: the ones the server sends notifications to
+        // everyone the server sends notifications to (a super admin only in Mode support)
         .task(id: auth.primaryRole) {
-            if [.student, .parent, .teacher].contains(auth.primaryRole) { await PushManager.shared.requestAndRegister() }
+            if [.student, .parent, .teacher, .schoolAdmin].contains(auth.primaryRole) { await PushManager.shared.requestAndRegister() }
         }
         .onChange(of: auth.supportSchool?.id) { _, _ in
             selection = .dashboard

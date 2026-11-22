@@ -8,6 +8,8 @@ struct SchoolSignalsView: View {
     @State private var rows: [Report] = []
     @State private var filter = "ouverts"
     @State private var ready = false
+    /// report a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
     @State private var error: String?
 
     @State private var tour = TabTour(key: "signalements")
@@ -76,7 +78,10 @@ struct SchoolSignalsView: View {
                                 .frame(maxWidth: .infinity).padding(24).modifier(HomeCardStyle()).coachMarkTarget("si.list")
                         } else {
                             VStack(spacing: 12) {
-                                ForEach(shown) { r in ReportCard(row: r, showSchool: isSuper) { Task { await load() } } }
+                                ForEach(shown) { r in
+                                    ReportCard(row: r, showSchool: isSuper) { Task { await load() } }
+                                        .pushHighlight(highlighted.contains(r.id)).id(r.id)
+                                }
                             }
                             .coachMarkTarget("si.list")
                         }
@@ -88,6 +93,12 @@ struct SchoolSignalsView: View {
             }
             .refreshable { await load() }
             .tabTour(tour, registry: coach, scroller: proxy)
+            .pushFocus(["signalement"], ready: ready, proxy: proxy, highlighted: $highlighted) { f in
+                let ids = Set(f.ids("sig"))
+                guard let hit = rows.first(where: { ids.contains($0.id) }) else { return nil }
+                if !shown.contains(hit) { filter = "tous" }
+                return (hit.id, [hit.id])
+            }
         }
         .environment(coach)
         .background(EduTheme.page.ignoresSafeArea())

@@ -67,6 +67,7 @@ final class PushManager: NSObject, ObservableObject {
         "edt": .timetable, "matin": .timetable, "bulletin": .bulletin,
         "message": .messages, "annonce": .announcements, "absence": .attendance,
         "confirmation": .teacherEvaluations, "saisie": .teacherEvaluations, "appel": .teacherAttendance,
+        "aconfirmer": .schoolHomework, "bilan": .schoolAttendance, "periode": .bulletins, "signalement": .signalements,
     ]
 
     func open(_ userInfo: [AnyHashable: Any]) {
@@ -216,9 +217,18 @@ struct PushPrefsCard: View {
         switch auth.primaryRole {
         case .parent: return parentKinds
         case .teacher: return teacherKinds
+        case .schoolAdmin: return adminKinds
         default: return studentKinds
         }
     }
+    private let adminKinds: [Kind] = [
+        Kind(id: "aconfirmer", icon: "checkmark.seal.fill", title: "Évaluations à confirmer", detail: "Quand un enseignant propose une évaluation", defaultOn: true),
+        Kind(id: "bilan", icon: "chart.bar.doc.horizontal", title: "Bilan du jour", detail: "À 17h30 : absences, retards et appels non faits", defaultOn: true),
+        Kind(id: "periode", icon: "calendar.badge.exclamationmark", title: "Fin de Trimestre", detail: "3 jours avant : évaluations encore sans notes", defaultOn: true),
+        Kind(id: "signalement", icon: "exclamationmark.bubble.fill", title: "Signalements", detail: "Un problème signalé dans l’application", defaultOn: true),
+        Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages des parents, élèves et enseignants", defaultOn: true),
+        Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces reçues", defaultOn: true),
+    ]
     private let teacherKinds: [Kind] = [
         Kind(id: "appel", icon: "checklist", title: "Appel non fait", detail: "10 minutes après la fin d’un cours sans appel", defaultOn: true),
         Kind(id: "saisie", icon: "square.and.pencil", title: "Notes à saisir", detail: "3 jours après une évaluation sans notes", defaultOn: true),
@@ -272,6 +282,7 @@ struct PushPrefsCard: View {
                             Text("Notifications désactivées").font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
                             Text(auth.primaryRole == .parent ? "Activez-les dans Réglages pour être prévenu des notes et absences."
                                  : auth.primaryRole == .teacher ? "Activez-les dans Réglages pour être prévenu des appels et des messages."
+                                 : auth.primaryRole == .schoolAdmin ? "Activez-les dans Réglages pour être prévenu des évaluations à confirmer et des messages."
                                  : "Active-les dans Réglages pour recevoir tes notes et exercices.").font(.caption).foregroundStyle(EduTheme.muted)
                         }
                         Spacer(minLength: 0)

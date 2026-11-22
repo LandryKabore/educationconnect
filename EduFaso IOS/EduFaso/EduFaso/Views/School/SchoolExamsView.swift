@@ -14,6 +14,8 @@ struct SchoolExamsView: View {
     @State private var ready = false
     @State private var error: String?
     @State private var busyId: String?
+    /// examen a tapped notification is about (briefly highlighted)
+    @State private var highlighted: Set<String> = []
     @State private var creating = false
     @State private var deleting: Exam?
     @State private var password = ""
@@ -137,6 +139,11 @@ struct SchoolExamsView: View {
             }
             .refreshable { await load() }
             .tabTour(tour, registry: coach, scroller: proxy)
+            .pushFocus(["aconfirmer"], ready: ready, proxy: proxy, highlighted: $highlighted) { f in
+                let ids = Set(f.ids("eval-a"))
+                guard let hits = Optional(shown.filter { ids.contains($0.id) }), let first = hits.first else { return nil }
+                return (first.id, Set(hits.map(\.id)))
+            }
         }
         .environment(coach)
         .background(EduTheme.page.ignoresSafeArea())
@@ -227,7 +234,7 @@ struct SchoolExamsView: View {
                 Text(g.name).font(.headline).foregroundStyle(EduTheme.ink)
                 Text("\(g.exams.count) examen\(g.exams.count > 1 ? "s" : "")").font(.caption).foregroundStyle(EduTheme.muted)
             }
-            ForEach(g.exams) { e in card(e) }
+            ForEach(g.exams) { e in card(e).pushHighlight(highlighted.contains(e.id)).id(e.id) }
         }
     }
 
