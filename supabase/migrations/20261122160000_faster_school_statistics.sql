@@ -1,6 +1,7 @@
 -- Statistiques: the page timed out for a school of ~2 000 pupils (18 s, over the 8 s limit of
 -- signed-in requests) and then said « Aucune année scolaire n'est définie ». Each step is now
 -- computed once (materialized) instead of being re-run for every pupil: same result, ~1 s.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 CREATE OR REPLACE FUNCTION public.ef_school_statistics(p_school uuid, p_year uuid DEFAULT NULL::uuid)
  RETURNS jsonb

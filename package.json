@@ -71,8 +71,10 @@
     "appId": "bf.edufaso.desktop",
     "productName": "EduFaso",
     "compression": "maximum",
+    "icon": "build/icon.png",
     "electronLanguages": ["fr", "en-US"],
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "files": [
@@ -89,7 +91,8 @@
           ]
         }
       ],
-      "artifactName": "EduFaso-Setup-${version}.${ext}"
+      "icon": "build/icon.png",
+      "artifactName": "EduFaso-Windows.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -105,12 +108,17 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64"
           ]
         }
       ],
-      "artifactName": "EduFaso-${version}-mac.${ext}",
-      "category": "public.app-category.education"
+      "icon": "build/icon.icns",
+      "artifactName": "EduFaso-Mac.${ext}",
+      "category": "public.app-category.education",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
       "title": "EduFaso"
