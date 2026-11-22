@@ -76,6 +76,9 @@ final class PushManager: NSObject, ObservableObject {
         let refs = userInfo["refs"] as? [String] ?? []
         // a parent's notification: which child it is about
         pendingChild = userInfo["child"] as? String
+        // the account it was sent to, and the portal it belongs to
+        pendingFor = userInfo["for"] as? String
+        pendingPortal = Self.portal(kind: kind, child: pendingChild, refs: refs)
         print("[push] tapped screen=\(raw ?? "nil") kind=\(kind ?? "nil") refs=\(refs)")
         // an évaluation is shown with its exact date on Examens
         let override: AppScreen? = kind == "evaluation" ? .exams : nil
@@ -89,6 +92,24 @@ final class PushManager: NSObject, ObservableObject {
     @Published var focus: PushFocus?
     /// Parents: the child the tapped notification is about.
     var pendingChild: String?
+    /// The account the tapped notification was sent to (nil for older notifications).
+    var pendingFor: String?
+    /// The portal the tapped notification belongs to, when its kind tells (nil: any).
+    var pendingPortal: AppRole?
+
+    private static func portal(kind: String?, child: String?, refs: [String]) -> AppRole? {
+        if child != nil { return .parent }
+        switch kind {
+        case "appel", "saisie", "confirmation": return .teacher
+        case "aconfirmer", "bilan", "periode", "signalement": return .schoolAdmin
+        case "absence": return .parent
+        case "note", "exercice", "rappel", "evaluation", "bulletin": return .student
+        case "edt", "composition", "matin":
+            if refs.contains(where: { $0.hasPrefix("edt-t") || $0.hasPrefix("compo-t") }) { return .teacher }
+            return refs.isEmpty ? nil : .student
+        default: return nil
+        }
+    }
 }
 
 /// What a tapped notification points at. Refs look like « note:<id> », « eval:<id> »,

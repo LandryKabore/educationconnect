@@ -434,7 +434,7 @@ private extension ProfileView {
             CoachMarkStep(
                 id: "prof.form", icon: "square.and.pencil",
                 title: t("Vos informations", "Tes informations"),
-                message: t("Modifiez votre prénom, votre nom, votre téléphone et votre sexe, puis touchez « Enregistrer ».", "Modifie ton prénom, ton nom, ta date de naissance, ton sexe et ton téléphone, puis touche « Enregistrer ».")
+                message: t("Votre sexe se modifie ici, puis « Enregistrer ». Pour corriger votre nom ou votre téléphone, contactez l’administration de l’école.", "Ton sexe se modifie ici, puis « Enregistrer ». Pour corriger ton nom, ta date de naissance ou ton téléphone, demande à l’administration de l’école.")
             ),
             CoachMarkStep(
                 id: "prof.account", icon: "person.text.rectangle",
@@ -639,10 +639,10 @@ private extension ProfileView {
                     .font(.subheadline)
                     .foregroundStyle(EduTheme.muted)
             }
-            field("Prénom", required: true, text: $form.firstName, content: .givenName)
-            field("Nom", required: true, text: $form.lastName, content: .familyName)
+            field("Prénom", required: true, text: $form.firstName, content: .givenName, locked: locked(\.firstName))
+            field("Nom", required: true, text: $form.lastName, content: .familyName, locked: locked(\.lastName))
             if isStudent { birthField } else {
-                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
+                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad, locked: locked(\.phone))
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -674,7 +674,17 @@ private extension ProfileView {
             }
 
             if isStudent {
-                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad)
+                field("Téléphone", required: true, text: $form.phone, content: .telephoneNumber, keyboard: .phonePad, locked: locked(\.phone))
+            }
+
+            if anyLocked {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "lock.fill").font(.caption).foregroundStyle(EduTheme.muted).padding(.top, 2)
+                    Text(t("Pour corriger votre nom ou votre téléphone, contactez l’administration de l’école.",
+                           "Pour corriger ton nom, ta date de naissance ou ton téléphone, demande à l’administration de l’école."))
+                        .font(.caption)
+                        .foregroundStyle(EduTheme.muted)
+                }
             }
 
             if let formError {
@@ -713,8 +723,51 @@ private extension ProfileView {
         .background(squareCard)
     }
 
+    /// Filled details are changed by the school, not here (sex stays editable; an empty field can be filled once).
+    func locked(_ key: KeyPath<ProfileForm, String>) -> Bool {
+        !baseline[keyPath: key].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var anyLocked: Bool {
+        locked(\.firstName) || locked(\.lastName) || locked(\.phone) || (isStudent && locked(\.dateOfBirth))
+    }
+
+    /// Read-only value with a lock, same size as a field.
+    func lockedValue(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(EduTheme.ink)
+            HStack(spacing: 8) {
+                Text(value).font(.subheadline).foregroundStyle(EduTheme.ink.opacity(0.75)).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "lock.fill").font(.caption).foregroundStyle(EduTheme.subtle)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 42)
+            .background(RoundedRectangle(cornerRadius: EduTheme.radius, style: .continuous)
+                .fill(Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255)))
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Modifiable par l’administration de l’école")
+        }
+    }
+
     /// Date of birth (student): French date picker; empty until chosen.
+    @ViewBuilder
     var birthField: some View {
+        if locked(\.dateOfBirth) {
+            lockedValue("Date de naissance", Self.frenchDate(baseline.dateOfBirth))
+        } else {
+            birthPicker
+        }
+    }
+
+    static func frenchDate(_ iso: String) -> String {
+        let parts = iso.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, (1...12).contains(parts[1]) else { return iso }
+        let months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+        return "\(parts[2]) \(months[parts[1] - 1]) \(parts[0])"
+    }
+
+    var birthPicker: some View {
         let iso = DateFormatter()
         iso.locale = Locale(identifier: "en_US_POSIX")
         iso.dateFormat = "yyyy-MM-dd"
@@ -759,12 +812,28 @@ private extension ProfileView {
         }
     }
 
+    @ViewBuilder
     func field(
         _ label: String,
         required: Bool,
         text: Binding<String>,
         content: UITextContentType,
-        keyboard: UIKeyboardType = .default
+        keyboard: UIKeyboardType = .default,
+        locked: Bool = false
+    ) -> some View {
+        if locked {
+            lockedValue(label, text.wrappedValue)
+        } else {
+            editableField(label, required: required, text: text, content: content, keyboard: keyboard)
+        }
+    }
+
+    func editableField(
+        _ label: String,
+        required: Bool,
+        text: Binding<String>,
+        content: UITextContentType,
+        keyboard: UIKeyboardType
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             (Text(label).foregroundStyle(EduTheme.ink) + (required ? Text(" *").foregroundStyle(EduTheme.fasoRed) : Text("")))
@@ -802,9 +871,13 @@ private extension ProfileView {
             formError = "Le champ « \(label) » est obligatoire."
             return
         }
-        var updates = ["first_name": trimmed.firstName, "last_name": trimmed.lastName, "phone": trimmed.phone]
+        // only sex and the details still empty (the rest is the school's)
+        var updates: [String: String] = [:]
+        if !locked(\.firstName) { updates["first_name"] = trimmed.firstName }
+        if !locked(\.lastName) { updates["last_name"] = trimmed.lastName }
+        if !locked(\.phone) { updates["phone"] = trimmed.phone }
         if !trimmed.gender.isEmpty { updates["gender"] = trimmed.gender }
-        if isStudent && !trimmed.dateOfBirth.isEmpty { updates["date_of_birth"] = trimmed.dateOfBirth }
+        if isStudent && !locked(\.dateOfBirth) && !trimmed.dateOfBirth.isEmpty { updates["date_of_birth"] = trimmed.dateOfBirth }
         saving = true
         let ok = await auth.saveProfile(updates)
         saving = false

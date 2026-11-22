@@ -12,6 +12,8 @@ struct RoleShellView: View {
     @State private var contentID = UUID()
     /// NavigationLink pushes (Présences, etc.) keep selection on dashboard — track real stack depth.
     @State private var navigationDepth = 1
+    /// tapped notification sent to another account
+    @State private var otherAccount: OtherAccountNotice?
 
     /// Root of the stack (Accueil / a menu screen) — not a pushed detail.
     private var isAtRoot: Bool {
@@ -41,6 +43,11 @@ struct RoleShellView: View {
         // (kept until the portal is ready: a tap that launches the app arrives during the opening screen)
         .onReceive(PushManager.shared.$pendingScreen) { _ in openPendingScreen() }
         .onChange(of: auth.portalReady) { _, _ in openPendingScreen() }
+        .alert(item: $otherAccount) { notice in
+            Alert(title: Text("Notification d’un autre compte"),
+                  message: Text(notice.message(current: auth.primaryRole)),
+                  dismissButton: .default(Text("Compris")))
+        }
         // everyone the server sends notifications to (a super admin only in Mode support)
         .task(id: auth.primaryRole) {
             if [.student, .parent, .teacher, .schoolAdmin].contains(auth.primaryRole) { await PushManager.shared.requestAndRegister() }
@@ -254,6 +261,20 @@ struct RoleShellView: View {
             }
             PushManager.shared.pendingScreen = nil
             menuOpen = false
+            // sent to another account (the phone changed account since): say so instead of opening
+            let push = PushManager.shared
+            let wrongUser = push.pendingFor.map { $0 != auth.userId } ?? false
+            let wrongPortal = push.pendingPortal.map { $0 != auth.primaryRole } ?? false
+            if wrongUser || wrongPortal {
+                otherAccount = OtherAccountNotice(portal: push.pendingPortal)
+                push.focus = nil
+                push.pendingChild = nil
+                push.pendingFor = nil
+                push.pendingPortal = nil
+                return
+            }
+            push.pendingFor = nil
+            push.pendingPortal = nil
             // a parent: the child's own screen, showing that child
             if auth.primaryRole == .parent {
                 if let child = PushManager.shared.pendingChild {
@@ -267,6 +288,29 @@ struct RoleShellView: View {
             }
             print("[push] opening \(screen.rawValue)")
             openScreen(screen)
+        }
+    }
+
+    /// « Cette notification est destinée au portail Parent… »
+    struct OtherAccountNotice: Identifiable {
+        let id = UUID()
+        let portal: AppRole?
+
+        static func name(_ role: AppRole?) -> String? {
+            switch role {
+            case .student: return "Élève"
+            case .parent: return "Parent"
+            case .teacher: return "Enseignant"
+            case .schoolAdmin: return "Administration"
+            case .superAdmin: return "Super administrateur"
+            case nil: return nil
+            }
+        }
+
+        func message(current: AppRole?) -> String {
+            let target = Self.name(portal).map { "au portail \($0)" } ?? "à un autre compte"
+            let now = Self.name(current).map { ", mais vous êtes connecté au portail \($0)" } ?? ""
+            return "Cette notification est destinée \(target)\(now). Pour l’ouvrir, déconnectez-vous puis connectez-vous avec le bon compte."
         }
     }
 
