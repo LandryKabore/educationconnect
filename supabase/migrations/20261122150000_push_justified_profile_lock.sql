@@ -3,6 +3,7 @@
 -- 2. Profile: a person edits only their sex (and photo) themself. Name, phone, date of birth and
 --    address can be filled once when empty (profile completion); after that only the school
 --    (or a super admin) changes them.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 create or replace function public.ef_push_enqueue_parents(
   p_student uuid, p_kind text, p_title text, p_body text, p_screen text,
