@@ -71,6 +71,7 @@ final class PushManager: NSObject, ObservableObject {
     func open(_ userInfo: [AnyHashable: Any]) {
         let raw = userInfo["screen"] as? String
         let kind = userInfo["kind"] as? String
+        print("[push] tapped screen=\(raw ?? "nil") kind=\(kind ?? "nil")")
         if let screen = raw.flatMap(AppScreen.init(rawValue:)) ?? (raw == "notes" ? .grades : nil) ?? kind.flatMap({ Self.screenOfKind[$0] }) {
             pendingScreen = screen
         }
@@ -79,13 +80,21 @@ final class PushManager: NSObject, ObservableObject {
 
 extension PushManager: UNUserNotificationCenterDelegate {
     // app open: still show the banner
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    // completion-handler versions: the async ones finish off the main thread, and iOS ends the app
+    // (« Call must be made on main thread »)
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list, .sound])
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        await MainActor.run { PushManager.shared.open(info) }
+        nonisolated(unsafe) let payload = info
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { PushManager.shared.open(payload) }
+            completionHandler()
+        }
     }
 }
 

@@ -320,7 +320,8 @@ struct TimetableView: View {
         if today != 7 {
             let lastEnd = slotsForWeek(0).filter { $0.dayOfWeek == today }.map { minutes($0.endTime) }.max()
             if let lastEnd, nowMin < lastEnd { return (0, today) }
-            if let next = (today + 1...6).first(where: { schoolDays.contains($0) }) { return (0, next) }
+            // (Saturday: nothing left this week — 7...6 would crash)
+            if let next = (1...6).first(where: { $0 > today && schoolDays.contains($0) }) { return (0, next) }
         }
         return (1, (1...6).first(where: { schoolDays.contains($0) }) ?? 1)
     }

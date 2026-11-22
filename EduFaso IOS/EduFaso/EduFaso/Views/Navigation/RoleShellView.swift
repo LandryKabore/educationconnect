@@ -244,9 +244,15 @@ struct RoleShellView: View {
         contentID = UUID()
     }
 
+    /// Read on the next turn of the main loop: @Published announces a change before storing it.
     private func openPendingScreen() {
-        guard let screen = PushManager.shared.pendingScreen, auth.portalReady, auth.primaryRole != nil else { return }
         DispatchQueue.main.async {
+            guard let screen = PushManager.shared.pendingScreen else { return }
+            guard auth.portalReady, auth.primaryRole != nil else {
+                print("[push] waiting for the portal to open \(screen.rawValue)")
+                return
+            }
+            print("[push] opening \(screen.rawValue)")
             PushManager.shared.pendingScreen = nil
             menuOpen = false
             openScreen(screen)
