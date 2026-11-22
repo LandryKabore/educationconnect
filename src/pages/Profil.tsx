@@ -24,6 +24,14 @@ import {
 } from "@/components/ui";
 import { cn, fromAuthEmail, fullName } from "@/lib/utils";
 
+// 2012-05-03 → 3 mai 2012
+function formatFrDate(iso: string) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!d) return iso;
+  const months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  return `${Number(d[3])} ${months[Number(d[2]) - 1]} ${d[1]}`;
+}
+
 export default function Profil() {
   const { t } = useTranslation();
   const { user, profile, role, realRole, refreshProfile, schools, schoolId } = useAuth();
@@ -74,6 +82,10 @@ export default function Profil() {
 
   const dirty = isFormDirty(values, baseline);
 
+  // filled details are changed by the school, not here (sex stays editable)
+  const isLocked = (f: (typeof fieldDefs)[number]) =>
+    f.type !== "gender" && !!baseline[f.key]?.trim() && effectiveRole !== "super_admin";
+
   const setField = (key: ProfileFieldKey, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
@@ -92,6 +104,7 @@ export default function Profil() {
     setSaving(true);
     const payload: Record<string, string | null> = {};
     for (const f of fieldDefs) {
+      if (isLocked(f)) continue;
       const raw = values[f.key]?.trim() ?? "";
       payload[f.key] = raw || null;
     }
@@ -134,7 +147,14 @@ export default function Profil() {
         {f.label}
         {f.required ? <span className="text-red-600"> *</span> : null}
       </Label>
-      {f.type === "date" ? (
+      {isLocked(f) ? (
+        <Input
+          id={`profil-${f.key}`}
+          value={f.type === "date" ? formatFrDate(values[f.key] ?? "") : values[f.key] ?? ""}
+          disabled
+          className="bg-slate-50 text-slate-700 dark:bg-white/5 dark:text-slate-300"
+        />
+      ) : f.type === "date" ? (
         <DateInputFr
           id={`profil-${f.key}`}
           value={values[f.key] ?? ""}
@@ -254,6 +274,13 @@ export default function Profil() {
                 {formal ? "Elles permettent à l’école de vous joindre." : "Elles apparaissent sur ton bulletin et pour l’école."}
               </p>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">{fieldDefs.map(renderField)}</div>
+              {fieldDefs.some(isLocked) ? (
+                <p className="mt-4 text-sm text-slate-500">
+                  {formal
+                    ? "Pour corriger votre nom, votre téléphone ou votre date de naissance, contactez l’administration de l’école."
+                    : "Pour corriger ton nom, ton téléphone ou ta date de naissance, demande à l’administration de l’école."}
+                </p>
+              ) : null}
               <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-[var(--border)]">
                 <SaveButton saving={saving} dirty={dirty} />
                 {dirty ? (

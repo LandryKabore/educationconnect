@@ -118,6 +118,8 @@ Deno.serve(async (req) => {
       screen: n.screen,
       kind: n.kind,
       refs: n.refs,
+      // the account it is for: on a phone signed in to another account, the app says so
+      for: n.user_id,
       child: n.child,
     });
     for (const t of tokens.filter((t) => t.user_id === n.user_id)) {
