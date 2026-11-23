@@ -2,6 +2,7 @@
 -- (only their members and the classmates invited see them). Whoever creates a group picks the
 -- classmates to invite; members of a group can invite more (6 people at most, invitations included).
 -- The invited classmate is notified and accepts or declines. The administration still sees everything.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 23 Nov 2026.
 
 alter table public.ef_space_groups add column if not exists visibility text not null default 'public'
   check (visibility in ('public', 'private'));
