@@ -20,7 +20,8 @@
     "dist:desktop": "npm run build:electron && electron-builder --win nsis --x64 && electron-builder --mac dmg --universal",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:add:android": "npx cap add android"
+    "cap:add:android": "npx cap add android",
+    "release:desktop": "npm run build:electron && electron-builder --mac --win --publish always"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
@@ -31,6 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "electron-updater": "^6.6.2",
     "fflate": "^0.8.2",
     "i18next": "^26.3.6",
     "jspdf": "^4.2.1",
@@ -72,7 +74,10 @@
     "productName": "EduFaso",
     "compression": "maximum",
     "icon": "build/icon.png",
-    "electronLanguages": ["fr", "en-US"],
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "directories": {
       "buildResources": "build",
       "output": "release"
@@ -110,6 +115,12 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "icon": "build/icon.icns",
@@ -123,6 +134,13 @@
     "dmg": {
       "title": "EduFaso"
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LandryKabore",
+        "repo": "educationconnect",
+        "releaseType": "release"
+      }
+    ]
   }
 }

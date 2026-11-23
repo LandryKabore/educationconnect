@@ -7,8 +7,12 @@ import { readFileSync } from "fs";
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8")) as { version: string };
 
+// Every build gets its own id, also written to /version.json: open tabs compare the two and
+// show « Nouvelle version — Recharger » after each deployment, with nothing to publish by hand.
+const BUILD_ID = `${pkg.version}-${Date.now().toString(36)}`;
+
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILD_ID__: JSON.stringify(BUILD_ID) },
   // Electron needs relative assets; GitHub Pages needs the repo base path
   base:
     process.env.ELECTRON === "true"
@@ -17,6 +21,12 @@ export default defineConfig({
         ? "/educationconnect/"
         : "/",
   plugins: [
+    {
+      name: "edufaso-version-file",
+      generateBundle() {
+        this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ version: pkg.version, build: BUILD_ID }) });
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, RefreshCw, Sparkles } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui";
-import { APP_VERSION } from "@/lib/appInfo";
+import { APP_VERSION, BUILD_ID } from "@/lib/appInfo";
 import {
   compareVersions,
   currentReleasePlatform,
@@ -68,7 +68,22 @@ export function UpdatePrompt() {
   const current = APP_VERSION;
   const dev = current === "dev";
 
-  const newer = !!latest && !dev && compareVersions(latest.version, current) > 0;
+  // web: the deployed site's build id; a different one means a new deployment
+  const { data: deployed } = useQuery({
+    queryKey: ["deployed-build"],
+    enabled: platform === "web" && BUILD_ID !== "dev",
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env.BASE_URL}version.json?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      return (await res.json()) as { version: string; build: string };
+    },
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+  const redeployed = platform === "web" && !!deployed?.build && deployed.build !== BUILD_ID;
+
+  const newer = (!!latest && !dev && compareVersions(latest.version, current) > 0) || redeployed;
   const required = !!latest?.minVersion && !dev && compareVersions(current, latest.minVersion) < 0;
   const snoozed = read(SNOOZE_KEY) === `${latest?.version}|${new Date().toDateString()}`;
   const [closed, setClosed] = useState(false);
@@ -89,7 +104,8 @@ export function UpdatePrompt() {
           <div className="sticky top-0 z-40 flex flex-wrap items-center justify-center gap-3 bg-brand-700 px-4 py-2 text-sm text-white">
             <Sparkles className="h-4 w-4" />
             <span>
-              <strong>Nouvelle version d’EduFaso ({latest!.version})</strong> · {latest!.title}
+              <strong>Nouvelle version d’EduFaso{deployed?.version ? ` (${deployed.version})` : latest ? ` (${latest.version})` : ""}</strong>
+              {latest && compareVersions(latest.version, current) > 0 ? ` · ${latest.title}` : ""}
             </span>
             <button
               type="button"
@@ -106,7 +122,9 @@ export function UpdatePrompt() {
   }
 
   const url = latest?.downloadUrl ?? defaultDownloadUrl(platform);
-  const showUpdate = newer && (required || (!snoozed && !closed));
+  // Windows / Mac apps check GitHub Releases themselves (electron/updater.cjs)
+  const selfUpdating = platform === "windows" || platform === "mac";
+  const showUpdate = !selfUpdating && newer && (required || (!snoozed && !closed));
   return (
     <>
       <Modal
