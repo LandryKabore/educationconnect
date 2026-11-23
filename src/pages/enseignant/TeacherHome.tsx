@@ -548,7 +548,7 @@ export default function TeacherHome() {
           to="/devoirs"
         />
         <MetricCard
-          label="Devoirs"
+          label="Examens"
           value={String(data.examensCount)}
           hint="Surveillés"
           valueClass="text-violet-600"
@@ -613,7 +613,7 @@ export default function TeacherHome() {
 
         <Panel
           icon={FileText}
-          title="Prochains devoirs"
+          title="Prochains examens"
           subtitle="Vos dates à venir"
           action={
             <Link to="/devoirs" className="block">

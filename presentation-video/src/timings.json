@@ -1,0 +1,134 @@
+[
+  {
+    "id": "intro",
+    "seconds": 14.313
+  },
+  {
+    "id": "probleme",
+    "seconds": 14.577
+  },
+  {
+    "id": "promesse",
+    "seconds": 13.087
+  },
+  {
+    "id": "connexion",
+    "seconds": 16.352
+  },
+  {
+    "id": "admin-titre",
+    "seconds": 4.872
+  },
+  {
+    "id": "admin-accueil",
+    "seconds": 16.89
+  },
+  {
+    "id": "admin-structure",
+    "seconds": 15.381
+  },
+  {
+    "id": "admin-personnes",
+    "seconds": 18.093
+  },
+  {
+    "id": "admin-vie",
+    "seconds": 13.18
+  },
+  {
+    "id": "admin-bulletins",
+    "seconds": 15.076
+  },
+  {
+    "id": "admin-annonces",
+    "seconds": 12.209
+  },
+  {
+    "id": "prof-titre",
+    "seconds": 5.265
+  },
+  {
+    "id": "prof-accueil",
+    "seconds": 11.85
+  },
+  {
+    "id": "prof-appel",
+    "seconds": 12.729
+  },
+  {
+    "id": "prof-cahier",
+    "seconds": 10.22
+  },
+  {
+    "id": "prof-notes",
+    "seconds": 16.109
+  },
+  {
+    "id": "prof-messages",
+    "seconds": 11.902
+  },
+  {
+    "id": "eleve-titre",
+    "seconds": 4.716
+  },
+  {
+    "id": "eleve-accueil",
+    "seconds": 16.867
+  },
+  {
+    "id": "eleve-notes",
+    "seconds": 10.196
+  },
+  {
+    "id": "eleve-travail",
+    "seconds": 11.584
+  },
+  {
+    "id": "eleve-presences",
+    "seconds": 11.827
+  },
+  {
+    "id": "eleve-bulletin",
+    "seconds": 12.232
+  },
+  {
+    "id": "eleve-echanges",
+    "seconds": 11.156
+  },
+  {
+    "id": "parent-titre",
+    "seconds": 7.722
+  },
+  {
+    "id": "parent-accueil",
+    "seconds": 13.411
+  },
+  {
+    "id": "parent-suivi",
+    "seconds": 12.544
+  },
+  {
+    "id": "parent-travail",
+    "seconds": 9.399
+  },
+  {
+    "id": "parent-messages",
+    "seconds": 11.827
+  },
+  {
+    "id": "direct",
+    "seconds": 16.439
+  },
+  {
+    "id": "securite",
+    "seconds": 13.504
+  },
+  {
+    "id": "appareils",
+    "seconds": 8.081
+  },
+  {
+    "id": "fin",
+    "seconds": 4.566
+  }
+]

@@ -1,0 +1,217 @@
+[
+  {
+    "id": "intro",
+    "kind": "title",
+    "title": "Une journée à l’école",
+    "subtitle": "Complexe scolaire Les Flamboyants · Ouagadougou",
+    "text": "Sept heures du matin, à Ouagadougou. Au Complexe scolaire Les Flamboyants, deux mille élèves arrivent en classe. Et avec eux, des centaines d’informations : des appels, des notes, des devoirs, des messages pour les parents."
+  },
+  {
+    "id": "probleme",
+    "kind": "problem",
+    "title": "Le constat",
+    "bullets": [
+      "Des registres d’appel et des cahiers de notes sur papier",
+      "Des notes qui arrivent tard, ou qui se perdent",
+      "Des parents informés trop tard"
+    ],
+    "text": "Aujourd’hui, dans beaucoup d’écoles, tout passe encore par le papier. Les registres d’appel se remplissent à la main. Les notes arrivent tard, quand elles ne se perdent pas. Et les parents apprennent une absence, ou une mauvaise note, bien après les faits."
+  },
+  {
+    "id": "promesse",
+    "kind": "title",
+    "title": "EduFaso",
+    "subtitle": "Une seule école. Quatre espaces. Les mêmes informations, en direct.",
+    "text": "EduFaso change cela. Une seule plateforme, quatre espaces : l’administration, les enseignants, les élèves et les parents. Chacun voit la même école, au même moment, avec ce qui le concerne."
+  },
+  {
+    "id": "connexion",
+    "kind": "screen",
+    "portal": "Connexion",
+    "text": "Tout commence par la connexion. Chaque personne reçoit un identifiant de son établissement. Sur un appareil partagé, les comptes peuvent être enregistrés : un clic suffit pour entrer. Et le même compte fonctionne sur l’ordinateur, le téléphone et le navigateur."
+  },
+  {
+    "id": "admin-titre",
+    "kind": "chapter",
+    "number": "1",
+    "title": "L’administration",
+    "subtitle": "Boukary Sanou, directeur du Complexe scolaire Les Flamboyants",
+    "text": "Commençons par l’administration. Boukary Sanou dirige l’établissement."
+  },
+  {
+    "id": "admin-accueil",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "Sur son tableau de bord, toute l’école tient sur un écran : le nombre de classes, d’élèves et d’enseignants, et surtout ce qui demande son attention. Des examens à confirmer, des élèves sans classe, des classes sans emploi du temps. Un clic, et il est au bon endroit."
+  },
+  {
+    "id": "admin-structure",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "C’est ici qu’il prépare l’année : l’année scolaire et ses trois trimestres, qu’il peut clôturer une fois les notes arrêtées. Les classes, les matières, et le programme de chaque classe, avec ses coefficients. Tout le calcul des moyennes en découle automatiquement."
+  },
+  {
+    "id": "admin-personnes",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "Les élèves, les enseignants et les parents ont chacun leur fiche. Avec deux mille élèves, la recherche est essentielle : une touche, et il retrouve n’importe qui, par son nom, sa classe ou son matricule. Sur la fiche d’un élève, il voit ses notes, ses présences et ses parents, en direct."
+  },
+  {
+    "id": "admin-vie",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "Il construit les emplois du temps, classe par classe. Il valide les examens proposés par les enseignants, programme les compositions de fin de trimestre, et suit les absences de toute l’école, qu’il peut justifier en lot."
+  },
+  {
+    "id": "admin-bulletins",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "À la fin du trimestre, les bulletins sont prêts : moyennes, rangs, appréciations, pour toute une classe en une fois. Chaque bulletin porte un code QR, qui permet à n’importe qui de vérifier qu’il est authentique. Fini les bulletins falsifiés."
+  },
+  {
+    "id": "admin-annonces",
+    "kind": "screen",
+    "portal": "Administration",
+    "text": "Et pour toute l’école, il publie des annonces : une réunion des parents, un jour férié, un changement d’horaire. Elles arrivent instantanément chez chacun, selon son rôle, et il voit qui les a lues."
+  },
+  {
+    "id": "prof-titre",
+    "kind": "chapter",
+    "number": "2",
+    "title": "L’enseignant",
+    "subtitle": "Issouf Zongo, professeur de français",
+    "text": "Passons maintenant de l’autre côté du bureau. Issouf Zongo est professeur de français."
+  },
+  {
+    "id": "prof-accueil",
+    "kind": "screen",
+    "portal": "Enseignant",
+    "text": "En arrivant, son accueil lui dit l’essentiel : le cours en cours, le suivant, et les appels qu’il lui reste à faire aujourd’hui. Ses classes, ses élèves et ses messages sont à portée de main."
+  },
+  {
+    "id": "prof-appel",
+    "kind": "screen",
+    "portal": "Enseignant",
+    "text": "L’appel se fait en quelques secondes. Tous les élèves sont présents par défaut : il touche seulement les absents et les retards, puis il valide. À l’instant même, l’administration et les parents sont informés."
+  },
+  {
+    "id": "prof-cahier",
+    "kind": "screen",
+    "portal": "Enseignant",
+    "text": "Après le cours, il remplit le cahier de textes : la leçon du jour, et le travail à faire pour la prochaine fois. Les élèves de la classe et leurs parents le voient aussitôt."
+  },
+  {
+    "id": "prof-notes",
+    "kind": "screen",
+    "portal": "Enseignant",
+    "text": "Pour les notes, il choisit sa classe et son évaluation, puis il saisit les notes comme dans un tableau. Les moyennes se calculent seules, avec les bons coefficients. Il propose aussi ses examens, que l’administration confirme, et retrouve son emploi du temps de la semaine."
+  },
+  {
+    "id": "prof-messages",
+    "kind": "screen",
+    "portal": "Enseignant",
+    "text": "Pour communiquer, il écrit à un élève, à un parent ou à l’administration, et peut envoyer une annonce à toute une classe en une seule fois. Les réponses arrivent dans sa messagerie, comme une conversation."
+  },
+  {
+    "id": "eleve-titre",
+    "kind": "chapter",
+    "number": "3",
+    "title": "L’élève",
+    "subtitle": "Fatoumata Nikiéma, élève de sixième A",
+    "text": "Et du côté des élèves ? Voici Fatoumata Nikiéma, en sixième A."
+  },
+  {
+    "id": "eleve-accueil",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Son accueil lui parle directement : sa moyenne du trimestre, son taux de présence, ce qu’elle a à préparer, et son prochain cours, avec le temps qui reste. En dessous, sa journée défile comme une frise : les cours terminés, le cours en cours, et ceux qui arrivent."
+  },
+  {
+    "id": "eleve-notes",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Dans Mes notes, elle retrouve chaque note dès sa publication, sa moyenne du trimestre, son évolution, et sa moyenne annuelle, calculées exactement comme sur le bulletin."
+  },
+  {
+    "id": "eleve-travail",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Ses exercices de maison et ses examens sont classés par date, avec un compte à rebours. Les compositions de fin de trimestre ont leur propre calendrier. Plus d’excuse pour avoir oublié."
+  },
+  {
+    "id": "eleve-presences",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Ses présences s’affichent comme un calendrier : vert pour présent, rouge pour absent, jaune pour un retard. Et son emploi du temps de la semaine montre, en direct, la ligne rouge de l’heure qu’il est."
+  },
+  {
+    "id": "eleve-bulletin",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Son bulletin est toujours disponible : sa moyenne, son rang, la moyenne de la classe et l’avis du conseil de classe, avec le bulletin officiel à télécharger en PDF, pour chaque trimestre et pour l’année."
+  },
+  {
+    "id": "eleve-echanges",
+    "kind": "screen",
+    "portal": "Élève",
+    "text": "Elle peut aussi écrire directement à ses professeurs, lire les annonces de l’école, et personnaliser son profil : sa photo se recadre en un geste, et ses informations restent à jour."
+  },
+  {
+    "id": "parent-titre",
+    "kind": "chapter",
+    "number": "4",
+    "title": "Le parent",
+    "subtitle": "Aïcha Konaté, mère de Fatoumata et d’Ousmane",
+    "text": "Enfin, il y a les parents. Aïcha Konaté a deux enfants dans l’école : Fatoumata, et son petit frère Ousmane."
+  },
+  {
+    "id": "parent-accueil",
+    "kind": "screen",
+    "portal": "Parent",
+    "text": "Une seule connexion pour ses deux enfants. Sur son accueil, elle choisit l’enfant dont elle veut voir le suivi. Moyenne, présence, choses à faire : tout est résumé, et les alertes importantes passent en premier."
+  },
+  {
+    "id": "parent-suivi",
+    "kind": "screen",
+    "portal": "Parent",
+    "text": "Elle voit les mêmes notes, les mêmes présences et le même bulletin que ses enfants. Rien n’est caché, rien n’arrive en retard. Elle peut télécharger le bulletin, et vérifier son authenticité grâce au code QR."
+  },
+  {
+    "id": "parent-travail",
+    "kind": "screen",
+    "portal": "Parent",
+    "text": "Elle suit aussi le cahier de textes de la classe, les examens à venir et le calendrier des compositions. Elle sait ce que ses enfants doivent préparer, et quand."
+  },
+  {
+    "id": "parent-messages",
+    "kind": "screen",
+    "portal": "Parent",
+    "text": "Si une absence doit être justifiée, ou si elle a une question, elle écrit directement au professeur ou à l’administration. Et elle reçoit les annonces de l’école, comme la prochaine réunion des parents."
+  },
+  {
+    "id": "direct",
+    "kind": "sync",
+    "title": "Tout est relié",
+    "text": "Le plus important, c’est que tout est relié. Quand le professeur fait l’appel, l’absence apparaît aussitôt chez l’administration, chez l’élève et chez le parent. Quand une note est publiée, elle arrive partout en même temps. Une seule information, au même moment, pour tous."
+  },
+  {
+    "id": "securite",
+    "kind": "title",
+    "title": "Chacun à sa place",
+    "subtitle": "Chaque compte ne voit que ce qui le concerne",
+    "text": "Et chacun ne voit que ce qui le concerne. Un élève ne voit que ses propres notes. Un parent, seulement celles de ses enfants. Un enseignant, ses classes. Les données de l’école sont protégées, compte par compte."
+  },
+  {
+    "id": "appareils",
+    "kind": "screen",
+    "portal": "Applications",
+    "text": "EduFaso fonctionne dans le navigateur, sur ordinateur avec l’application Windows et Mac, et bientôt sur Android et sur iPhone."
+  },
+  {
+    "id": "fin",
+    "kind": "outro",
+    "title": "Tout le monde voit la même école,",
+    "subtitle": "chacun à sa place.",
+    "text": "EduFaso. Tout le monde voit la même école, chacun à sa place."
+  }
+]

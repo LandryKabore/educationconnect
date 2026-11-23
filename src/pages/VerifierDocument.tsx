@@ -14,6 +14,19 @@ function frDate(iso: string | null | undefined) {
   return y && m && d ? `${d}/${m}/${y}` : iso;
 }
 
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
+/** Opens the native app verifier when installed (`edufaso://`). Falls back to this page. */
+function openInEduFasoApp(code: string) {
+  const clean = code.trim();
+  if (!clean) return;
+  const appUrl = `edufaso://verifier?c=${encodeURIComponent(clean)}`;
+  window.location.href = appUrl;
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 border-b border-slate-100 py-2 text-sm last:border-0 dark:border-slate-700">
@@ -37,13 +50,21 @@ export default function VerifierDocument() {
   const [error, setError] = useState<string | null>(null);
   const lastKey = useRef("");
 
-  const run = async (c: string, avg?: string) => {
+  const normalizeAverage = (raw: string): string | null => {
+    const cleaned = raw.trim().replace(/\s/g, "").replace(",", ".");
+    const n = Number(cleaned);
+    if (!Number.isFinite(n) || n < 0 || n > 20) return null;
+    return (Math.round(n * 100) / 100).toFixed(2);
+  };
+
+  const run = async (c: string, avg: string) => {
     const clean = c.trim();
-    if (!clean) return;
+    const normalizedAvg = normalizeAverage(avg);
+    if (!clean || !normalizedAvg) return;
     setLoading(true);
     setError(null);
     try {
-      setResult(await verifyDocument(clean, avg));
+      setResult(await verifyDocument(clean, normalizedAvg));
     } catch (e) {
       setResult(null);
       setError(e instanceof Error ? e.message : "Vérification indisponible.");
@@ -52,16 +73,23 @@ export default function VerifierDocument() {
     }
   };
 
-  // opened from the QR code: check straight away
+  // QR opens with code filled — try the native app on phones, else stay here for moyenne.
   useEffect(() => {
     if (!urlCode || lastKey.current === urlCode) return;
     lastKey.current = urlCode;
     setCode(urlCode);
-    void run(urlCode);
+    if (isMobileBrowser()) {
+      openInEduFasoApp(urlCode);
+    }
   }, [urlCode]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!normalizeAverage(average)) {
+      setError("Indiquez la moyenne générale imprimée (ex. 11,01).");
+      setResult(null);
+      return;
+    }
     if (code.trim() !== urlCode) setParams({ c: code.trim() }, { replace: true });
     lastKey.current = code.trim();
     void run(code, average);
@@ -84,6 +112,17 @@ export default function VerifierDocument() {
           Scannez le QR code d’un bulletin EduFaso, ou saisissez le code imprimé sur le document.
         </p>
 
+        {code.trim() ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 w-full"
+            onClick={() => openInEduFasoApp(code)}
+          >
+            Ouvrir dans l’app EduFaso
+          </Button>
+        ) : null}
+
         <form onSubmit={submit} className="mt-5 space-y-3">
           <div>
             <Label htmlFor="doc-code">Code du document</Label>
@@ -100,21 +139,28 @@ export default function VerifierDocument() {
             />
           </div>
           <div>
-            <Label htmlFor="doc-moyenne">Moyenne générale imprimée (facultatif)</Label>
+            <Label htmlFor="doc-moyenne">
+              Moyenne générale imprimée <span className="text-red-600">*</span>
+            </Label>
             <Input
               id="doc-moyenne"
               value={average}
               onChange={(e) => setAverage(e.target.value)}
-              placeholder="ex. 12,45"
+              placeholder="ex. 11,01"
               inputMode="decimal"
               autoComplete="off"
               maxLength={6}
+              required
             />
             <p className="mt-1 text-xs text-slate-500">
-              Permet de contrôler que la moyenne écrite sur le papier est bien celle enregistrée.
+              Exactement comme sur le bulletin (2 décimales) — 11,01 ≠ 11,1.
             </p>
           </div>
-          <Button type="submit" className="w-full" disabled={loading || !code.trim()}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || !code.trim() || !normalizeAverage(average)}
+          >
             {loading ? "Vérification…" : "Vérifier"}
           </Button>
         </form>
@@ -185,8 +231,8 @@ export default function VerifierDocument() {
               ) : null}
               {result.grade_check === "mismatch" ? (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
-                  Attention : la moyenne générale saisie ne correspond PAS à celle enregistrée.
-                  Le papier a peut-être été modifié.
+                  La moyenne saisie ne correspond pas. Reprenez les 2 décimales du bulletin
+                  (ex. 11,01 ≠ 11,1). Si la saisie est exacte, le papier a peut-être été modifié.
                 </p>
               ) : null}
             </div>
