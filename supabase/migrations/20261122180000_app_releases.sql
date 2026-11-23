@@ -4,6 +4,7 @@
 -- « Nouveautés » and download link. Each app compares itself with the latest version of its
 -- platform: older → « Mise à jour disponible » (or a required update below min_version);
 -- just updated → « Nouveautés » once. With notify, everyone with the app gets a push.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 23 Nov 2026.
 
 create table if not exists public.app_releases (
   id           uuid primary key default gen_random_uuid(),
