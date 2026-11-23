@@ -31,6 +31,8 @@ const SUMMARY: Record<string, (n: number) => string> = {
   saisie: (n) => `${n} évaluations à noter`,
   aconfirmer: (n) => `${n} évaluations à confirmer`,
   signalement: (n) => `${n} nouveaux signalements`,
+  classe: (n) => `${n} nouveautés dans ton espace classe`,
+  moderation: (n) => `Espace classe : ${n} messages signalés`,
   bulletin: () => "Bulletins disponibles",
 };
 

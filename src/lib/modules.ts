@@ -18,6 +18,7 @@ export type ModuleKey =
   | "presences"
   | "saisie_secretariat"
   | "messages"
+  | "espace_classe"
   | "statistiques"
   | "frais_scolarite"
   | "discipline"
@@ -180,6 +181,16 @@ export const MODULES: ModuleDef[] = [
     defaultEnabled: true,
     requires: [],
     paths: [/^\/messages/, /^\/annonces/],
+  },
+  {
+    key: "espace_classe",
+    name: "Espace classe",
+    description: "Les élèves d'une même classe (secondaire) s'entraident : questions, fiches de révision, groupes de travail.",
+    category: "communication",
+    available: true,
+    defaultEnabled: true,
+    requires: [],
+    paths: [/^\/espace-classe/],
   },
   {
     key: "statistiques",

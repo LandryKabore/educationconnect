@@ -45,6 +45,8 @@ const PresencesEcole = lazy(() => import("@/pages/ecole/PresencesEcole"));
 // nov3: cahier de textes (#31) and annual statistics (#32), loaded on demand
 const CahierEcole = lazy(() => import("@/pages/ecole/CahierEcole"));
 const Statistiques = lazy(() => import("@/pages/ecole/Statistiques"));
+const EspaceClasse = lazy(() => import("@/pages/eleve/EspaceClasse"));
+const EspaceClasseEcole = lazy(() => import("@/pages/ecole/EspaceClasseEcole"));
 const MonCahier = lazy(() => import("@/pages/eleve/MonCahier"));
 const EnfantCahier = lazy(() => import("@/pages/parent/EnfantCahier"));
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
@@ -573,6 +575,26 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["student"]}>
               <MesCompositions />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/espace-classe"
+          element={
+            <RequireAuth roles={["student"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <EspaceClasse />
+              </Suspense>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/espace-classe-ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <EspaceClasseEcole />
+              </Suspense>
             </RequireAuth>
           }
         />

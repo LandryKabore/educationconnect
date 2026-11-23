@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookMarked,
   BarChart3,
@@ -20,6 +21,7 @@ import {
   Megaphone,
   Menu,
   MessageSquare,
+  MessagesSquare,
   PencilLine,
   School,
   Search,
@@ -81,6 +83,7 @@ import { useTeacherTodo } from "@/hooks/useTeacherTodo";
 import { ModuleGate } from "@/components/ModuleGate";
 import { useMyModules } from "@/hooks/useSchoolModules";
 import { moduleForPath } from "@/lib/modules";
+import { fetchSpaceContext } from "@/lib/espaceClasse";
 
 interface NavItem {
   to: string;
@@ -216,6 +219,11 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           icon: <Megaphone className="h-4 w-4" />,
           badgeKey: "annonces-unread",
         },
+        {
+          to: "/espace-classe-ecole",
+          label: "Espace classe",
+          icon: <MessagesSquare className="h-4 w-4" />,
+        },
       ],
     },
   ],
@@ -327,6 +335,11 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
           to: "/mes-profs",
           label: "Mes profs",
           icon: <Users className="h-4 w-4" />,
+        },
+        {
+          to: "/espace-classe",
+          label: "Espace classe",
+          icon: <MessagesSquare className="h-4 w-4" />,
         },
       ],
     },
@@ -473,10 +486,18 @@ export function AppShell() {
     : [];
   // Hide the menu items of modules that are off for this school.
   const { isOn: moduleOn } = useMyModules();
+  const { data: spaceCtx } = useQuery({
+    queryKey: ["espace-classe", "context", user?.id],
+    enabled: !!user?.id && role === "student",
+    queryFn: fetchSpaceContext,
+  });
+
   const visibleRoleGroups = roleGroups
     .map((g) => ({
       ...g,
       items: g.items.filter((item) => {
+        // the class space: students of the secondaire only
+        if (item.to === "/espace-classe" && !spaceCtx?.enabled) return false;
         const mod = moduleForPath(item.to);
         return !mod || moduleOn(mod.key);
       }),

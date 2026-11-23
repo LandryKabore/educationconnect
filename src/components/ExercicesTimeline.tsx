@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { BookOpenCheck, CheckCircle2, ChevronDown, NotebookPen } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, ChevronDown, MessagesSquare, NotebookPen } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchSpaceContext } from "@/lib/espaceClasse";
 import type { DevoirListItem } from "@/components/DevoirsClearList";
 import type { ExamScore } from "@/components/ExamensSubjectBoards";
 import { isLessonHomework } from "@/lib/homework";
@@ -64,6 +68,14 @@ export function ExercicesTimeline({
   isLoading: boolean;
   forParent: boolean;
 }) {
+  // « Discuter avec ma classe » (espace classe, secondaire)
+  const { user, role } = useAuth();
+  const { data: spaceCtx } = useQuery({
+    queryKey: ["espace-classe", "context", user?.id],
+    enabled: !!user?.id && role === "student",
+    queryFn: fetchSpaceContext,
+  });
+  const spaceOn = role === "student" && spaceCtx?.enabled === true;
   const [tab, setTab] = useState<Tab>("todo");
   const [subject, setSubject] = useState<string>("");
   const [open, setOpen] = useState<string | null>(null);
@@ -268,6 +280,19 @@ export function ExercicesTimeline({
                           </span>
                           <StatusChip status={status} date={item.eval_date} score={scores[item.id]} />
                         </button>
+                        {spaceOn && status !== "graded" ? (
+                          <Link
+                            to={`/espace-classe?${new URLSearchParams({
+                              nouveau: "question",
+                              titre: item.title ?? "Exercice",
+                              ...(fromLesson ? {} : { exercice: item.id }),
+                              ...(item.subject_id ? { matiere: item.subject_id } : {}),
+                            }).toString()}`}
+                            className="-mt-1 mb-3 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
+                          >
+                            <MessagesSquare className="h-3.5 w-3.5" /> Discuter avec ma classe
+                          </Link>
+                        ) : null}
                       </li>
                     );
                   })}
