@@ -13,6 +13,7 @@
 -- 30 posts / replies / group messages per student per day.
 --
 -- A school module (« Espace classe », on by default) lets a super admin turn it off for a school.
+-- Applied to production (hbfjtsxzueftoiryzhxh) on 22 Nov 2026.
 
 -- ---------------------------------------------------------------- module
 
