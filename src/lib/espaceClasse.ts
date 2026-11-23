@@ -94,6 +94,10 @@ export type SpaceGroupSummary = {
   archived: boolean;
   lastActivityAt: string;
   member: boolean;
+  visibility: "public" | "private";
+  invited: boolean;
+  invitedBy: string | null;
+  pendingInvites: number;
   members: SpaceMember[];
   tasks: number;
   tasksDone: number;
@@ -124,7 +128,11 @@ export type SpaceGroup = {
   mine: boolean;
   member: boolean;
   archived: boolean;
+  visibility: "public" | "private";
+  invited: boolean;
   members: SpaceMember[];
+  /** classmates invited, not answered yet */
+  pending: SpaceMember[];
   tasks: SpaceTask[];
   messages: SpaceGroupMessage[];
 };
@@ -249,7 +257,24 @@ export async function toggleReaction(
   }
 }
 
-export async function createGroup(input: { classId: string; userId: string; name: string; subjectId: string | null; evaluationId?: string | null }) {
+export const fetchClassmates = (classId: string) => rpc<SpaceMember[]>("ef_space_classmates", { p_class: classId });
+
+export const inviteToGroup = (groupId: string, invitedBy: string, userIds: string[]) =>
+  userIds.length === 0
+    ? Promise.resolve(null)
+    : must(supabase.from("ef_space_group_invites").insert(userIds.map((u) => ({ group_id: groupId, user_id: u, invited_by: invitedBy }))));
+
+export const answerInvite = (groupId: string, accept: boolean) =>
+  rpc<void>("ef_space_answer_invite", { p_group: groupId, p_accept: accept });
+
+export async function createGroup(input: {
+  classId: string;
+  userId: string;
+  name: string;
+  subjectId: string | null;
+  evaluationId?: string | null;
+  visibility?: "public" | "private";
+}) {
   const row = await must(
     supabase
       .from("ef_space_groups")
@@ -259,6 +284,7 @@ export async function createGroup(input: { classId: string; userId: string; name
         name: input.name.trim(),
         subject_id: input.subjectId,
         evaluation_id: input.evaluationId ?? null,
+        visibility: input.visibility ?? "public",
       })
       .select("id")
       .single(),

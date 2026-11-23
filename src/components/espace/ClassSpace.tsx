@@ -14,6 +14,9 @@ import {
   Heart,
   ListChecks,
   Loader2,
+  Lock,
+  Search,
+  UserPlus,
   MessagesSquare,
   NotebookPen,
   Plus,
@@ -35,7 +38,10 @@ import {
   KIND_LABEL,
   REPORT_REASONS,
   addTask,
+  answerInvite,
   archiveGroup,
+  fetchClassmates,
+  inviteToGroup,
   createGroup,
   createPost,
   createReply,
@@ -58,6 +64,7 @@ import {
   uploadSpacePhoto,
   type PostKind,
   type SpaceComposition,
+  type SpaceMember,
   type SpacePostSummary,
   type SpaceSubject,
 } from "@/lib/espaceClasse";
@@ -781,6 +788,60 @@ function BackButton({ onClick }: { onClick: () => void }) {
 
 // ---------------------------------------------------------------- groups
 
+/** Classmates to invite (search, tick up to `max`). */
+function ClassmatePicker({
+  classId,
+  exclude,
+  max,
+  value,
+  onChange,
+}: {
+  classId: string;
+  exclude: string[];
+  max: number;
+  value: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const { data: classmates = [] } = useQuery({
+    queryKey: ["espace-classe", "classmates", classId],
+    queryFn: () => fetchClassmates(classId),
+    staleTime: 10 * 60 * 1000,
+  });
+  const [q, setQ] = useState("");
+  const shown = classmates
+    .filter((c) => !exclude.includes(c.id))
+    .filter((c) => !q.trim() || c.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const toggle = (id: string) =>
+    value.includes(id) ? onChange(value.filter((x) => x !== id)) : value.length < max ? onChange([...value, id]) : toast.error(`${max} camarades au maximum.`);
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un camarade" className="pl-9" />
+      </div>
+      {value.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((id) => (
+            <button key={id} type="button" onClick={() => toggle(id)} className="inline-flex items-center gap-1 rounded-md bg-brand-700 px-2 py-1 text-xs font-semibold text-white">
+              {classmates.find((c) => c.id === id)?.name ?? "Élève"} <X className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200 dark:divide-[var(--border)] dark:border-[var(--border)]">
+        {shown.map((c) => (
+          <label key={c.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-white/5">
+            <input type="checkbox" checked={value.includes(c.id)} onChange={() => toggle(c.id)} className="accent-brand-700" />
+            {c.name}
+          </label>
+        ))}
+        {shown.length === 0 ? <p className="px-3 py-4 text-sm text-slate-500">Personne ne correspond.</p> : null}
+      </div>
+      <p className="text-xs text-slate-500">{value.length}/{max} sélectionné{value.length > 1 ? "s" : ""}</p>
+    </div>
+  );
+}
+
 function Groups({
   classId,
   userId,
@@ -807,6 +868,8 @@ function Groups({
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [subjectId, setSubjectId] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [invitees, setInvitees] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (createFor) {
@@ -820,9 +883,17 @@ function Groups({
     if (!name.trim()) return toast.error("Donne un nom au groupe.");
     setBusy(true);
     try {
-      const id = await createGroup({ classId, userId, name, subjectId: subjectId || null });
+      if (visibility === "private" && invitees.length === 0) {
+        setBusy(false);
+        return toast.error("Choisis au moins un camarade à inviter.");
+      }
+      const id = await createGroup({ classId, userId, name, subjectId: subjectId || null, visibility });
+      await inviteToGroup(id, userId, invitees);
+      if (invitees.length) toast.success(`${invitees.length} invitation${invitees.length > 1 ? "s" : ""} envoyée${invitees.length > 1 ? "s" : ""}`);
       setCreating(false);
       setName("");
+      setInvitees([]);
+      setVisibility("public");
       void qc.invalidateQueries({ queryKey: ["espace-classe", "groups", classId] });
       onOpen(id);
     } catch (e) {
@@ -831,6 +902,16 @@ function Groups({
       setBusy(false);
     }
   };
+  const answer = async (id: string, accept: boolean) => {
+    try {
+      await answerInvite(id, accept);
+      void qc.invalidateQueries({ queryKey: ["espace-classe", "groups", classId] });
+      if (accept) onOpen(id);
+    } catch (e) {
+      toast.error(errText(e));
+    }
+  };
+  const invitations = data.filter((g) => g.invited && !g.member);
   const join = async (id: string) => {
     try {
       await joinGroup(id, userId);
@@ -850,6 +931,19 @@ function Groups({
           </Button>
         ) : null}
       </div>
+      {invitations.map((g) => (
+        <div key={`inv-${g.id}`} className={cn(square, "flex flex-wrap items-center gap-3 border-brand-300 bg-brand-50/60 p-4 dark:bg-brand-500/10")}>
+          <UserPlus className="h-5 w-5 text-brand-700" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-slate-700 dark:text-slate-200">
+              <strong>{g.invitedBy ?? "Un camarade"}</strong> t’invite dans <strong>« {g.name} »</strong>
+            </p>
+            <p className="text-xs text-slate-500">{g.members.map((m) => m.name).join(", ")}</p>
+          </div>
+          <Button size="sm" variant="outline" className="rounded-md" onClick={() => void answer(g.id, false)}>Refuser</Button>
+          <Button size="sm" className="rounded-md" onClick={() => void answer(g.id, true)}>Rejoindre</Button>
+        </div>
+      ))}
       {isLoading ? (
         <p className="text-sm text-slate-500">Chargement…</p>
       ) : data.length === 0 ? (
@@ -860,12 +954,15 @@ function Groups({
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {data.map((g) => (
+          {data.filter((g) => !(g.invited && !g.member)).map((g) => (
             <div key={g.id} className={cn(square, "flex flex-col p-4", g.archived && "opacity-70")}>
               <button type="button" className="text-left" onClick={() => (g.member || moderator ? onOpen(g.id) : undefined)}>
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   {g.subjectName ? <span className="text-brand-700 dark:text-brand-300">{g.subjectName}</span> : null}
                   {g.member ? <span className="rounded bg-brand-50 px-1.5 py-0.5 text-brand-700">Mon groupe</span> : null}
+                  {g.visibility === "private" ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-600"><Lock className="h-3 w-3" /> Sur invitation</span>
+                  ) : null}
                   {g.archived ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">Terminé</span> : null}
                   <span className="ml-auto font-normal text-slate-400">{relativeFr(g.lastActivityAt)}</span>
                 </div>
@@ -878,7 +975,7 @@ function Groups({
                 <span className="ml-auto">
                   {g.member || moderator ? (
                     <Button size="sm" variant="outline" className="rounded-md" onClick={() => onOpen(g.id)}>Ouvrir</Button>
-                  ) : !g.archived && g.members.length < 6 ? (
+                  ) : !g.archived && g.visibility === "public" && g.members.length + g.pendingInvites < 6 ? (
                     <Button size="sm" className="rounded-md" onClick={() => void join(g.id)}>Rejoindre</Button>
                   ) : (
                     <span className="text-xs">Complet</span>
@@ -904,7 +1001,21 @@ function Groups({
               ))}
             </Select>
           </div>
-          <p className="text-xs text-slate-500">Le groupe est ouvert : tes camarades le voient et peuvent le rejoindre (6 au maximum). L’administration de l’école peut le lire.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={() => setVisibility("public")} className={cn(square, "p-3 text-left", visibility === "public" && "border-brand-700 ring-1 ring-brand-700")}>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-slate-50"><Users className="h-4 w-4 text-brand-700" /> Public</p>
+              <p className="mt-0.5 text-xs text-slate-500">Toute la classe le voit et peut le rejoindre.</p>
+            </button>
+            <button type="button" onClick={() => setVisibility("private")} className={cn(square, "p-3 text-left", visibility === "private" && "border-brand-700 ring-1 ring-brand-700")}>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900 dark:text-slate-50"><Lock className="h-4 w-4 text-brand-700" /> Sur invitation</p>
+              <p className="mt-0.5 text-xs text-slate-500">Seuls les camarades invités le voient.</p>
+            </button>
+          </div>
+          <div>
+            <Label>{visibility === "private" ? "Camarades à inviter" : "Inviter des camarades (facultatif)"}</Label>
+            <ClassmatePicker classId={classId} exclude={[userId]} max={5} value={invitees} onChange={setInvitees} />
+          </div>
+          <p className="text-xs text-slate-500">6 élèves au maximum. Chaque invité reçoit une notification et choisit de rejoindre ou non. L’administration de l’école peut lire le groupe.</p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" className="rounded-md" onClick={() => setCreating(false)}>Annuler</Button>
             <Button className="rounded-md" onClick={() => void create()} disabled={busy}>Créer</Button>
@@ -926,6 +1037,8 @@ function GroupView({ groupId, classId, userId, moderator, onBack }: { groupId: s
   const [photos, setPhotos] = useState<string[]>([]);
   const [task, setTask] = useState("");
   const [busy, setBusy] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [invitees, setInvitees] = useState<string[]>([]);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
@@ -936,6 +1049,18 @@ function GroupView({ groupId, classId, userId, moderator, onBack }: { groupId: s
   };
   if (isLoading || !g) return <p className="text-sm text-slate-500">Chargement…</p>;
   const canWrite = !moderator && g.member && !g.archived;
+  const room = 6 - g.members.length - g.pending.length;
+  const invite = async () => {
+    try {
+      await inviteToGroup(g.id, userId, invitees);
+      toast.success(`${invitees.length} invitation${invitees.length > 1 ? "s" : ""} envoyée${invitees.length > 1 ? "s" : ""}`);
+      setInvitees([]);
+      setInviting(false);
+      refresh();
+    } catch (e) {
+      toast.error(errText(e));
+    }
+  };
   const send = async () => {
     if (!text.trim()) return;
     setBusy(true);
@@ -958,9 +1083,50 @@ function GroupView({ groupId, classId, userId, moderator, onBack }: { groupId: s
           <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">{g.subjectName ?? "Groupe de travail"}</p>
           <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">{g.name}</h2>
           <p className="text-sm text-slate-500">{g.members.map((m) => (m.id === userId ? "Toi" : m.name)).join(", ")}</p>
+          {g.pending.length ? <p className="text-xs text-slate-400">Invité{g.pending.length > 1 ? "s" : ""} : {g.pending.map((m: SpaceMember) => m.name).join(", ")}</p> : null}
+          {g.visibility === "private" ? <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-slate-500"><Lock className="h-3 w-3" /> Sur invitation</p> : null}
         </div>
-        {!moderator ? (
+        {!moderator && g.invited && !g.member ? (
           <div className="ml-auto flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-md"
+              onClick={async () => {
+                try {
+                  await answerInvite(g.id, false);
+                  void qc.invalidateQueries({ queryKey: ["espace-classe", "groups", classId] });
+                  onBack();
+                } catch (e) {
+                  toast.error(errText(e));
+                }
+              }}
+            >
+              Refuser
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-md"
+              onClick={async () => {
+                try {
+                  await answerInvite(g.id, true);
+                  refresh();
+                } catch (e) {
+                  toast.error(errText(e));
+                }
+              }}
+            >
+              Rejoindre
+            </Button>
+          </div>
+        ) : null}
+        {!moderator && g.member ? (
+          <div className="ml-auto flex gap-2">
+            {canWrite && room > 0 ? (
+              <Button size="sm" className="rounded-md" onClick={() => setInviting(true)}>
+                <UserPlus className="h-4 w-4" /> Inviter
+              </Button>
+            ) : null}
             {g.mine ? (
               <Button
                 size="sm"
@@ -1000,6 +1166,24 @@ function GroupView({ groupId, classId, userId, moderator, onBack }: { groupId: s
           </div>
         ) : null}
       </div>
+
+      <Modal open={inviting} title={`Inviter dans « ${g.name} »`} onClose={() => setInviting(false)}>
+        <div className="space-y-4">
+          <ClassmatePicker
+            classId={classId}
+            exclude={[...g.members.map((m) => m.id), ...g.pending.map((m) => m.id)]}
+            max={Math.max(room, 0)}
+            value={invitees}
+            onChange={setInvitees}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" className="rounded-md" onClick={() => setInviting(false)}>Annuler</Button>
+            <Button className="rounded-md" onClick={() => void invite()} disabled={invitees.length === 0}>
+              <Send className="h-4 w-4" /> Envoyer les invitations
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <div className="grid gap-4 lg:grid-cols-12">
         <section className={cn(square, "flex flex-col lg:col-span-8")}>
