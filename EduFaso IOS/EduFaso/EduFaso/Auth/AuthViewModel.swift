@@ -313,8 +313,15 @@ final class AuthViewModel: ObservableObject {
     }
 
     private func friendlyAuthError(_ error: Error) -> String {
-        let text = error.localizedDescription.lowercased()
-        if text.contains("invalid login") || text.contains("invalid credentials") {
+        let text = "\(error) \(error.localizedDescription)".lowercased()
+        // a lost connection is not a wrong password
+        if error is URLError || text.contains("offline") || text.contains("internet") || text.contains("network") {
+            return "Pas de connexion internet. Vérifiez votre connexion puis réessayez."
+        }
+        if text.contains("rate limit") || text.contains("429") || text.contains("too many") {
+            return "Trop de tentatives. Réessayez dans quelques minutes."
+        }
+        if text.contains("invalid login") || text.contains("invalid credentials") || text.contains("invalid_credentials") {
             return "Identifiant ou mot de passe incorrect."
         }
         return error.localizedDescription
