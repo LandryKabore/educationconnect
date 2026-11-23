@@ -43,9 +43,11 @@ const VerifierDocument = lazy(() => import("@/pages/VerifierDocument"));
 const Bulletins = lazy(() => import("@/pages/ecole/Bulletins"));
 const PresencesEcole = lazy(() => import("@/pages/ecole/PresencesEcole"));
 // nov3: cahier de textes (#31) and annual statistics (#32), loaded on demand
-const CahierTextes = lazy(() => import("@/pages/enseignant/CahierTextes"));
 const CahierEcole = lazy(() => import("@/pages/ecole/CahierEcole"));
 const Statistiques = lazy(() => import("@/pages/ecole/Statistiques"));
+const EspaceClasse = lazy(() => import("@/pages/eleve/EspaceClasse"));
+const EspaceClasseEcole = lazy(() => import("@/pages/ecole/EspaceClasseEcole"));
+const Versions = lazy(() => import("@/pages/admin/Versions"));
 const MonCahier = lazy(() => import("@/pages/eleve/MonCahier"));
 const EnfantCahier = lazy(() => import("@/pages/parent/EnfantCahier"));
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
@@ -54,13 +56,17 @@ import SaisieEnseignant from "@/pages/ecole/SaisieEnseignant";
 import Dashboard from "@/pages/Dashboard";
 import ClassDetail from "@/pages/enseignant/ClassDetail";
 const Presences = lazy(() => import("@/pages/enseignant/Presences"));
-import Notes from "@/pages/enseignant/Notes";
 import NotesSaisie from "@/pages/enseignant/NotesSaisie";
+import { ClassNotesRoute } from "@/pages/enseignant/ClassNotesRoute";
+import ExercicesMaison from "@/pages/enseignant/ExercicesMaison";
+import EspaceCours from "@/pages/enseignant/EspaceCours";
+import AFaire from "@/pages/enseignant/AFaire";
 import MesDevoirsProf from "@/pages/enseignant/MesDevoirsProf";
 import MesClasses from "@/pages/enseignant/MesClasses";
 import MesEleves from "@/pages/enseignant/MesEleves";
 import MesPresencesProf from "@/pages/enseignant/MesPresencesProf";
-import Messages from "@/pages/Messages";
+import { MessagesRoute } from "@/pages/eleve/MesMessages";
+import { AnnoncesRoute } from "@/pages/eleve/MesAnnonces";
 import MesNotes from "@/pages/eleve/MesNotes";
 import {
   MesExamensPage,
@@ -148,6 +154,16 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["super_admin"]}>
               <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/versions"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <Versions />
+              </Suspense>
             </RequireAuth>
           }
         />
@@ -368,13 +384,7 @@ function AppRoutes() {
         />
         <Route
           path="/cahier-de-textes"
-          element={
-            <RequireAuth roles={["teacher"]}>
-              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
-                <CahierTextes />
-              </Suspense>
-            </RequireAuth>
-          }
+          element={<Navigate to="/exercices-maison" replace />}
         />
         <Route
           path="/mon-cahier"
@@ -459,7 +469,7 @@ function AppRoutes() {
           path="/classes/:id/notes"
           element={
             <RequireAuth roles={["teacher", "school_admin"]}>
-              <Notes />
+              <ClassNotesRoute />
             </RequireAuth>
           }
         />
@@ -474,7 +484,11 @@ function AppRoutes() {
 
         <Route
           path="/exercices-maison"
-          element={<Navigate to="/devoirs" replace />}
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <ExercicesMaison />
+            </RequireAuth>
+          }
         />
         <Route
           path="/examens"
@@ -485,6 +499,22 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["teacher"]}>
               <MesDevoirsProf />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/cours/:slotId"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <EspaceCours />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/a-faire"
+          element={
+            <RequireAuth roles={["teacher"]}>
+              <AFaire />
             </RequireAuth>
           }
         />
@@ -520,8 +550,8 @@ function AppRoutes() {
             </RequireAuth>
           }
         />
-        <Route path="/messages" element={<Messages view="messages" />} />
-        <Route path="/annonces" element={<Messages view="annonces" />} />
+        <Route path="/messages" element={<MessagesRoute />} />
+        <Route path="/annonces" element={<AnnoncesRoute />} />
 
         <Route
           path="/mes-notes"
@@ -556,6 +586,26 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["student"]}>
               <MesCompositions />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/espace-classe"
+          element={
+            <RequireAuth roles={["student"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <EspaceClasse />
+              </Suspense>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/espace-classe-ecole"
+          element={
+            <RequireAuth roles={["school_admin"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <EspaceClasseEcole />
+              </Suspense>
             </RequireAuth>
           }
         />

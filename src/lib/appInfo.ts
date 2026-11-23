@@ -1,4 +1,8 @@
 declare const __APP_VERSION__: string;
+declare const __BUILD_ID__: string;
+
+/** Id of this build (also in /version.json of the deployed site). */
+export const BUILD_ID: string = typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev";
 
 /** Version of the app (from package.json, injected at build time). */
 export const APP_VERSION: string =

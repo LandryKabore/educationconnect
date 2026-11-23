@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import { Check, ChevronRight, Circle, Sparkles } from "lucide-react";
 import { useSchoolSetupProgress } from "@/hooks/useSchoolSetupProgress";
 import { enterSetupGuide } from "@/lib/setupGuide";
-import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import { cn } from "@/lib/utils";
 
 function setupLink(to: string) {
@@ -23,7 +24,7 @@ export default function ConfigurationEcole() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Configuration de l’école"
         subtitle="Suivez ces étapes dans l’ordre pour préparer l’année scolaire."
       />

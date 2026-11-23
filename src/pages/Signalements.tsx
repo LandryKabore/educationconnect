@@ -5,7 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { ROLE_LABELS, type AppRole } from "@/lib/types";
 import { fullName } from "@/lib/utils";
-import { Badge, Button, Card, EmptyState, PageHeader, Select, Textarea } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Select, Textarea } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 type Status = "nouveau" | "vu" | "en_cours" | "resolu";
 
@@ -74,7 +75,7 @@ export default function Signalements() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Signalements"
         subtitle={
           isSuper

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, session, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { startUpdates } = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -145,6 +146,7 @@ app.whenReady().then(() => {
   );
 
   createWindow();
+  startUpdates();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

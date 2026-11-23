@@ -8,8 +8,9 @@ import {
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
+import { EmptyState, PageLoadingState } from "@/components/ui";
 import { BulletinView } from "@/components/BulletinView";
+import { BulletinBanner } from "@/components/BulletinBanner";
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
@@ -92,14 +93,16 @@ export default function MonBulletin() {
     period === ANNUAL_PERIOD_LABEL ? "annee" : period.replace(/\s+/g, "-");
 
   return (
-    <div>
-      <PageHeader
+    // squarer corners on this page only: the shared bulletin keeps its radius elsewhere
+    <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+      <BulletinBanner
+        studentId={user?.id}
+        classSectionId={enrollment?.class_section_id}
+        period={period}
+        closedLabels={closedLabels}
+        className={enrollment?.classes?.name}
         title="Mon bulletin"
-        subtitle={
-          enrollment?.classes?.name
-            ? `${enrollment.classes.name} · ${period}`
-            : "Vos moyennes, votre rang et le bulletin PDF"
-        }
+        subtitle="Tes moyennes, ton rang et le bulletin officiel en PDF."
       />
 
       {isLoading ? (

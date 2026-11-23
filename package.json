@@ -1,7 +1,7 @@
 {
   "name": "edufaso",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "EduFaso — système de gestion scolaire",
   "author": "EduFaso",
   "main": "electron/main.cjs",
@@ -15,12 +15,13 @@
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron:multi": "wait-on http://localhost:5173 && concurrently -k \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=1 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=2 electron .\" \"cross-env VITE_DEV_SERVER_URL=http://localhost:5173 EDUFASO_INSTANCE=3 electron .\"",
     "electron:pack": "npm run build:electron && electron-builder --dir",
-    "dist:win": "npm run build:electron && electron-builder --win nsis portable",
-    "dist:mac": "npm run build:electron && electron-builder --mac dmg",
-    "dist:desktop": "npm run build:electron && electron-builder --win nsis --mac dmg",
+    "dist:win": "npm run build:electron && electron-builder --win nsis portable --x64",
+    "dist:mac": "npm run build:electron && electron-builder --mac dmg --universal",
+    "dist:desktop": "npm run build:electron && electron-builder --win nsis --x64 && electron-builder --mac dmg --universal",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
-    "cap:add:android": "npx cap add android"
+    "cap:add:android": "npx cap add android",
+    "release:desktop": "npm run build:electron && electron-builder --mac --publish always && electron-builder --win --publish always"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
@@ -31,6 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "electron-updater": "^6.6.2",
     "fflate": "^0.8.2",
     "i18next": "^26.3.6",
     "jspdf": "^4.2.1",
@@ -71,8 +73,13 @@
     "appId": "bf.edufaso.desktop",
     "productName": "EduFaso",
     "compression": "maximum",
-    "electronLanguages": ["fr", "en-US"],
+    "icon": "build/icon.png",
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "files": [
@@ -89,7 +96,8 @@
           ]
         }
       ],
-      "artifactName": "EduFaso-Setup-${version}.${ext}"
+      "icon": "build/icon.png",
+      "artifactName": "EduFaso-Windows.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -105,16 +113,34 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
           ]
         }
       ],
-      "artifactName": "EduFaso-${version}-mac.${ext}",
-      "category": "public.app-category.education"
+      "icon": "build/icon.icns",
+      "artifactName": "EduFaso-Mac.${ext}",
+      "category": "public.app-category.education",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
       "title": "EduFaso"
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "LandryKabore",
+        "repo": "educationconnect",
+        "releaseType": "release"
+      }
+    ]
   }
 }

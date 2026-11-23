@@ -16,7 +16,8 @@ import {
   type SchoolStatistics,
 } from "@/lib/scaleApi";
 import type { AcademicYear } from "@/lib/types";
-import { Badge, Button, Card, DateInputFr, EmptyState, PageHeader, Select } from "@/components/ui";
+import { Badge, Button, Card, DateInputFr, EmptyState, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : "—");
 const avg = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2).replace(".", ","));
@@ -58,7 +59,7 @@ export default function Statistiques() {
     },
   });
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["statistiques", schoolId, yearId],
     enabled: !!schoolId,
     queryFn: () => fetchSchoolStatistics(schoolId!, yearId || null),
@@ -138,10 +139,34 @@ export default function Statistiques() {
   };
 
   if (isLoading) return <p className="text-slate-500">Chargement…</p>;
+  // a failed load is not « no year »: say so, and keep the year picker to try another year
+  if (isError || (stats?.year == null && years.length > 0)) {
+    return (
+      <div>
+        <PageBanner title="Statistiques" />
+        <div className="rounded-md border border-slate-200 bg-white p-6 text-center dark:border-[var(--border)] dark:bg-[var(--surface)]">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            {isError ? "Les statistiques n’ont pas pu être chargées." : "Aucune statistique pour cette année scolaire."}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {years.length > 0 ? (
+              <Select value={yearId} onChange={(e) => setYearId(e.target.value)} aria-label="Année scolaire" className="!h-9 w-auto">
+                <option value="">Année en cours</option>
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>{y.label}</option>
+                ))}
+              </Select>
+            ) : null}
+            <Button onClick={() => void refetch()} disabled={isFetching}>{isFetching ? "Chargement…" : "Réessayer"}</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!stats || !stats.year) {
     return (
       <div>
-        <PageHeader title="Statistiques" />
+        <PageBanner title="Statistiques" />
         <EmptyState message="Aucune année scolaire n'est définie. Créez-en une dans « Années scolaires »." />
       </div>
     );
@@ -153,7 +178,7 @@ export default function Statistiques() {
 
   return (
     <div className="print:text-sm">
-      <PageHeader
+      <PageBanner
         title="Statistiques annuelles"
         subtitle={`${school?.name ?? "École"} · année ${stats.year.label}`}
         actions={

@@ -1,15 +1,13 @@
 import { CahierFeedView } from "@/components/CahierFeedView";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 import {
   childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
-import {
-  ParentChildBackLink,
-  ParentChildGate,
-} from "@/pages/parent/ParentChildGate";
+import { ParentChildGate } from "@/pages/parent/ParentChildGate";
 
 /** Parent: the lesson log of the child's class. */
 export default function EnfantCahier() {
@@ -21,8 +19,7 @@ export default function EnfantCahier() {
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
       <div>
-        <ParentChildBackLink childName={childName} />
-        <PageHeader
+        <PageBanner
           title={childName ? `Cahier de textes — ${childName}` : "Cahier de textes"}
           subtitle={enrollment?.classes?.name ? `Classe ${enrollment.classes.name} · cours et travail à faire` : undefined}
         />

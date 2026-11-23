@@ -22,6 +22,7 @@ import {
 } from "@/lib/parentHome";
 import type { AttendanceStatus } from "@/lib/types";
 import type { InboxPreview } from "@/components/PortalHomeKit";
+import { hideAdminNames } from "@/lib/adminNames";
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -267,13 +268,16 @@ export function useParentInbox(userId: string | undefined) {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, subject, body, created_at, read_at, is_announcement, sender:profils!messages_sender_id_fkey(first_name, last_name)",
+          "id, subject, body, created_at, read_at, is_announcement, school_id, sender_id, sender:profils!messages_sender_id_fkey(first_name, last_name)",
         )
         .eq("recipient_id", userId!)
         .order("created_at", { ascending: false })
         .limit(30);
       if (error) throw error;
-      const all = (data ?? []) as unknown as InboxPreview[];
+      // school administrators read « Administration »
+      const all = (await hideAdminNames(
+        (data ?? []) as unknown as (InboxPreview & { school_id: string | null; sender_id: string | null })[],
+      )) as InboxPreview[];
       return {
         announcements: all.filter((m) => m.is_announcement).slice(0, 2),
         messages: all.filter((m) => !m.is_announcement).slice(0, 3),

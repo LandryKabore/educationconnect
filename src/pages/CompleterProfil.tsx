@@ -12,13 +12,13 @@ import {
 } from "@/lib/profileCompletion";
 import {
   Button,
-  Card,
   DateInputFr,
   Input,
   Label,
   Select,
 } from "@/components/ui";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Phone, UserRound } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { fullName } from "@/lib/utils";
 
@@ -119,21 +119,19 @@ export default function CompleterProfil() {
   const displayName = fullName(profile?.first_name, profile?.last_name);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-lg">
-        <h1 className="text-xl font-bold text-slate-900">
-          Complétez votre profil
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Première connexion : renseignez les informations manquantes pour
-          continuer.
-        </p>
-
+    <AuthShell
+      wide
+      panelTitle="Encore une étape"
+      panelBody="Ces informations aident votre école à vous identifier et à vous joindre."
+      points={[
+        { icon: UserRound, title: "Votre photo", body: "Facultative : elle aide les professeurs à vous reconnaître." },
+        { icon: Phone, title: "Vos coordonnées", body: "Visibles seulement par l’administration de votre école." },
+      ]}
+      title="Complétez votre profil"
+      subtitle="Première connexion : renseignez les informations manquantes pour continuer."
+    >
         {profile ? (
-          <div className="mt-5">
+          <div className="mb-6 flex justify-center">
             <ProfileAvatar
               userId={profile.id}
               avatarUrl={profile.avatar_url}
@@ -146,7 +144,7 @@ export default function CompleterProfil() {
           </div>
         ) : null}
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           {fields.map((f) => (
             <div key={f.key}>
               <Label htmlFor={f.key}>
@@ -203,11 +201,10 @@ export default function CompleterProfil() {
             </div>
           ))}
 
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? "Enregistrement…" : "Enregistrer et continuer"}
           </Button>
         </form>
-      </Card>
-    </div>
+    </AuthShell>
   );
 }

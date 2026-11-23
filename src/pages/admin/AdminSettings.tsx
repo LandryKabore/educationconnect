@@ -6,7 +6,10 @@ import { logAudit } from "@/lib/audit";
 import type { PlatformSettings } from "@/lib/types";
 import { SaveButton } from "@/components/SaveButton";
 import { isFormDirty } from "@/lib/formDirty";
-import { Card, Input, Label, PageHeader } from "@/components/ui";
+import { Card, Input, Label } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
+import { AdminCardHeader } from "@/components/admin/AdminKit";
+import { Settings2 } from "lucide-react";
 
 type SettingsForm = {
   invite_site_url: string;
@@ -99,12 +102,18 @@ export default function AdminSettings() {
 
   return (
     <div>
-      <PageHeader
+      <PageBanner
         title="Paramètres"
         subtitle="Configuration globale de la plateforme EduFaso"
+        stats={[
+          { label: "Application", value: settings?.app_name || "EduFaso" },
+          { label: "Année par défaut", value: settings?.default_year_label || "—" },
+          { label: "Support", value: settings?.support_email ? "Renseigné" : "—", hint: settings?.support_email ?? undefined },
+        ]}
       />
 
       <Card className="max-w-2xl">
+        <AdminCardHeader icon={Settings2} title="Configuration" subtitle="Utilisée par toutes les écoles." />
         <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
           <div>
             <Label htmlFor="invite_site_url">URL du site d'invitation</Label>

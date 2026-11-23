@@ -23,15 +23,8 @@ import {
   classColorVars,
 } from "@/lib/classColors";
 import { cn } from "@/lib/utils";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 export default function Classes() {
   const { schoolId } = useAuth();
@@ -294,7 +287,7 @@ export default function Classes() {
           if (pendingRemove) await removeClass(pendingRemove);
         }}
       />
-      <PageHeader
+      <PageBanner
         title="Classes"
         subtitle="Créez les classes de l’année — le programme se fait à l’étape suivante"
         actions={

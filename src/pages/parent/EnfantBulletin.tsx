@@ -8,18 +8,15 @@ import {
 import { useGradingPeriodState } from "@/hooks/useGradingPeriodState";
 import type { Profile, School } from "@/lib/types";
 import { supabase } from "@/lib/supabase";
-import { EmptyState, PageHeader, PageLoadingState } from "@/components/ui";
+import { EmptyState, PageLoadingState } from "@/components/ui";
+import { BulletinBanner } from "@/components/BulletinBanner";
 import { BulletinView } from "@/components/BulletinView";
 import {
-  childDisplayName,
   useChildEnrollment,
   useParentChildLink,
   useParentChildParams,
 } from "@/pages/parent/parentChildAccess";
-import {
-  ParentChildBackLink,
-  ParentChildGate,
-} from "@/pages/parent/ParentChildGate";
+import { ParentChildGate } from "@/pages/parent/ParentChildGate";
 
 const BULLETIN_PERIODS = [...TRIMESTER_PERIODS, ANNUAL_PERIOD_LABEL] as const;
 
@@ -30,7 +27,6 @@ export default function EnfantBulletin() {
 
   const { data: link, isLoading: linkLoading } = useParentChildLink(id);
   const child = link?.profils;
-  const childName = childDisplayName(child);
 
   const { data: enrollment, isLoading: enrollLoading } = useChildEnrollment(
     id,
@@ -120,15 +116,15 @@ export default function EnfantBulletin() {
 
   return (
     <ParentChildGate link={link} isLoading={linkLoading}>
-      <div>
-        <ParentChildBackLink childName={childName} />
-        <PageHeader
-          title={childName ? `Bulletin — ${childName}` : "Bulletin"}
-          subtitle={
-            enrollment?.classes?.name
-              ? `${enrollment.classes.name} · ${period}`
-              : "Moyennes, rang et bulletin PDF"
-          }
+      <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+        <BulletinBanner
+          studentId={id}
+          classSectionId={enrollment?.class_section_id}
+          period={period}
+          closedLabels={closedLabels}
+          className={enrollment?.classes?.name}
+          title={child?.first_name ? `Bulletin de ${child.first_name}` : "Bulletin"}
+          subtitle="Moyennes, rang et bulletin officiel en PDF."
         />
 
         {isLoading ? (

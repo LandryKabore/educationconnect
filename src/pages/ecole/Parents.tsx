@@ -29,16 +29,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Pagination } from "@/components/Pagination";
 import { RowMenu } from "@/components/RowMenu";
 import { BulkBar } from "@/components/BulkBar";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-} from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
+import { PageBanner } from "@/components/PageBanner";
 
 interface CreateResult {
   username: string;
@@ -487,7 +479,7 @@ export default function Parents() {
   return (
     <div>
       <SetupGuideBar />
-      <PageHeader
+      <PageBanner
         title="Parents"
         subtitle="Comptes, identifiants et liaison avec les élèves"
         actions={

@@ -13,7 +13,6 @@ import {
   Users,
 } from "lucide-react";
 import {
-  MetricCard,
   Panel,
   PanelEmpty,
   PortalHomeHeader,
@@ -38,6 +37,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadMessagesCount, EMPTY_UNREAD_INBOX } from "@/hooks/useUnreadMessagesCount";
 import { supabase } from "@/lib/supabase";
 import { cn, fullName, personName } from "@/lib/utils";
+import { getTimeGreeting } from "@/lib/greeting";
 
 export default function TeacherHome() {
   const { user, profile, schools, schoolId } = useAuth();
@@ -320,6 +320,26 @@ export default function TeacherHome() {
     [weekSlots],
   );
 
+  /**
+   * Roll calls due today: the classes this teacher has a slot with today (none on Sunday),
+   * plus any class already called. Without a timetable at all, every class counts as before.
+   */
+  const appels = useMemo(() => {
+    if (!data) return null;
+    const useTimetable = !edtLoading && !edtError && weekSlots.length > 0;
+    const todayIds = new Set(
+      isSunday(new Date()) ? [] : todaySlots.map((s) => s.class_section_id).filter((id): id is string => !!id),
+    );
+    const rows = useTimetable
+      ? data.attendanceToday.filter((r) => todayIds.has(r.classId) || r.recorded > 0)
+      : data.attendanceToday;
+    return {
+      rows,
+      pending: rows.filter((r) => r.status !== "done" && r.studentCount > 0).length,
+      done: rows.filter((r) => r.status === "done").length,
+    };
+  }, [data, todaySlots, weekSlots.length, edtLoading, edtError]);
+
   const mobileSchedule = useMemo(() => {
     if (!data) return null;
     const now = new Date();
@@ -354,7 +374,8 @@ export default function TeacherHome() {
   const metricChips = useMemo((): MetricChipModel[] => {
     if (!data) return [];
     const unread = unreadInbox.discussions;
-    const pending = data.attendancePending;
+    const pending = appels?.pending ?? 0;
+    const doneToday = appels?.done ?? 0;
     const appel =
       pending > 0
         ? {
@@ -364,18 +385,18 @@ export default function TeacherHome() {
             ariaLabel: `${frCount(pending, "appel", "appels")} à faire aujourd’hui`,
           }
         : {
-            value: String(data.attendanceDone),
+            value: String(doneToday),
             label:
               data.uniqueClasses === 0
                 ? "appels"
-                : data.attendanceDone === 1
+                : doneToday === 1
                   ? "appel fait"
                   : "appels faits",
             valueClass: "text-emerald-800 dark:text-emerald-200",
             ariaLabel:
               data.uniqueClasses === 0
                 ? "Aucune classe"
-                : `${frCount(data.attendanceDone, "appel fait", "appels faits")} aujourd’hui`,
+                : `${frCount(doneToday, "appel fait", "appels faits")} aujourd’hui`,
           };
     return [
       {
@@ -435,7 +456,7 @@ export default function TeacherHome() {
         ariaLabel: `${frCount(data.studentsCount, "élève", "élèves")} dans vos classes`,
       },
     ];
-  }, [data, unreadInbox.discussions]);
+  }, [data, appels, unreadInbox.discussions]);
 
   if (isLoading || !data) {
     if (!isLoading) {
@@ -485,18 +506,94 @@ export default function TeacherHome() {
   }
   // Counts for classes already listed in Maintenant / Ensuite stay out of this panel
   // until an appel has actually been recorded.
-  const presenceRows = data.attendanceToday.filter(
+  const presenceRows = (appels?.rows ?? []).filter(
     (row) => row.recorded > 0 || !timetableClassIds.has(row.classId),
   );
 
+  const appelsPending = appels?.pending ?? 0;
+  const appelsDone = appels?.done ?? 0;
+  const appelsTotal = appelsPending + appelsDone;
+  const appelsPct = appelsTotal ? Math.round((appelsDone / appelsTotal) * 100) : 0;
+
   return (
-    <div className="space-y-6">
-      <PortalHomeHeader
-        icon={BookOpen}
-        name={name}
-        context={[schoolName, "Enseignant"].filter(Boolean).join(" · ")}
-        unreadInbox={unreadInbox}
-      />
+    // squarer corners on this page only
+    <div className="space-y-6 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
+      {/* Banner: same teal gradient and effects as the student and parent portals */}
+      <section className="relative overflow-hidden rounded-lg bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 text-white shadow-lg shadow-brand-900/25">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/[0.04]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-12 lg:items-center lg:gap-8 lg:p-8">
+          <div className="space-y-5 lg:col-span-7">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
+                {getTimeGreeting()}
+                {schoolName ? ` · ${schoolName}` : ""}
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight lg:text-[2rem]">{name || "—"}
+                <span className="animate-greeting-wave ml-2" aria-hidden>👋</span>
+              </h1>
+              <p className="mt-2 text-sm font-medium text-white/85">
+                Enseignant · {data.uniqueClasses} classe{data.uniqueClasses > 1 ? "s" : ""} ·{" "}
+                {data.assignmentCount} affectation{data.assignmentCount > 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <BannerStat to="/mes-classes" label="Classes" value={String(data.uniqueClasses)} hint="voir mes classes" />
+              <BannerStat to="/mes-eleves" label="Élèves" value={String(data.studentsCount)} hint="dans vos classes" />
+              <BannerStat
+                to="/messages"
+                label="Messages"
+                value={String(unreadInbox.discussions)}
+                hint={unreadInbox.discussions ? (unreadInbox.discussions > 1 ? "non lus" : "non lu") : "tout est lu"}
+              />
+            </div>
+          </div>
+          <div className="lg:col-span-5">
+            <div className="rounded-md bg-white p-5 text-slate-900 shadow-xl shadow-brand-900/25">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-sky-800">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Appels du jour
+                </span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {formatDateSafe(data.today, "EEEE d MMMM", { locale: fr })}
+                </span>
+              </div>
+              {appelsTotal === 0 ? (
+                <p className="mt-3 text-lg font-bold text-slate-900">Pas d’appel prévu aujourd’hui</p>
+              ) : (
+                <>
+                  <p className="mt-3 text-xl font-bold text-slate-900">
+                    {appelsPending > 0
+                      ? `${appelsPending} appel${appelsPending > 1 ? "s" : ""} à faire`
+                      : "Tous les appels sont faits"}
+                  </p>
+                  <div className="mt-2 h-2 overflow-hidden rounded-sm bg-slate-100">
+                    <div
+                      className={cn("h-full rounded-sm", appelsPending ? "bg-brand-600" : "bg-emerald-500")}
+                      style={{ width: `${appelsPct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {appelsDone} sur {appelsTotal} classe{appelsTotal > 1 ? "s" : ""}
+                  </p>
+                </>
+              )}
+              <Link
+                to="/presences"
+                className="mt-4 flex h-10 items-center justify-center rounded-md bg-brand-700 text-sm font-semibold text-white transition hover:bg-brand-800"
+              >
+                {appelsPending > 0 ? "Faire l’appel" : "Voir les présences"}
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="flex h-1" aria-hidden>
+          <span className="flex-1 bg-faso-red" />
+          <span className="flex-1 bg-faso-yellow" />
+          <span className="flex-1 bg-faso-green" />
+        </div>
+      </section>
 
       <TeacherMobileHome
         schedule={mobileSchedule}
@@ -505,63 +602,6 @@ export default function TeacherHome() {
         edtLoading={edtLoading}
         edtError={edtError}
       />
-
-      <section className="hidden gap-3 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <MetricCard
-          label="Classes"
-          value={String(data.uniqueClasses)}
-          hint={`${data.assignmentCount} affectation${data.assignmentCount > 1 ? "s" : ""}`}
-          valueClass="text-brand-600"
-          to="/mes-classes"
-        />
-        <MetricCard
-          label="Élèves"
-          value={String(data.studentsCount)}
-          hint="Dans vos classes"
-          valueClass="text-sky-600"
-          to="/mes-eleves"
-        />
-        <MetricCard
-          label="Présences"
-          value={
-            data.attendancePending > 0
-              ? String(data.attendancePending)
-              : String(data.attendanceDone)
-          }
-          hint={
-            data.attendancePending > 0
-              ? `classe${data.attendancePending > 1 ? "s" : ""} à faire aujourd’hui`
-              : data.uniqueClasses > 0
-                ? "Appel du jour à jour"
-                : "Aucune classe"
-          }
-          valueClass={
-            data.attendancePending > 0 ? "text-amber-600" : "text-emerald-600"
-          }
-          to="/presences"
-        />
-        <MetricCard
-          label="Exercices"
-          value={String(data.exercicesCount)}
-          hint="De maison"
-          valueClass="text-amber-600"
-          to="/devoirs"
-        />
-        <MetricCard
-          label="Devoirs"
-          value={String(data.examensCount)}
-          hint="Surveillés"
-          valueClass="text-violet-600"
-          to="/devoirs"
-        />
-        <MetricCard
-          label="Messages"
-          value={String(unreadInbox.discussions)}
-          hint="Non lus"
-          valueClass={unreadInbox.discussions > 0 ? "text-rose-600" : "text-slate-500 dark:text-slate-300"}
-          to="/messages"
-        />
-      </section>
 
       {/* Présences : effectifs, sans répéter l’état d’appel déjà porté par Maintenant / Ensuite. */}
       <section className="grid gap-4 lg:grid-cols-3">
@@ -580,7 +620,13 @@ export default function TeacherHome() {
             }
           >
             {presenceRows.length === 0 ? (
-              <PanelEmpty message="Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »." />
+              <PanelEmpty
+                message={
+                  appelsTotal === 0
+                    ? "Pas de cours aujourd’hui : aucun appel à faire."
+                    : "Les appels du jour sont dans « Maintenant » et « Ensuite aujourd’hui »."
+                }
+              />
             ) : (
               <ul className="space-y-2">
                 {presenceRows.slice(0, 6).map((c) => (
@@ -873,5 +919,15 @@ export default function TeacherHome() {
         </div>
       </section>
     </div>
+  );
+}
+
+function BannerStat({ label, value, hint, to }: { label: string; value: string; hint: string; to: string }) {
+  return (
+    <Link to={to} className="block rounded-md bg-white/10 p-3.5 ring-1 ring-white/15 transition hover:bg-white/15">
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-white/70">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-white lg:text-[1.75rem]">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-white/80">{hint}</p>
+    </Link>
   );
 }

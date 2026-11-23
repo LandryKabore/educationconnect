@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, X } from "lucide-react";
+import { Check, KeyRound, ShieldCheck, X } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   PASSWORD_RULES,
@@ -10,9 +11,7 @@ import {
 } from "@/lib/passwordRules";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { BrandLogo } from "@/components/BrandLogo";
-import { Button, Card, Label, PasswordInput } from "@/components/ui";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Button, Label, PasswordInput } from "@/components/ui";
 
 export default function ReinitialiserMotDePasse() {
   const { session, completePasswordChange, refreshProfile, homePath } =
@@ -62,32 +61,24 @@ export default function ReinitialiserMotDePasse() {
 
   if (!activeSession) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
-        </div>
-        <Card className="w-full max-w-md text-center">
-          <BrandLogo className="mx-auto h-16 w-auto max-w-[10rem] rounded-2xl" />
-          <h1 className="mt-4 text-xl font-bold text-slate-900 dark:text-slate-100">
-            Lien invalide ou expiré
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Demandez un nouveau lien de réinitialisation, ou connectez-vous si
-            vous connaissez déjà votre mot de passe.
-          </p>
-          <div className="mt-6 flex flex-col gap-2">
+      <AuthShell
+      panelTitle="Un nouveau mot de passe"
+      panelBody="Choisissez un mot de passe que vous seul connaissez."
+      title="Lien invalide ou expiré"
+      subtitle="Demandez un nouveau lien de réinitialisation, ou connectez-vous si vous connaissez déjà votre mot de passe."
+    >
+          <div className="flex flex-col gap-3">
             <Link to="/mot-de-passe-oublie">
-              <Button className="w-full">Nouveau lien</Button>
+              <Button size="lg" className="h-12 w-full rounded-md font-bold">Nouveau lien</Button>
             </Link>
             <Link
               to="/connexion"
-              className="text-sm text-brand-700 hover:underline"
+              className="text-center text-sm font-semibold text-brand-700 hover:underline"
             >
               Retour à la connexion
             </Link>
           </div>
-        </Card>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -116,22 +107,19 @@ export default function ReinitialiserMotDePasse() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 to-slate-100 p-4 dark:from-[#243044] dark:to-[#1a2030]">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md">
-        <BrandLogo className="mx-auto h-16 w-auto max-w-[10rem] rounded-2xl" />
-        <h1 className="mt-4 text-xl font-bold text-slate-900 dark:text-slate-100">
-          Nouveau mot de passe
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Choisissez un mot de passe sécurisé pour votre compte.
-        </p>
-
+    <AuthShell
+      panelTitle="Un nouveau mot de passe"
+      panelBody="Choisissez un mot de passe que vous seul connaissez."
+      points={[
+        { icon: KeyRound, title: "Au moins 8 caractères", body: "Avec une majuscule, un chiffre et un caractère spécial." },
+        { icon: ShieldCheck, title: "Gardez-le secret", body: "Personne à l’école ne vous le demandera." },
+      ]}
+      title="Nouveau mot de passe"
+      subtitle="Choisissez un mot de passe sécurisé pour votre compte."
+    >
         <form
           onSubmit={(e) => void handleSubmit(e)}
-          className="mt-6 space-y-4"
+          className="space-y-4"
         >
           <div>
             <Label htmlFor="newPassword">Nouveau mot de passe</Label>
@@ -176,13 +164,12 @@ export default function ReinitialiserMotDePasse() {
           </div>
           <Button
             type="submit"
-            className="w-full"
+            size="lg"
             disabled={submitting || !isPasswordStrong(password)}
           >
             {submitting ? "Enregistrement…" : "Enregistrer"}
           </Button>
         </form>
-      </Card>
-    </div>
+    </AuthShell>
   );
 }
