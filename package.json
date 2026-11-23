@@ -21,7 +21,7 @@
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:add:android": "npx cap add android",
-    "release:desktop": "npm run build:electron && electron-builder --mac --win --publish always"
+    "release:desktop": "npm run build:electron && electron-builder --mac --publish always && electron-builder --win --publish always"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.8",
