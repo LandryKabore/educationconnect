@@ -59,7 +59,7 @@ struct ClassSpaceView: View {
             DispatchQueue.main.async {
                 PushManager.shared.focus = nil
                 if let post = f.ids("space-post").first { openPost = post }
-                else if let group = f.ids("space-group").first { tab = 2; openGroup = group }
+                else if let group = f.ids("space-group").first ?? f.ids("space-invite").first { tab = 2; openGroup = group }
             }
         }
     }
@@ -823,13 +823,47 @@ struct ClassSpaceGroups: View {
     @State private var creating = false
     @State private var name = ""
     @State private var subjectId: String?
+    @State private var visibility = "public"
+    @State private var invitees: [String] = []
+
+    private var invitations: [ClassSpace.GroupSummary] { groups.filter { $0.invited && !$0.member } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            ForEach(invitations) { g in
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "person.badge.plus").foregroundStyle(EduTheme.teal)
+                    VStack(alignment: .leading, spacing: 2) {
+                        (Text(g.invitedBy ?? "Un camarade").bold() + Text(" t’invite dans ") + Text("« \(g.name) »").bold())
+                            .font(.subheadline).foregroundStyle(EduTheme.ink)
+                        Text(g.members.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(EduTheme.muted)
+                    }
+                    Spacer(minLength: 4)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: EduTheme.radius))
+                .overlay(alignment: .bottomTrailing) {
+                    HStack(spacing: 8) {
+                        Button("Refuser") { Task { try? await ClassSpace.answerInvite(groupId: g.id, accept: false); await load() } }
+                            .font(.caption.weight(.semibold)).tint(EduTheme.muted)
+                        Button {
+                            Task { try? await ClassSpace.answerInvite(groupId: g.id, accept: true); await load(); onOpen(g.id) }
+                        } label: {
+                            Text("Rejoindre").font(.caption.weight(.semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 10).frame(minHeight: 28)
+                                .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(8)
+                }
+                .padding(.bottom, 4)
+            }
             Text("Des groupes de 2 à 6 pour réviser ou préparer un devoir ensemble : une discussion et une liste de tâches partagée.")
                 .font(.caption).foregroundStyle(EduTheme.muted)
             if !moderator {
-                Button { name = ""; subjectId = nil; creating = true } label: {
+                Button { name = ""; subjectId = nil; visibility = "public"; invitees = []; creating = true } label: {
                     Label("Créer un groupe", systemImage: "plus").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius))
@@ -841,13 +875,13 @@ struct ClassSpaceGroups: View {
             } else if groups.isEmpty {
                 ClassSpaceEmpty(icon: "person.3", title: "Aucun groupe pour le moment", text: moderator ? nil : "Crée le premier et invite tes camarades à le rejoindre.")
             } else {
-                ForEach(groups) { g in groupCard(g) }
+                ForEach(groups.filter { !($0.invited && !$0.member) }) { g in groupCard(g) }
             }
         }
         .task { await load() }
         .onChange(of: seed?.id) { _, _ in
             guard let s = seed else { return }
-            name = s.name; subjectId = s.subjectId; creating = true; seed = nil
+            name = s.name; subjectId = s.subjectId; visibility = "public"; invitees = []; creating = true; seed = nil
         }
         .sheet(isPresented: $creating) {
             NavigationStack {
@@ -857,7 +891,16 @@ struct ClassSpaceGroups: View {
                         Text("Toutes matières").tag(String?.none)
                         ForEach(subjects) { Text($0.name).tag(String?.some($0.id)) }
                     }
-                    Text("Le groupe est ouvert : tes camarades le voient et peuvent le rejoindre (6 au maximum). L’administration de l’école peut le lire.")
+                    Picker("Qui peut le voir", selection: $visibility) {
+                        Text("Public").tag("public")
+                        Text("Sur invitation").tag("private")
+                    }
+                    .pickerStyle(.segmented)
+                    Section(visibility == "private" ? "Camarades à inviter" : "Inviter des camarades (facultatif)") {
+                        ClassmatePickerList(classId: classId, exclude: [auth.userId ?? ""], max: 5, selection: $invitees)
+                    }
+                    Text(visibility == "private" ? "Seuls les camarades invités voient le groupe. Chacun reçoit une notification et choisit de rejoindre ou non. L’administration de l’école peut le lire."
+                         : "Toute la classe voit le groupe et peut le rejoindre (6 au maximum). L’administration de l’école peut le lire.")
                         .font(.caption).foregroundStyle(EduTheme.muted)
                 }
                 .navigationTitle("Nouveau groupe").navigationBarTitleDisplayMode(.inline)
@@ -867,18 +910,19 @@ struct ClassSpaceGroups: View {
                         Button("Créer") {
                             guard let uid = auth.userId else { return }
                             Task {
-                                if let id = try? await ClassSpace.createGroup(classId: classId, userId: uid, name: name, subjectId: subjectId) {
+                                if let id = try? await ClassSpace.createGroup(classId: classId, userId: uid, name: name, subjectId: subjectId, visibility: visibility) {
+                                    try? await ClassSpace.invite(groupId: id, invitedBy: uid, userIds: invitees)
                                     creating = false
                                     await load()
                                     onOpen(id)
                                 }
                             }
                         }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (visibility == "private" && invitees.isEmpty))
                     }
                 }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
         }
     }
 
@@ -893,6 +937,7 @@ struct ClassSpaceGroups: View {
                 if let s = g.subjectName { Text(s).font(.caption.weight(.semibold)).foregroundStyle(EduTheme.teal) }
                 if g.member { Text("Mon groupe").font(.caption2.weight(.bold)).foregroundStyle(EduTheme.teal).padding(.horizontal, 6).padding(.vertical, 2).background(EduTheme.brand50, in: RoundedRectangle(cornerRadius: 3)) }
                 if g.archived { Text("Terminé").font(.caption2.weight(.bold)).foregroundStyle(EduTheme.muted) }
+                if g.visibility == "private" { Label("Sur invitation", systemImage: "lock.fill").font(.caption2.weight(.semibold)).foregroundStyle(EduTheme.muted) }
                 Spacer()
                 Text(ClassSpace.relative(g.lastActivityAt)).font(.caption2).foregroundStyle(EduTheme.subtle)
             }
@@ -904,7 +949,7 @@ struct ClassSpaceGroups: View {
                 Spacer()
                 if g.member || moderator {
                     Button("Ouvrir") { onOpen(g.id) }.font(.subheadline.weight(.semibold)).tint(EduTheme.teal)
-                } else if !g.archived && g.members.count < 6 {
+                } else if !g.archived && g.visibility == "public" && g.members.count + g.pendingInvites < 6 {
                     Button {
                         guard let uid = auth.userId else { return }
                         Task { try? await ClassSpace.join(groupId: g.id, userId: uid); await load(); onOpen(g.id) }
@@ -937,6 +982,8 @@ struct ClassSpaceGroupView: View {
     @State private var photos: [String] = []
     @State private var task = ""
     @State private var showTasks = false
+    @State private var inviting = false
+    @State private var invitees: [String] = []
     @State private var reporting: ClassSpacePostView.ReportTarget?
 
     private var canWrite: Bool { !moderator && (group?.member ?? false) && !(group?.archived ?? true) }
@@ -978,6 +1025,27 @@ struct ClassSpaceGroupView: View {
             }
         }
         .sheet(isPresented: $showTasks) { tasksSheet }
+        .sheet(isPresented: $inviting) {
+            if let g = group {
+                NavigationStack {
+                    Form {
+                        ClassmatePickerList(classId: classId, exclude: g.members.map(\.id) + g.pending.map(\.id),
+                                            max: max(0, 6 - g.members.count - g.pending.count), selection: $invitees)
+                    }
+                    .navigationTitle("Inviter").navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Annuler") { inviting = false } }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Envoyer") {
+                                guard let uid = auth.userId else { return }
+                                Task { try? await ClassSpace.invite(groupId: g.id, invitedBy: uid, userIds: invitees); inviting = false; await load() }
+                            }
+                            .disabled(invitees.isEmpty)
+                        }
+                    }
+                }
+            }
+        }
         .sheet(item: $reporting) { t in ClassSpaceReportSheet(classId: classId, targetType: t.type, targetId: t.id).environmentObject(auth) }
     }
 
@@ -989,8 +1057,30 @@ struct ClassSpaceGroupView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(g.subjectName ?? "Groupe de travail").font(.caption.weight(.semibold)).foregroundStyle(EduTheme.teal)
             Text(g.members.map { $0.id == auth.userId ? "Toi" : $0.name }.joined(separator: ", ")).font(.caption).foregroundStyle(EduTheme.muted)
-            if !moderator {
+            if !g.pending.isEmpty {
+                Text("Invité\(g.pending.count > 1 ? "s" : "") : \(g.pending.map(\.name).joined(separator: ", "))").font(.caption2).foregroundStyle(EduTheme.subtle)
+            }
+            if g.visibility == "private" { Label("Sur invitation", systemImage: "lock.fill").font(.caption2.weight(.semibold)).foregroundStyle(EduTheme.muted) }
+            if !moderator && g.invited && !g.member {
+                HStack(spacing: 10) {
+                    Button("Refuser") { Task { try? await ClassSpace.answerInvite(groupId: g.id, accept: false); dismiss() } }
+                        .font(.subheadline.weight(.semibold)).tint(EduTheme.muted)
+                    Button {
+                        Task { try? await ClassSpace.answerInvite(groupId: g.id, accept: true); await load() }
+                    } label: {
+                        Text("Rejoindre le groupe").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(minHeight: 36)
+                            .background(EduTheme.teal, in: RoundedRectangle(cornerRadius: EduTheme.radius))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if !moderator && g.member {
                 HStack(spacing: 12) {
+                    if canWrite && 6 - g.members.count - g.pending.count > 0 {
+                        Button { invitees = []; inviting = true } label: { Label("Inviter", systemImage: "person.badge.plus") }
+                            .font(.caption.weight(.semibold)).tint(EduTheme.teal)
+                    }
                     if g.mine {
                         Button(g.archived ? "Rouvrir" : "Terminer le groupe") {
                             Task { try? await ClassSpace.archive(groupId: g.id, !g.archived); await load() }
@@ -1234,5 +1324,40 @@ struct SchoolClassSpaceView: View {
                 .background(color, in: RoundedRectangle(cornerRadius: EduTheme.radius))
         }
         .buttonStyle(.plain)
+    }
+}
+
+
+/// Classmates to tick (search, up to `max`), for group invitations.
+struct ClassmatePickerList: View {
+    let classId: String
+    let exclude: [String]
+    let max: Int
+    @Binding var selection: [String]
+    @State private var classmates: [ClassSpace.Member] = []
+    @State private var query = ""
+
+    private var shown: [ClassSpace.Member] {
+        classmates.filter { !exclude.contains($0.id) }
+            .filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        TextField("Chercher un camarade", text: $query)
+            .task { if classmates.isEmpty { classmates = (try? await ClassSpace.classmates(classId: classId)) ?? [] } }
+        Text("\(selection.count)/\(max) sélectionné\(selection.count > 1 ? "s" : "")").font(.caption).foregroundStyle(EduTheme.muted)
+        ForEach(shown) { c in
+            Button {
+                if let i = selection.firstIndex(of: c.id) { selection.remove(at: i) }
+                else if selection.count < max { selection.append(c.id) }
+            } label: {
+                HStack {
+                    Text(c.name).foregroundStyle(EduTheme.ink)
+                    Spacer()
+                    Image(systemName: selection.contains(c.id) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selection.contains(c.id) ? EduTheme.teal : EduTheme.subtle)
+                }
+            }
+        }
     }
 }

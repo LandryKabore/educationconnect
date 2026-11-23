@@ -90,6 +90,10 @@ enum ClassSpace {
         let archived: Bool
         let lastActivityAt: String
         let member: Bool
+        let visibility: String
+        let invited: Bool
+        let invitedBy: String?
+        let pendingInvites: Int
         let members: [Member]
         let tasks: Int
         let tasksDone: Int
@@ -109,7 +113,10 @@ enum ClassSpace {
         let mine: Bool
         let member: Bool
         let archived: Bool
+        let visibility: String
+        let invited: Bool
         let members: [Member]
+        let pending: [Member]
         let tasks: [TaskItem]
         let messages: [GroupMessage]
     }
@@ -234,12 +241,29 @@ enum ClassSpace {
         }
     }
 
-    private struct NewGroup: Encodable { let class_id: String; let created_by: String; let name: String; let subject_id: String? }
-    static func createGroup(classId: String, userId: String, name: String, subjectId: String?) async throws -> String {
+    private struct NewGroup: Encodable { let class_id: String; let created_by: String; let name: String; let subject_id: String?; let visibility: String }
+    static func createGroup(classId: String, userId: String, name: String, subjectId: String?, visibility: String = "public") async throws -> String {
         let row: IdRow = try await client.from("ef_space_groups")
-            .insert(NewGroup(class_id: classId, created_by: userId, name: name.trimmingCharacters(in: .whitespacesAndNewlines), subject_id: subjectId))
+            .insert(NewGroup(class_id: classId, created_by: userId, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                             subject_id: subjectId, visibility: visibility))
             .select("id").single().execute().value
         return row.id
+    }
+
+    static func classmates(classId: String) async throws -> [Member] {
+        try await client.rpc("ef_space_classmates", params: ["p_class": classId]).execute().value
+    }
+
+    private struct Invite: Encodable { let group_id: String; let user_id: String; let invited_by: String }
+    static func invite(groupId: String, invitedBy: String, userIds: [String]) async throws {
+        guard !userIds.isEmpty else { return }
+        try await client.from("ef_space_group_invites")
+            .insert(userIds.map { Invite(group_id: groupId, user_id: $0, invited_by: invitedBy) }).execute()
+    }
+
+    private struct AnswerParams: Encodable { let p_group: String; let p_accept: Bool }
+    static func answerInvite(groupId: String, accept: Bool) async throws {
+        try await client.rpc("ef_space_answer_invite", params: AnswerParams(p_group: groupId, p_accept: accept)).execute()
     }
 
     static func join(groupId: String, userId: String) async throws {
