@@ -47,6 +47,7 @@ const CahierEcole = lazy(() => import("@/pages/ecole/CahierEcole"));
 const Statistiques = lazy(() => import("@/pages/ecole/Statistiques"));
 const EspaceClasse = lazy(() => import("@/pages/eleve/EspaceClasse"));
 const EspaceClasseEcole = lazy(() => import("@/pages/ecole/EspaceClasseEcole"));
+const Versions = lazy(() => import("@/pages/admin/Versions"));
 const MonCahier = lazy(() => import("@/pages/eleve/MonCahier"));
 const EnfantCahier = lazy(() => import("@/pages/parent/EnfantCahier"));
 import ExamensEcole from "@/pages/ecole/ExamensEcole";
@@ -153,6 +154,16 @@ function AppRoutes() {
           element={
             <RequireAuth roles={["super_admin"]}>
               <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/versions"
+          element={
+            <RequireAuth roles={["super_admin"]}>
+              <Suspense fallback={<p className="text-slate-500">Chargement…</p>}>
+                <Versions />
+              </Suspense>
             </RequireAuth>
           }
         />

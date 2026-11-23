@@ -84,6 +84,7 @@ import { ModuleGate } from "@/components/ModuleGate";
 import { useMyModules } from "@/hooks/useSchoolModules";
 import { moduleForPath } from "@/lib/modules";
 import { fetchSpaceContext } from "@/lib/espaceClasse";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 
 interface NavItem {
   to: string;
@@ -124,6 +125,7 @@ const NAV_GROUPS_BY_ROLE: Record<AppRole, NavGroup[]> = {
         { to: "/admin/rapports", label: "Rapports", icon: <ClipboardList className="h-4 w-4" /> },
         { to: "/signalements", label: "Signalements", icon: <MessageSquare className="h-4 w-4" /> },
         { to: "/admin/abonnements", label: "Abonnements", icon: <BookOpen className="h-4 w-4" /> },
+        { to: "/admin/versions", label: "Versions de l’app", icon: <Download className="h-4 w-4" /> },
         { to: "/admin/parametres", label: "Paramètres", icon: <Settings className="h-4 w-4" /> },
         { to: "/admin/audit", label: "Journal d'audit", icon: <ClipboardList className="h-4 w-4" /> },
         { to: "/admin/super-admins", label: "Super admins", icon: <UserCog className="h-4 w-4" /> },
@@ -737,6 +739,7 @@ export function AppShell() {
           <ThemeToggle compact />
         </header>
 
+        <UpdatePrompt />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 [&_.rounded-2xl]:rounded-lg [&_.rounded-3xl]:rounded-lg [&_.rounded-xl]:rounded-md">
           <ErrorBoundary
             scope="page"
