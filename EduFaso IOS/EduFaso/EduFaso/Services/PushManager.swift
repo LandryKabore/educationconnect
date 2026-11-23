@@ -68,6 +68,7 @@ final class PushManager: NSObject, ObservableObject {
         "message": .messages, "annonce": .announcements, "absence": .attendance,
         "confirmation": .teacherEvaluations, "saisie": .teacherEvaluations, "appel": .teacherAttendance,
         "aconfirmer": .schoolHomework, "bilan": .schoolAttendance, "periode": .bulletins, "signalement": .signalements,
+        "classe": .classSpace, "moderation": .schoolClassSpace,
     ]
 
     func open(_ userInfo: [AnyHashable: Any]) {
@@ -101,7 +102,8 @@ final class PushManager: NSObject, ObservableObject {
         if child != nil { return .parent }
         switch kind {
         case "appel", "saisie", "confirmation": return .teacher
-        case "aconfirmer", "bilan", "periode", "signalement": return .schoolAdmin
+        case "aconfirmer", "bilan", "periode", "signalement", "moderation": return .schoolAdmin
+        case "classe": return .student
         case "absence": return .parent
         case "note", "exercice", "rappel", "evaluation", "bulletin": return .student
         case "edt", "composition", "matin":
@@ -247,6 +249,7 @@ struct PushPrefsCard: View {
         Kind(id: "bilan", icon: "chart.bar.doc.horizontal", title: "Bilan du jour", detail: "À 17h30 : absences, retards et appels non faits", defaultOn: true),
         Kind(id: "periode", icon: "calendar.badge.exclamationmark", title: "Fin de Trimestre", detail: "3 jours avant : évaluations encore sans notes", defaultOn: true),
         Kind(id: "signalement", icon: "exclamationmark.bubble.fill", title: "Signalements", detail: "Un problème signalé dans l’application", defaultOn: true),
+        Kind(id: "moderation", icon: "flag.fill", title: "Espace classe", detail: "Un message d’élève signalé", defaultOn: true),
         Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages des parents, élèves et enseignants", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces reçues", defaultOn: true),
     ]
@@ -281,6 +284,7 @@ struct PushPrefsCard: View {
         Kind(id: "edt", icon: "calendar", title: "Emploi du temps", detail: "Cours ajoutés, déplacés ou retirés", defaultOn: true),
         Kind(id: "bulletin", icon: "rosette", title: "Bulletins", detail: "Quand ton bulletin est disponible", defaultOn: true),
         Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages reçus", defaultOn: true),
+        Kind(id: "classe", icon: "bubble.left.and.bubble.right.fill", title: "Espace classe", detail: "Réponses à tes questions et messages de tes groupes", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
         Kind(id: "matin", icon: "sunrise.fill", title: "Résumé du matin", detail: "À 6h15 : tes cours du jour", defaultOn: false),
     ]

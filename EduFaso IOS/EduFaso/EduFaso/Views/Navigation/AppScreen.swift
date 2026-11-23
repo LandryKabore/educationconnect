@@ -63,6 +63,9 @@ enum AppScreen: String, Identifiable, Hashable {
     case childTimetable
     case childCahier
 
+    case classSpace
+    case schoolClassSpace
+
     var id: String { rawValue }
 
     var title: String {
@@ -122,6 +125,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .childBulletin: return "Bulletins"
         case .childTimetable: return "Emploi du temps"
         case .childCahier: return "Cahier de textes"
+        case .classSpace, .schoolClassSpace: return "Espace classe"
         }
     }
 
@@ -150,6 +154,7 @@ enum AppScreen: String, Identifiable, Hashable {
         case .teacherExercises: return "book.closed"
         case .parents: return "figure.and.child.holdinghands"
         case .signalements: return "exclamationmark.bubble"
+        case .classSpace, .schoolClassSpace: return "bubble.left.and.bubble.right"
         }
     }
 
@@ -197,7 +202,7 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
             AppNavSection(id: "structure", title: "Structure", screens: [
                 .schoolSettings, .years, .periods, .signalements, .subjects, .classes, .programmes,
             ]),
-            AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
+            AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements, .schoolClassSpace]),
             account,
         ]
     case .teacher:
@@ -215,7 +220,7 @@ func appNavSections(for role: AppRole?) -> [AppNavSection] {
             AppNavSection(id: "main", title: nil, screens: [.dashboard]),
             AppNavSection(id: "travail", title: "Travail", screens: [.cahier, .exercises, .compositions]),
             AppNavSection(id: "resultats", title: "Résultats", screens: [.grades, .bulletin, .attendance]),
-            AppNavSection(id: "classe", title: "Ma classe", screens: [.timetable, .myTeachers]),
+            AppNavSection(id: "classe", title: "Ma classe", screens: [.timetable, .myTeachers, .classSpace]),
             AppNavSection(id: "com", title: "Communication", screens: [.messages, .announcements]),
             account,
         ]

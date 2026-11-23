@@ -14,6 +14,8 @@ struct RoleShellView: View {
     @State private var navigationDepth = 1
     /// tapped notification sent to another account
     @State private var otherAccount: OtherAccountNotice?
+    /// « Espace classe »: students of the secondaire only (and the school's module on)
+    @State private var classSpaceOn = false
 
     /// Root of the stack (Accueil / a menu screen) — not a pushed detail.
     private var isAtRoot: Bool {
@@ -49,6 +51,9 @@ struct RoleShellView: View {
                   dismissButton: .default(Text("Compris")))
         }
         // everyone the server sends notifications to (a super admin only in Mode support)
+        .task(id: auth.userId) {
+            classSpaceOn = auth.primaryRole == .student ? ((try? await ClassSpace.context())?.enabled ?? false) : false
+        }
         .task(id: auth.primaryRole) {
             if [.student, .parent, .teacher, .schoolAdmin].contains(auth.primaryRole) { await PushManager.shared.requestAndRegister() }
         }
@@ -158,6 +163,7 @@ struct RoleShellView: View {
 
                 SideDrawerView(
                     selection: selection,
+                    classSpaceOn: classSpaceOn,
                     onSelect: { screen in
                         openScreen(screen)
                         closeMenu()
@@ -237,8 +243,12 @@ struct RoleShellView: View {
     }
 
     @ViewBuilder
+    private func visibleScreens(_ section: AppNavSection) -> [AppScreen] {
+        section.screens.filter { $0 != .classSpace || classSpaceOn }
+    }
+
     private func sectionRows(_ section: AppNavSection) -> some View {
-        ForEach(section.screens) { screen in
+        ForEach(visibleScreens(section)) { screen in
             Label(menuTitle(screen, role: auth.primaryRole), systemImage: screen.systemImage)
                 .tag(screen)
         }
@@ -350,9 +360,14 @@ private enum HorizontalScrollProbe {
 struct SideDrawerView: View {
     @EnvironmentObject private var auth: AuthViewModel
     let selection: AppScreen
+    var classSpaceOn = false
     var onSelect: (AppScreen) -> Void
     var onClose: () -> Void
     @State private var unreadMessages = 0
+
+    private func visibleScreens(_ section: AppNavSection) -> [AppScreen] {
+        section.screens.filter { $0 != .classSpace || classSpaceOn }
+    }
     @State private var unreadAnnouncements = 0
 
     /// A super admin belongs to no school: the school shows only in Mode support.
@@ -419,7 +434,7 @@ struct SideDrawerView: View {
                                 .accessibilityAddTraits(.isHeader)
                             }
                             VStack(alignment: .leading, spacing: 2) {
-                                ForEach(section.screens) { screen in
+                                ForEach(visibleScreens(section)) { screen in
                                     drawerRow(screen)
                                 }
                             }
@@ -774,6 +789,10 @@ struct ScreenHost: View {
             ChildGate(title: "Emploi du temps", keepsContentOnSwitch: true) { TimetableView(mode: .student, studentIdOverride: $0.id, childName: $0.firstName ?? $0.fullName) }
         case .childCahier:
             ChildGate(title: "Cahier de textes", keepsContentOnSwitch: true) { CahierFeedView(studentId: $0.id, childName: $0.firstName ?? $0.fullName) }
+        case .classSpace:
+            ClassSpaceView()
+        case .schoolClassSpace:
+            SchoolClassSpaceView()
         }
     }
 }
