@@ -3,6 +3,8 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @EnvironmentObject private var deepLinks: DeepLinkCenter
+    @ObservedObject private var release = ReleaseCheck.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     /// One continuous opening screen through auth + first portal load.
     private var showOpening: Bool {
@@ -43,6 +45,18 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: routeKey)
+        // new version: « Mise à jour disponible » / « Nouveautés »
+        .task { await release.check() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await release.check() } } }
+        .sheet(item: Binding(get: { release.required ? nil : release.update }, set: { if $0 == nil { release.later() } })) { r in
+            ReleaseSheet(release: r, mode: .update, onLater: { release.later() })
+        }
+        .fullScreenCover(item: Binding(get: { release.required ? release.update : nil }, set: { _ in })) { r in
+            ReleaseSheet(release: r, mode: .required).background(EduTheme.page.ignoresSafeArea())
+        }
+        .sheet(item: Binding(get: { release.update == nil ? release.whatsNew : nil }, set: { if $0 == nil { release.seen() } })) { r in
+            ReleaseSheet(release: r, mode: .whatsNew, onDone: { release.seen() })
+        }
         .sheet(item: $deepLinks.verifyRequest) { request in
             NavigationStack {
                 VerifyDocumentView(initialCode: request.code)

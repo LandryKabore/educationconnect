@@ -68,7 +68,7 @@ final class PushManager: NSObject, ObservableObject {
         "message": .messages, "annonce": .announcements, "absence": .attendance,
         "confirmation": .teacherEvaluations, "saisie": .teacherEvaluations, "appel": .teacherAttendance,
         "aconfirmer": .schoolHomework, "bilan": .schoolAttendance, "periode": .bulletins, "signalement": .signalements,
-        "classe": .classSpace, "moderation": .schoolClassSpace,
+        "classe": .classSpace, "moderation": .schoolClassSpace, "nouveautes": .dashboard,
     ]
 
     func open(_ userInfo: [AnyHashable: Any]) {
@@ -252,6 +252,7 @@ struct PushPrefsCard: View {
         Kind(id: "moderation", icon: "flag.fill", title: "Espace classe", detail: "Un message d’élève signalé", defaultOn: true),
         Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages des parents, élèves et enseignants", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces reçues", defaultOn: true),
+        Kind(id: "nouveautes", icon: "sparkles", title: "Nouveautés", detail: "Quand une nouvelle version d’EduFaso sort", defaultOn: true),
     ]
     private let teacherKinds: [Kind] = [
         Kind(id: "appel", icon: "checklist", title: "Appel non fait", detail: "10 minutes après la fin d’un cours sans appel", defaultOn: true),
@@ -262,6 +263,7 @@ struct PushPrefsCard: View {
         Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages des parents, élèves et de l’administration", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
         Kind(id: "matin", icon: "sunrise.fill", title: "Résumé du matin", detail: "À 6h15 : vos cours du jour", defaultOn: false),
+        Kind(id: "nouveautes", icon: "sparkles", title: "Nouveautés", detail: "Quand une nouvelle version d’EduFaso sort", defaultOn: true),
     ]
     private let parentKinds: [Kind] = [
         Kind(id: "absence", icon: "person.crop.circle.badge.xmark", title: "Absences et retards", detail: "Dès que l’appel est fait", defaultOn: true),
@@ -274,6 +276,7 @@ struct PushPrefsCard: View {
         Kind(id: "bulletin", icon: "rosette", title: "Bulletins", detail: "Quand un bulletin est disponible", defaultOn: true),
         Kind(id: "message", icon: "envelope.fill", title: "Messages", detail: "Messages reçus", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
+        Kind(id: "nouveautes", icon: "sparkles", title: "Nouveautés", detail: "Quand une nouvelle version d’EduFaso sort", defaultOn: true),
     ]
     private let studentKinds: [Kind] = [
         Kind(id: "note", icon: "chart.bar.fill", title: "Notes", detail: "Chaque nouvelle note", defaultOn: true),
@@ -287,6 +290,7 @@ struct PushPrefsCard: View {
         Kind(id: "classe", icon: "bubble.left.and.bubble.right.fill", title: "Espace classe", detail: "Réponses à tes questions et messages de tes groupes", defaultOn: true),
         Kind(id: "annonce", icon: "megaphone.fill", title: "Annonces", detail: "Annonces de l’école", defaultOn: true),
         Kind(id: "matin", icon: "sunrise.fill", title: "Résumé du matin", detail: "À 6h15 : tes cours du jour", defaultOn: false),
+        Kind(id: "nouveautes", icon: "sparkles", title: "Nouveautés", detail: "Quand une nouvelle version d’EduFaso sort", defaultOn: true),
     ]
 
     private struct Pref: Codable { let user_id: String; let kind: String; let enabled: Bool }
