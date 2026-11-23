@@ -25,6 +25,26 @@ type PendingSave = {
   password: string;
 };
 
+/**
+ * What went wrong when signing in: only real bad credentials read « Identifiants incorrects »
+ * (a lost connection used to look like a wrong password, also with « Comptes enregistrés »).
+ */
+function signInErrorText(err: unknown, wrongCredentials: string): string {
+  const e = err as { message?: string; status?: number; code?: string; name?: string } | null;
+  const msg = (e?.message ?? "").toLowerCase();
+  if ((typeof navigator !== "undefined" && navigator.onLine === false) || msg.includes("failed to fetch") || msg.includes("network") || e?.name === "AuthRetryableFetchError") {
+    return "Pas de connexion internet. Vérifiez votre connexion puis réessayez.";
+  }
+  if (e?.status === 429 || msg.includes("rate limit") || e?.code === "over_request_rate_limit") {
+    return "Trop de tentatives. Réessayez dans quelques minutes.";
+  }
+  if (e?.code === "invalid_credentials" || msg.includes("invalid login") || msg.includes("invalid credentials")) {
+    return wrongCredentials;
+  }
+  if (e?.status && e.status >= 500) return "Le service est momentanément indisponible. Réessayez dans un instant.";
+  return wrongCredentials;
+}
+
 export default function Connexion() {
   const { t } = useTranslation();
   const { signIn, session, profile, role, realRole, homePath, loading } =
@@ -73,8 +93,8 @@ export default function Connexion() {
           password: pwd,
         });
       }
-    } catch {
-      toast.error(t("connexions.error"));
+    } catch (err) {
+      toast.error(signInErrorText(err, t("connexions.error")));
     } finally {
       setSubmitting(false);
     }
