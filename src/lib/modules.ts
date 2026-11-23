@@ -417,6 +417,8 @@ export const ROLE_ACCESS: Partial<Record<ModuleKey, RoleAccess>> = {
   presences: access(M, M, C, C),
   saisie_secretariat: access(M, N, N, N),
   messages: access(M, M, M, M),
+  // the class space: students write, the administration reads and moderates; teachers and parents have no access
+  espace_classe: access(M, N, M, N),
   statistiques: access(C, N, N, N),
 };
 
